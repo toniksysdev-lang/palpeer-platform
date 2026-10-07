@@ -39,9 +39,10 @@ USER palpeer
 
 COPY --from=build /workspace/palpeer-app/target/palpeer-app-*.jar /app/app.jar
 
-ENV SPRING_PROFILES_ACTIVE=dev \
+ENV SPRING_PROFILES_ACTIVE=prod \
     JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
 
 EXPOSE 8080
 
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
+# Render sets PORT; Spring reads it via server.port=${PORT:...} in application.yml.
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

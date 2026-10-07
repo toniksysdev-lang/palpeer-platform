@@ -1,0 +1,92 @@
+# Render Blueprint — Palpeer API + Postgres + Redis
+# Dashboard: New → Blueprint → connect https://github.com/toniksysdev-lang/palpeer-platform
+# Docs: docs/render-deploy.md
+
+databases:
+  - name: palpeer-db
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+
+services:
+  - type: keyvalue
+    name: palpeer-redis
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: [] # private (internal network only)
+
+  - type: web
+    name: palpeer-api
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: OTP_LOG_CODE
+        value: "false"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DB_HOST
+        fromDatabase:
+          name: palpeer-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: palpeer-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: palpeer-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: palpeer-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: palpeer-db
+          property: password
+      - key: DB_SSLMODE
+        value: require
+      - key: REDIS_HOST
+        fromService:
+          type: keyvalue
+          name: palpeer-redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: keyvalue
+          name: palpeer-redis
+          property: port
+      - key: REDIS_PASSWORD
+        fromService:
+          type: keyvalue
+          name: palpeer-redis
+          property: password
+      - key: REDIS_SSL
+        value: "true"
+      # Set these in the Render dashboard when the Blueprint prompts (sync: false)
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: PALPEER_SMTP_HOST
+        sync: false
+      - key: PALPEER_SMTP_PORT
+        sync: false
+      - key: PALPEER_SMTP_USERNAME
+        sync: false
+      - key: PALPEER_SMTP_PASSWORD
+        sync: false
+      - key: PALPEER_SMTP_SSL
+        sync: false
+      - key: PALPEER_MAIL_FROM
+        sync: false
+      - key: PALPEER_MAIL_FROM_NAME
+        sync: false
+      - key: PALPEER_MAIL_HEADER_FROM
+        sync: false
+      - key: ADMIN_BOOTSTRAP_EMAIL
+        sync: false
+      - key: GOOGLE_CLIENT_IDS
+        sync: false
