@@ -34,13 +34,16 @@ RUN mvn -B -pl palpeer-app -am -DskipTests package
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-RUN addgroup -S palpeer && adduser -S palpeer -G palpeer
+RUN addgroup -S palpeer && adduser -S palpeer -G palpeer \
+    && mkdir -p /app/data/private-storage \
+    && chown -R palpeer:palpeer /app
 USER palpeer
 
-COPY --from=build /workspace/palpeer-app/target/palpeer-app-*.jar /app/app.jar
+COPY --chown=palpeer:palpeer --from=build /workspace/palpeer-app/target/palpeer-app-*.jar /app/app.jar
 
 ENV SPRING_PROFILES_ACTIVE=prod \
-    JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+    JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0" \
+    PALPEER_STORAGE_ROOT=/app/data/private-storage
 
 EXPOSE 8080
 
