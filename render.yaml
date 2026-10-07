@@ -4,20 +4,20 @@
 
 databases:
   - name: palpeer-db
-    plan: basic-256mb
+    plan: free
     postgresMajorVersion: "16"
 
 services:
   - type: keyvalue
     name: palpeer-redis
-    plan: starter
+    plan: free
     maxmemoryPolicy: allkeys-lru
     ipAllowList: [] # private (internal network only)
 
   - type: web
     name: palpeer-api
     runtime: docker
-    plan: starter
+    plan: free
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     healthCheckPath: /actuator/health
