@@ -1,6 +1,6 @@
 # Deploy Palpeer API on Render
 
-Blueprint file: [`render.yaml`](../render.yaml) (API + Postgres + Redis).
+Blueprint file: [`render.yaml`](../render.yaml) (API + admin + Postgres + Redis).
 
 ## 1. Create the Blueprint
 
@@ -28,6 +28,7 @@ Blueprint file: [`render.yaml`](../render.yaml) (API + Postgres + Redis).
 ## 2. Plans
 
 - **Web (`palpeer-api`)**: `starter` — Java Docker builds need more RAM than free.
+- **Static (`palpeer-admin`)**: admin SPA; Node 22 build, SPA routes rewrite to `index.html`.
 - **Postgres (`palpeer-db`)**: `basic-256mb` (adjust in `render.yaml` if needed).
 - **Redis (`palpeer-redis`)**: `starter`, private network only.
 
@@ -37,7 +38,11 @@ Blueprint file: [`render.yaml`](../render.yaml) (API + Postgres + Redis).
 - API base: `https://<service>.onrender.com/api/v1`
 - WebSocket: `https://<service>.onrender.com/ws` (SockJS) / `wss://…/ws/websocket`
 
-Point admin (`VITE_API_BASE_URL`) and mobile (`EXPO_PUBLIC_API_BASE_URL`) at that HTTPS API URL.
+The Blueprint also publishes **palpeer-admin** (static). Its build reads `PALPEER_API_ORIGIN` from the API service and writes `VITE_API_BASE_URL` (`…/api/v1`) and `VITE_WS_URL` (`…/ws`).
+
+After the first deploy, set `CORS_ALLOWED_ORIGINS` on **palpeer-api** to the admin origin Render assigns (for example `https://palpeer-admin.onrender.com`). The API will not accept the admin’s browser calls until that value is saved and the API redeploys.
+
+Mobile (`EXPO_PUBLIC_API_BASE_URL`) still needs that same HTTPS API URL when you build an APK.
 
 ## 4. Custom domain (optional)
 

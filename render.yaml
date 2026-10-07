@@ -1,4 +1,4 @@
-# Render Blueprint — Palpeer API + Postgres + Redis
+# Render Blueprint — Palpeer API, admin, Postgres, and Redis
 # Dashboard: New → Blueprint → connect https://github.com/toniksysdev-lang/palpeer-platform
 # Docs: docs/render-deploy.md
 
@@ -90,3 +90,22 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_IDS
         sync: false
+
+  - type: web
+    name: palpeer-admin
+    runtime: static
+    rootDir: palpeer-admin-end
+    buildCommand: npm ci && node scripts/render-env.mjs && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: PALPEER_API_ORIGIN
+        fromService:
+          type: web
+          name: palpeer-api
+          envVarKey: RENDER_EXTERNAL_URL
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
