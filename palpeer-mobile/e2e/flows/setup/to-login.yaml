@@ -1,0 +1,20 @@
+appId: com.palpeer.app
+name: Fresh install to the login screen
+# For running flows 03+ without 01/02 (see e2e/run.cjs --from=03).
+---
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          clearState: true
+          clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-login
+    timeout: 90000
+- tapOn:
+    id: welcome-login
+- extendedWaitUntil:
+    visible:
+      id: login-email
+    timeout: 20000

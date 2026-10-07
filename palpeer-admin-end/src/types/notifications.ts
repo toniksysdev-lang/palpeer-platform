@@ -1,0 +1,14 @@
+export type NotificationSummary = {
+  id: string;
+  title: string;
+  body?: string | null;
+  category?: string | null;
+  channel: string;
+  status: string;
+  referenceType?: string | null;
+  referenceId?: string | null;
+  readAt?: string | null;
+  sentAt?: string | null;
+  failureReason?: string | null;
+  createdAt: string;
+};

@@ -1,0 +1,32 @@
+appId: com.android.settings
+name: Enroll emulator fingerprint
+# Run by e2e/run.cjs after it sets the device PIN (adb shell locksettings set-pin) and opens
+# android.settings.FINGERPRINT_ENROLL. Finger id 1 is the one the helper's fingerTouch uses.
+---
+- extendedWaitUntil:
+    visible: 'Re-enter your PIN|Enter your PIN|Confirm your PIN|Use your PIN|.*PIN.*'
+    timeout: 30000
+- inputText: ${DEVICE_PIN}
+- pressKey: Enter
+- repeat:
+    times: 4
+    commands:
+      - runFlow:
+          when:
+            visible: 'I agree|More|Next|Start|Agree'
+          commands:
+            - tapOn: 'I agree|More|Next|Start|Agree'
+- repeat:
+    while:
+      notVisible: 'Done|Fingerprint added'
+    times: 20
+    commands:
+      - runScript:
+          file: ../subflows/helper.js
+          env:
+            ACTION: fingerTouch
+      - extendedWaitUntil:
+          visible: 'Done|Fingerprint added'
+          timeout: 4000
+          optional: true
+- tapOn: 'Done'

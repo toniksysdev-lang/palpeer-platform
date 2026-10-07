@@ -1,0 +1,49 @@
+appId: com.palpeer.app
+name: 13 Biometric login
+tags: [critical]
+# Needs a fingerprint enrolled on the emulator (the runner does this with
+# e2e/flows/setup/enroll-fingerprint.yaml before the suite).
+---
+- runFlow: subflows/to-tabs.yaml
+- tapOn:
+    id: tab-home
+- tapOn:
+    id: home-profile
+- tapOn:
+    id: profile-security
+- extendedWaitUntil:
+    visible:
+      id: hub-biometric-switch
+    timeout: 20000
+- tapOn:
+    id: hub-biometric-switch
+- runScript:
+    file: subflows/helper.js
+    env:
+      ACTION: fingerTouch
+- extendedWaitUntil:
+    visible:
+      id: hub-biometric-switch
+      checked: true
+    timeout: 20000
+
+# Cold start: the app opens locked and unlocks only with the fingerprint
+- stopApp
+- launchApp:
+    clearState: false
+# The lock screen opens the system fingerprint prompt by itself
+- extendedWaitUntil:
+    visible: 'Unlock PALPEER'
+    timeout: 60000
+- assertNotVisible:
+    id: tab-home
+- runScript:
+    file: subflows/helper.js
+    env:
+      ACTION: fingerTouch
+- extendedWaitUntil:
+    visible:
+      id: tab-home
+    timeout: 30000
+- assertNotVisible:
+    id: lock-screen

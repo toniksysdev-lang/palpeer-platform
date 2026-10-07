@@ -1,0 +1,25 @@
+appId: com.palpeer.app
+name: 04 Set transaction PIN
+tags: [critical]
+---
+- runFlow: subflows/to-tabs.yaml
+- tapOn:
+    id: home-profile
+- tapOn:
+    id: profile-security
+- tapOn:
+    id: hub-set-pin
+- runFlow:
+    file: subflows/enter-pin.yaml
+    env:
+      ENTRY: set-pin-enter
+- runFlow:
+    file: subflows/enter-pin.yaml
+    env:
+      ENTRY: set-pin-confirm
+- extendedWaitUntil:
+    visible:
+      id: hub-change-pin
+    timeout: 20000
+- back
+- back

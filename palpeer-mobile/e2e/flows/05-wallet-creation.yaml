@@ -1,0 +1,42 @@
+appId: com.palpeer.app
+name: 05 Wallet creation
+tags: [critical]
+---
+- runFlow: subflows/to-tabs.yaml
+- tapOn:
+    id: tab-wallets
+- extendedWaitUntil:
+    visible: 'No Wallets Available'
+    timeout: 20000
+# The header "+" only shows once a wallet exists; the empty state has its own button
+- tapOn: 'Create wallet'
+- tapOn:
+    id: create-wallet-option-CAD
+- tapOn:
+    id: create-wallet-submit
+- extendedWaitUntil:
+    visible:
+      id: wallet-available
+    timeout: 20000
+- assertVisible:
+    id: wallet-fund
+- back
+
+- tapOn:
+    id: wallets-create
+- tapOn:
+    id: create-wallet-option-NGN
+- tapOn:
+    id: create-wallet-submit
+- extendedWaitUntil:
+    visible:
+      id: wallet-available
+    timeout: 20000
+- back
+
+- extendedWaitUntil:
+    visible:
+      id: wallet-card-CAD
+    timeout: 15000
+- assertVisible:
+    id: wallet-card-NGN

@@ -1,0 +1,66 @@
+appId: com.palpeer.app
+name: 09 P2P negotiation
+tags: [critical, financial]
+---
+# Another user posts a request; the app opens it from a deep link
+- runScript:
+    file: subflows/helper.js
+    env:
+      ACTION: counterpartyRequest
+- evalScript: ${output.requestId = output.helper.requestId}
+- openLink: ${'palpeer://p2p/request/' + output.requestId}
+- extendedWaitUntil:
+    visible:
+      id: p2p-make-offer
+    timeout: 30000
+
+# Make an offer
+- tapOn:
+    id: p2p-make-offer
+- extendedWaitUntil:
+    visible:
+      id: offer-amount
+    timeout: 20000
+- runFlow:
+    file: subflows/type.yaml
+    env: { FIELD: offer-amount, TEXT: '40' }
+- runFlow:
+    file: subflows/type.yaml
+    env: { FIELD: offer-rate, TEXT: '990' }
+- tapOn:
+    id: offer-submit
+- extendedWaitUntil:
+    visible:
+      id: negotiation-status
+    timeout: 30000
+- assertVisible:
+    id: negotiation-turn
+
+# The counterparty counters; the app shows it (realtime or refetch) and it is now our turn
+- runScript:
+    file: subflows/helper.js
+    env:
+      ACTION: counterpartyCounter
+      QUERY: amount=40&rate=1010
+- extendedWaitUntil:
+    visible:
+      id: negotiation-accept
+    timeout: 45000
+
+# Accept the counter-offer: the backend creates the order
+- tapOn:
+    id: negotiation-accept
+- tapOn:
+    id: confirm-dialog-confirm
+- extendedWaitUntil:
+    visible:
+      id: negotiation-view-order
+    timeout: 30000
+- tapOn:
+    id: negotiation-view-order
+- extendedWaitUntil:
+    visible:
+      id: p2p-order-status
+    timeout: 20000
+- assertVisible:
+    id: p2p-order-rate

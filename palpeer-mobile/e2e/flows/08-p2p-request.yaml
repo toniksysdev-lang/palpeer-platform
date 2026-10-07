@@ -1,0 +1,40 @@
+appId: com.palpeer.app
+name: 08 P2P request
+tags: [critical, financial]
+---
+- runFlow: subflows/to-tabs.yaml
+- tapOn:
+    id: tab-p2p
+- tapOn:
+    id: p2p-create
+- extendedWaitUntil:
+    visible:
+      id: p2p-create-amount
+    timeout: 20000
+- tapOn:
+    id: p2p-create-base
+- tapOn:
+    id: p2p-currency-sheet-option-CAD
+- tapOn:
+    id: p2p-create-quote
+- tapOn:
+    id: p2p-currency-sheet-option-NGN
+- runFlow:
+    file: subflows/type.yaml
+    env: { FIELD: p2p-create-amount, TEXT: '25' }
+- runFlow:
+    file: subflows/type.yaml
+    env: { FIELD: p2p-create-rate, TEXT: '1000' }
+- tapOn:
+    id: p2p-create-submit
+- extendedWaitUntil:
+    visible:
+      id: p2p-request-status
+    timeout: 30000
+- assertVisible:
+    id: p2p-request-amount
+- assertVisible:
+    id: p2p-edit
+- assertVisible:
+    id: p2p-cancel
+- back

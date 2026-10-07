@@ -1,0 +1,11 @@
+appId: com.palpeer.app
+# Replaces the text of the field with testID FIELD by TEXT. Typing goes through the helper
+# (adb input text) because Maestro's inputText/eraseText stall on slow emulators.
+---
+- tapOn:
+    id: ${FIELD}
+- runScript:
+    file: helper.js
+    env:
+      ACTION: type
+      QUERY: ${'clear=1&text=' + encodeURIComponent(TEXT)}

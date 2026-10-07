@@ -1,0 +1,21 @@
+# Maestro workspace config. The flows share one signed-in user, so they run in order and stop at
+# the first failure.
+flows:
+  - '*.yaml'
+executionOrder:
+  continueOnFailure: false
+  flowsOrder:
+    - 01 App launch
+    - 02 Registration and OTP
+    - 03 Login
+    - 04 Set transaction PIN
+    - 05 Wallet creation
+    - 06 Wallet funding
+    - 07 Currency exchange
+    - 08 P2P request
+    - 09 P2P negotiation
+    - 10 Chat
+    - 11 Transaction history
+    - 12 Virtual card
+    - 13 Biometric login
+    - 14 Logout

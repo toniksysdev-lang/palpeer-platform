@@ -1,0 +1,24 @@
+appId: com.palpeer.app
+name: 01 App launch
+tags: [critical]
+---
+# Retried: the emulator's adb link can drop briefly while Maestro starts its driver.
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          clearState: true
+          clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-get-started
+    timeout: 90000
+- assertVisible: 'View Best Rate Now'
+- assertVisible:
+    id: welcome-login
+- tapOn:
+    id: welcome-get-started
+- extendedWaitUntil:
+    visible:
+      id: register-email
+    timeout: 15000

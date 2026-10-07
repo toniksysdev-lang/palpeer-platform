@@ -1,0 +1,19 @@
+# Signs in with ${EMAIL} / ${PASSWORD} from the login screen and waits for Home.
+appId: com.palpeer.app
+---
+- extendedWaitUntil:
+    visible:
+      id: login-email
+    timeout: 30000
+- runFlow:
+    file: type.yaml
+    env: { FIELD: login-email, TEXT: '${EMAIL}' }
+- runFlow:
+    file: type.yaml
+    env: { FIELD: login-password, TEXT: '${PASSWORD}' }
+- tapOn:
+    id: login-submit
+- extendedWaitUntil:
+    visible:
+      id: tab-home
+    timeout: 30000

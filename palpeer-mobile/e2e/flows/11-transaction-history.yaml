@@ -1,0 +1,26 @@
+appId: com.palpeer.app
+name: 11 Transaction history
+tags: [critical, financial]
+---
+- runFlow: subflows/to-tabs.yaml
+- tapOn:
+    id: tab-home
+- tapOn:
+    id: home-activity-all
+- extendedWaitUntil:
+    visible:
+      id: activity-list
+    timeout: 30000
+# The exchange and the settled funding from earlier flows are listed
+- assertVisible: 'Exchange CAD → NGN.*'
+- assertVisible: 'Funding · CAD.*'
+- tapOn: 'Exchange CAD → NGN.*'
+- extendedWaitUntil:
+    visible:
+      id: transaction-status
+    timeout: 20000
+- assertVisible:
+    id: transaction-rate
+- assertVisible:
+    id: transaction-reference
+- back

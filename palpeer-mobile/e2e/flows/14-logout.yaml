@@ -1,0 +1,40 @@
+appId: com.palpeer.app
+name: 14 Logout
+tags: [critical]
+---
+- runFlow: subflows/to-tabs.yaml
+- tapOn:
+    id: tab-home
+- tapOn:
+    id: home-profile
+- scrollUntilVisible:
+    element:
+      id: profile-sign-out
+    direction: DOWN
+- tapOn:
+    id: profile-sign-out
+- runFlow:
+    when:
+      visible:
+        id: confirm-dialog-confirm
+    commands:
+      - tapOn:
+          id: confirm-dialog-confirm
+- extendedWaitUntil:
+    visible:
+      id: login-email
+    timeout: 30000
+
+# Signed out for real: a cold start stays on sign-in, with no lock screen or cached data
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: login-email
+    timeout: 60000
+- assertNotVisible:
+    id: lock-screen
+- assertNotVisible: 'Unlock PALPEER'
+- assertNotVisible:
+    id: tab-home

@@ -1,0 +1,23 @@
+appId: com.palpeer.app
+name: 03 Login
+tags: [critical]
+---
+# Wrong password is rejected without signing in
+- runFlow:
+    file: subflows/type.yaml
+    env: { FIELD: login-email, TEXT: '${EMAIL}' }
+- runFlow:
+    file: subflows/type.yaml
+    env: { FIELD: login-password, TEXT: 'Wrong-Passw0rd!' }
+- tapOn:
+    id: login-submit
+- extendedWaitUntil:
+    visible:
+      id: login-error
+    timeout: 20000
+- assertNotVisible:
+    id: tab-home
+
+- runFlow: subflows/sign-in.yaml
+- assertVisible:
+    id: tab-wallets

@@ -1,0 +1,32 @@
+appId: com.palpeer.app
+name: 10 Chat
+tags: [critical]
+---
+# Continues on the order screen left by 09
+- tapOn:
+    id: p2p-order-chat
+- extendedWaitUntil:
+    visible:
+      id: chat-input
+    timeout: 30000
+- runFlow:
+    file: subflows/type.yaml
+    env: { FIELD: chat-input, TEXT: 'Hello from the E2E test' }
+- tapOn:
+    id: chat-send
+- extendedWaitUntil:
+    visible: 'Hello from the E2E test'
+    timeout: 20000
+
+# The counterparty replies; it arrives over the realtime connection
+- runScript:
+    file: subflows/helper.js
+    env:
+      ACTION: counterpartyMessage
+      QUERY: text=Reply%20from%20the%20counterparty
+- extendedWaitUntil:
+    visible: 'Reply from the counterparty'
+    timeout: 45000
+- back
+- back
+- back

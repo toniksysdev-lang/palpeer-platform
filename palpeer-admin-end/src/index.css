@@ -1,0 +1,225 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Visual language aligned with Support-Ticketing-App (styling only). */
+:root {
+  color-scheme: light;
+
+  --ki-primary: #0f626a;
+  --ki-font: #082f32;
+  --ki-bg: #f6f7fa;
+  --ki-border: #ebedf0;
+
+  --color-background: 246 247 250;
+  --color-surface: 255 255 255;
+  --color-surface-secondary: 240 241 245;
+  --color-border: 235 237 240;
+  --color-text-primary: 8 47 50;
+  --color-text-secondary: 55 65 81;
+  --color-text-muted: 107 114 128;
+  --color-primary: 15 98 106;
+  --color-primary-hover: 10 74 80;
+  --color-primary-foreground: 255 255 255;
+  --color-success: 5 150 105;
+  --color-warning: 217 119 6;
+  --color-danger: 220 82 99;
+  --color-info: 39 81 125;
+
+  --radius: 0.6rem;
+  --shadow-card: 0 0.1rem 0.5rem 0 rgba(40, 35, 45, 0.1);
+  --shadow-raised: 0 0.5rem 2rem #f4f7f8;
+  --shadow-sidebar: 0 -0.8rem 1.2rem rgba(40, 35, 45, 0.08);
+  --gradient-maritime: linear-gradient(135deg, #0f626a, #0a4a50);
+  --transition-smooth: all 0.3s ease;
+
+  --sidebar-width: 16.5rem;
+  --sidebar-collapsed-width: 4.5rem;
+  --header-height: 3.75rem;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --ki-font: #e8f4f5;
+  --ki-bg: #06191b;
+  --ki-border: #1e3a3d;
+
+  --color-background: 6 25 27;
+  --color-surface: 10 40 44;
+  --color-surface-secondary: 15 55 60;
+  --color-border: 30 58 61;
+  --color-text-primary: 232 244 245;
+  --color-text-secondary: 186 210 214;
+  --color-text-muted: 140 168 173;
+  --color-primary: 51 151 161;
+  --color-primary-hover: 102 177 184;
+  --color-primary-foreground: 3 20 22;
+  --color-success: 52 211 153;
+  --color-warning: 251 191 36;
+  --color-danger: 248 113 128;
+  --color-info: 125 187 220;
+
+  --shadow-card: 0 0.1rem 0.5rem 0 rgba(0, 0, 0, 0.35);
+  --shadow-raised: 0 0.5rem 2rem rgba(0, 0, 0, 0.35);
+  --shadow-sidebar: 0 -0.8rem 1.2rem rgba(0, 0, 0, 0.25);
+  --gradient-maritime: linear-gradient(135deg, #0f626a, #08383d);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    @apply bg-background font-sans text-text-primary antialiased;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--ki-font);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: var(--ki-font);
+    line-height: 1.4;
+    font-weight: 600;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary;
+  }
+}
+
+@layer components {
+  .ki-gradient {
+    background: var(--gradient-maritime);
+  }
+
+  .auth-shell-bg {
+    background:
+      radial-gradient(ellipse 80% 60% at 50% -10%, rgba(124, 187, 21, 0.22), transparent 55%),
+      radial-gradient(ellipse 70% 50% at 100% 100%, rgba(15, 98, 106, 0.55), transparent 50%),
+      linear-gradient(155deg, #0a4a50 0%, #0f626a 42%, #08383d 100%);
+  }
+
+  .auth-panel {
+    animation: auth-rise 0.55s ease-out both;
+  }
+
+  .auth-orb {
+    animation: auth-drift 12s ease-in-out infinite alternate;
+  }
+
+  .auth-orb-delayed {
+    animation: auth-drift 16s ease-in-out infinite alternate-reverse;
+  }
+
+  @keyframes auth-drift {
+    from {
+      transform: translate(0, 0);
+    }
+    to {
+      transform: translate(18px, -12px);
+    }
+  }
+
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+
+  .ki-head-icon {
+    @apply flex h-10 w-10 items-center justify-center rounded-full bg-surface-secondary text-text-primary transition-smooth hover:bg-primary/10 hover:text-primary;
+  }
+
+  .ki-card {
+    @apply rounded-[0.6rem] border border-border bg-surface p-6 shadow-card;
+  }
+
+  .ki-menu-title {
+    @apply px-2 py-2 text-xs font-medium uppercase tracking-wide text-primary;
+  }
+
+  .ki-nav-item {
+    @apply flex w-full items-center gap-2.5 rounded-[0.6rem] px-4 py-2.5 text-[15px] font-medium capitalize text-text-primary transition-smooth;
+  }
+
+  .ki-nav-item-active {
+    @apply bg-primary text-primary-foreground shadow-sm;
+  }
+
+  .ki-nav-item-inactive {
+    @apply hover:bg-primary/10 hover:text-primary;
+  }
+
+  .ki-welcome-alert {
+    @apply relative overflow-hidden rounded-[0.6rem] border border-primary/20 bg-primary/5 px-4 py-3;
+  }
+
+  .ki-welcome-alert::after {
+    content: '';
+    @apply absolute bottom-0 left-0 h-0.5 w-full bg-primary;
+  }
+
+  .btn-primary,
+  .btn-action {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary-500 px-4 py-2 font-medium text-white shadow-sm transition-smooth hover:bg-primary-600 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .input-field {
+    @apply w-full rounded-[0.6rem] border border-border bg-surface px-4 py-2.5 text-text-primary outline-none transition-smooth placeholder:text-text-muted focus:border-primary focus:ring-2 focus:ring-primary/25 disabled:opacity-60;
+  }
+}
+
+@layer utilities {
+  .skip-to-content {
+    @apply sr-only;
+  }
+
+  .skip-to-content:focus {
+    position: fixed;
+    left: 1rem;
+    top: 1rem;
+    z-index: 100;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+    @apply rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground;
+  }
+
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-surface-secondary;
+  }
+
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent dark:via-white/10;
+    animation: shimmer 1.4s infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

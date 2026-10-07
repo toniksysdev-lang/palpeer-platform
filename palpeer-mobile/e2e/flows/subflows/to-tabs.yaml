@@ -1,0 +1,10 @@
+appId: com.palpeer.app
+# Goes back until the tab bar shows, so each flow starts from the tabs whatever the last one left open.
+---
+- repeat:
+    while:
+      notVisible:
+        id: tab-home
+    times: 6
+    commands:
+      - back

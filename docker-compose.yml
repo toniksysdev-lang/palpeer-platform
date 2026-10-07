@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: palpeer-postgres
+    environment:
+      POSTGRES_DB: palpeer
+      POSTGRES_USER: palpeer
+      POSTGRES_PASSWORD: palpeer
+    ports:
+      - "5432:5432"
+    volumes:
+      - palpeer_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U palpeer -d palpeer"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: palpeer-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - palpeer_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: palpeer-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: palpeer
+      DB_USER: palpeer
+      DB_PASSWORD: palpeer
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SERVER_PORT: 8080
+    ports:
+      - "8080:8080"
+
+volumes:
+  palpeer_pg_data:
+  palpeer_redis_data:

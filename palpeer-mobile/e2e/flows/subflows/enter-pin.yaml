@@ -1,0 +1,14 @@
+# Types ${PIN} on the PinEntry keypad identified by ${ENTRY} and submits.
+appId: com.palpeer.app
+---
+- evalScript: ${output.pinDigits = PIN.split('')}
+- tapOn:
+    id: ${ENTRY + '-pad-key-' + output.pinDigits[0]}
+- tapOn:
+    id: ${ENTRY + '-pad-key-' + output.pinDigits[1]}
+- tapOn:
+    id: ${ENTRY + '-pad-key-' + output.pinDigits[2]}
+- tapOn:
+    id: ${ENTRY + '-pad-key-' + output.pinDigits[3]}
+- tapOn:
+    id: ${ENTRY + '-submit'}

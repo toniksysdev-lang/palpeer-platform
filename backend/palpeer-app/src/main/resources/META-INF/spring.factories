@@ -1,0 +1,3 @@
+# Auto-loaded by DotEnvEnvironmentPostProcessor (and listed for Boot discovery)
+org.springframework.boot.env.EnvironmentPostProcessor=\
+com.palpeer.app.config.DotEnvEnvironmentPostProcessor

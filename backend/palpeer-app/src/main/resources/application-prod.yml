@@ -1,0 +1,49 @@
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME:palpeer}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 40
+      minimum-idle: 10
+      connection-timeout: 30000
+  jpa:
+    show-sql: false
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      ssl:
+        enabled: ${REDIS_SSL:true}
+  mail:
+    host: ${PALPEER_SMTP_HOST}
+    port: ${PALPEER_SMTP_PORT:587}
+    username: ${PALPEER_SMTP_USERNAME}
+    password: ${PALPEER_SMTP_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: ${PALPEER_SMTP_SSL:true}
+            required: ${PALPEER_SMTP_SSL:true}
+          ssl:
+            enable: false
+          connectiontimeout: 15000
+          timeout: 15000
+          writetimeout: 15000
+
+server:
+  error:
+    include-stacktrace: never
+
+logging:
+  level:
+    root: WARN
+    com.palpeer: INFO
+    org.hibernate.SQL: ERROR

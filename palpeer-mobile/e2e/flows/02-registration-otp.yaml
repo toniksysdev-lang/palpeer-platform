@@ -1,0 +1,61 @@
+appId: com.palpeer.app
+name: 02 Registration and OTP
+tags: [critical]
+---
+# Registration (starts on the register screen left by 01)
+- runFlow:
+    file: subflows/type.yaml
+    env: { FIELD: register-email, TEXT: '${EMAIL}' }
+- runFlow:
+    file: subflows/type.yaml
+    env: { FIELD: register-phone, TEXT: '${PHONE}' }
+- runFlow:
+    file: subflows/type.yaml
+    env: { FIELD: register-password, TEXT: '${PASSWORD}' }
+- runFlow:
+    file: subflows/type.yaml
+    env: { FIELD: register-confirm, TEXT: '${PASSWORD}' }
+- tapOn:
+    id: register-submit
+- extendedWaitUntil:
+    visible: 'Check your email'
+    timeout: 30000
+
+# Wrong code first: the app must reject it, clear the boxes and stay on the screen
+- tapOn:
+    id: verify-code-cells
+- runScript:
+    file: subflows/helper.js
+    env:
+      ACTION: type
+      QUERY: text=000000
+- extendedWaitUntil:
+    visible: 'That code is incorrect.*'
+    timeout: 20000
+- assertVisible: 'Check your email'
+- assertNotVisible: 'Verify your phone'
+
+# Real code from the development backend log
+- runScript:
+    file: subflows/helper.js
+    env:
+      ACTION: otp
+      QUERY: ${'purpose=EMAIL_VERIFICATION&email=' + encodeURIComponent(EMAIL)}
+- tapOn:
+    id: verify-code-cells
+- runScript:
+    file: subflows/helper.js
+    env:
+      ACTION: type
+      QUERY: ${'text=' + output.helper.code}
+- extendedWaitUntil:
+    visible: 'Verify your phone'
+    timeout: 30000
+
+# SMS delivery isn't available yet; the app lets the user skip
+- tapOn:
+    id: verify-skip
+- extendedWaitUntil:
+    visible:
+      id: login-email
+    timeout: 15000

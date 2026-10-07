@@ -1,0 +1,51 @@
+appId: com.palpeer.app
+name: 12 Virtual card
+tags: [critical, financial]
+---
+- runFlow: subflows/to-tabs.yaml
+- tapOn:
+    id: tab-cards
+# No cards yet: the empty state's button (the footer "cards-issue" shows once a card exists)
+- tapOn: 'Issue a card'
+- extendedWaitUntil:
+    visible:
+      id: issue-card-submit
+    timeout: 20000
+- tapOn:
+    id: issue-card-currency-CAD
+- runFlow:
+    file: subflows/type.yaml
+    env: { FIELD: issue-card-holder, TEXT: 'E2E Tester' }
+- tapOn:
+    id: issue-card-submit
+- tapOn:
+    id: confirm-dialog-confirm
+- extendedWaitUntil:
+    visible:
+      id: card-status
+    timeout: 30000
+# Only the last four digits exist; there is no full number or CVV to show
+- assertNotVisible: 'CVV'
+
+# Freeze, then unfreeze with the transaction PIN
+- tapOn:
+    id: card-freeze
+- tapOn:
+    id: confirm-dialog-confirm
+- extendedWaitUntil:
+    visible:
+      id: card-unfreeze
+    timeout: 20000
+- tapOn:
+    id: card-unfreeze
+- tapOn:
+    id: confirm-dialog-confirm
+- runFlow:
+    file: subflows/enter-pin.yaml
+    env:
+      ENTRY: pin-prompt-entry
+- extendedWaitUntil:
+    visible:
+      id: card-freeze
+    timeout: 20000
+- back

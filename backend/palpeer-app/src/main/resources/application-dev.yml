@@ -1,0 +1,52 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:palpeer}
+    username: ${DB_USER:palpeer}
+    password: ${DB_PASSWORD:palpeer}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN:2}
+  jpa:
+    show-sql: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  # Dev SMTP — values come from repo-root `.env` (PALPEER_SMTP_* / PALPEER_MAIL_*).
+  mail:
+    host: ${PALPEER_SMTP_HOST:smtp-pulse.com}
+    port: ${PALPEER_SMTP_PORT:587}
+    username: ${PALPEER_SMTP_USERNAME:}
+    password: ${PALPEER_SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: ${PALPEER_SMTP_SSL:true}
+            required: ${PALPEER_SMTP_SSL:true}
+          ssl:
+            enable: false
+          connectiontimeout: 15000
+          timeout: 15000
+          writetimeout: 15000
+
+logging:
+  level:
+    com.palpeer: DEBUG
+    org.hibernate.SQL: DEBUG
+    com.zaxxer.hikari: INFO
+
+palpeer:
+  mail:
+    from: ${PALPEER_MAIL_FROM:noreply@palpeer.com.ng}
+    from-name: ${PALPEER_MAIL_FROM_NAME:PALPEER SUPPORT}
+    header-from: ${PALPEER_MAIL_HEADER_FROM:noreply@palpeer.com.ng}
+  security:
+    otp:
+      # Still log in dev as fallback visibility when debugging
+      log-code: ${OTP_LOG_CODE:true}

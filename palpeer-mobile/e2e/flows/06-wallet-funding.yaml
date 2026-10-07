@@ -1,0 +1,53 @@
+appId: com.palpeer.app
+name: 06 Wallet funding
+tags: [critical, financial]
+---
+- runFlow: subflows/to-tabs.yaml
+- tapOn:
+    id: tab-wallets
+- tapOn:
+    id: wallet-card-CAD
+- tapOn:
+    id: wallet-fund
+- runFlow:
+    file: subflows/type.yaml
+    env: { FIELD: fund-amount, TEXT: '100' }
+- tapOn:
+    id: fund-continue
+- extendedWaitUntil:
+    visible:
+      id: fund-review-amount
+    timeout: 15000
+- tapOn:
+    id: fund-confirm
+- extendedWaitUntil:
+    visible:
+      id: funding-back
+    timeout: 30000
+# The backend hasn't settled it yet (INITIATED/PENDING), so the app must not claim success.
+# Without an enabled rail the backend leaves it INITIATED for an operator to process.
+- assertVisible:
+    id: movement-status
+- assertVisible: "Funding requested|Waiting for your payment|Funding isn't available for CAD yet"
+- assertNotVisible: 'Funds added'
+
+# The payment operator completes the funding (backend-side), then the app shows the new balance
+- runScript:
+    file: subflows/helper.js
+    env:
+      ACTION: completeFunding
+      QUERY: ${'email=' + encodeURIComponent(EMAIL) + '&password=' + encodeURIComponent(PASSWORD)}
+- tapOn:
+    id: funding-back
+- extendedWaitUntil:
+    visible:
+      id: wallet-available
+    timeout: 15000
+# Pull to refresh picks up the settled balance
+- swipe:
+    direction: DOWN
+- extendedWaitUntil:
+    visible:
+      id: wallet-available
+      text: '.*100\.00.*'
+    timeout: 30000
