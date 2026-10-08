@@ -1,0 +1,27 @@
+# Keep the EAS upload small; cloud install restores dependencies.
+node_modules/
+.expo/
+dist/
+web-build/
+coverage/
+e2e/results/
+web-emulator/
+ios/
+android/
+.git/
+**/.git/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.env
+.env.*
+!.env.example
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.tsbuildinfo
+.DS_Store
+.kotlin/
+.metro-health-check*
