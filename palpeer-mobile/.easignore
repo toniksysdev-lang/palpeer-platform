@@ -1,27 +1,37 @@
-# Keep the EAS upload small; cloud install restores dependencies.
+# Dependencies & tooling (reinstalled on EAS)
 node_modules/
+**/node_modules/
 .expo/
 dist/
 web-build/
 coverage/
-e2e/results/
-web-emulator/
-ios/
-android/
 .git/
 **/.git/
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
+
+# Local native projects (CNG regenerates these on EAS)
+ios/
+android/
+.kotlin/
+
+# Large / non-app content
+e2e/
+web-emulator/
+docs/
+*.md
+!README.md
+
+# Secrets & local env
 .env
 .env.*
 !.env.example
+
+# Logs / junk
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 *.tsbuildinfo
 .DS_Store
-.kotlin/
 .metro-health-check*
+*.log
+jest-*-out*.txt
+target-state*.png
