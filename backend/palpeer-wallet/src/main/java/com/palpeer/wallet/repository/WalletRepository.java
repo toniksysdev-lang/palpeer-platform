@@ -21,6 +21,8 @@ public interface WalletRepository extends JpaRepository<Wallet, UUID>, JpaSpecif
 
     boolean existsByUserIdAndCurrencyCodeIgnoreCase(UUID userId, String currencyCode);
 
+    Optional<Wallet> findByUserIdAndCurrencyCodeIgnoreCase(UUID userId, String currencyCode);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select w from Wallet w where w.id = :id")
     Optional<Wallet> findByIdForUpdate(@Param("id") UUID id);

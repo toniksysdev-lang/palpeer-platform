@@ -19,6 +19,7 @@ type Props = {
   editable?: boolean;
   appearance?: 'outlined' | 'elevated';
   placeholder?: string;
+  autoFocus?: boolean;
   testID?: string;
 };
 
@@ -52,6 +53,7 @@ export function AmountInput({
   editable = true,
   appearance = 'outlined',
   placeholder = '0',
+  autoFocus = false,
   testID,
 }: Props) {
   const theme = useTheme();
@@ -66,7 +68,9 @@ export function AmountInput({
     value,
     onChange: handleChange,
     maxLength: AMOUNT_MAX_LENGTH,
-    bottomLeft: precision > 0 ? '.' : '',
+    bottomLeft: precision > 0 ? '.' : '*',
+    variant: 'phone',
+    autoFocus,
     disabled: !editable,
   });
 

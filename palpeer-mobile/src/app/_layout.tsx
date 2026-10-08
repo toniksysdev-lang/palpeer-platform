@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { OfflineBanner } from '@/components/feedback/OfflineBanner';
 import { BrandSplash } from '@/features/auth/components/BrandSplash';
 import { OfferBiometricUnlock } from '@/features/security/OfferBiometricUnlock';
+import { RequirePinSetup } from '@/features/security/RequirePinSetup';
 import { LockScreen } from '@/features/security/lock/LockScreen';
 import { useAppLockLifecycle } from '@/features/security/lock/useAppLockLifecycle';
 import { useAppSwitcherPrivacy } from '@/features/security/lock/useAppSwitcherPrivacy';
@@ -76,6 +77,7 @@ function RootNavigator() {
         <Stack.Screen name="support" />
       </Stack>
       <OfflineBanner />
+      {isAuthenticated ? <RequirePinSetup /> : null}
       {isAuthenticated ? <OfferBiometricUnlock /> : null}
       {isAuthenticated && locked ? <LockScreen /> : null}
     </>

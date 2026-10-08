@@ -160,16 +160,18 @@ export function WithdrawScreen() {
       void pinStatus.refetch();
       return;
     }
+    if (!pinStatus.data.pinSet) {
+      setError('Set up a transaction PIN before withdrawing.');
+      return;
+    }
     setConfirming(true);
-    if (pinStatus.data.pinSet) {
-      const confirmed = await requestPin({
-        title: 'Confirm withdrawal',
-        message: `Enter your PIN to withdraw ${format(toMoney(amount), code)}.`,
-      });
-      if (!confirmed) {
-        setConfirming(false);
-        return;
-      }
+    const confirmed = await requestPin({
+      title: 'Confirm withdrawal',
+      message: `Enter your PIN to withdraw ${format(toMoney(amount), code)}.`,
+    });
+    if (!confirmed) {
+      setConfirming(false);
+      return;
     }
     const result = await createWithdrawal({
       walletId: data.id,
@@ -232,14 +234,14 @@ export function WithdrawScreen() {
           withdrawal completes. If it fails, it goes back to your available balance.
         </AppText>
         {pinStatus.data && !pinStatus.data.pinSet ? (
-          <FormAlert
-            tone="info"
-            message="Set up a transaction PIN to confirm withdrawals with it."
-            testID="withdraw-no-pin"
-          />
-        ) : null}
-        {pinStatus.data && !pinStatus.data.pinSet ? (
-          <TextLink label="Set up a PIN" onPress={() => router.push('/security/pin/set')} />
+          <View style={{ gap: theme.spacing.xs }}>
+            <FormAlert
+              tone="info"
+              message="A transaction PIN is required to withdraw."
+              testID="withdraw-no-pin"
+            />
+            <TextLink label="Set up a PIN" onPress={() => router.push('/security/pin/set')} />
+          </View>
         ) : null}
       </Screen>
     );

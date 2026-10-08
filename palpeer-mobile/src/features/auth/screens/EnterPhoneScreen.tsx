@@ -39,7 +39,7 @@ export function EnterPhoneScreen() {
     value: national,
     onChange: setDigits,
     maxLength: PHONE_MAX_DIGITS,
-    bottomLeft: '.',
+    bottomLeft: '*',
     variant: 'phone',
     autoFocus: true,
   });

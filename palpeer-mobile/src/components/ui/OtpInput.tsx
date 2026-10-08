@@ -47,6 +47,7 @@ export function OtpInput({
     onChange: handleChange,
     maxLength: length,
     bottomLeft: '*',
+    variant: 'phone',
     autoFocus,
     disabled: !editable,
   });

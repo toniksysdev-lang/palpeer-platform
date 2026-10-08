@@ -8,12 +8,11 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useTheme } from '@/providers/ThemeProvider';
 
 import { NumberPad, type NumberPadBottomLeft, type NumberPadVariant } from './NumberPad';
-import { TextLink } from './TextLink';
 
 export type NumberPadField = {
   id: string;
@@ -129,32 +128,25 @@ export function NumberPadDock({ testID = 'number-pad-dock' }: { testID?: string 
   const pad = useOptionalNumberPad();
   if (!pad?.active) return null;
 
-  const { active, close } = pad;
+  const { active } = pad;
 
-  const phone = active.variant === 'phone';
-
+  // Flat Figma pad: no chrome/Done. Forms dismiss via their primary action.
   return (
     <View
       testID={testID}
       style={{
-        gap: phone ? 0 : theme.spacing.md,
-        paddingTop: phone ? theme.spacing.sm : theme.spacing.md,
-        borderTopWidth: phone ? 0 : StyleSheet.hairlineWidth,
-        borderTopColor: theme.colors.border,
+        gap: 0,
+        paddingTop: theme.spacing.sm,
+        borderTopWidth: 0,
         backgroundColor: theme.colors.background,
       }}
     >
-      {phone ? null : (
-        <View style={{ alignItems: 'flex-end', paddingHorizontal: theme.spacing.sm }}>
-          <TextLink label="Done" tone="info" onPress={() => close(active.id)} testID={`${testID}-done`} />
-        </View>
-      )}
       <NumberPad
         value={active.value}
         onChange={active.onChange}
         maxLength={active.maxLength}
-        bottomLeft={active.bottomLeft}
-        variant={active.variant}
+        bottomLeft={active.bottomLeft || '*'}
+        variant="phone"
         testID={testID}
       />
     </View>

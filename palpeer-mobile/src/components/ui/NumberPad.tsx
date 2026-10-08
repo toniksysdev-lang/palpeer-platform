@@ -7,7 +7,7 @@ import { AppText } from './AppText';
 import { Icon } from './Icon';
 
 export type NumberPadBottomLeft = '' | '*' | '.';
-/** `phone` = Figma enter-phone pad (flat, full-width). `compact` = PIN/amount dock. */
+/** Flat Figma pad (full-width). Use for phone, PIN, OTP, and amount fields. */
 export type NumberPadVariant = 'compact' | 'phone';
 
 type Props = {
@@ -16,8 +16,7 @@ type Props = {
   maxLength?: number;
   disabled?: boolean;
   /**
-   * Bottom-left key: blank (PIN), `*` (decorative), or `.` (phone / amounts).
-   * `*` is disabled; `.` inserts a decimal point once (ignored for digit-only phone fields).
+   * Bottom-left key: blank, decorative `*` (ignored), or `.` (decimal for amounts).
    */
   bottomLeft?: NumberPadBottomLeft;
   variant?: NumberPadVariant;
@@ -25,24 +24,24 @@ type Props = {
 };
 
 /**
- * On-screen numeric keypad (1–9, 0, delete). Digits never go through the system keyboard.
+ * Flat Figma numeric keypad (1–9, bottom-left, 0, delete). No letter legends or key borders.
  */
 export function NumberPad({
   value,
   onChange,
   maxLength = 15,
   disabled,
-  bottomLeft = '',
-  variant = 'compact',
+  bottomLeft = '*',
+  variant = 'phone',
   testID,
 }: Props) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
-  const phone = variant === 'phone';
+  const flat = variant === 'phone' || variant === 'compact';
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', bottomLeft, '0', 'back'] as const;
-  const gridWidth = phone ? width - theme.spacing.xl * 2 : 264;
-  const keyWidth = phone ? Math.floor(gridWidth / 3) : 80;
-  const keyHeight = phone ? 56 : 64;
+  const gridWidth = flat ? width - theme.spacing.xl * 2 : 264;
+  const keyWidth = flat ? Math.floor(gridWidth / 3) : 80;
+  const keyHeight = 56;
 
   const press = (key: (typeof keys)[number]) => {
     if (disabled) return;
@@ -52,8 +51,6 @@ export function NumberPad({
     }
     if (!key || key === '*') return;
     if (key === '.') {
-      // Phone national digits are digits-only; keep `.` visible per Figma but ignore presses.
-      if (phone) return;
       if (value.includes('.')) return;
       onChange(value.length === 0 ? '0.' : `${value}.`);
       return;
@@ -63,13 +60,7 @@ export function NumberPad({
 
   return (
     <View
-      style={[
-        styles.grid,
-        {
-          width: gridWidth,
-          rowGap: phone ? theme.spacing.sm : 8,
-        },
-      ]}
+      style={[styles.grid, { width: gridWidth, rowGap: theme.spacing.sm }]}
       testID={testID ? `${testID}-grid` : undefined}
       accessibilityLabel="Number pad"
     >
@@ -80,14 +71,12 @@ export function NumberPad({
           <Pressable
             key={`${key}-${index}`}
             onPress={() => press(key)}
-            disabled={disabled || key === '*' || (phone && key === '.')}
+            disabled={disabled || key === '*'}
             accessibilityRole="button"
             accessibilityLabel={
               key === 'back' ? 'Delete last digit' : key === '.' ? 'Decimal point' : key
             }
-            accessibilityState={{
-              disabled: disabled || key === '*' || (phone && key === '.'),
-            }}
+            accessibilityState={{ disabled: disabled || key === '*' }}
             testID={testID ? `${testID}-key-${key === 'back' ? 'back' : key}` : undefined}
             style={({ pressed }) => [
               {
@@ -95,13 +84,8 @@ export function NumberPad({
                 height: keyHeight,
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderRadius: phone ? 0 : theme.radius.pill,
-                backgroundColor:
-                  !phone && pressed && key !== '*'
-                    ? theme.colors.surfaceMuted
-                    : phone && pressed
-                      ? theme.colors.surfaceMuted
-                      : 'transparent',
+                borderRadius: 0,
+                backgroundColor: pressed && key !== '*' ? theme.colors.surfaceMuted : 'transparent',
                 opacity: disabled ? 0.5 : 1,
               },
             ]}
@@ -110,18 +94,14 @@ export function NumberPad({
               <Icon icon={Delete} size="lg" color={theme.colors.textSecondary} />
             ) : (
               <AppText
-                variant={phone ? 'h1' : 'h2'}
-                tone={key === '*' || (phone && key === '.') ? 'muted' : 'secondary'}
-                style={
-                  phone
-                    ? {
-                        fontSize: 28,
-                        fontWeight: '400',
-                        color: theme.colors.textSecondary,
-                        lineHeight: 34,
-                      }
-                    : undefined
-                }
+                variant="h1"
+                tone={key === '*' ? 'muted' : 'secondary'}
+                style={{
+                  fontSize: 28,
+                  fontWeight: '400',
+                  color: theme.colors.textSecondary,
+                  lineHeight: 34,
+                }}
               >
                 {key}
               </AppText>

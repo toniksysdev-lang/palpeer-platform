@@ -93,6 +93,27 @@ export type WithdrawalTransactionResponse = {
   createdAt: IsoInstant;
 };
 
+/** VERIFIED: wallet-to-wallet transfer between users (same currency). */
+export type CreateWalletTransferRequest = {
+  sourceWalletId: Uuid;
+  /** Recipient email or E.164 phone. */
+  recipient: string;
+  amount: Money;
+  note?: string;
+};
+
+export type WalletTransferResponse = {
+  id: Uuid;
+  senderUserId: Uuid;
+  recipientUserId: Uuid;
+  sourceWalletId: Uuid;
+  destinationWalletId: Uuid;
+  currencyCode: string;
+  amount: Money;
+  note: string | null;
+  createdAt: IsoInstant;
+};
+
 /** VERIFIED: `TransactionActivityType` (unified feed). */
 export type TransactionActivityType = 'FUNDING' | 'WITHDRAWAL' | 'EXCHANGE';
 

@@ -11,10 +11,13 @@ import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { TextLink } from '@/components/ui/TextLink';
+import { usePinPrompt } from '@/features/security/PinPromptProvider';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { useGetCurrenciesQuery } from '@/services/api/currencyApi';
 import { toAppError } from '@/services/api/errors';
+import { useGetPinStatusQuery } from '@/services/api/securityApi';
 import { useCreateWalletMutation, useGetWalletsQuery } from '@/services/api/walletApi';
 
 import { walletErrorMessage } from '../errors';
@@ -25,9 +28,12 @@ export function CreateWalletScreen() {
   const toast = useToast();
   const currencies = useGetCurrenciesQuery();
   const wallets = useGetWalletsQuery();
+  const pinStatus = useGetPinStatusQuery();
+  const { requestPin } = usePinPrompt();
   const [createWallet, createState] = useCreateWalletMutation();
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   const header = <StackHeader title="New wallet" />;
   const loadError = currencies.error ?? wallets.error;
@@ -63,7 +69,26 @@ export function CreateWalletScreen() {
   const submit = async () => {
     if (!selected) return;
     setError(null);
+    if (!pinStatus.data) {
+      setError("We couldn't check your PIN status. Try again.");
+      void pinStatus.refetch();
+      return;
+    }
+    if (!pinStatus.data.pinSet) {
+      setError('Set up a transaction PIN before creating a wallet.');
+      return;
+    }
+    setConfirming(true);
+    const confirmed = await requestPin({
+      title: 'Confirm wallet creation',
+      message: `Enter your PIN to create a ${selected} wallet.`,
+    });
+    if (!confirmed) {
+      setConfirming(false);
+      return;
+    }
     const result = await createWallet({ currencyCode: selected });
+    setConfirming(false);
     if ('error' in result) {
       const appError = toAppError(result.error);
       if (appError.code === 'WALLET_EXISTS') void wallets.refetch();
@@ -93,8 +118,8 @@ export function CreateWalletScreen() {
         <Button
           label={selected ? `Create ${selected} wallet` : 'Choose a currency'}
           onPress={() => void submit()}
-          disabled={!selected}
-          loading={createState.isLoading}
+          disabled={!selected || confirming}
+          loading={confirming || createState.isLoading}
           loadingLabel="Creating…"
           testID="create-wallet-submit"
         />
@@ -103,6 +128,16 @@ export function CreateWalletScreen() {
       {header}
       <AppText tone="secondary">Choose the currency for your new wallet.</AppText>
       <FormAlert message={error} testID="create-wallet-error" />
+      {pinStatus.data && !pinStatus.data.pinSet ? (
+        <View style={{ gap: theme.spacing.xs }}>
+          <FormAlert
+            tone="info"
+            message="A transaction PIN is required before you can create a wallet."
+            testID="create-wallet-no-pin"
+          />
+          <TextLink label="Set up a PIN" onPress={() => router.push('/security/pin/set')} />
+        </View>
+      ) : null}
       <View style={{ gap: theme.spacing.sm }} accessibilityRole="radiogroup">
         {available.map((currency) => {
           const active = currency.code === selected;

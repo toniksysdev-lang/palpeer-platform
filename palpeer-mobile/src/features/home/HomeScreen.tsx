@@ -1,6 +1,7 @@
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import {
   ArrowDownToLine,
+  ArrowLeftRight,
   ChevronRight,
   HandCoins,
   Megaphone,
@@ -66,9 +67,16 @@ export function HomeScreen() {
     void promotions.refetch();
   };
 
-  const moveMoney = (action: 'fund' | 'withdraw') => {
+  const moveMoney = (action: 'fund' | 'withdraw' | 'transfer') => {
     if (!selected) {
       router.push('/wallet/create');
+      return;
+    }
+    if (action === 'transfer') {
+      router.push({
+        pathname: '/wallet/[id]/transfer',
+        params: { id: selected.id },
+      } as Href);
       return;
     }
     router.push({
@@ -126,7 +134,7 @@ export function HomeScreen() {
       }
     >
       <AppHeader
-        title={greetingName ? `Welcome back, ${greetingName} 👋` : 'Welcome back 👋'}
+        title={greetingName ? `Welcome back, ${greetingName}` : 'Welcome back'}
         left={
           <IconButton
             icon={Menu}
@@ -164,6 +172,12 @@ export function HomeScreen() {
           label="Withdraw"
           onPress={() => moveMoney('withdraw')}
           testID="home-action-withdraw"
+        />
+        <QuickAction
+          icon={ArrowLeftRight}
+          label="Transfer"
+          onPress={() => moveMoney('transfer')}
+          testID="home-action-transfer"
         />
       </QuickActionBar>
 

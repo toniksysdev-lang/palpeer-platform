@@ -76,7 +76,8 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
     value: stringValue,
     onChange: handlePadChange,
     maxLength: numberPadMaxLength,
-    bottomLeft: numberPad ? bottomLeftFor(numberPad) : '',
+    bottomLeft: numberPad ? bottomLeftFor(numberPad) : '*',
+    variant: 'phone',
     disabled: !editable || !numberPad,
   });
 

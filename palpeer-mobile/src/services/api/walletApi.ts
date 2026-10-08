@@ -2,11 +2,13 @@ import type { SpringPage } from '@/types/api/common';
 import type {
   CreateFundingRequest,
   CreateWalletRequest,
+  CreateWalletTransferRequest,
   CreateWithdrawalRequest,
   FundingTransactionResponse,
   LedgerTransactionResponse,
   TransactionItemResponse,
   WalletResponse,
+  WalletTransferResponse,
   WithdrawalTransactionResponse,
 } from '@/types/api/wallet';
 
@@ -102,6 +104,32 @@ export const walletApi = baseApi.injectEndpoints({
       query: (withdrawalId) => ({ path: `/withdrawals/${encodeURIComponent(withdrawalId)}` }),
       providesTags: (_result, _error, id) => [{ type: 'Transaction', id: `WITHDRAWAL-${id}` }],
     }),
+
+    createWalletTransfer: build.mutation<
+      WalletTransferResponse,
+      WithKey<CreateWalletTransferRequest>
+    >({
+      query: ({ sourceWalletId, recipient, amount, note, idempotencyKey }) => ({
+        path: '/transfers',
+        method: 'POST',
+        body: {
+          sourceWalletId,
+          recipient,
+          amount: jsonDecimal(amount),
+          ...(note ? { note } : {}),
+        },
+        idempotencyKey,
+      }),
+      invalidatesTags: (_result, error, { sourceWalletId }) =>
+        error
+          ? []
+          : [
+              WALLET_LIST,
+              ...ACTIVITY,
+              { type: 'Wallet', id: sourceWalletId },
+              { type: 'Wallet', id: `LEDGER-${sourceWalletId}` },
+            ],
+    }),
   }),
 });
 
@@ -115,6 +143,7 @@ export const {
   useGetFundingQuery,
   useCreateWithdrawalMutation,
   useGetWithdrawalQuery,
+  useCreateWalletTransferMutation,
 } = walletApi;
 
 /** Tags to refresh once a funding or withdrawal reaches a final status. */

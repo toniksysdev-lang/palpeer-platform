@@ -35,7 +35,14 @@ export function QuickAction({ icon, label, onPress, tone = 'surface', disabled, 
       accessibilityLabel={label}
       accessibilityState={{ disabled: !!disabled }}
       style={[
-        { flex: 1, alignItems: 'center', gap: theme.spacing.sm, opacity: disabled ? 0.5 : 1 },
+        {
+          width: '18%',
+          minWidth: 64,
+          flexGrow: 1,
+          alignItems: 'center',
+          gap: theme.spacing.sm,
+          opacity: disabled ? 0.5 : 1,
+        },
         press.animatedStyle,
       ]}
     >
@@ -47,11 +54,20 @@ export function QuickAction({ icon, label, onPress, tone = 'surface', disabled, 
   );
 }
 
-/** Lays out `QuickAction`s in one evenly spaced row. */
+/** Lays out `QuickAction`s in a wrapping row (supports Fund / InstantEX / P2P / Withdraw / Transfer). */
 export function QuickActionBar({ children, testID }: { children: ReactNode; testID?: string }) {
   const theme = useTheme();
   return (
-    <View testID={testID} style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+    <View
+      testID={testID}
+      style={{
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        rowGap: theme.spacing.md,
+        columnGap: theme.spacing.sm,
+      }}
+    >
       {children}
     </View>
   );
