@@ -130,6 +130,14 @@ export function mockUpdateUser(userId: string, input: UpdateUserAdminInput): Adm
   return next;
 }
 
+export function mockDeleteUser(userId: string): void {
+  const index = mockUsersCatalog.findIndex((user) => user.id === userId);
+  if (index < 0) {
+    throw new ApiClientError(404, 'RESOURCE_NOT_FOUND', 'User not found');
+  }
+  mockUsersCatalog.splice(index, 1);
+}
+
 export function mockUserRecentTransactions(userId: string): TransactionItem[] {
   return [
     {

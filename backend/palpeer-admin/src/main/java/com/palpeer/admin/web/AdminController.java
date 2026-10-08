@@ -128,6 +128,14 @@ public class AdminController {
         return ApiResponse.ok(adminUserService.updateUser(userId, request));
     }
 
+    @DeleteMapping("/users/{userId}")
+    @PreAuthorize("hasAuthority('users:write')")
+    @Operation(summary = "Permanently delete an app user and all related records")
+    public ApiResponse<Void> deleteUser(@PathVariable UUID userId) {
+        adminUserService.deleteUser(userId);
+        return ApiResponse.ok("User deleted", null);
+    }
+
     @GetMapping("/users/{userId}/notes")
     @PreAuthorize("hasAuthority('users:notes:read')")
     @Operation(summary = "List internal notes / incident records for an app user (newest first)")

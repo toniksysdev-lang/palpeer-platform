@@ -45,6 +45,12 @@ export async function updateAdminUser(
   });
 }
 
+export async function deleteAdminUser(userId: string): Promise<void> {
+  await apiRequest<null>(`/admin/users/${userId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function getAdminUserRecentTransactions(
   userId: string,
   limit = 20,

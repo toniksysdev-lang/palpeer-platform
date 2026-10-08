@@ -47,6 +47,7 @@ Envelope (VERIFIED pattern): responses wrapped as `ApiResponse<T>` (success mess
 | GET | `/admin/users` | VERIFIED | `users:read` |
 | GET | `/admin/users/{userId}` | VERIFIED | `users:read` |
 | PUT | `/admin/users/{userId}` | VERIFIED | `users:write` |
+| DELETE | `/admin/users/{userId}` | VERIFIED | `users:write` |
 
 **AdminUserSummaryResponse (VERIFIED):**  
 `id`, `email`, `phone`, `status`, `enabled`, `emailVerified`, `phoneVerified`, `createdAt`
@@ -323,7 +324,8 @@ Implementation notes:
 
 ## 16. App users vs admin accounts, and user notes
 
-- `/admin/users` (list, get, update), `/admin/search` user results, the reports `users` totals and the `users` CSV export only include **app users**. Any account linked to `admin_users` is excluded and returns 404 on `/admin/users/{id}`. Operator accounts are managed under `/admin/admins`.
+- `/admin/users` (list, get, update, delete), `/admin/search` user results, the reports `users` totals and the `users` CSV export only include **app users**. Any account linked to `admin_users` is excluded and returns 404 on `/admin/users/{id}`. Operator accounts are managed under `/admin/admins`.
+- `DELETE /admin/users/{userId}` (`users:write`) permanently removes the app user and related rows (auth, profile, wallets/ledger, funding/withdrawal/exchange, cards, KYC + private files, P2P/negotiation/chat participation, promotions, notifications, devices, admin notes, and matching audit rows). Returns 404 for missing or admin-linked accounts.
 - `GET /admin/users/{userId}/notes?page=&size=` (`users:notes:read`) returns `Page<UserNoteResponse>` newest first: `{ id, userId, category, body, authorUserId, authorEmail, createdAt }`.
 - `POST /admin/users/{userId}/notes` (`users:notes:write`) with body `{ category: INCIDENT|FRAUD|COMPLIANCE|SUPPORT|GENERAL, body (1-4000 chars) }` returns 201. Notes are append-only (no edit or delete) and audited as `ADMIN_USER_NOTE_CREATE`.
 - Migration `V24__admin_user_notes.sql` creates `admin_user_notes` and grants both permissions to SUPER_ADMIN.

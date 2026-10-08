@@ -19,12 +19,14 @@ import { UserNotesPanel } from '@/features/users/UserNotesPanel';
 import { UserRelatedTabs } from '@/features/users/UserRelatedTabs';
 import { formatDateTime, formatDecimal } from '@/lib/format';
 import {
+  mockDeleteUser,
   mockGetUser,
   mockUpdateUser,
   mockUserRecentTransactions,
   mockUserTransactionHistory,
 } from '@/mocks/users';
 import {
+  deleteAdminUser,
   getAdminUser,
   getAdminUserRecentTransactions,
   getAdminUserTransactionHistory,
@@ -48,6 +50,7 @@ export function UserDetailPage() {
   const [statusDraft, setStatusDraft] = useState<UserStatus | ''>('');
   const [enabledDraft, setEnabledDraft] = useState<'true' | 'false' | ''>('');
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const userQuery = useQuery({
     queryKey: ['admin-user', id, appConfig.useMockApi],
@@ -109,6 +112,32 @@ export function UserDetailPage() {
     onError: (error) => {
       const message = error instanceof ApiClientError ? error.message : 'User update failed.';
       push({ tone: 'error', title: 'Update failed', description: message });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (appConfig.useMockApi) {
+        await new Promise((r) => setTimeout(r, 250));
+        mockDeleteUser(id);
+        return;
+      }
+      await deleteAdminUser(id);
+    },
+    onSuccess: async () => {
+      setDeleteConfirmOpen(false);
+      push({
+        tone: 'success',
+        title: 'User deleted',
+        description: 'The app user and all related records were removed.',
+      });
+      await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      await queryClient.invalidateQueries({ queryKey: ['dashboard', 'users'] });
+      navigate('/admin/users');
+    },
+    onError: (error) => {
+      const message = error instanceof ApiClientError ? error.message : 'User delete failed.';
+      push({ tone: 'error', title: 'Delete failed', description: message });
     },
   });
 
@@ -280,6 +309,25 @@ export function UserDetailPage() {
         )}
       </section>
 
+      {canWrite ? (
+        <section className="rounded-[0.6rem] border border-danger/30 bg-surface p-5 shadow-card">
+          <h3 className="text-base font-semibold text-text-primary">Delete user</h3>
+          <p className="mt-1 text-sm text-text-secondary">
+            Permanently remove this app user and every related record (wallets, transactions, KYC,
+            P2P, chat, cards, notes, and auth data). This cannot be undone.
+          </p>
+          <div className="mt-4">
+            <Button
+              variant="danger"
+              disabled={deleteMutation.isPending}
+              onClick={() => setDeleteConfirmOpen(true)}
+            >
+              Delete
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
       <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="text-base font-semibold text-text-primary">Recent transactions</h3>
@@ -400,6 +448,17 @@ export function UserDetailPage() {
         busy={updateMutation.isPending}
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => updateMutation.mutate()}
+      />
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        title="Delete app user"
+        description={`Permanently delete ${user.email} and all related records? Wallets, transactions, KYC files, P2P activity, chat, cards, and auth data will be removed. This cannot be undone.`}
+        confirmLabel="Delete forever"
+        tone="danger"
+        busy={deleteMutation.isPending}
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={() => deleteMutation.mutate()}
       />
     </div>
   );
