@@ -12,7 +12,7 @@ export type PreferencesState = {
 
 const initialState: PreferencesState = {
   loaded: false,
-  appearance: 'system',
+  appearance: 'light',
   onboardingSeen: false,
   biometricUnlockPrompted: false,
 };

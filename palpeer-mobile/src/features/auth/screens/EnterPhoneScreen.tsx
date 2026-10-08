@@ -8,7 +8,7 @@ import { AppText } from '@/components/ui/AppText';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
-import { useNumberPadField } from '@/components/ui/NumberPadContext';
+import { useNumberPadField, useOptionalNumberPad } from '@/components/ui/NumberPadContext';
 import { useTheme } from '@/providers/ThemeProvider';
 
 import { AuthLayout } from '../components/AuthLayout';
@@ -40,8 +40,10 @@ export function EnterPhoneScreen() {
     onChange: setDigits,
     maxLength: PHONE_MAX_DIGITS,
     bottomLeft: '*',
+    variant: 'dialer',
     autoFocus: true,
   });
+  const pad = useOptionalNumberPad();
 
   const continueSignup = () => {
     const local = digitsOnly(national);
@@ -50,6 +52,8 @@ export function EnterPhoneScreen() {
       return;
     }
     setError(null);
+    // Hide the dialer before leaving so it does not flash on the next screen.
+    pad?.close();
     const phone = toE164(country.dialCode, local);
     router.push({ pathname: '/verify-phone', params: { phone, signup: '1' } });
   };

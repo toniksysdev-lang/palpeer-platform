@@ -12,7 +12,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { useTheme } from '@/providers/ThemeProvider';
 
-import { NumberPad, type NumberPadBottomLeft } from './NumberPad';
+import { NumberPad, type NumberPadBottomLeft, type NumberPadVariant } from './NumberPad';
 import { TextLink } from './TextLink';
 
 export type NumberPadField = {
@@ -21,6 +21,7 @@ export type NumberPadField = {
   onChange: (next: string) => void;
   maxLength: number;
   bottomLeft: NumberPadBottomLeft;
+  variant: NumberPadVariant;
 };
 
 type NumberPadApi = {
@@ -74,6 +75,7 @@ type BindOptions = {
   onChange: (next: string) => void;
   maxLength?: number;
   bottomLeft?: NumberPadBottomLeft;
+  variant?: NumberPadVariant;
   /** Open the pad as soon as the field mounts. */
   autoFocus?: boolean;
   disabled?: boolean;
@@ -87,6 +89,7 @@ export function useNumberPadField({
   onChange,
   maxLength = 32,
   bottomLeft = '',
+  variant = 'compact',
   autoFocus = false,
   disabled = false,
 }: BindOptions) {
@@ -95,8 +98,8 @@ export function useNumberPadField({
   const active = pad?.active?.id === id;
 
   const field = useMemo<NumberPadField>(
-    () => ({ id, value, onChange, maxLength, bottomLeft }),
-    [id, value, onChange, maxLength, bottomLeft],
+    () => ({ id, value, onChange, maxLength, bottomLeft, variant }),
+    [id, value, onChange, maxLength, bottomLeft, variant],
   );
 
   useEffect(() => {
@@ -147,6 +150,7 @@ export function NumberPadDock({ testID = 'number-pad-dock' }: { testID?: string 
         onChange={active.onChange}
         maxLength={active.maxLength}
         bottomLeft={active.bottomLeft}
+        variant={active.variant}
         testID={testID}
       />
     </View>

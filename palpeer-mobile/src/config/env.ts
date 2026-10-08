@@ -93,7 +93,8 @@ export function buildConfig(raw: RawEnv): AppConfig {
     env,
     apiBaseUrl: parseEndpoint(raw.EXPO_PUBLIC_API_BASE_URL, env, ['https://']),
     wsUrl: parseEndpoint(raw.EXPO_PUBLIC_WS_URL, env, ['https://', 'wss://']),
-    requestTimeoutMs: 15_000,
+    // Staging/production often hit a cold Render free instance; keep headroom beyond 15s.
+    requestTimeoutMs: env === 'development' ? 15_000 : 60_000,
     sessionRestoreTimeoutMs: 8_000,
     support: {
       email: parseEmail(raw.EXPO_PUBLIC_SUPPORT_EMAIL),

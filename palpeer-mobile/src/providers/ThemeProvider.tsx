@@ -8,16 +8,15 @@ import { buildTheme, type Theme } from '@/theme';
 const ThemeContext = createContext<Theme>(buildTheme('light'));
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const systemScheme = useColorScheme();
+  // Product UI is light-mode only (ignore system / stored dark preference).
+  useColorScheme();
   const appearance = useAppSelector((state) => state.preferences.appearance);
-  const scheme =
-    appearance === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : appearance;
 
   useEffect(() => {
-    nativewindColorScheme.set(appearance);
+    nativewindColorScheme.set('light');
   }, [appearance]);
 
-  const theme = useMemo(() => buildTheme(scheme), [scheme]);
+  const theme = useMemo(() => buildTheme('light'), []);
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
 }
 

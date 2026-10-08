@@ -43,7 +43,7 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
   scheme: 'palpeer',
   orientation: 'portrait',
   icon: './assets/icon.png',
-  userInterfaceStyle: 'automatic',
+  userInterfaceStyle: 'light',
   ios: {
     bundleIdentifier: APP_ID,
     supportsTablet: false,
@@ -59,7 +59,7 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
     package: APP_ID,
     allowBackup: false,
     adaptiveIcon: {
-      backgroundColor: '#E8F7F0',
+      backgroundColor: '#FFFFFF',
       foregroundImage: './assets/android-icon-foreground.png',
       backgroundImage: './assets/android-icon-background.png',
       monochromeImage: './assets/android-icon-monochrome.png',
@@ -86,10 +86,9 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
       'expo-splash-screen',
       {
         image: './assets/splash-icon.png',
-        imageWidth: 160,
+        imageWidth: 180,
         resizeMode: 'contain',
         backgroundColor: '#FFFFFF',
-        dark: { backgroundColor: '#07140F' },
       },
     ],
     [

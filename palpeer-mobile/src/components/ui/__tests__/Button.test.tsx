@@ -1,6 +1,6 @@
 import { fireEvent, screen } from '@testing-library/react-native';
 
-import { darkColors, lightColors } from '@/theme';
+import { lightColors } from '@/theme';
 import { renderWithProviders } from '@/tests/render';
 
 import { Button } from '../Button';
@@ -45,15 +45,16 @@ describe('Button', () => {
     expect(screen.queryByText('Login')).toBeNull();
   });
 
-  it.each([
-    ['light', lightColors.primary],
-    ['dark', darkColors.primary],
-  ] as const)('uses the %s theme primary colour', async (appearance, expected) => {
-    await renderWithProviders(<Button label="Go" onPress={() => {}} testID="go" />, { appearance });
+  it('uses the light theme primary colour', async () => {
+    await renderWithProviders(<Button label="Go" onPress={() => {}} testID="go" />, {
+      appearance: 'light',
+    });
 
     const flat = [screen.getByTestId('go').props.style].flat(Infinity);
     expect(flat).toEqual(
-      expect.arrayContaining([expect.objectContaining({ backgroundColor: expected })]),
+      expect.arrayContaining([
+        expect.objectContaining({ backgroundColor: lightColors.primary }),
+      ]),
     );
   });
 });

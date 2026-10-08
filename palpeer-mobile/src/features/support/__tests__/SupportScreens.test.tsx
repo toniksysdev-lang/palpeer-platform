@@ -162,11 +162,11 @@ describe('PrivacyScreen', () => {
 describe('SettingsScreen', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('changes appearance and links to the other settings', async () => {
+  it('keeps light appearance and links to the other settings', async () => {
     const { store } = await renderWithProviders(<SettingsScreen />);
 
-    await fireEvent.press(screen.getByText('Dark'));
-    expect(store.getState().preferences.appearance).toBe('dark');
+    expect(screen.getByText('Light')).toBeTruthy();
+    expect(store.getState().preferences.appearance).toBe('light');
 
     expect(screen.getByTestId('settings-version')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('settings-privacy'));

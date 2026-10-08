@@ -10,13 +10,11 @@ import { useAppearance } from '@/hooks/useAppearance';
 import type { AppearancePreference } from '@/store/slices/preferencesSlice';
 
 const APPEARANCE_OPTIONS = [
-  { value: 'system', label: 'System' },
   { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
 ] as const satisfies readonly { value: AppearancePreference; label: string }[];
 
 export function SettingsScreen() {
-  const { appearance, setAppearance } = useAppearance();
+  const { setAppearance } = useAppearance();
 
   return (
     <Screen scroll>
@@ -25,7 +23,7 @@ export function SettingsScreen() {
       <RowSection title="Appearance">
         <SegmentedControl
           options={APPEARANCE_OPTIONS}
-          value={appearance}
+          value="light"
           onChange={setAppearance}
           accessibilityLabel="Appearance"
         />

@@ -18,7 +18,7 @@ import type {
  */
 export const accountCommands = {
   login(body: LoginRequest): Promise<ApiResult<AuthTokensResponse>> {
-    return apiRequest('/auth/login', { method: 'POST', body });
+    return apiRequest('/auth/login', { method: 'POST', body, timeoutMs: 120_000 });
   },
 
   loginWithGoogle(body: GoogleAuthRequest): Promise<ApiResult<AuthTokensResponse>> {
@@ -26,7 +26,8 @@ export const accountCommands = {
   },
 
   register(body: RegisterRequest): Promise<ApiResult<RegisterResponse>> {
-    return apiRequest('/auth/register', { method: 'POST', body });
+    // Render free-tier cold starts often exceed the default 15s client timeout.
+    return apiRequest('/auth/register', { method: 'POST', body, timeoutMs: 120_000 });
   },
 
   verifyOtp(body: OtpVerifyRequest): Promise<ApiResult<void>> {

@@ -23,15 +23,14 @@ export const preferencesStorage = {
         AsyncStorage.getItem(KEYS.biometricUnlockPrompted),
       ]);
       return {
-        appearance: APPEARANCES.includes(appearance as AppearancePreference)
-          ? (appearance as AppearancePreference)
-          : 'system',
+        // Dark / system prefs are ignored — the app ships light-only.
+        appearance: 'light',
         onboardingSeen: onboardingSeen === 'true',
         biometricUnlockPrompted: biometricUnlockPrompted === 'true',
       };
     } catch (error) {
       logger.warn('Preferences load failed', { error });
-      return { appearance: 'system', onboardingSeen: false, biometricUnlockPrompted: false };
+      return { appearance: 'light', onboardingSeen: false, biometricUnlockPrompted: false };
     }
   },
 
