@@ -17,6 +17,7 @@ import com.palpeer.wallet.provider.PaymentRailRouter;
 import com.palpeer.wallet.repository.WalletRepository;
 import com.palpeer.wallet.withdrawal.dto.CreateWithdrawalRequest;
 import com.palpeer.wallet.withdrawal.dto.WithdrawalTransactionResponse;
+import java.math.BigDecimal;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.UUID;
@@ -62,6 +63,37 @@ public class WithdrawalService {
         return withdrawalTransactionRepository.findByIdempotencyKey(idempotencyKey)
                 .map(existing -> assertWithdrawalReplay(existing, userId, request))
                 .orElseGet(() -> createWithdrawal(userId, idempotencyKey, request));
+    }
+
+    /**
+     * Admin creates a withdrawal (HOLD) for a wallet owner. Owner is taken from the wallet,
+     * not the operator principal.
+     */
+    @Transactional
+    public WithdrawalTransactionResponse operatorInitiate(
+            UUID operatorId,
+            UUID walletId,
+            String idempotencyKey,
+            BigDecimal amount,
+            String destinationReference) {
+        requireIdempotencyKey(idempotencyKey);
+        Wallet wallet = walletRepository
+                .findById(walletId)
+                .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
+        CreateWithdrawalRequest request = new CreateWithdrawalRequest(walletId, amount, destinationReference);
+        WithdrawalTransactionResponse response = withdrawalTransactionRepository
+                .findByIdempotencyKey(idempotencyKey)
+                .map(existing -> assertWithdrawalReplay(existing, wallet.getUserId(), request))
+                .orElseGet(() -> createWithdrawal(wallet.getUserId(), idempotencyKey, request));
+        auditRecorder.record(AuditRecord.builder("WITHDRAWAL_ADMIN_INITIATE")
+                .entity("WithdrawalTransaction:" + response.id())
+                .userRef(operatorId)
+                .newValue("walletId=" + walletId
+                        + ";owner=" + wallet.getUserId()
+                        + ";amount=" + amount
+                        + ";status=" + response.status())
+                .build());
+        return response;
     }
 
     @Transactional(readOnly = true)

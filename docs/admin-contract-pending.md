@@ -9,7 +9,7 @@ Modules marked pending until admin APIs are verified (see `admin-api-map.md` and
 | Bonus ledger settlement | Referral/bonus inventory VERIFIED (`GET /admin/referrals`, `GET /admin/bonuses`); settlement still CONTRACT_PENDING (P14-03) |
 | Campaign eligibility/performance engines | Not verified |
 | Promotions admin CRUD beyond create/active | Permission exists; only `GET /promotions/active` + `POST /promotions` + admin referral/bonus lists verified |
-| Admin wallet funding / withdrawal | Wallet inventory VERIFIED; money-movement actions not contracted |
+| ~~Admin wallet funding / withdrawal~~ | Implemented (`POST /admin/wallets/{id}/fundings|withdrawals` + process/fail/reverse; `payments:operate`) |
 | Admin card funding / withdraw-from-card | Block/unblock VERIFIED (`POST /admin/cards/{id}/block|unblock`); funding still pending |
 | Negotiation admin actions | Inventory/detail VERIFIED; no admin intervention endpoints |
 | Admin WS/STOMP subscriptions | Not contracted; chat and negotiations use optional REST polling (15s auto-refresh toggle) |

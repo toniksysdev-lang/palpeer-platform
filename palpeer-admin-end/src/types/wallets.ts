@@ -20,3 +20,27 @@ export type LedgerTransactionSummary = {
   description?: string | null;
   createdAt: string;
 };
+
+export type MoneyMovementStatus =
+  | 'INITIATED'
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'SUCCESS'
+  | 'FAILED'
+  | 'REVERSED';
+
+export type MoneyMovementType = 'FUNDING' | 'WITHDRAWAL';
+
+export type AdminMoneyMovement = {
+  id: string;
+  type: MoneyMovementType;
+  walletId: string;
+  userId: string;
+  amount: string | number;
+  currencyCode: string;
+  status: MoneyMovementStatus;
+  failureReason?: string | null;
+  reference?: string | null;
+  providerName?: string | null;
+  createdAt: string;
+};

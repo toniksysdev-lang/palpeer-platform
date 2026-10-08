@@ -23,6 +23,8 @@ public interface WithdrawalTransactionRepository
 
     List<WithdrawalTransaction> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 
+    List<WithdrawalTransaction> findByWalletIdOrderByCreatedAtDesc(UUID walletId, Pageable pageable);
+
     List<WithdrawalTransaction> findByUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanEqualOrderByCreatedAtDesc(
             UUID userId, Instant from, Instant to, Pageable pageable);
 

@@ -23,6 +23,8 @@ public interface FundingTransactionRepository
 
     List<FundingTransaction> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 
+    List<FundingTransaction> findByWalletIdOrderByCreatedAtDesc(UUID walletId, Pageable pageable);
+
     List<FundingTransaction> findByUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanEqualOrderByCreatedAtDesc(
             UUID userId, Instant from, Instant to, Pageable pageable);
 

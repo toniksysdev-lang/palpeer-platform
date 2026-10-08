@@ -16,6 +16,7 @@ import com.palpeer.wallet.funding.dto.FundingTransactionResponse;
 import com.palpeer.wallet.provider.PaymentRailProvider;
 import com.palpeer.wallet.provider.PaymentRailRouter;
 import com.palpeer.wallet.repository.WalletRepository;
+import java.math.BigDecimal;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.UUID;
@@ -55,6 +56,33 @@ public class FundingService {
         return fundingTransactionRepository.findByIdempotencyKey(idempotencyKey)
                 .map(existing -> assertFundingReplay(existing, userId, request))
                 .orElseGet(() -> createFunding(userId, idempotencyKey, request));
+    }
+
+    /**
+     * Admin creates funding for a wallet owner. Uses the wallet's userId (not the operator id)
+     * so ledger ownership stays correct.
+     */
+    @Transactional
+    public FundingTransactionResponse operatorInitiate(
+            UUID operatorId, UUID walletId, String idempotencyKey, BigDecimal amount, String providerReference) {
+        requireIdempotencyKey(idempotencyKey);
+        Wallet wallet = walletRepository
+                .findById(walletId)
+                .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
+        CreateFundingRequest request = new CreateFundingRequest(walletId, amount, providerReference);
+        FundingTransactionResponse response = fundingTransactionRepository
+                .findByIdempotencyKey(idempotencyKey)
+                .map(existing -> assertFundingReplay(existing, wallet.getUserId(), request))
+                .orElseGet(() -> createFunding(wallet.getUserId(), idempotencyKey, request));
+        auditRecorder.record(AuditRecord.builder("FUNDING_ADMIN_INITIATE")
+                .entity("FundingTransaction:" + response.id())
+                .userRef(operatorId)
+                .newValue("walletId=" + walletId
+                        + ";owner=" + wallet.getUserId()
+                        + ";amount=" + amount
+                        + ";status=" + response.status())
+                .build());
+        return response;
     }
 
     @Transactional(readOnly = true)

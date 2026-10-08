@@ -227,7 +227,7 @@ Customer `/promotions/referrals/mine` and `/bonuses/mine` remain user-scoped —
 | Admin UI module (prompt) | Backend customer APIs | Admin API | Classification |
 |--------------------------|----------------------|-----------|----------------|
 | Dashboard KPIs | None | None | CONTRACT_PENDING |
-| Wallets inventory | `/wallets/**` | `/admin/wallets[/{id}[/transactions]]` | VERIFIED (`wallets:read`) |
+| Wallets inventory + movements | `/wallets/**` | `/admin/wallets[/{id}[/transactions|/movements|/fundings|/withdrawals]]` | VERIFIED (`wallets:read` / `payments:operate`) |
 | Cards inventory / block | `/cards/**` | `/admin/cards*` + block/unblock | VERIFIED (`cards:read` / `cards:write`) |
 | Negotiations monitor | `/negotiations/**` | `/admin/negotiations[/{id}]` | VERIFIED (`negotiations:read`) |
 | Chat monitor (REST) | `/chat/**` + WS | `/admin/chat/rooms*` | VERIFIED (`chat:read`); STOMP still pending |
