@@ -117,6 +117,12 @@ Customer KYC (`/api/v1/kyc/**`) remains user-scoped — STRONGLY INDICATED for d
 |--------|------|--------|--------------------|
 | POST | `/admin/currencies` | VERIFIED | `currencies:write` |
 | POST | `/admin/rates` | VERIFIED | `rates:write` |
+| GET | `/admin/rates/latest` | VERIFIED | Admin latest rates (`channel?`) |
+| POST | `/admin/rates/{id}/activate` | VERIFIED | `rates:write` |
+| POST | `/admin/rates/{id}/deactivate` | VERIFIED | `rates:write` |
+| POST | `/admin/rates/{id}/approve` | VERIFIED | `rates:write` |
+| POST | `/admin/rates/{id}/reject` | VERIFIED | `rates:write` |
+| DELETE | `/admin/rates/{id}` | VERIFIED | `rates:write` — deletes all rows for that pair+channel |
 | GET | `/currencies` | VERIFIED | Authenticated currency list |
 | GET | `/currencies/{code}` | VERIFIED | Get by code |
 | POST | `/currencies` | VERIFIED | Admin create (duplicate surface) |
@@ -132,7 +138,8 @@ Customer KYC (`/api/v1/kyc/**`) remains user-scoped — STRONGLY INDICATED for d
 | `rates:read` permission | CONTRACT_PENDING (read uses authenticated currency endpoints) |
 | P2P vs swap rate admin split fields | CONTRACT_PENDING — do not invent |
 | Rate approval workflow | CONTRACT_PENDING |
-| Rate deactivate / soft-delete | CONTRACT_PENDING |
+| Rate deactivate | VERIFIED (`POST /admin/rates/{id}/deactivate`) |
+| Rate pair hard-delete | VERIFIED (`DELETE /admin/rates/{id}` — all rows for base/quote/channel) |
 
 ---
 

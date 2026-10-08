@@ -139,3 +139,22 @@ export function mockPublishRate(input: CreateExchangeRateInput): ExchangeRate {
   rates.unshift(created);
   return { ...created };
 }
+
+/** Removes all mock rates for the same base/quote/channel as the given rate id. */
+export function mockDeleteRatePair(id: string): void {
+  const seed = rates.find((row) => row.id === id);
+  if (!seed) {
+    throw new ApiClientError(404, 'RESOURCE_NOT_FOUND', 'Rate not found.');
+  }
+  const channel = seed.channel ?? 'SWAP';
+  for (let i = rates.length - 1; i >= 0; i -= 1) {
+    const row = rates[i];
+    if (
+      row.baseCurrencyCode === seed.baseCurrencyCode &&
+      row.quoteCurrencyCode === seed.quoteCurrencyCode &&
+      (row.channel ?? 'SWAP') === channel
+    ) {
+      rates.splice(i, 1);
+    }
+  }
+}

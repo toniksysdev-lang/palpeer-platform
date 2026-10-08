@@ -19,6 +19,7 @@ import { formatDateTime, formatDecimal } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import {
   mockCreateCurrency,
+  mockDeleteRatePair,
   mockLatestRate,
   mockLatestRates,
   mockListCurrencies,
@@ -28,6 +29,7 @@ import {
 import { P2PRateBoundsPanel } from '@/features/rates/P2PRateBoundsPanel';
 import {
   createCurrency,
+  deleteExchangeRatePair,
   getLatestExchangeRate,
   listCurrencies,
   listExchangeRateHistory,
@@ -95,6 +97,7 @@ export function RatesPage() {
   const [currencyPrecision, setCurrencyPrecision] = useState('2');
   const [currencyConfirmOpen, setCurrencyConfirmOpen] = useState(false);
   const [currencyErrors, setCurrencyErrors] = useState<Record<string, string>>({});
+  const [removingPair, setRemovingPair] = useState<ExchangeRate | null>(null);
 
   const currenciesQuery = useQuery({
     queryKey: ['currencies', appConfig.useMockApi],
@@ -301,6 +304,39 @@ export function RatesPage() {
     },
   });
 
+  const deletePairMutation = useMutation({
+    mutationFn: async (rate: ExchangeRate) => {
+      if (appConfig.useMockApi) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        mockDeleteRatePair(rate.id);
+        return rate;
+      }
+      await deleteExchangeRatePair(rate.id);
+      return rate;
+    },
+    onSuccess: async (rate) => {
+      setRemovingPair(null);
+      push({
+        tone: 'success',
+        title: 'Pair deleted',
+        description: `${rate.baseCurrencyCode}/${rate.quoteCurrencyCode} (${rate.channel ?? channel}) removed.`,
+      });
+      if (rate.baseCurrencyCode === base && rate.quoteCurrencyCode === quote) {
+        setPair('', '');
+      }
+      await queryClient.invalidateQueries({ queryKey: ['exchange-rates-all-latest'] });
+      await queryClient.invalidateQueries({ queryKey: ['exchange-rate-history'] });
+      await queryClient.invalidateQueries({ queryKey: ['exchange-rate-latest'] });
+    },
+    onError: (error) => {
+      push({
+        tone: 'error',
+        title: 'Delete failed',
+        description: error instanceof ApiClientError ? error.message : 'The pair could not be deleted.',
+      });
+    },
+  });
+
   const allLatestColumns = useMemo<DataColumn<ExchangeRate>[]>(
     () => [
       {
@@ -399,6 +435,9 @@ export function RatesPage() {
                   </Button>
                 </>
               ) : null}
+              <Button size="sm" variant="ghost" onClick={() => setRemovingPair(row)}>
+                Delete
+              </Button>
             </div>
           ) : null,
       },
@@ -505,8 +544,9 @@ export function RatesPage() {
           All {channel === 'P2P' ? 'P2P' : 'swap'} pairs (latest)
         </h3>
         <p className="mt-1 mb-4 text-sm text-text-secondary">
-          Latest rate per pair for this channel. Activate/deactivate or approve pending rates from
-          the row actions. Click a row to open the pair viewer.
+          Latest rate per pair for this channel. Activate/deactivate, approve pending rates, or
+          delete a pair (removes all history for that base/quote/channel). Click a row to open the
+          pair viewer.
         </p>
         <DataTable
           columns={allLatestColumns}
@@ -748,6 +788,21 @@ export function RatesPage() {
         busy={currencyMutation.isPending}
         onClose={() => setCurrencyConfirmOpen(false)}
         onConfirm={() => currencyMutation.mutate()}
+      />
+
+      <ConfirmDialog
+        open={Boolean(removingPair)}
+        title="Delete rate pair"
+        description={
+          removingPair
+            ? `Permanently delete ${removingPair.baseCurrencyCode}/${removingPair.quoteCurrencyCode} on ${removingPair.channel ?? channel}? This removes every rate row for that pair and channel.`
+            : ''
+        }
+        confirmLabel="Delete pair"
+        tone="danger"
+        busy={deletePairMutation.isPending}
+        onClose={() => setRemovingPair(null)}
+        onConfirm={() => removingPair && deletePairMutation.mutate(removingPair)}
       />
     </div>
   );

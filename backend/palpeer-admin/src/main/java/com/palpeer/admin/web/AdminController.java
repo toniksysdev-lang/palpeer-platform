@@ -273,6 +273,14 @@ public class AdminController {
         return ApiResponse.ok(exchangeRateService.setApprovalStatus(id, RateApprovalStatus.REJECTED));
     }
 
+    @DeleteMapping("/rates/{id}")
+    @PreAuthorize("hasAuthority('rates:write')")
+    @Operation(summary = "Delete a swap/P2P pair (all rate rows for that base/quote/channel)")
+    public ApiResponse<Void> deleteRatePair(@PathVariable UUID id) {
+        exchangeRateService.deletePair(id);
+        return ApiResponse.ok("Rate pair deleted", null);
+    }
+
     // --- Transactions ---
 
     @GetMapping("/users/{userId}/transactions/recent")

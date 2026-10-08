@@ -91,4 +91,7 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, UUID
 
     boolean existsByBaseCurrencyCodeIgnoreCaseAndQuoteCurrencyCodeIgnoreCaseAndChannelAndEffectiveDate(
             String baseCurrencyCode, String quoteCurrencyCode, RateChannel channel, Instant effectiveDate);
+
+    long deleteByBaseCurrencyCodeIgnoreCaseAndQuoteCurrencyCodeIgnoreCaseAndChannel(
+            String baseCurrencyCode, String quoteCurrencyCode, RateChannel channel);
 }

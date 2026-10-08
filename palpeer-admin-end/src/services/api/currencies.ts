@@ -86,3 +86,10 @@ export async function setExchangeRateApproval(
     method: 'POST',
   });
 }
+
+/** Hard-deletes the pair (all rate rows for that base/quote/channel). */
+export async function deleteExchangeRatePair(id: string): Promise<void> {
+  await apiRequest<null>(`/admin/rates/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}

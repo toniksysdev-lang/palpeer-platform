@@ -191,6 +191,26 @@ public class ExchangeRateService {
         return toResponse(rate);
     }
 
+    /**
+     * Permanently deletes a swap/P2P pair: every exchange_rates row for the same
+     * base/quote/channel as the given rate id (so the pair disappears from admin latest).
+     */
+    @Transactional
+    public void deletePair(UUID id) {
+        ExchangeRate rate = requireRate(id);
+        String base = normalize(rate.getBaseCurrencyCode());
+        String quote = normalize(rate.getQuoteCurrencyCode());
+        RateChannel channel = rate.getChannel();
+        long removed = exchangeRateRepository
+                .deleteByBaseCurrencyCodeIgnoreCaseAndQuoteCurrencyCodeIgnoreCaseAndChannel(
+                        base, quote, channel);
+        auditRecorder.record(AuditRecord.builder("ADMIN_RATE_PAIR_DELETE")
+                .entity("ExchangeRatePair:" + base + "/" + quote + ":" + channel)
+                .oldValue("seedRateId=" + id + ";rows=" + removed)
+                .newValue("deleted")
+                .build());
+    }
+
     private ExchangeRate requireRate(UUID id) {
         return exchangeRateRepository
                 .findById(id)
