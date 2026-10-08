@@ -24,8 +24,9 @@ services:
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
+      # Soft-fail SMTP when true; mobile autofills debugOtp. Render free often blocks SMTP.
       - key: OTP_LOG_CODE
-        value: "false"
+        value: "true"
       - key: JWT_SECRET
         generateValue: true
       - key: DB_HOST

@@ -81,13 +81,15 @@ public class AuthService {
         issueOtp(user, OtpPurpose.PHONE_VERIFICATION, OtpChannel.SMS);
         sendWelcomeEmail(user);
 
+        // Always return debugOtp while outbound SMTP is unreliable on free hosts (Render).
+        // Clients autofill verification; re-gate on log-code once real email delivery works.
         return new RegisterResponse(
                 user.getId(),
                 user.getEmail(),
                 user.getPhone(),
                 user.getStatus().name(),
                 "Registration successful. OTP verification required.",
-                authProperties.getOtp().isLogCode() ? emailOtp : null
+                emailOtp
         );
     }
 
@@ -259,7 +261,7 @@ public class AuthService {
 
         User user = requireUserByEmail(request.email());
         String code = issueOtp(user, request.purpose(), request.channel());
-        return new OtpResendResponse(authProperties.getOtp().isLogCode() ? code : null);
+        return new OtpResendResponse(code);
     }
 
     @Transactional

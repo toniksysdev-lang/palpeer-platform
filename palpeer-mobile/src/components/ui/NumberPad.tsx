@@ -7,7 +7,8 @@ import { AppText } from './AppText';
 import { Icon } from './Icon';
 
 export type NumberPadBottomLeft = '' | '*' | '.';
-export type NumberPadVariant = 'compact' | 'dialer';
+/** `phone` = Figma enter-phone pad (flat, full-width). `compact` = PIN/amount dock. */
+export type NumberPadVariant = 'compact' | 'phone';
 
 type Props = {
   value: string;
@@ -15,25 +16,12 @@ type Props = {
   maxLength?: number;
   disabled?: boolean;
   /**
-   * Bottom-left key: blank (PIN), `*` (phone dialer), or `.` (amounts).
-   * `*` is decorative / disabled; `.` inserts a decimal point once.
+   * Bottom-left key: blank (PIN), `*` (decorative), or `.` (phone / amounts).
+   * `*` is disabled; `.` inserts a decimal point once (ignored for digit-only phone fields).
    */
   bottomLeft?: NumberPadBottomLeft;
-  /** `dialer` matches a phone keypad (letters under digits, round keys). */
   variant?: NumberPadVariant;
   testID?: string;
-};
-
-const DIALER_LETTERS: Record<string, string> = {
-  '2': 'ABC',
-  '3': 'DEF',
-  '4': 'GHI',
-  '5': 'JKL',
-  '6': 'MNO',
-  '7': 'PQRS',
-  '8': 'TUV',
-  '9': 'WXYZ',
-  '0': '+',
 };
 
 /**
@@ -50,10 +38,11 @@ export function NumberPad({
 }: Props) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
-  const dialer = variant === 'dialer';
+  const phone = variant === 'phone';
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', bottomLeft, '0', 'back'] as const;
-  const keySize = dialer ? Math.min(78, Math.floor((width - 64) / 3) - 12) : 80;
-  const gridWidth = dialer ? Math.min(width - 32, keySize * 3 + 48) : 264;
+  const gridWidth = phone ? width - theme.spacing.xl * 2 : 264;
+  const keyWidth = phone ? Math.floor(gridWidth / 3) : 80;
+  const keyHeight = phone ? 56 : 64;
 
   const press = (key: (typeof keys)[number]) => {
     if (disabled) return;
@@ -63,6 +52,8 @@ export function NumberPad({
     }
     if (!key || key === '*') return;
     if (key === '.') {
+      // Phone national digits are digits-only; keep `.` visible per Figma but ignore presses.
+      if (phone) return;
       if (value.includes('.')) return;
       onChange(value.length === 0 ? '0.' : `${value}.`);
       return;
@@ -72,75 +63,68 @@ export function NumberPad({
 
   return (
     <View
-      style={[styles.grid, { width: gridWidth, rowGap: dialer ? 14 : 8 }]}
+      style={[
+        styles.grid,
+        {
+          width: gridWidth,
+          rowGap: phone ? theme.spacing.sm : 8,
+        },
+      ]}
       testID={testID ? `${testID}-grid` : undefined}
       accessibilityLabel="Number pad"
     >
       {keys.map((key, index) =>
         key === '' ? (
-          <View key={`blank-${index}`} style={{ width: keySize, height: keySize }} />
+          <View key={`blank-${index}`} style={{ width: keyWidth, height: keyHeight }} />
         ) : (
           <Pressable
             key={`${key}-${index}`}
             onPress={() => press(key)}
-            disabled={disabled || key === '*'}
+            disabled={disabled || key === '*' || (phone && key === '.')}
             accessibilityRole="button"
             accessibilityLabel={
               key === 'back' ? 'Delete last digit' : key === '.' ? 'Decimal point' : key
             }
-            accessibilityState={{ disabled: disabled || key === '*' }}
+            accessibilityState={{
+              disabled: disabled || key === '*' || (phone && key === '.'),
+            }}
             testID={testID ? `${testID}-key-${key === 'back' ? 'back' : key}` : undefined}
             style={({ pressed }) => [
               {
-                width: keySize,
-                height: keySize,
+                width: keyWidth,
+                height: keyHeight,
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderRadius: dialer ? keySize / 2 : theme.radius.pill,
-                backgroundColor: dialer
-                  ? pressed
+                borderRadius: phone ? 0 : theme.radius.pill,
+                backgroundColor:
+                  !phone && pressed && key !== '*'
                     ? theme.colors.surfaceMuted
-                    : theme.colors.surface
-                  : pressed && key !== '*'
-                    ? theme.colors.surfaceMuted
-                    : 'transparent',
+                    : phone && pressed
+                      ? theme.colors.surfaceMuted
+                      : 'transparent',
                 opacity: disabled ? 0.5 : 1,
-                ...(dialer && key !== '*'
-                  ? {
-                      borderWidth: StyleSheet.hairlineWidth,
-                      borderColor: theme.colors.border,
-                      ...theme.shadows.card,
-                    }
-                  : null),
               },
             ]}
           >
             {key === 'back' ? (
-              <Icon icon={Delete} size="lg" />
+              <Icon icon={Delete} size="lg" color={theme.colors.textSecondary} />
             ) : (
-              <View style={styles.keyContent}>
-                <AppText
-                  variant={dialer ? 'h1' : 'h2'}
-                  tone={key === '*' ? 'muted' : 'primary'}
-                  style={dialer ? { fontWeight: '400', lineHeight: keySize * 0.42 } : undefined}
-                >
-                  {key}
-                </AppText>
-                {dialer && DIALER_LETTERS[key] ? (
-                  <AppText
-                    variant="caption"
-                    tone="muted"
-                    style={{
-                      letterSpacing: key === '0' ? 0 : 1.5,
-                      fontSize: 10,
-                      marginTop: -2,
-                      textTransform: key === '0' ? 'none' : 'uppercase',
-                    }}
-                  >
-                    {DIALER_LETTERS[key]}
-                  </AppText>
-                ) : null}
-              </View>
+              <AppText
+                variant={phone ? 'h1' : 'h2'}
+                tone={key === '*' || (phone && key === '.') ? 'muted' : 'secondary'}
+                style={
+                  phone
+                    ? {
+                        fontSize: 28,
+                        fontWeight: '400',
+                        color: theme.colors.textSecondary,
+                        lineHeight: 34,
+                      }
+                    : undefined
+                }
+              >
+                {key}
+              </AppText>
             )}
           </Pressable>
         ),
@@ -156,5 +140,4 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignSelf: 'center',
   },
-  keyContent: { alignItems: 'center', justifyContent: 'center' },
 });

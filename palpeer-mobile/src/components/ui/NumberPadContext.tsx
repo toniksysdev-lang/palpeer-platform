@@ -131,20 +131,24 @@ export function NumberPadDock({ testID = 'number-pad-dock' }: { testID?: string 
 
   const { active, close } = pad;
 
+  const phone = active.variant === 'phone';
+
   return (
     <View
       testID={testID}
       style={{
-        gap: theme.spacing.md,
-        paddingTop: theme.spacing.md,
-        borderTopWidth: StyleSheet.hairlineWidth,
+        gap: phone ? 0 : theme.spacing.md,
+        paddingTop: phone ? theme.spacing.sm : theme.spacing.md,
+        borderTopWidth: phone ? 0 : StyleSheet.hairlineWidth,
         borderTopColor: theme.colors.border,
         backgroundColor: theme.colors.background,
       }}
     >
-      <View style={{ alignItems: 'flex-end', paddingHorizontal: theme.spacing.sm }}>
-        <TextLink label="Done" tone="info" onPress={() => close(active.id)} testID={`${testID}-done`} />
-      </View>
+      {phone ? null : (
+        <View style={{ alignItems: 'flex-end', paddingHorizontal: theme.spacing.sm }}>
+          <TextLink label="Done" tone="info" onPress={() => close(active.id)} testID={`${testID}-done`} />
+        </View>
+      )}
       <NumberPad
         value={active.value}
         onChange={active.onChange}

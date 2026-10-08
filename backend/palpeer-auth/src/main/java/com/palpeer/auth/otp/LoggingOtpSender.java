@@ -2,12 +2,10 @@ package com.palpeer.auth.otp;
 
 import com.palpeer.auth.domain.OtpChannel;
 import com.palpeer.auth.domain.OtpPurpose;
-import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.mail.EmailSender;
 import com.palpeer.common.mail.PalpeerEmailTemplates;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 /**
@@ -29,12 +27,7 @@ public class LoggingOtpSender implements OtpSender {
 
     @Override
     public void send(OtpChannel channel, String destination, OtpPurpose purpose, String code) {
-        if (channel == OtpChannel.EMAIL) {
-            sendEmailOtp(destination, purpose, code);
-        } else {
-            log.info("OTP SMS placeholder [destination={}, purpose={}]", destination, purpose);
-        }
-
+        // Log before delivery so the code is always available when SMTP is blocked.
         if (logCode) {
             log.warn(
                     "DEV OTP [channel={}, destination={}, purpose={}, code={}]",
@@ -42,6 +35,12 @@ public class LoggingOtpSender implements OtpSender {
                     destination,
                     purpose,
                     code);
+        }
+
+        if (channel == OtpChannel.EMAIL) {
+            sendEmailOtp(destination, purpose, code);
+        } else {
+            log.info("OTP SMS placeholder [destination={}, purpose={}]", destination, purpose);
         }
     }
 
@@ -52,16 +51,21 @@ public class LoggingOtpSender implements OtpSender {
             emailSender.send(destination, rendered.subject(), rendered.text(), rendered.html());
             log.info("OTP email sent [destination={}, purpose={}]", destination, purpose);
         } catch (RuntimeException ex) {
+            // Free hosts (e.g. Render) often block outbound SMTP (connect timeout on :587/:465).
+            // Soft-fail so registration can continue; the OTP is still stored and returned as
+            // debugOtp when log-code is enabled (see AuthService / render.yaml OTP_LOG_CODE).
             log.error(
-                    "OTP email failed [destination={}, purpose={}]: {}",
+                    "OTP email failed [destination={}, purpose={}]: {} — continuing without email",
                     destination,
                     purpose,
                     ex.getMessage());
-            throw new BusinessException(
-                    "OTP_EMAIL_FAILED",
-                    "Could not send the verification email. Check SMTP settings and try again.",
-                    HttpStatus.BAD_GATEWAY,
-                    ex);
+            if (!logCode) {
+                log.warn(
+                        "Set OTP_LOG_CODE=true so clients receive debugOtp while SMTP is unavailable"
+                                + " [destination={}, purpose={}]",
+                        destination,
+                        purpose);
+            }
         }
     }
 }

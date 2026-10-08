@@ -39,8 +39,8 @@ export function EnterPhoneScreen() {
     value: national,
     onChange: setDigits,
     maxLength: PHONE_MAX_DIGITS,
-    bottomLeft: '*',
-    variant: 'dialer',
+    bottomLeft: '.',
+    variant: 'phone',
     autoFocus: true,
   });
   const pad = useOptionalNumberPad();
