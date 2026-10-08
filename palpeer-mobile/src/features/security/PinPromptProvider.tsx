@@ -86,6 +86,7 @@ export function PinPromptProvider({ children }: { children: ReactNode }) {
           submitLabel="Confirm"
           loading={verifying}
           disabled={blocked}
+          autoSubmit
           onSubmit={(pin) => void verify(pin)}
           testID="pin-prompt-entry"
           footer={

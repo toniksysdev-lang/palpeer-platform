@@ -24,13 +24,17 @@ export function SetPinScreen() {
   useSensitiveScreen();
   const toast = useToast();
   const dispatch = useAppDispatch();
-  const { required } = useLocalSearchParams<{ required?: string }>();
+  const { required, returnTo } = useLocalSearchParams<{ required?: string; returnTo?: string }>();
   const mustSet = required === '1';
   const [step, setStep] = useState<Step>({ name: 'enter' });
   const [saving, setSaving] = useState(false);
 
   const finish = () => {
     toast.show({ type: 'success', title: 'Transaction PIN set' });
+    if (returnTo && typeof returnTo === 'string') {
+      router.replace(returnTo as '/wallet/create');
+      return;
+    }
     if (mustSet) {
       router.replace('/');
       return;

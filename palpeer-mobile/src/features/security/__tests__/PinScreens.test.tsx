@@ -66,12 +66,14 @@ describe('PIN screens', () => {
       });
       const { store } = await renderWithProviders(<SetPinScreen />);
 
-      await enterPin('set-pin-enter', '482915');
-      await enterPin('set-pin-confirm', '482915');
+      await enterPin('set-pin-enter', '4829');
+      await enterPin('set-pin-confirm', '4829');
 
-      await waitFor(() => expect(router.back).toHaveBeenCalled());
-      expect(calls[0]).toMatchObject({ method: 'POST', body: { pin: '482915' } });
-      expect(JSON.stringify(store.getState())).not.toContain('482915');
+      await waitFor(() =>
+        expect(router.back.mock.calls.length + router.replace.mock.calls.length).toBeGreaterThan(0),
+      );
+      expect(calls[0]).toMatchObject({ method: 'POST', body: { pin: '4829' } });
+      expect(JSON.stringify(store.getState())).not.toContain('4829');
     });
   });
 

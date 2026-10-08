@@ -3,10 +3,10 @@ import { Check } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { FormAlert } from '@/components/feedback/FormAlert';
+import { EmptyState, ErrorState } from '@/components/feedback/StateViews';
 import { Screen } from '@/components/layout/Screen';
 import { StackHeader } from '@/components/layout/StackHeader';
-import { EmptyState, ErrorState } from '@/components/feedback/StateViews';
-import { FormAlert } from '@/components/feedback/FormAlert';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
@@ -65,38 +65,54 @@ export function CreateWalletScreen() {
 
   const held = new Set(wallets.data.map((wallet) => wallet.currencyCode));
   const available = currencies.data.filter((currency) => !held.has(currency.code));
+  const pinReady = Boolean(pinStatus.data?.pinSet);
+  const pinLoading = pinStatus.isLoading || pinStatus.isFetching;
 
   const submit = async () => {
-    if (!selected) return;
+    if (!selected || confirming) return;
     setError(null);
+
+    if (pinLoading) {
+      setError('Checking your PIN status…');
+      void pinStatus.refetch();
+      return;
+    }
+
     if (!pinStatus.data) {
       setError("We couldn't check your PIN status. Try again.");
       void pinStatus.refetch();
       return;
     }
+
     if (!pinStatus.data.pinSet) {
-      setError('Set up a transaction PIN before creating a wallet.');
+      setError('Set up a transaction PIN, then create your wallet.');
+      router.push({
+        pathname: '/security/pin/set',
+        params: { required: '1', returnTo: '/wallet/create' },
+      });
       return;
     }
+
     setConfirming(true);
-    const confirmed = await requestPin({
-      title: 'Confirm wallet creation',
-      message: `Enter your PIN to create a ${selected} wallet.`,
-    });
-    if (!confirmed) {
+    try {
+      const confirmed = await requestPin({
+        title: 'Confirm wallet creation',
+        message: `Enter your 4-digit PIN to create a ${selected} wallet.`,
+      });
+      if (!confirmed) return;
+
+      const result = await createWallet({ currencyCode: selected });
+      if ('error' in result) {
+        const appError = toAppError(result.error);
+        if (appError.code === 'WALLET_EXISTS') void wallets.refetch();
+        setError(walletErrorMessage(appError));
+        return;
+      }
+      toast.show({ type: 'success', title: `${result.data.currencyCode} wallet created` });
+      router.replace({ pathname: '/wallet/[id]', params: { id: result.data.id } });
+    } finally {
       setConfirming(false);
-      return;
     }
-    const result = await createWallet({ currencyCode: selected });
-    setConfirming(false);
-    if ('error' in result) {
-      const appError = toAppError(result.error);
-      if (appError.code === 'WALLET_EXISTS') void wallets.refetch();
-      setError(walletErrorMessage(appError));
-      return;
-    }
-    toast.show({ type: 'success', title: `${result.data.currencyCode} wallet created` });
-    router.replace({ pathname: '/wallet/[id]', params: { id: result.data.id } });
   };
 
   if (available.length === 0) {
@@ -118,7 +134,7 @@ export function CreateWalletScreen() {
         <Button
           label={selected ? `Create ${selected} wallet` : 'Choose a currency'}
           onPress={() => void submit()}
-          disabled={!selected || confirming}
+          disabled={!selected || confirming || pinLoading}
           loading={confirming || createState.isLoading}
           loadingLabel="Creating…"
           testID="create-wallet-submit"
@@ -128,14 +144,22 @@ export function CreateWalletScreen() {
       {header}
       <AppText tone="secondary">Choose the currency for your new wallet.</AppText>
       <FormAlert message={error} testID="create-wallet-error" />
-      {pinStatus.data && !pinStatus.data.pinSet ? (
+      {!pinReady && !pinLoading ? (
         <View style={{ gap: theme.spacing.xs }}>
           <FormAlert
             tone="info"
-            message="A transaction PIN is required before you can create a wallet."
+            message="Creating a wallet always requires your transaction PIN."
             testID="create-wallet-no-pin"
           />
-          <TextLink label="Set up a PIN" onPress={() => router.push('/security/pin/set')} />
+          <TextLink
+            label="Set up a PIN"
+            onPress={() =>
+              router.push({
+                pathname: '/security/pin/set',
+                params: { required: '1', returnTo: '/wallet/create' },
+              })
+            }
+          />
         </View>
       ) : null}
       <View style={{ gap: theme.spacing.sm }} accessibilityRole="radiogroup">

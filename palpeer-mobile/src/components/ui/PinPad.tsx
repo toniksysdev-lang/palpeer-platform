@@ -10,34 +10,18 @@ export const PIN_MAX_LENGTH = 8;
 /** Figma Set/Confirm PIN uses four circular slots. */
 export const PIN_SETUP_LENGTH = 4;
 
-type Props = {
+type DotsProps = {
   value: string;
-  onChange: (next: string) => void;
-  maxLength?: number;
-  /** Fixed number of circular slots (Figma = 4). Defaults to max(4, value length+1 capped). */
-  slots?: number;
-  disabled?: boolean;
+  slots: number;
   statusMessage?: string | null;
   testID?: string;
 };
 
-/**
- * On-screen PIN keypad with circular digit slots. Digits never reach the system keyboard.
- */
-export function PinPad({
-  value,
-  onChange,
-  maxLength = PIN_MAX_LENGTH,
-  slots,
-  disabled,
-  statusMessage,
-  testID,
-}: Props) {
+/** Circular PIN slots (filled = entered digits). */
+export function PinDots({ value, slots, statusMessage, testID }: DotsProps) {
   const theme = useTheme();
-  const slotCount = slots ?? Math.max(PIN_MIN_LENGTH, Math.min(maxLength, Math.max(value.length + 1, PIN_MIN_LENGTH)));
-
   return (
-    <View style={{ gap: theme.spacing.xxl }} testID={testID}>
+    <View style={{ gap: theme.spacing.md }} testID={testID}>
       {statusMessage ? (
         <AppText align="center" style={{ color: theme.colors.primary, fontWeight: '600' }}>
           {statusMessage}
@@ -46,10 +30,10 @@ export function PinPad({
       <View
         style={styles.dots}
         accessible
-        accessibilityLabel={`${value.length} of ${slotCount} digits entered`}
+        accessibilityLabel={`${value.length} of up to ${slots} digits entered`}
         testID={testID ? `${testID}-dots` : undefined}
       >
-        {Array.from({ length: slotCount }, (_, index) => (
+        {Array.from({ length: slots }, (_, index) => (
           <View
             key={index}
             style={[
@@ -62,6 +46,40 @@ export function PinPad({
           />
         ))}
       </View>
+    </View>
+  );
+}
+
+type Props = {
+  value: string;
+  onChange: (next: string) => void;
+  maxLength?: number;
+  slots?: number;
+  disabled?: boolean;
+  statusMessage?: string | null;
+  testID?: string;
+};
+
+/**
+ * Dots + flat Figma keypad. Prefer composing `PinDots` + `NumberPad` when the action button
+ * must sit between them (Set PIN / PIN prompt sheets).
+ */
+export function PinPad({
+  value,
+  onChange,
+  maxLength = PIN_MAX_LENGTH,
+  slots,
+  disabled,
+  statusMessage,
+  testID,
+}: Props) {
+  const theme = useTheme();
+  const slotCount =
+    slots ?? Math.max(PIN_MIN_LENGTH, Math.min(maxLength, Math.max(value.length, PIN_MIN_LENGTH)));
+
+  return (
+    <View style={{ gap: theme.spacing.xxl }} testID={testID}>
+      <PinDots value={value} slots={slotCount} statusMessage={statusMessage} testID={testID} />
       <NumberPad
         value={value}
         onChange={onChange}

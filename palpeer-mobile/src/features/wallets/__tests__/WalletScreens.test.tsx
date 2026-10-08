@@ -158,10 +158,12 @@ describe('HomeScreen', () => {
 });
 
 describe('CreateWalletScreen', () => {
-  it('offers only currencies the user does not hold and opens the new wallet', async () => {
+  it('offers only currencies the user does not hold, asks for PIN, then opens the new wallet', async () => {
     const { calls } = installFetchMock({
       'GET /currencies': CURRENCIES,
       'GET /wallets': ok([wallet('w-cad', 'CAD')]),
+      'GET /security/pin': ok({ pinSet: true, lockedUntil: null }),
+      'POST /security/pin/verify': { status: 200, body: undefined },
       'POST /wallets': {
         status: 201,
         body: { success: true, data: wallet('w-ngn', 'NGN'), timestamp: '' },
@@ -175,25 +177,39 @@ describe('CreateWalletScreen', () => {
     await fireEvent.press(screen.getByTestId('create-wallet-option-NGN'));
     await fireEvent.press(screen.getByTestId('create-wallet-submit'));
 
+    for (const digit of '1234') {
+      await fireEvent.press(await screen.findByTestId(`pin-prompt-entry-pad-key-${digit}`));
+    }
+
     await waitFor(() =>
       expect(router.replace).toHaveBeenCalledWith({
         pathname: '/wallet/[id]',
         params: { id: 'w-ngn' },
       }),
     );
-    expect(calls.find((call) => call.method === 'POST')?.body).toEqual({ currencyCode: 'NGN' });
+    expect(calls.some((call) => call.method === 'POST' && call.path === '/security/pin/verify')).toBe(
+      true,
+    );
+    expect(calls.find((call) => call.path === '/wallets' && call.method === 'POST')?.body).toEqual({
+      currencyCode: 'NGN',
+    });
   });
 
-  it('explains a duplicate wallet', async () => {
+  it('explains a duplicate wallet after PIN confirmation', async () => {
     installFetchMock({
       'GET /currencies': CURRENCIES,
       'GET /wallets': ok([]),
+      'GET /security/pin': ok({ pinSet: true, lockedUntil: null }),
+      'POST /security/pin/verify': { status: 200, body: undefined },
       'POST /wallets': fail(409, 'WALLET_EXISTS'),
     });
     await renderWithProviders(<CreateWalletScreen />);
 
     await fireEvent.press(await screen.findByTestId('create-wallet-option-USD'));
     await fireEvent.press(screen.getByTestId('create-wallet-submit'));
+    for (const digit of '1234') {
+      await fireEvent.press(await screen.findByTestId(`pin-prompt-entry-pad-key-${digit}`));
+    }
 
     expect(await screen.findByText('You already have a wallet in this currency.')).toBeTruthy();
   });
