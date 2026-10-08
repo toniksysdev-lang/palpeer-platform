@@ -122,5 +122,8 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
   },
   extra: {
     appEnv: APP_ENV,
+    eas: {
+      projectId: 'adc52ccf-513c-4198-afb0-b5d4315cfca9',
+    },
   },
 });
