@@ -47,6 +47,37 @@ export const withdrawalItem = (overrides: Partial<TransactionItemResponse> = {})
     ...overrides,
   });
 
+export const transferItem = (overrides: Partial<TransactionItemResponse> = {}) =>
+  item({
+    type: 'TRANSFER',
+    id: 'tr-1',
+    status: 'SUCCESS',
+    walletId: 'w-cad',
+    secondaryWalletId: 'w-cad-other',
+    currencyCode: 'CAD',
+    amount: '50.00' as Money,
+    ledgerEntryIds: {},
+    failureReason: null,
+    ...overrides,
+  });
+
+export const p2pItem = (overrides: Partial<TransactionItemResponse> = {}) =>
+  item({
+    type: 'P2P',
+    id: 'o-1',
+    status: 'COMPLETED',
+    walletId: null,
+    secondaryWalletId: null,
+    currencyCode: 'CAD',
+    secondaryCurrencyCode: 'NGN',
+    amount: '100.00' as Money,
+    secondaryAmount: '108945.12' as Money,
+    appliedRate: '1089.451200000000' as Money,
+    ledgerEntryIds: {},
+    failureReason: null,
+    ...overrides,
+  });
+
 export const historyPage = (
   items: TransactionItemResponse[],
   { page = 0, totalPages = 1 }: { page?: number; totalPages?: number } = {},
@@ -55,9 +86,15 @@ export const historyPage = (
 export const summary = (overrides: Record<string, unknown> = {}) => ({
   from: '1970-01-01T00:00:00Z',
   to: '2026-09-29T12:00:00Z',
-  totalCount: 3,
-  countByType: { FUNDING: 1, WITHDRAWAL: 1, EXCHANGE: 1 },
-  countByStatus: { 'FUNDING:SUCCESS': 1, 'WITHDRAWAL:PENDING': 1, 'EXCHANGE:SUCCESS': 1 },
+  totalCount: 5,
+  countByType: { FUNDING: 1, WITHDRAWAL: 1, EXCHANGE: 1, TRANSFER: 1, P2P: 1 },
+  countByStatus: {
+    'FUNDING:SUCCESS': 1,
+    'WITHDRAWAL:PENDING': 1,
+    'EXCHANGE:SUCCESS': 1,
+    'TRANSFER:SUCCESS': 1,
+    'P2P:COMPLETED': 1,
+  },
   successfulFundingByCurrency: [{ currencyCode: 'CAD', totalAmount: '250.00', count: 1 }],
   successfulWithdrawalByCurrency: [],
   successfulExchangeCount: 1,

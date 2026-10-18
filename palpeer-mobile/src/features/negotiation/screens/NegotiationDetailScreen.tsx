@@ -17,7 +17,9 @@ import { effectiveStatus, p2pRateLine } from '@/features/p2p/logic';
 import { useMoneyFormat } from '@/features/wallets/useMoneyFormat';
 import { useNow } from '@/hooks/useNow';
 import { useTheme } from '@/providers/ThemeProvider';
+import { chatErrorMessage } from '@/features/chat/logic';
 import { toAppError } from '@/services/api/errors';
+import { useOpenChatRoomMutation } from '@/services/api/chatApi';
 import {
   useAcceptNegotiationMutation,
   useCancelNegotiationMutation,
@@ -45,11 +47,17 @@ import {
 } from '../logic';
 import { useNegotiationRealtime } from '../useNegotiationRealtime';
 
+function routeParam(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
 /** Fallback while live updates are down: an open negotiation is re-read while focused. */
 const POLL_MS = 15_000;
 
 export function NegotiationDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: idParam } = useLocalSearchParams<{ id: string }>();
+  const id = routeParam(idParam);
   const [open, setOpen] = useState(true);
   useNegotiationRealtime();
   const live = useRealtimeStatus() === 'connected';
@@ -87,7 +95,7 @@ export function NegotiationDetailScreen() {
       </Screen>
     );
   }
-  if (!negotiation.data || !request.data) {
+  if (!id || !negotiation.data || !request.data) {
     return (
       <Screen>
         {header}
@@ -99,6 +107,7 @@ export function NegotiationDetailScreen() {
   return (
     <NegotiationView
       negotiation={negotiation.data}
+      negotiationId={id}
       request={request.data}
       header={header}
       refreshing={negotiation.isFetching && !negotiation.isLoading}
@@ -112,12 +121,14 @@ export function NegotiationDetailScreen() {
 
 function NegotiationView({
   negotiation,
+  negotiationId: routeNegotiationId,
   request,
   header,
   refreshing,
   onRefresh,
 }: {
   negotiation: NegotiationResponse;
+  negotiationId: string;
   request: P2PRequestResponse;
   header: React.ReactNode;
   refreshing: boolean;
@@ -131,6 +142,7 @@ function NegotiationView({
   const [accept, acceptState] = useAcceptNegotiationMutation();
   const [reject, rejectState] = useRejectNegotiationMutation();
   const [cancel, cancelState] = useCancelNegotiationMutation();
+  const [openRoom, chatState] = useOpenChatRoomMutation();
   const [countering, setCountering] = useState(false);
   const [confirming, setConfirming] = useState<'accept' | 'decline' | 'cancel' | null>(null);
   const [amount, setAmount] = useState('');
@@ -180,6 +192,22 @@ function NegotiationView({
     setNotice('Counter-offer sent.');
   };
 
+  const openChat = async () => {
+    setError(null);
+    // Prefer the loaded entity id; fall back to the route param (same value) so we never POST {}.
+    const negotiationId = negotiation.id || routeNegotiationId;
+    if (!negotiationId) {
+      setError('Unable to open chat for this offer.');
+      return;
+    }
+    const result = await openRoom({ negotiationId });
+    if ('error' in result) {
+      setError(chatErrorMessage(toAppError(result.error)));
+      return;
+    }
+    router.push({ pathname: '/chat/[roomId]', params: { roomId: result.data.id } });
+  };
+
   const runConfirmed = async () => {
     setError(null);
     const action = confirming;
@@ -215,14 +243,27 @@ function NegotiationView({
     />
   );
 
+  const messageButton = (
+    <Button
+      label="Message"
+      variant="outline"
+      onPress={() => void openChat()}
+      loading={chatState.isLoading}
+      testID="negotiation-chat"
+    />
+  );
+
   let footer = null;
   if (accepted && orderId) {
     footer = (
-      <Button
-        label="View order"
-        onPress={() => router.push({ pathname: '/p2p/order/[id]', params: { id: orderId } })}
-        testID="negotiation-view-order"
-      />
+      <View style={{ gap: theme.spacing.sm }}>
+        <Button
+          label="View order"
+          onPress={() => router.push({ pathname: '/p2p/order/[id]', params: { id: orderId } })}
+          testID="negotiation-view-order"
+        />
+        {messageButton}
+      </View>
     );
   } else if (myTurn && countering) {
     footer = (
@@ -258,6 +299,7 @@ function NegotiationView({
           onPress={startCounter}
           testID="negotiation-counter"
         />
+        {messageButton}
         <Button
           label="Decline offer"
           variant="ghost"
@@ -268,7 +310,12 @@ function NegotiationView({
       </View>
     );
   } else if (isOpen) {
-    footer = cancelButton;
+    footer = (
+      <View style={{ gap: theme.spacing.sm }}>
+        {messageButton}
+        {cancelButton}
+      </View>
+    );
   }
 
   const dialog =
@@ -355,9 +402,7 @@ function NegotiationView({
           amount={amount}
           rate={rate}
           onAmountChange={setAmount}
-          onRateChange={setRate}
           amountError={submitted && !isPositiveMoney(amount) ? 'Enter an amount above zero.' : null}
-          rateError={submitted && !isPositiveMoney(rate) ? 'Enter a rate above zero.' : null}
           testID="counter"
         />
       ) : null}

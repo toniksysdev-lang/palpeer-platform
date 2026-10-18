@@ -26,6 +26,19 @@ export function toDisplayDate(iso: string | null | undefined): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+/** Default calendar / form DOB: today minus `years` (local calendar date). */
+export function defaultDateOfBirth(yearsBack = 15, today: Date = new Date()): Date {
+  return new Date(today.getFullYear() - yearsBack, today.getMonth(), today.getDate());
+}
+
+export function defaultDateOfBirthDisplay(yearsBack = 15, today: Date = new Date()): string {
+  const date = defaultDateOfBirth(yearsBack, today);
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return toDisplayDate(`${yyyy}-${mm}-${dd}`);
+}
+
 export const personalInfoSchema = z.object({
   firstName: z
     .string()
@@ -44,7 +57,7 @@ export const personalInfoSchema = z.object({
     .refine((value) => {
       const iso = toIsoDate(value);
       return iso != null && isValidPastIsoDate(iso);
-    }, 'Use dd/mm/yyyy, e.g. 21/04/1990'),
+    }, 'Select a valid past date of birth'),
   countryOfResidence: z.string().trim().min(2, 'Select a country').max(2),
   stateTerritory: z.string().trim().min(1, 'Select a state or territory'),
   addressLine1: z
@@ -62,10 +75,12 @@ export const personalInfoSchema = z.object({
 export type PersonalInfoForm = z.infer<typeof personalInfoSchema>;
 
 export function profileToFormDefaults(profile: ProfileResponse | null): PersonalInfoForm {
+  const savedDob = toDisplayDate(profile?.dateOfBirth);
   return {
     firstName: profile?.firstName ?? '',
     lastName: profile?.lastName ?? '',
-    dateOfBirth: toDisplayDate(profile?.dateOfBirth),
+    // New / empty profiles open on a DOB 15 years before today.
+    dateOfBirth: savedDob || defaultDateOfBirthDisplay(15),
     countryOfResidence: profile?.countryOfResidence ?? '',
     stateTerritory: profile?.stateTerritory ?? '',
     addressLine1: profile?.addressLine1 ?? '',

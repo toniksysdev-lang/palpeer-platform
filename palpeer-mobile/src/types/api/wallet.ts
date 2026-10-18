@@ -17,6 +17,10 @@ export type WalletResponse = {
   currencyCode: string;
   availableBalance: Money;
   pendingBalance: Money;
+  /** Present on admin inventory responses only. */
+  userEmail?: string | null;
+  userFirstName?: string | null;
+  userLastName?: string | null;
 };
 
 /** VERIFIED: `CreateWalletRequest` — code 3–10 chars, must exist in `GET /currencies`. */
@@ -67,6 +71,13 @@ export type FundingTransactionResponse = {
   createdAt: IsoInstant;
 };
 
+/** VERIFIED: `BankOptionResponse` — payout banks (NGN withdrawals). */
+export type BankOptionResponse = {
+  code: string;
+  name: string;
+  slug: string | null;
+};
+
 /** VERIFIED: `CreateWithdrawalRequest`. */
 export type CreateWithdrawalRequest = {
   walletId: Uuid;
@@ -102,6 +113,16 @@ export type CreateWalletTransferRequest = {
   note?: string;
 };
 
+/** VERIFIED: `TransferRecipientResponse` from GET /transfers/recipient?q=. */
+export type TransferRecipientResponse = {
+  userId: Uuid;
+  displayName: string;
+  recipient: string;
+  matchedBy: 'EMAIL' | 'PHONE' | string;
+  /** Present when currencyCode was sent on the lookup. */
+  hasWallet: boolean | null;
+};
+
 export type WalletTransferResponse = {
   id: Uuid;
   senderUserId: Uuid;
@@ -115,15 +136,15 @@ export type WalletTransferResponse = {
 };
 
 /** VERIFIED: `TransactionActivityType` (unified feed). */
-export type TransactionActivityType = 'FUNDING' | 'WITHDRAWAL' | 'EXCHANGE';
+export type TransactionActivityType = 'FUNDING' | 'WITHDRAWAL' | 'EXCHANGE' | 'TRANSFER' | 'P2P';
 
-/** VERIFIED: `TransactionItemResponse` (unified feed over funding, withdrawal, exchange). */
+/** VERIFIED: `TransactionItemResponse` (unified feed over funding, withdrawal, exchange, transfer, P2P). */
 export type TransactionItemResponse = {
   type: TransactionActivityType;
   id: Uuid;
   userId: Uuid;
   status: string;
-  walletId: Uuid;
+  walletId: Uuid | null;
   secondaryWalletId: Uuid | null;
   currencyCode: string;
   secondaryCurrencyCode: string | null;

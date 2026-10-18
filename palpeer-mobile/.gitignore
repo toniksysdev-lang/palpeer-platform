@@ -45,3 +45,8 @@ e2e/results/
 # generated native folders
 /ios
 /android
+
+# Firebase / FCM credentials (use *.example templates; set via EAS secrets for builds)
+google-services.json
+GoogleService-Info.plist
+firebase-service-account.json

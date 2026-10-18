@@ -61,7 +61,7 @@ describe('money from the backend', () => {
 describe('payment rails', () => {
   it('only CAD and NGN have a funding/withdrawal rail', () => {
     expect(railFor('CAD')).toBe('APAYLO');
-    expect(railFor('ngn')).toBe('KUDA');
+    expect(railFor('ngn')).toBe('KORAPAY');
     expect(hasPaymentRail('USD')).toBe(false);
     expect(hasPaymentRail('GBP')).toBe(false);
   });
@@ -104,7 +104,13 @@ describe('withdrawal destinations', () => {
   });
 
   it('requires both parts of an NGN destination', () => {
-    expect(validateNgn({ bankCode: '', accountNumber: '0123456789' })).toHaveProperty('bankCode');
+    expect(validateNgn({ bankCode: '', accountNumber: '0123456789' })).toEqual({
+      bankCode: 'Select a bank.',
+    });
+    expect(validateNgn({ bankCode: '058', accountNumber: '012345678' })).toEqual({
+      accountNumber: 'Account number must be 10 digits.',
+    });
+    expect(validateNgn({ bankCode: '058', accountNumber: '0123456789' })).toEqual({});
     expect(ngnReference({ bankCode: '058', accountNumber: '0123456789' })).toBe('058:0123456789');
   });
 

@@ -40,9 +40,18 @@ const rooms: ChatRoomSummary[] = [
   {
     id: 'room-1',
     p2pOrderId: 'ord-1',
+    negotiationId: null,
     participantAId: 'u-3',
     participantBId: 'u-5',
     createdAt: new Date(now - 7000000).toISOString(),
+  },
+  {
+    id: 'room-2',
+    p2pOrderId: null,
+    negotiationId: 'neg-1',
+    participantAId: 'u-2',
+    participantBId: 'u-3',
+    createdAt: new Date(now - 6000000).toISOString(),
   },
 ];
 

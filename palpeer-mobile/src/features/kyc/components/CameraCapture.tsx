@@ -1,7 +1,14 @@
 import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera';
 import { Camera, CameraOff, ImageIcon, X } from 'lucide-react-native';
-import { useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { createElement, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Linking,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Screen } from '@/components/layout/Screen';
@@ -14,6 +21,12 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { logger } from '@/utils/logger';
 
 import type { CapturedImage } from '../image';
+import {
+  captureWebCameraFrame,
+  openWebCameraStream,
+  stopWebCameraStream,
+  webCameraErrorMessage,
+} from './webCamera';
 
 type Props = {
   facing: CameraType;
@@ -26,10 +39,260 @@ type Props = {
 };
 
 /**
- * Permission-aware camera. Permission is requested only when the user chooses to take a photo,
- * never on mount of an unrelated screen.
+ * Permission-aware camera. Permission is requested only when the user chooses to take a photo.
+ *
+ * On web, getUserMedia must run in the Allow-button gesture. Expo CameraView starts the stream
+ * from a useEffect after unlock, which browsers often deny without a prompt — so web uses its
+ * own preview fed by a stream opened directly from the button press.
  */
 export function CameraCapture({
+  facing,
+  overlay,
+  hint,
+  onCaptured,
+  onCancel,
+  onUseLibrary,
+}: Props) {
+  const theme = useTheme();
+  const isWeb = Platform.OS === 'web';
+
+  if (isWeb) {
+    return (
+      <WebCameraCapture
+        facing={facing}
+        overlay={overlay}
+        hint={hint}
+        onCaptured={onCaptured}
+        onCancel={onCancel}
+        onUseLibrary={onUseLibrary}
+      />
+    );
+  }
+
+  return (
+    <NativeCameraCapture
+      facing={facing}
+      overlay={overlay}
+      hint={hint}
+      onCaptured={onCaptured}
+      onCancel={onCancel}
+      onUseLibrary={onUseLibrary}
+    />
+  );
+}
+
+function WebCameraCapture({
+  facing,
+  overlay,
+  hint,
+  onCaptured,
+  onCancel,
+  onUseLibrary,
+}: Props) {
+  const theme = useTheme();
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [phase, setPhase] = useState<'gate' | 'live' | 'error'>('gate');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [requesting, setRequesting] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  const [captureFailed, setCaptureFailed] = useState(false);
+
+  useEffect(() => {
+    return () => stopWebCameraStream(streamRef.current);
+  }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (phase !== 'live' || !video || !stream) return;
+    video.srcObject = stream;
+    if (typeof video.play === 'function') {
+      const play = video.play();
+      if (play && typeof play.catch === 'function') {
+        play.catch((error: unknown) => logger.warn('Web camera play failed', { error }));
+      }
+    }
+  }, [phase]);
+
+  const startCamera = async () => {
+    setRequesting(true);
+    setErrorMessage(null);
+    setReady(false);
+    setCaptureFailed(false);
+    stopWebCameraStream(streamRef.current);
+    streamRef.current = null;
+    try {
+      // Must stay in the click's async chain so the browser shows the permission prompt.
+      const stream = await openWebCameraStream(facing);
+      streamRef.current = stream;
+      setPhase('live');
+    } catch (error) {
+      logger.warn('Web camera open failed', { error });
+      setErrorMessage(webCameraErrorMessage(error));
+      setPhase('error');
+    } finally {
+      setRequesting(false);
+    }
+  };
+
+  const takePicture = async () => {
+    const video = videoRef.current;
+    if (!video || !ready || capturing) return;
+    setCapturing(true);
+    setCaptureFailed(false);
+    try {
+      const image = await captureWebCameraFrame(video);
+      stopWebCameraStream(streamRef.current);
+      streamRef.current = null;
+      onCaptured(image);
+    } catch (error) {
+      logger.warn('Web camera capture failed', { error });
+      setCaptureFailed(true);
+    } finally {
+      setCapturing(false);
+    }
+  };
+
+  if (phase === 'gate' || phase === 'error') {
+    return (
+      <Screen>
+        <StackHeader onBack={onCancel} />
+        <View style={styles.center} testID={phase === 'error' ? 'camera-unavailable' : 'camera-permission'}>
+          <EmptyState
+            icon={CameraOff}
+            title={phase === 'error' ? 'Camera access is off' : 'Allow camera access'}
+            message={
+              errorMessage ??
+              'PALPEER needs your camera for this photo. Your browser will ask for permission when you continue.'
+            }
+          />
+          <View style={{ gap: theme.spacing.sm, alignSelf: 'stretch' }}>
+            <Button
+              label={phase === 'error' ? 'Try again' : 'Allow camera'}
+              onPress={() => void startCamera()}
+              loading={requesting}
+              testID={phase === 'error' ? 'camera-retry' : 'camera-allow'}
+            />
+            {onUseLibrary ? (
+              <Button
+                label="Choose from library instead"
+                variant="ghost"
+                onPress={onUseLibrary}
+                testID="camera-use-library"
+              />
+            ) : null}
+          </View>
+        </View>
+      </Screen>
+    );
+  }
+
+  return (
+    <View style={styles.fill} testID="camera-view">
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {/* HTML video preview — RN View can't host a MediaStream. */}
+        {createElement('video', {
+          ref: (node: HTMLVideoElement | null) => {
+            videoRef.current = node;
+          },
+          autoPlay: true,
+          playsInline: true,
+          muted: true,
+          onLoadedMetadata: () => setReady(true),
+          style: {
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            transform: facing === 'front' ? 'scaleX(-1)' : undefined,
+            backgroundColor: '#000',
+          },
+        })}
+      </View>
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center]}>
+        <View
+          style={
+            overlay === 'face'
+              ? [styles.faceFrame, { borderColor: theme.colors.onPrimary }]
+              : [
+                  styles.documentFrame,
+                  { borderColor: theme.colors.onPrimary, borderRadius: theme.radius.lg },
+                ]
+          }
+        />
+      </View>
+      <SafeAreaView edges={['top', 'bottom']} style={styles.controls}>
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            padding: theme.spacing.md,
+          }}
+        >
+          <IconButton
+            icon={X}
+            accessibilityLabel="Close camera"
+            onPress={() => {
+              stopWebCameraStream(streamRef.current);
+              streamRef.current = null;
+              onCancel();
+            }}
+            variant="filled"
+            testID="camera-close"
+          />
+        </View>
+        <View
+          style={{ alignItems: 'center', gap: theme.spacing.lg, paddingBottom: theme.spacing.xl }}
+        >
+          <AppText align="center" style={[styles.hint, { color: theme.colors.onPrimary }]}>
+            {captureFailed ? "Couldn't take the photo. Hold still and try again." : hint}
+          </AppText>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: theme.spacing.xxl,
+            }}
+          >
+            {onUseLibrary ? (
+              <IconButton
+                icon={ImageIcon}
+                accessibilityLabel="Choose from library"
+                onPress={onUseLibrary}
+                variant="filled"
+              />
+            ) : (
+              <View style={{ width: 44 }} />
+            )}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Take photo"
+              accessibilityState={{ disabled: !ready || capturing }}
+              disabled={!ready || capturing}
+              onPress={() => void takePicture()}
+              testID="camera-shutter"
+              style={[
+                styles.shutter,
+                { borderColor: theme.colors.onPrimary, opacity: ready ? 1 : 0.5 },
+              ]}
+            >
+              {capturing ? (
+                <ActivityIndicator color={theme.colors.onPrimary} />
+              ) : (
+                <Camera color={theme.colors.onPrimary} size={28} />
+              )}
+            </Pressable>
+            <View style={{ width: 44 }} />
+          </View>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+function NativeCameraCapture({
   facing,
   overlay,
   hint,
@@ -44,6 +307,22 @@ export function CameraCapture({
   const [capturing, setCapturing] = useState(false);
   const [mountError, setMountError] = useState(false);
   const [captureFailed, setCaptureFailed] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+
+  const allowCamera = async () => {
+    setRequesting(true);
+    setMountError(false);
+    try {
+      const result = await requestPermission();
+      if (!result.granted) {
+        logger.warn('Camera permission not granted', { status: result.status });
+      }
+    } catch (error) {
+      logger.warn('Camera permission request failed', { error });
+    } finally {
+      setRequesting(false);
+    }
+  };
 
   if (!permission) {
     return (
@@ -84,11 +363,8 @@ export function CameraCapture({
             ) : (
               <Button
                 label="Allow camera"
-                onPress={() => {
-                  requestPermission().catch((error: unknown) =>
-                    logger.warn('Camera permission request failed', { error }),
-                  );
-                }}
+                onPress={() => void allowCamera()}
+                loading={requesting}
                 testID="camera-allow"
               />
             )}
@@ -117,7 +393,15 @@ export function CameraCapture({
             message="We couldn't start the camera. Close other apps using it and try again."
           />
           <View style={{ gap: theme.spacing.sm, alignSelf: 'stretch' }}>
-            <Button label="Try again" variant="outline" onPress={() => setMountError(false)} />
+            <Button
+              label="Try again"
+              variant="outline"
+              onPress={() => {
+                setMountError(false);
+                setReady(false);
+              }}
+              testID="camera-retry"
+            />
             {onUseLibrary ? (
               <Button label="Choose from library instead" variant="ghost" onPress={onUseLibrary} />
             ) : null}
@@ -133,7 +417,11 @@ export function CameraCapture({
     setCaptureFailed(false);
     try {
       const picture = await cameraRef.current.takePictureAsync({ quality: 0.9, exif: false });
-      onCaptured({ uri: picture.uri, width: picture.width, height: picture.height });
+      onCaptured({
+        uri: picture.uri,
+        width: picture.width ?? 0,
+        height: picture.height ?? 0,
+      });
     } catch (error) {
       logger.warn('Camera capture failed', { error });
       setCaptureFailed(true);
@@ -212,7 +500,7 @@ export function CameraCapture({
               accessibilityLabel="Take photo"
               accessibilityState={{ disabled: !ready || capturing }}
               disabled={!ready || capturing}
-              onPress={takePicture}
+              onPress={() => void takePicture()}
               testID="camera-shutter"
               style={[
                 styles.shutter,

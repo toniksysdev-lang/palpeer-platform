@@ -5,7 +5,7 @@ import { RefreshControl, View } from 'react-native';
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState, ErrorState } from '@/components/feedback/StateViews';
 import { AppText } from '@/components/ui/AppText';
-import { IconButton } from '@/components/ui/IconButton';
+import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useTheme } from '@/providers/ThemeProvider';
 import { toAppError } from '@/services/api/errors';
@@ -20,18 +20,21 @@ export function WalletsScreen() {
   const createWallet = () => router.push('/wallet/create');
 
   const header = (
-    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.sm }}>
       <AppText variant="h1" accessibilityRole="header" style={{ flex: 1 }}>
         Wallets
       </AppText>
       {wallets.data && wallets.data.length > 0 ? (
-        <IconButton
-          icon={Plus}
-          variant="filled"
-          accessibilityLabel="Create a wallet"
-          onPress={createWallet}
-          testID="wallets-create"
-        />
+        <View style={{ marginTop: theme.spacing.xxxl }}>
+          <Button
+            label="Create Wallet"
+            leftIcon={Plus}
+            size="md"
+            fullWidth={false}
+            onPress={createWallet}
+            testID="wallets-create"
+          />
+        </View>
       ) : null}
     </View>
   );

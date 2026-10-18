@@ -1,6 +1,7 @@
 package com.palpeer.kyc.web.dto;
 
 import com.palpeer.kyc.domain.KycStatus;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -13,6 +14,8 @@ public record KycProgressResponse(
         boolean hasDocument,
         long documentCount,
         boolean hasSelfie,
-        long selfieCount
+        long selfieCount,
+        /** Distinct document types uploaded for this case (e.g. PASSPORT), newest first. */
+        List<String> documentTypes
 ) {
 }

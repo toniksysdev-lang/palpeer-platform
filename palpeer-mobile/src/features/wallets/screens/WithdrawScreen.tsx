@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
 import { Screen } from '@/components/layout/Screen';
@@ -14,18 +14,24 @@ import { Input } from '@/components/ui/Input';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TextLink } from '@/components/ui/TextLink';
+import { PickerField, PickerSheet } from '@/features/exchange/components/PickerSheet';
 import { usePinPrompt } from '@/features/security/PinPromptProvider';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { toAppError } from '@/services/api/errors';
 import { useGetPinStatusQuery } from '@/services/api/securityApi';
-import { useCreateWithdrawalMutation, useGetWalletQuery } from '@/services/api/walletApi';
+import {
+  useCreateWithdrawalMutation,
+  useGetWalletQuery,
+  useGetWithdrawalBanksQuery,
+} from '@/services/api/walletApi';
 import { compareMoney, isPositiveMoney, toMoney } from '@/utils/money';
 
 import { ReviewRow } from '../components/ReviewRow';
 import {
   cadReference,
   describeDestination,
+  describeNgnDestination,
   ngnReference,
   validateCad,
   validateNgn,
@@ -71,11 +77,26 @@ export function WithdrawScreen() {
     transit: '',
     account: '',
     bankCode: '',
+    bankName: '',
     accountNumber: '',
   });
   const [fieldErrors, setFieldErrors] = useState<DestinationErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [bankPickerOpen, setBankPickerOpen] = useState(false);
+
+  const isNgn = wallet.data?.currencyCode?.toUpperCase() === 'NGN';
+  const banksQuery = useGetWithdrawalBanksQuery('NG', { skip: !isNgn });
+
+  const bankOptions = useMemo(
+    () =>
+      (banksQuery.data ?? []).map((bank) => ({
+        key: bank.code,
+        title: bank.name,
+        subtitle: bank.code,
+      })),
+    [banksQuery.data],
+  );
 
   const title = 'Withdraw';
 
@@ -135,6 +156,10 @@ export function WithdrawScreen() {
   const ngnDestination = () => ({ bankCode: fields.bankCode, accountNumber: fields.accountNumber });
   const reference =
     rail === 'APAYLO' ? cadReference(cadDestination()) : ngnReference(ngnDestination());
+  const reviewDestination =
+    rail === 'APAYLO'
+      ? (describeDestination(code, reference) ?? reference)
+      : describeNgnDestination(fields.bankName, fields.bankCode, fields.accountNumber);
 
   const toReview = () => {
     setError(null);
@@ -225,7 +250,7 @@ export function WithdrawScreen() {
           />
           <ReviewRow
             label="To"
-            value={describeDestination(code, reference) ?? reference}
+            value={reviewDestination}
             testID="withdraw-review-destination"
           />
         </Card>
@@ -336,24 +361,51 @@ export function WithdrawScreen() {
         </View>
       ) : (
         <View style={{ gap: theme.spacing.md }}>
-          <Input
-            label="Bank code"
-            value={fields.bankCode}
-            onChangeText={(text) => setField('bankCode', digitsOnly(text))}
-            numberPad="digits"
-            numberPadMaxLength={12}
+          {banksQuery.isError && !banksQuery.data ? (
+            <FormAlert
+              tone="danger"
+              message="Couldn't load banks. Pull to retry or try again shortly."
+              testID="withdraw-banks-error"
+            />
+          ) : null}
+          <PickerField
+            label="Banks"
+            value={fields.bankName}
+            placeholder={banksQuery.isLoading ? 'Loading banks…' : 'Select a bank'}
+            onPress={() => {
+              if (!banksQuery.isLoading) setBankPickerOpen(true);
+            }}
             error={fieldErrors.bankCode}
-            testID="withdraw-bank-code"
+            testID="withdraw-bank"
           />
           <Input
             label="Account number"
             value={fields.accountNumber}
-            onChangeText={(text) => setField('accountNumber', digitsOnly(text))}
+            onChangeText={(text) => setField('accountNumber', digitsOnly(text).slice(0, 10))}
             numberPad="digits"
-            numberPadMaxLength={20}
+            numberPadMaxLength={10}
             error={fieldErrors.accountNumber}
-            hint="The account name is checked with the bank before the transfer."
+            hint="Enter the 10-digit NUBAN account number."
             testID="withdraw-account-number"
+          />
+          <PickerSheet
+            visible={bankPickerOpen}
+            title="Select bank"
+            options={bankOptions}
+            selectedKey={fields.bankCode || null}
+            searchable
+            searchPlaceholder="Search banks"
+            onSelect={(code) => {
+              const bank = banksQuery.data?.find((item) => item.code === code);
+              setFields((current) => ({
+                ...current,
+                bankCode: code,
+                bankName: bank?.name ?? code,
+              }));
+              setFieldErrors((current) => ({ ...current, bankCode: '' }));
+            }}
+            onClose={() => setBankPickerOpen(false)}
+            testID="withdraw-bank-sheet"
           />
         </View>
       )}

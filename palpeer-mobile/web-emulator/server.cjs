@@ -29,7 +29,12 @@ const server = http.createServer((req, res) => {
       "const APP_URL = new URLSearchParams(location.search).get('app') || 'http://localhost:8081';",
       `const APP_URL = new URLSearchParams(location.search).get('app') || ${JSON.stringify(APP_URL)};`,
     );
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      // Let the embedded Expo origin (usually :8081) use getUserMedia from this shell.
+      'Permissions-Policy': 'camera=*, microphone=*',
+    });
     res.end(html);
     return;
   }

@@ -60,7 +60,18 @@ describe('resolveDeepLink', () => {
 describe('notification and push targets', () => {
   it('maps REFERRAL notifications to the referrals screen and nothing else', () => {
     expect(notificationTarget({ referenceType: 'REFERRAL', referenceId: ID })).toBe('/referrals');
-    expect(notificationTarget({ referenceType: 'WITHDRAWAL', referenceId: ID })).toBeNull();
+    expect(notificationTarget({ referenceType: 'WITHDRAWAL', referenceId: ID })).toBe(
+      `/transaction/WITHDRAWAL/${ID}`,
+    );
+    expect(notificationTarget({ referenceType: 'FUNDING', referenceId: ID })).toBe(
+      `/transaction/FUNDING/${ID}`,
+    );
+    expect(notificationTarget({ referenceType: 'TRANSFER', referenceId: ID })).toBe(
+      `/transaction/TRANSFER/${ID}`,
+    );
+    expect(notificationTarget({ referenceType: 'NEGOTIATION', referenceId: ID })).toBe(
+      `/negotiation/${ID}`,
+    );
     expect(notificationTarget({ referenceType: null, referenceId: null })).toBeNull();
   });
 

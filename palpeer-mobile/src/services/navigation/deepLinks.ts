@@ -8,7 +8,7 @@ const MAX_LINK_LENGTH = 512;
  * ignored, so a crafted link can't open arbitrary screens or pass unexpected parameters.
  */
 const ROUTES: readonly RegExp[] = [
-  new RegExp(`^/transaction/(FUNDING|WITHDRAWAL|EXCHANGE)/${UUID}$`),
+  new RegExp(`^/transaction/(FUNDING|WITHDRAWAL|EXCHANGE|TRANSFER)/${UUID}$`),
   new RegExp(`^/wallet/${UUID}$`),
   new RegExp(`^/p2p/request/${UUID}$`),
   new RegExp(`^/p2p/order/${UUID}$`),
@@ -56,25 +56,40 @@ export function resolveDeepLink(input: string | null | undefined): string | null
   return path;
 }
 
-/** Screen for a notification's `referenceType`. Only `REFERRAL` exists today (NT-3). */
+const UUID_ONLY = new RegExp(`^${UUID}$`);
+
+/** Screen for a notification's `referenceType` (NT-3). */
 export function notificationTarget(notification: {
   referenceType: string | null;
   referenceId: string | null;
 }): string | null {
-  switch (notification.referenceType?.toUpperCase()) {
+  const type = notification.referenceType?.toUpperCase();
+  const id = notification.referenceId;
+  switch (type) {
     case 'REFERRAL':
       return '/referrals';
+    case 'FUNDING':
+    case 'WITHDRAWAL':
+    case 'EXCHANGE':
+    case 'TRANSFER':
+      return id && UUID_ONLY.test(id) ? `/transaction/${type}/${id}` : null;
+    case 'P2P_REQUEST':
+      return id && UUID_ONLY.test(id) ? `/p2p/request/${id}` : null;
+    case 'P2P_ORDER':
+      return id && UUID_ONLY.test(id) ? `/p2p/order/${id}` : null;
+    case 'NEGOTIATION':
+      return id && UUID_ONLY.test(id) ? `/negotiation/${id}` : null;
+    case 'ADMIN_BROADCAST':
+    case 'P2P':
+      return '/notifications';
     default:
       return null;
   }
 }
 
-const UUID_ONLY = new RegExp(`^${UUID}$`);
-
 /**
- * Where a tapped push goes. The backend push payload isn't defined yet (NT-4), so only fields
- * mirroring `NotificationResponse` are read, and the screen always refetches from the API
- * (R-NT-1). Falls back to the notification center.
+ * Where a tapped push goes. FCM data includes `notificationId` / `referenceType` /
+ * `referenceId` (NT-4). The screen always refetches from the API (R-NT-1).
  */
 export function pushTarget(data: unknown): string {
   const record = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};

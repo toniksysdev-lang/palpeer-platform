@@ -2,6 +2,7 @@ package com.palpeer.negotiation.service;
 
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
+import com.palpeer.common.notify.UserNotifyEvent;
 import com.palpeer.negotiation.domain.Negotiation;
 import com.palpeer.negotiation.domain.NegotiationCloseReason;
 import com.palpeer.negotiation.domain.NegotiationOffer;
@@ -20,6 +21,7 @@ import com.palpeer.p2p.service.P2PRequestClosedEvent;
 import com.palpeer.p2p.service.P2PService;
 import com.palpeer.p2p.web.dto.P2POrderResponse;
 import jakarta.persistence.criteria.Predicate;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -85,7 +87,34 @@ public class NegotiationService {
                 request.rate());
         negotiation.setCurrentOfferId(offer.getId());
         negotiationRepository.save(negotiation);
+        notifyRequesterOfOffer(p2p, negotiation, request.amount(), request.rate());
         return changed(negotiation);
+    }
+
+    /** Email + in-app + push to the listing owner when a counterparty opens a negotiation. */
+    private void notifyRequesterOfOffer(
+            P2PRequest p2p, Negotiation negotiation, BigDecimal amount, BigDecimal rate) {
+        String detail = formatAmount(amount)
+                + " "
+                + p2p.getBaseCurrencyCode()
+                + " / "
+                + p2p.getQuoteCurrencyCode()
+                + " at rate "
+                + formatAmount(rate);
+        String side = p2p.getSide() != null ? p2p.getSide().name() : "P2P";
+        eventPublisher.publishEvent(new UserNotifyEvent(
+                negotiation.getRequesterId(),
+                "New P2P negotiation offer",
+                "Someone sent a negotiation on your P2P " + side + " request: " + detail + ".",
+                "P2P",
+                "NEGOTIATION",
+                negotiation.getId(),
+                true,
+                true));
+    }
+
+    private static String formatAmount(BigDecimal amount) {
+        return amount == null ? "0" : amount.stripTrailingZeros().toPlainString();
     }
 
     @Transactional

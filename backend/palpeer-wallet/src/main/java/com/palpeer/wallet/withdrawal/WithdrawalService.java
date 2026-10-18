@@ -4,17 +4,27 @@ import com.palpeer.common.audit.AuditRecord;
 import com.palpeer.common.audit.AuditRecorder;
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
+import com.palpeer.common.notify.UserNotifyEvent;
 import com.palpeer.ledger.domain.LedgerEntry;
 import com.palpeer.ledger.domain.LedgerEntryType;
 import com.palpeer.ledger.service.LedgerPostingRequest;
 import com.palpeer.ledger.service.LedgerService;
+import com.palpeer.profile.domain.Profile;
+import com.palpeer.profile.repository.ProfileRepository;
 import com.palpeer.user.domain.User;
 import com.palpeer.user.repository.UserRepository;
 import com.palpeer.wallet.domain.Wallet;
 import com.palpeer.wallet.funding.MoneyMovementStatus;
 import com.palpeer.wallet.provider.PaymentRailProvider;
 import com.palpeer.wallet.provider.PaymentRailRouter;
+import com.palpeer.wallet.provider.apaylo.ApayloPaymentRail;
+import com.palpeer.wallet.provider.apaylo.ApayloProperties;
+import com.palpeer.wallet.provider.korapay.KorapayPaymentRail;
+import com.palpeer.wallet.provider.korapay.KorapayProperties;
 import com.palpeer.wallet.repository.WalletRepository;
+import com.palpeer.wallet.service.PoolFundThresholdService;
+import com.palpeer.wallet.service.PoolLiquidityGuard;
+import com.palpeer.wallet.service.WithdrawalUnverifiedLimitService;
 import com.palpeer.wallet.withdrawal.dto.CreateWithdrawalRequest;
 import com.palpeer.wallet.withdrawal.dto.WithdrawalTransactionResponse;
 import java.math.BigDecimal;
@@ -22,6 +32,7 @@ import java.util.EnumSet;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -52,9 +63,16 @@ public class WithdrawalService {
     private final WithdrawalTransactionRepository withdrawalTransactionRepository;
     private final WalletRepository walletRepository;
     private final UserRepository userRepository;
+    private final ProfileRepository profileRepository;
     private final LedgerService ledgerService;
     private final AuditRecorder auditRecorder;
     private final PaymentRailRouter paymentRailRouter;
+    private final KorapayProperties korapayProperties;
+    private final ApayloProperties apayloProperties;
+    private final ApplicationEventPublisher eventPublisher;
+    private final PoolLiquidityGuard poolLiquidityGuard;
+    private final PoolFundThresholdService poolFundThresholdService;
+    private final WithdrawalUnverifiedLimitService withdrawalUnverifiedLimitService;
 
     @Transactional
     public WithdrawalTransactionResponse initiate(UUID userId, String idempotencyKey, CreateWithdrawalRequest request) {
@@ -96,9 +114,24 @@ public class WithdrawalService {
         return response;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public WithdrawalTransactionResponse get(UUID userId, UUID withdrawalId) {
-        return toResponse(requireOwned(userId, withdrawalId));
+        WithdrawalTransaction tx = requireOwned(userId, withdrawalId);
+        // Local sandboxes often cannot receive provider webhooks — settle pending withdrawals on read.
+        if (tx.getStatus() == MoneyMovementStatus.PENDING && shouldSandboxSettleWithdrawal(tx)) {
+            return settleSuccess(requireForUpdate(tx.getId()));
+        }
+        return toResponse(tx);
+    }
+
+    private boolean shouldSandboxSettleWithdrawal(WithdrawalTransaction tx) {
+        if (KorapayPaymentRail.NAME.equals(tx.getProviderName())) {
+            return korapayProperties.isSandbox() && korapayProperties.isAutoSandboxSettle();
+        }
+        if (ApayloPaymentRail.NAME.equals(tx.getProviderName())) {
+            return apayloProperties.isSandbox() && apayloProperties.isAutoSandboxSettle();
+        }
+        return false;
     }
 
     /** Manual operator completion. Callers must be authorised operators, never the withdrawal owner. */
@@ -163,6 +196,16 @@ public class WithdrawalService {
         tx.setFailureReason(null);
         withdrawalTransactionRepository.save(tx);
         auditWithdrawal(tx, "WITHDRAWAL_PROCESS");
+        notifyWithdrawal(
+                tx,
+                "Withdrawal successful",
+                "Your withdrawal of " + formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                        + " has been sent to your destination.");
+        try {
+            poolFundThresholdService.notifyIfThresholdHit(tx.getCurrencyCode());
+        } catch (RuntimeException ex) {
+            // Settlement already succeeded — threshold alerts must not roll back the payout.
+        }
         return toResponse(tx);
     }
 
@@ -208,6 +251,12 @@ public class WithdrawalService {
                 .oldValue("status=" + old)
                 .newValue("status=FAILED;reason=" + tx.getFailureReason())
                 .build());
+        String detail = tx.getFailureReason() == null ? "" : " Reason: " + tx.getFailureReason();
+        notifyWithdrawal(
+                tx,
+                "Withdrawal failed",
+                "Your withdrawal of " + formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                        + " could not be completed." + detail);
         return toResponse(tx);
     }
 
@@ -244,6 +293,11 @@ public class WithdrawalService {
         tx.setStatus(MoneyMovementStatus.REVERSED);
         withdrawalTransactionRepository.save(tx);
         auditWithdrawal(tx, "WITHDRAWAL_REVERSE");
+        notifyWithdrawal(
+                tx,
+                "Withdrawal reversed",
+                "Your withdrawal of " + formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                        + " was reversed and credited back to your wallet.");
         return toResponse(tx);
     }
 
@@ -253,6 +307,13 @@ public class WithdrawalService {
                 .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        // Unverified users may only withdraw up to the per-currency ceiling (admin Settings).
+        withdrawalUnverifiedLimitService.assertWithinUnverifiedLimit(
+                userId, wallet.getCurrencyCode(), request.amount());
+
+        // Treasury gate: do not HOLD or call the rail when the pool cannot cover the payout.
+        poolLiquidityGuard.assertSufficientPool(wallet.getCurrencyCode(), request.amount());
 
         WithdrawalTransaction tx = new WithdrawalTransaction();
         tx.setUserId(userId);
@@ -284,7 +345,11 @@ public class WithdrawalService {
         tx.setStatus(MoneyMovementStatus.PENDING);
 
         if (paymentRailRouter.hasEnabledRail(wallet.getCurrencyCode())) {
-            PaymentRailProvider rail = paymentRailRouter.requireForCurrency(wallet.getCurrencyCode());
+            Profile profile = profileRepository.findByUserId(userId).orElse(null);
+            String customerName = profile == null
+                    ? null
+                    : joinName(profile.getFirstName(), profile.getLastName());
+            PaymentRailProvider rail = paymentRailRouter.requireForWithdrawal(wallet.getCurrencyCode());
             PaymentRailProvider.WithdrawalInitiation initiation = rail.initiateWithdrawal(
                     new PaymentRailProvider.WithdrawalInitiationRequest(
                             userId,
@@ -294,7 +359,8 @@ public class WithdrawalService {
                             tx.getAmount(),
                             tx.getDestinationReference(),
                             user.getEmail(),
-                            idempotencyKey
+                            idempotencyKey,
+                            customerName
                     ));
             tx.setProviderName(rail.providerName());
             tx.setProviderReference(initiation.providerReference());
@@ -307,6 +373,11 @@ public class WithdrawalService {
 
         withdrawalTransactionRepository.save(tx);
         auditWithdrawal(tx, "WITHDRAWAL_INITIATE");
+        notifyWithdrawal(
+                tx,
+                "Withdrawal initiated",
+                "Your withdrawal of " + formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                        + " is pending. Funds are held until settlement.");
         return toResponse(tx);
     }
 
@@ -376,6 +447,28 @@ public class WithdrawalService {
                 .userRef(tx.getUserId())
                 .newValue("status=" + tx.getStatus() + ";amount=" + tx.getAmount())
                 .build());
+    }
+
+    private void notifyWithdrawal(WithdrawalTransaction tx, String title, String body) {
+        eventPublisher.publishEvent(new UserNotifyEvent(
+                tx.getUserId(),
+                title,
+                body,
+                "TRANSACTION",
+                "WITHDRAWAL",
+                tx.getId(),
+                true,
+                true));
+    }
+
+    private static String formatMoney(BigDecimal amount, String currency) {
+        String value = amount == null ? "0" : amount.stripTrailingZeros().toPlainString();
+        return value + " " + (currency == null ? "" : currency);
+    }
+
+    private static String joinName(String first, String last) {
+        String name = ((first == null ? "" : first) + " " + (last == null ? "" : last)).trim();
+        return name.isBlank() ? null : name;
     }
 
     private static String trimToNull(String value) {

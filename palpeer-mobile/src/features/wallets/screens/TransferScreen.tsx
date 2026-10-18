@@ -18,7 +18,12 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { toAppError } from '@/services/api/errors';
 import { useGetPinStatusQuery } from '@/services/api/securityApi';
-import { useCreateWalletTransferMutation, useGetWalletQuery } from '@/services/api/walletApi';
+import {
+  useCreateWalletTransferMutation,
+  useGetWalletQuery,
+  useLazyLookupTransferRecipientQuery,
+} from '@/services/api/walletApi';
+import type { TransferRecipientResponse } from '@/types/api/wallet';
 import { compareMoney, isPositiveMoney, toMoney } from '@/utils/money';
 
 import { ReviewRow } from '../components/ReviewRow';
@@ -28,6 +33,7 @@ import { useMoneyFormat } from '../useMoneyFormat';
 
 /**
  * Send funds from this wallet to another user's matching-currency wallet.
+ * Looks up the recipient before review so the sender confirms the full name.
  * Requires a transaction PIN.
  */
 export function TransferScreen() {
@@ -39,10 +45,12 @@ export function TransferScreen() {
   const { requestPin } = usePinPrompt();
   const { format, precision } = useMoneyFormat();
   const [createTransfer, createState] = useCreateWalletTransferMutation();
+  const [lookupRecipient, lookupState] = useLazyLookupTransferRecipientQuery();
   const idempotency = useIdempotencyKey();
 
   const [step, setStep] = useState<'form' | 'review'>('form');
   const [recipient, setRecipient] = useState('');
+  const [resolved, setResolved] = useState<TransferRecipientResponse | null>(null);
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [recipientError, setRecipientError] = useState<string | null>(null);
@@ -72,7 +80,7 @@ export function TransferScreen() {
   const data = wallet.data;
   const code = data.currencyCode;
 
-  const toReview = () => {
+  const toReview = async () => {
     const trimmed = recipient.trim();
     let nextRecipientError: string | null = null;
     let nextAmountError: string | null = null;
@@ -83,12 +91,33 @@ export function TransferScreen() {
     }
     setRecipientError(nextRecipientError);
     setAmountError(nextAmountError);
+    setError(null);
     if (nextRecipientError || nextAmountError) return;
+
+    const result = await lookupRecipient({ q: trimmed, currencyCode: code });
+    if (result.error || !result.data) {
+      setRecipientError(walletErrorMessage(toAppError(result.error)));
+      setResolved(null);
+      return;
+    }
+    if (result.data.hasWallet === false) {
+      setRecipientError(
+        `${result.data.displayName} doesn't have a ${code} wallet yet. Ask them to create one first.`,
+      );
+      setResolved(null);
+      return;
+    }
+    setResolved(result.data);
     setStep('review');
   };
 
   const submit = async () => {
     setError(null);
+    if (!resolved) {
+      setError('Confirm the recipient again before transferring.');
+      setStep('form');
+      return;
+    }
     if (!pinStatus.data) {
       setError("We couldn't check your PIN status. Try again.");
       void pinStatus.refetch();
@@ -101,7 +130,7 @@ export function TransferScreen() {
     setConfirming(true);
     const confirmed = await requestPin({
       title: 'Confirm transfer',
-      message: `Enter your PIN to send ${format(toMoney(amount), code)}.`,
+      message: `Enter your PIN to send ${format(toMoney(amount), code)} to ${resolved.displayName}.`,
     });
     if (!confirmed) {
       setConfirming(false);
@@ -109,7 +138,7 @@ export function TransferScreen() {
     }
     const result = await createTransfer({
       sourceWalletId: data.id,
-      recipient: recipient.trim(),
+      recipient: resolved.recipient,
       amount: toMoney(amount),
       note: note.trim() || undefined,
       idempotencyKey: idempotency.current(),
@@ -125,7 +154,7 @@ export function TransferScreen() {
     router.replace({ pathname: '/wallet/[id]', params: { id: data.id } });
   };
 
-  if (step === 'review') {
+  if (step === 'review' && resolved) {
     return (
       <Screen
         scroll
@@ -148,9 +177,23 @@ export function TransferScreen() {
           }}
         />
         <FormAlert message={error} testID="transfer-error" />
+        <FormAlert
+          tone="info"
+          message="Confirm this is the person you intend to pay before continuing."
+          testID="transfer-confirm-name"
+        />
         <Card variant="outlined" padding="md">
           <ReviewRow label="From" value={`${code} Wallet`} />
-          <ReviewRow label="To" value={recipient.trim()} testID="transfer-review-recipient" />
+          <ReviewRow
+            label="Recipient"
+            value={resolved.displayName}
+            testID="transfer-review-name"
+          />
+          <ReviewRow
+            label={resolved.matchedBy === 'PHONE' ? 'Phone' : 'Email'}
+            value={resolved.recipient}
+            testID="transfer-review-recipient"
+          />
           <ReviewRow
             label="Amount"
             value={format(toMoney(amount), code)}
@@ -176,7 +219,15 @@ export function TransferScreen() {
     <Screen
       scroll
       keyboardAware
-      footer={<Button label="Continue" onPress={toReview} testID="transfer-continue" />}
+      footer={
+        <Button
+          label="Continue"
+          onPress={() => void toReview()}
+          loading={lookupState.isFetching}
+          loadingLabel="Checking…"
+          testID="transfer-continue"
+        />
+      }
     >
       <StackHeader title={`Transfer ${code}`} />
       <AppText tone="secondary" testID="transfer-available">
@@ -189,6 +240,7 @@ export function TransferScreen() {
         onChangeText={(text) => {
           setRecipient(text);
           setRecipientError(null);
+          setResolved(null);
         }}
         placeholder="Email or phone (+E.164)"
         autoCapitalize="none"

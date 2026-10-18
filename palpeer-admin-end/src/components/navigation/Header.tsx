@@ -40,7 +40,7 @@ export function Header() {
   const { toggleMobileNav } = useShell();
   const { mode, cycleMode } = useTheme();
   const { push } = useToast();
-  const { user, permissions, can } = useAuth();
+  const { user, can } = useAuth();
   const [jumpQuery, setJumpQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [jumping, setJumping] = useState(false);
@@ -291,19 +291,6 @@ export function Header() {
         </form>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <Badge tone={appConfig.appEnv === 'production' ? 'danger' : 'info'} className="hidden sm:inline-flex">
-            {appConfig.appEnv}
-          </Badge>
-          {permissions === 'unknown' ? (
-            <Badge tone="warning" className="hidden lg:inline-flex">
-              perms pending
-            </Badge>
-          ) : (
-            <Badge tone="success" className="hidden lg:inline-flex">
-              {permissions.length} perms
-            </Badge>
-          )}
-
           <Button
             variant="ghost"
             size="icon"

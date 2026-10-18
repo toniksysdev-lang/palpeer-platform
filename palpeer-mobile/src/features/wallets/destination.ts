@@ -2,7 +2,7 @@
  * Withdrawal destinations, mirroring how the backend parses `destinationReference`:
  * - CAD (Apaylo): text matching `\d{3}[:|;-]\d{5}[:|;-]\d+` is an EFT bank transfer; text with
  *   "@" is an Interac e-Transfer e-mail; any other text is an Interac phone number.
- * - NGN (Kuda): `bankCode:accountNumber`, both parts required (checked by Kuda name enquiry).
+ * - NGN (Korapay / Kuda): `bankCode:accountNumber`, both parts required.
  */
 export type CadMethod = 'email' | 'phone' | 'eft';
 
@@ -55,9 +55,24 @@ export function cadReference(destination: CadDestination): string {
 
 export function validateNgn(destination: NgnDestination): DestinationErrors {
   const errors: DestinationErrors = {};
-  if (!destination.bankCode.trim()) errors.bankCode = 'Enter the bank code.';
-  if (!destination.accountNumber.trim()) errors.accountNumber = 'Enter the account number.';
+  if (!destination.bankCode.trim()) errors.bankCode = 'Select a bank.';
+  const account = destination.accountNumber.trim();
+  if (!account) errors.accountNumber = 'Enter the account number.';
+  else if (!/^\d{10}$/.test(account)) errors.accountNumber = 'Account number must be 10 digits.';
   return errors;
+}
+
+/** Review/status label when the bank name is known. */
+export function describeNgnDestination(
+  bankName: string | null | undefined,
+  bankCode: string,
+  accountNumber: string,
+): string {
+  const ending = accountNumber.slice(-4);
+  if (bankName?.trim()) {
+    return `${bankName.trim()} · account ending ${ending}`;
+  }
+  return `Bank ${bankCode} · account ending ${ending}`;
 }
 
 export function ngnReference(destination: NgnDestination): string {

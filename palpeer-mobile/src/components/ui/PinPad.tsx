@@ -21,7 +21,7 @@ type DotsProps = {
 export function PinDots({ value, slots, statusMessage, testID }: DotsProps) {
   const theme = useTheme();
   return (
-    <View style={{ gap: theme.spacing.md }} testID={testID}>
+    <View style={{ gap: theme.spacing.md }}>
       {statusMessage ? (
         <AppText align="center" style={{ color: theme.colors.primary, fontWeight: '600' }}>
           {statusMessage}
@@ -54,6 +54,7 @@ type Props = {
   value: string;
   onChange: (next: string) => void;
   maxLength?: number;
+  /** Fixed number of circular slots (Figma = 4). */
   slots?: number;
   disabled?: boolean;
   statusMessage?: string | null;
@@ -61,8 +62,7 @@ type Props = {
 };
 
 /**
- * Dots + flat Figma keypad. Prefer composing `PinDots` + `NumberPad` when the action button
- * must sit between them (Set PIN / PIN prompt sheets).
+ * On-screen PIN keypad with circular digit slots. Digits never reach the system keyboard.
  */
 export function PinPad({
   value,
@@ -75,20 +75,24 @@ export function PinPad({
 }: Props) {
   const theme = useTheme();
   const slotCount =
-    slots ?? Math.max(PIN_MIN_LENGTH, Math.min(maxLength, Math.max(value.length, PIN_MIN_LENGTH)));
+    slots ??
+    Math.max(PIN_MIN_LENGTH, Math.min(maxLength, Math.max(value.length + 1, PIN_MIN_LENGTH)));
 
   return (
-    <View style={{ gap: theme.spacing.xxl }} testID={testID}>
+    <View style={{ flex: 1, width: '100%', minHeight: 0, gap: theme.spacing.xxl }} testID={testID}>
       <PinDots value={value} slots={slotCount} statusMessage={statusMessage} testID={testID} />
-      <NumberPad
-        value={value}
-        onChange={onChange}
-        maxLength={maxLength}
-        bottomLeft="*"
-        variant="phone"
-        disabled={disabled}
-        testID={testID}
-      />
+      <View style={{ flexGrow: 1, flexShrink: 1, minHeight: 16 }} />
+      <View style={{ width: '100%', flexShrink: 0 }}>
+        <NumberPad
+          value={value}
+          onChange={onChange}
+          maxLength={maxLength}
+          bottomLeft="*"
+          variant="phone"
+          disabled={disabled}
+          testID={testID}
+        />
+      </View>
     </View>
   );
 }

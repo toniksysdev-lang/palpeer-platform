@@ -5,7 +5,7 @@ import { secureStorage } from '@/services/storage/secureStorage';
 import { created, installFakeXhr, partValue } from '@/tests/fakeXhr';
 import { fail, installFetchMock, ok } from '@/tests/fetchMock';
 import { router, setSearchParams } from '@/tests/mocks/expoRouter';
-import { media, usePreventScreenCapture } from '@/tests/mocks/media';
+import { media, preventScreenCaptureAsync } from '@/tests/mocks/media';
 import { renderWithProviders } from '@/tests/render';
 
 import { DocumentCaptureScreen } from '../screens/DocumentCaptureScreen';
@@ -63,7 +63,7 @@ describe('KYC capture', () => {
     installFetchMock({});
     setSearchParams({ type: 'PASSPORT' });
     await renderWithProviders(<DocumentCaptureScreen />);
-    expect(usePreventScreenCapture).toHaveBeenCalled();
+    await waitFor(() => expect(preventScreenCaptureAsync).toHaveBeenCalled());
   });
 
   it('asks for a retake when the photo is too small, without uploading', async () => {
@@ -72,7 +72,7 @@ describe('KYC capture', () => {
     setSearchParams({ type: 'PASSPORT' });
     await renderWithProviders(<DocumentCaptureScreen />);
 
-    await pickFromLibrary(640, 480);
+    await pickFromLibrary(320, 240);
 
     expect(await screen.findByTestId('capture-warning')).toBeTruthy();
     expect(screen.getByText(/This photo is too small to read/)).toBeTruthy();

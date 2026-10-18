@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.palpeer.wallet.funding.FundingService;
 import com.palpeer.wallet.provider.apaylo.ApayloProperties;
+import com.palpeer.wallet.provider.korapay.KorapayProperties;
 import com.palpeer.wallet.provider.kuda.KudaProperties;
 import com.palpeer.wallet.withdrawal.WithdrawalService;
 import java.nio.charset.StandardCharsets;
@@ -43,7 +44,12 @@ class PaymentWebhookControllerTest {
         kudaProperties = new KudaProperties();
         kudaProperties.setWebhookSecret(SECRET);
         controller = new PaymentWebhookController(
-                fundingService, withdrawalService, new ObjectMapper(), new ApayloProperties(), kudaProperties);
+                fundingService,
+                withdrawalService,
+                new ObjectMapper(),
+                new ApayloProperties(),
+                new KorapayProperties(),
+                kudaProperties);
     }
 
     @Test

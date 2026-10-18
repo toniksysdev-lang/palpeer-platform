@@ -47,6 +47,40 @@ jest.mock('expo-device', () => ({ deviceName: 'Test Phone', modelName: 'Pixel Te
 
 jest.mock('expo-notifications', () => require('./mocks/notifications'));
 
+jest.mock('expo-clipboard', () => ({
+  setStringAsync: jest.fn(async () => undefined),
+  getStringAsync: jest.fn(async () => ''),
+}));
+
+jest.mock('expo-location', () => ({
+  Accuracy: { Balanced: 3 },
+  hasServicesEnabledAsync: jest.fn(async () => true),
+  requestForegroundPermissionsAsync: jest.fn(async () => ({
+    status: 'granted',
+    granted: true,
+    canAskAgain: true,
+  })),
+  getCurrentPositionAsync: jest.fn(async () => ({
+    coords: { latitude: 43.65, longitude: -79.38, accuracy: 10 },
+  })),
+  reverseGeocodeAsync: jest.fn(async () => [
+    {
+      streetNumber: '100',
+      street: 'Queen St W',
+      city: 'Toronto',
+      region: 'Ontario',
+      postalCode: 'M5H 2N2',
+      country: 'Canada',
+      isoCountryCode: 'CA',
+      district: null,
+      subregion: null,
+      name: null,
+    },
+  ]),
+}));
+
+jest.mock('@react-native-community/datetimepicker', () => require('./mocks/datetimepicker'));
+
 jest.mock('expo-crypto', () => {
   let counter = 0;
   return {

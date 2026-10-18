@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeftRight } from 'lucide-react';
@@ -20,7 +20,6 @@ import { cn } from '@/lib/cn';
 import {
   mockCreateCurrency,
   mockDeleteRatePair,
-  mockLatestRate,
   mockLatestRates,
   mockListCurrencies,
   mockPublishRate,
@@ -30,7 +29,6 @@ import { P2PRateBoundsPanel } from '@/features/rates/P2PRateBoundsPanel';
 import {
   createCurrency,
   deleteExchangeRatePair,
-  getLatestExchangeRate,
   listCurrencies,
   listExchangeRateHistory,
   listLatestExchangeRates,
@@ -98,6 +96,54 @@ export function RatesPage() {
   const [currencyConfirmOpen, setCurrencyConfirmOpen] = useState(false);
   const [currencyErrors, setCurrencyErrors] = useState<Record<string, string>>({});
   const [removingPair, setRemovingPair] = useState<ExchangeRate | null>(null);
+  const [scrollToPublish, setScrollToPublish] = useState(false);
+  const publishSectionRef = useRef<HTMLElement | null>(null);
+
+  function nowLocalInputValue() {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 16);
+  }
+
+  function setChannel(next: RateChannel) {
+    const params = new URLSearchParams(searchParams);
+    params.set('channel', next);
+    setSearchParams(params);
+  }
+
+  function setPair(nextBase: string, nextQuote: string) {
+    const next = new URLSearchParams(searchParams);
+    if (nextBase) next.set('base', nextBase.toUpperCase());
+    else next.delete('base');
+    if (nextQuote) next.set('quote', nextQuote.toUpperCase());
+    else next.delete('quote');
+    next.set('channel', channel);
+    setSearchParams(next);
+  }
+
+  /** Prefill the publish form so the operator can publish an updated rate for the pair. */
+  const startEdit = useCallback(
+    (row: ExchangeRate) => {
+      const next = new URLSearchParams(searchParams);
+      next.set('base', row.baseCurrencyCode.toUpperCase());
+      next.set('quote', row.quoteCurrencyCode.toUpperCase());
+      next.set('channel', channel);
+      setSearchParams(next);
+      setBuyRate(String(row.buyRate ?? ''));
+      setSellRate(String(row.sellRate ?? ''));
+      setSubmitForApproval(false);
+      setEffectiveLocal(nowLocalInputValue());
+      setPublishErrors({});
+      setScrollToPublish(true);
+    },
+    [searchParams, channel, setSearchParams],
+  );
+
+  useEffect(() => {
+    if (!scrollToPublish || !pairSelected) return;
+    publishSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setScrollToPublish(false);
+  }, [scrollToPublish, pairSelected, base, quote]);
 
   const currenciesQuery = useQuery({
     queryKey: ['currencies', appConfig.useMockApi],
@@ -108,19 +154,6 @@ export function RatesPage() {
       }
       return listCurrencies();
     },
-  });
-
-  const latestQuery = useQuery({
-    queryKey: ['exchange-rate-latest', base, quote, appConfig.useMockApi],
-    enabled: pairSelected,
-    queryFn: async () => {
-      if (appConfig.useMockApi) {
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        return mockLatestRate(base, quote);
-      }
-      return getLatestExchangeRate({ base, quote });
-    },
-    retry: false,
   });
 
   const allLatestQuery = useQuery({
@@ -134,15 +167,28 @@ export function RatesPage() {
     },
   });
 
+  /** Admin latest for the selected pair — avoids public /exchange-rates/latest 404 when none published. */
+  const latestForPair = useMemo(() => {
+    if (!pairSelected) return null;
+    return (
+      (allLatestQuery.data ?? []).find(
+        (row) =>
+          row.baseCurrencyCode === base &&
+          row.quoteCurrencyCode === quote &&
+          (row.channel ?? 'SWAP') === channel,
+      ) ?? null
+    );
+  }, [allLatestQuery.data, base, quote, channel, pairSelected]);
+
   const historyQuery = useQuery({
-    queryKey: ['exchange-rate-history', base, quote, appConfig.useMockApi],
+    queryKey: ['exchange-rate-history', base, quote, channel, appConfig.useMockApi],
     enabled: pairSelected,
     queryFn: async () => {
       if (appConfig.useMockApi) {
         await new Promise((resolve) => setTimeout(resolve, 200));
-        return mockRateHistory(base, quote);
+        return mockRateHistory(base, quote, channel);
       }
-      return listExchangeRateHistory({ base, quote });
+      return listExchangeRateHistory({ base, quote, channel });
     },
     retry: false,
   });
@@ -188,7 +234,6 @@ export function RatesPage() {
       setBuyRate('');
       setSellRate('');
       setSubmitForApproval(false);
-      await queryClient.invalidateQueries({ queryKey: ['exchange-rate-latest', base, quote] });
       await queryClient.invalidateQueries({ queryKey: ['exchange-rate-history', base, quote] });
       await queryClient.invalidateQueries({ queryKey: ['exchange-rates-all-latest'] });
     },
@@ -293,7 +338,6 @@ export function RatesPage() {
       });
       await queryClient.invalidateQueries({ queryKey: ['exchange-rates-all-latest'] });
       await queryClient.invalidateQueries({ queryKey: ['exchange-rate-history'] });
-      await queryClient.invalidateQueries({ queryKey: ['exchange-rate-latest'] });
     },
     onError: (error) => {
       push({
@@ -326,7 +370,6 @@ export function RatesPage() {
       }
       await queryClient.invalidateQueries({ queryKey: ['exchange-rates-all-latest'] });
       await queryClient.invalidateQueries({ queryKey: ['exchange-rate-history'] });
-      await queryClient.invalidateQueries({ queryKey: ['exchange-rate-latest'] });
     },
     onError: (error) => {
       push({
@@ -435,6 +478,9 @@ export function RatesPage() {
                   </Button>
                 </>
               ) : null}
+              <Button size="sm" variant="ghost" onClick={() => startEdit(row)}>
+                Edit
+              </Button>
               <Button size="sm" variant="ghost" onClick={() => setRemovingPair(row)}>
                 Delete
               </Button>
@@ -442,26 +488,10 @@ export function RatesPage() {
           ) : null,
       },
     ],
-    [base, quote, canPublishRate, rateActionMutation],
+    [base, quote, canPublishRate, rateActionMutation, startEdit],
   );
 
   const currencyOptions = currenciesQuery.data ?? [];
-
-  function setChannel(next: RateChannel) {
-    const params = new URLSearchParams(searchParams);
-    params.set('channel', next);
-    setSearchParams(params);
-  }
-
-  function setPair(nextBase: string, nextQuote: string) {
-    const next = new URLSearchParams(searchParams);
-    if (nextBase) next.set('base', nextBase.toUpperCase());
-    else next.delete('base');
-    if (nextQuote) next.set('quote', nextQuote.toUpperCase());
-    else next.delete('quote');
-    next.set('channel', channel);
-    setSearchParams(next);
-  }
 
   return (
     <div className="space-y-5">
@@ -544,9 +574,9 @@ export function RatesPage() {
           All {channel === 'P2P' ? 'P2P' : 'swap'} pairs (latest)
         </h3>
         <p className="mt-1 mb-4 text-sm text-text-secondary">
-          Latest rate per pair for this channel. Activate/deactivate, approve pending rates, or
-          delete a pair (removes all history for that base/quote/channel). Click a row to open the
-          pair viewer.
+          Latest rate per pair for this channel. Edit pre-fills buy/sell to publish an updated rate.
+          Activate/deactivate, approve pending rates, or delete a pair (removes all history for that
+          base/quote/channel). Click a row to open the pair viewer.
         </p>
         <DataTable
           columns={allLatestColumns}
@@ -609,37 +639,45 @@ export function RatesPage() {
             <h3 className="text-base font-semibold text-text-primary">
               Latest {base}/{quote}
             </h3>
-            {latestQuery.isLoading ? <Skeleton className="mt-4 h-20 w-full" /> : null}
-            {latestQuery.isError ? (
+            {allLatestQuery.isLoading ? <Skeleton className="mt-4 h-20 w-full" /> : null}
+            {allLatestQuery.isError ? (
               <div className="mt-4">
                 <ErrorState
                   description={
-                    latestQuery.error instanceof ApiClientError
-                      ? latestQuery.error.message
+                    allLatestQuery.error instanceof ApiClientError
+                      ? allLatestQuery.error.message
                       : 'Failed to load latest rate.'
                   }
-                  onRetry={() => void latestQuery.refetch()}
+                  onRetry={() => void allLatestQuery.refetch()}
                 />
               </div>
             ) : null}
-            {latestQuery.data ? (
+            {!allLatestQuery.isLoading && !allLatestQuery.isError && !latestForPair ? (
+              <div className="mt-4">
+                <EmptyState
+                  title="No rate for this pair"
+                  description={`Publish a ${channel} rate for ${base}/${quote} below to populate this section.`}
+                />
+              </div>
+            ) : null}
+            {latestForPair ? (
               <dl className="mt-4 grid gap-4 sm:grid-cols-3">
                 <div>
                   <dt className="text-xs text-text-muted">Buy rate</dt>
                   <dd className="mt-1 font-mono text-2xl font-semibold text-text-primary">
-                    {formatDecimal(latestQuery.data.buyRate)}
+                    {formatDecimal(latestForPair.buyRate)}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-xs text-text-muted">Sell rate</dt>
                   <dd className="mt-1 font-mono text-2xl font-semibold text-text-primary">
-                    {formatDecimal(latestQuery.data.sellRate)}
+                    {formatDecimal(latestForPair.sellRate)}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-xs text-text-muted">Effective</dt>
                   <dd className="mt-1 text-sm text-text-primary">
-                    {formatDateTime(latestQuery.data.effectiveDate)}
+                    {formatDateTime(latestForPair.effectiveDate)}
                   </dd>
                 </div>
               </dl>
@@ -666,13 +704,16 @@ export function RatesPage() {
             />
           </section>
 
-          <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
+          <section
+            ref={publishSectionRef}
+            className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card"
+          >
             <h3 className="text-base font-semibold text-text-primary">
-              Publish {channel === 'P2P' ? 'P2P' : 'swap'} rate
+              {latestForPair ? `Edit / publish ${base}/${quote}` : `Publish ${channel === 'P2P' ? 'P2P' : 'swap'} rate`}
             </h3>
             <p className="mt-1 text-sm text-text-secondary">
               Set a new buy and sell rate for this pair on the {channel} channel. Both rates must be
-              greater than 0.
+              greater than 0. Publishing creates a new effective rate (history is preserved).
             </p>
             {!canPublishRate ? (
               <div className="mt-4">

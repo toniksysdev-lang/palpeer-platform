@@ -29,6 +29,8 @@ export const ANDROID_CHANNEL_ID = 'default';
  * refreshes the notification center instead. It is still added to the system list.
  */
 export function configureForegroundPresentation() {
+  // expo-notifications has limited/no web support; skip so web preview doesn't throw at import.
+  if (Platform.OS === 'web') return;
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowBanner: false,

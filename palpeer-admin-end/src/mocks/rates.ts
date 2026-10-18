@@ -88,12 +88,14 @@ export function mockLatestRate(base: string, quote: string): ExchangeRate {
   return { ...matched[0] };
 }
 
-export function mockRateHistory(base: string, quote: string): ExchangeRate[] {
+export function mockRateHistory(base: string, quote: string, channel: string = 'SWAP'): ExchangeRate[] {
+  const ch = channel.toUpperCase();
   return rates
     .filter(
       (row) =>
         row.baseCurrencyCode === base.toUpperCase() &&
-        row.quoteCurrencyCode === quote.toUpperCase(),
+        row.quoteCurrencyCode === quote.toUpperCase() &&
+        (row.channel ?? 'SWAP') === ch,
     )
     .sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate))
     .map((row) => ({ ...row }));

@@ -306,13 +306,12 @@ describe('LockScreen', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('offers signing in with the password instead', async () => {
+  it('offers signing in with the password instead without clearing biometric login', async () => {
     localAuth.nextResults = [{ success: false, error: 'user_cancel' }];
     installFetchMock({
       'GET /security/devices': ok([device('d-1', THIS_DEVICE)]),
-      'DELETE /security/devices/d-1': ok(),
-      'POST /auth/logout': ok(),
     });
+    const dismiss = jest.spyOn(sessionManager, 'dismissToLogin');
     const signOut = jest.spyOn(sessionManager, 'signOut');
     await renderLocked();
 
@@ -322,7 +321,10 @@ describe('LockScreen', () => {
       ).toBeFalsy(),
     );
     await fireEvent.press(screen.getByTestId('lock-use-password'));
-    await waitFor(() => expect(signOut).toHaveBeenCalled());
+    await waitFor(() => expect(dismiss).toHaveBeenCalled());
+    expect(signOut).not.toHaveBeenCalled();
+    expect(await secureStorage.getBiometricUserId()).toBe('u-1');
+    expect(await secureStorage.loadSession()).not.toBeNull();
   });
 });
 

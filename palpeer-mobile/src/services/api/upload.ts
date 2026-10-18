@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 import { isApiConfigured } from '@/config/env';
 import { sessionManager } from '@/services/auth/session';
 import { logger } from '@/utils/logger';
@@ -26,17 +28,35 @@ export type UploadOptions = {
 /** Large files on mobile data need longer than JSON calls. */
 const DEFAULT_UPLOAD_TIMEOUT_MS = 120_000;
 
-function buildForm({ fields, file, fileField = 'file' }: UploadOptions): FormData {
+/**
+ * Native FormData accepts `{ uri, name, type }`. On web that becomes a useless
+ * "[object Object]" part, so Spring never sees `file` and returns 500.
+ * Resolve the URI to a real Blob/File for browser uploads.
+ */
+async function toMultipartFile(file: UploadFile): Promise<Blob | { uri: string; name: string; type: string }> {
+  if (Platform.OS !== 'web') {
+    return { uri: file.uri, name: file.name, type: file.mimeType };
+  }
+
+  const response = await fetch(file.uri);
+  if (!response.ok) {
+    throw new Error(`Failed to read upload file (${response.status})`);
+  }
+  const blob = await response.blob();
+  const type = file.mimeType || blob.type || 'application/octet-stream';
+  if (typeof File !== 'undefined') {
+    return new File([blob], file.name, { type });
+  }
+  return blob;
+}
+
+async function buildForm({ fields, file, fileField = 'file' }: UploadOptions): Promise<FormData> {
   const form = new FormData();
   for (const [key, value] of Object.entries(fields ?? {})) {
     form.append(key, value);
   }
-  // React Native's FormData accepts { uri, name, type } for file parts.
-  form.append(fileField, {
-    uri: file.uri,
-    name: file.name,
-    type: file.mimeType,
-  } as unknown as Blob);
+  const part = await toMultipartFile(file);
+  form.append(fileField, part as Blob);
   return form;
 }
 
@@ -105,7 +125,25 @@ function send<T>(
       return;
     }
     options.signal?.addEventListener('abort', onAbort);
-    xhr.send(buildForm(options));
+
+    buildForm(options)
+      .then((form) => {
+        if (settled || options.signal?.aborted) {
+          onAbort();
+          return;
+        }
+        xhr.send(form);
+      })
+      .catch((error: unknown) => {
+        logger.warn('Upload form build failed', { path, requestId, error });
+        finish({
+          ok: false,
+          error: createAppError('unknown', {
+            message: "We couldn't read that photo for upload. Please try another one.",
+            requestId,
+          }),
+        });
+      });
   });
 }
 

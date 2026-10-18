@@ -8,7 +8,7 @@ import {
   transactionPollMs,
   uniqueItems,
 } from '../logic';
-import { exchangeItem, item, summary, withdrawalItem } from './fixtures';
+import { exchangeItem, item, summary, transferItem, withdrawalItem } from './fixtures';
 
 const NOW = new Date(2026, 8, 29, 15, 0).getTime();
 const at = (day: number, hour = 10) => new Date(2026, 8, day, hour, 0).toISOString();
@@ -17,8 +17,9 @@ describe('isTransactionType', () => {
   it('accepts only the backend types, case-sensitively', () => {
     expect(isTransactionType('FUNDING')).toBe(true);
     expect(isTransactionType('EXCHANGE')).toBe(true);
+    expect(isTransactionType('TRANSFER')).toBe(true);
+    expect(isTransactionType('P2P')).toBe(true);
     expect(isTransactionType('funding')).toBe(false);
-    expect(isTransactionType('P2P')).toBe(false);
     expect(isTransactionType(undefined)).toBe(false);
   });
 });
@@ -78,6 +79,7 @@ describe('describeTransaction', () => {
     expect(describeTransaction(exchangeItem({ status: 'INITIATED' })).title).toBe(
       'Exchange in progress',
     );
+    expect(describeTransaction(transferItem()).title).toBe('Transfer complete');
   });
 
   it('includes the backend failure reason', () => {

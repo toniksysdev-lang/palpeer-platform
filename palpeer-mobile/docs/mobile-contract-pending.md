@@ -131,11 +131,11 @@ Everything the mobile app needs that the backend does not verifiably provide. Ea
 
 | ID | Item | Status | Meanwhile |
 |---|---|---|---|
-| NT-1 | Push delivery (FCM/APNs) | Logging stub (`LoggingPushNotifier`) | Tokens registered; in-app center works. Real pushes need a backend provider plus the credentials in NT-5. |
+| NT-1 | Push delivery (FCM/APNs) | **Implemented:** Firebase Admin `FcmPushNotifier` when `PALPEER_FCM_ENABLED=true`; otherwise logging stub | Wire Firebase service-account credentials (see `docs/push-fcm-setup.md`). |
 | NT-2 | Mark all read, delete | None | Per-item read only. |
 | NT-3 | Notification categories → deep-link mapping | Free text (`REFERRAL` only today) | `REFERRAL` → Invite friends; anything else → notification detail. Map new `referenceType` values as they are introduced. |
-| NT-4 | Push payload format | Not defined (stub sends nothing) | App reads only `notificationId`, `referenceType`, `referenceId` from push `data` and always refetches (R-NT-4). The backend should put `notificationId` in the data payload. |
-| NT-5 | Push credentials in the build | None | Android needs `google-services.json` (FCM) and iOS an APNs key, added at EAS build time (Phase 17). Without them "turn on" shows "Push notifications aren't available in this version of the app." |
+| NT-4 | Push payload format | **Defined:** FCM data includes `notificationId`, `referenceType`, `referenceId`, `category` | App already routes on these fields and refetches (R-NT-4). |
+| NT-5 | Push credentials in the build | Scaffolded (`google-services.json` / `GoogleService-Info.plist` via `app.config.ts`) | Drop real Firebase client files (gitignored) or set `GOOGLE_SERVICES_JSON` / `GOOGLE_SERVICES_PLIST` for EAS. Without them "turn on" shows unavailable. |
 | NT-6 | Which events notify users | Only "Referral completed" to the referrer, channel `EMAIL` | It still appears in the center and counts as unread. No funding/withdrawal/P2P/KYC notifications exist, so the Gate 12 push paths are verified with simulated OS events in tests, not end-to-end. |
 | NT-7 | Live notification updates | None (no STOMP topic) | Unread count refreshes on screen focus, app foreground and when a push arrives. |
 | PR-1 | Eligible/personalised promotions | None | Active list only. |

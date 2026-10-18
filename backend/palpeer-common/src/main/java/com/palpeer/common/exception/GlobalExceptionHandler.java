@@ -13,6 +13,8 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 @Slf4j
 @RestControllerAdvice
@@ -56,6 +58,36 @@ public class GlobalExceptionHandler {
                 .build();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.fail("Invalid request parameter", error));
+    }
+
+    /**
+     * Missing multipart part (e.g. web clients that append a non-Blob file descriptor).
+     * Prefer 400 FILE_REQUIRED over a generic 500 INTERNAL_ERROR.
+     */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingPart(MissingServletRequestPartException ex) {
+        log.warn("Missing multipart part: {}", ex.getRequestPartName());
+        String code = "file".equals(ex.getRequestPartName()) ? "FILE_REQUIRED" : "INVALID_PARAMETER";
+        String message = "file".equals(ex.getRequestPartName())
+                ? "File is required"
+                : "Invalid or missing request part: " + ex.getRequestPartName();
+        ApiError error = ApiError.builder()
+                .code(code)
+                .detail(message)
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.fail(message, error));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUploadTooLarge(MaxUploadSizeExceededException ex) {
+        log.warn("Upload exceeds configured max size");
+        ApiError error = ApiError.builder()
+                .code("FILE_TOO_LARGE")
+                .detail("The uploaded file exceeds the maximum allowed size")
+                .build();
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(ApiResponse.fail("File too large", error));
     }
 
     /** Malformed JSON, wrong types or unknown enum values; parser details are not echoed back. */

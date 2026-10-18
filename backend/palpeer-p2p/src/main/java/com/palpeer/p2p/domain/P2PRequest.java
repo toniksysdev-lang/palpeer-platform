@@ -52,4 +52,12 @@ public class P2PRequest extends BaseEntity {
 
     @Column(name = "notes", length = 500)
     private String notes;
+
+    /** Wallet that received the temporary SELL hold (base currency). */
+    @Column(name = "hold_wallet_id")
+    private UUID holdWalletId;
+
+    /** Ledger HOLD entry for an open SELL listing; released or captured on terminal status. */
+    @Column(name = "hold_ledger_entry_id")
+    private UUID holdLedgerEntryId;
 }

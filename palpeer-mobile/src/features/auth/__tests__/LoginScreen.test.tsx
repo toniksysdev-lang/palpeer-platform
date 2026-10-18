@@ -3,7 +3,8 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { sessionManager } from '@/services/auth/session';
 import { secureStorage } from '@/services/storage/secureStorage';
 import { fail, installFetchMock, ok } from '@/tests/fetchMock';
-import { usePreventScreenCapture } from '@/tests/mocks/media';
+import { localAuth } from '@/tests/mocks/localAuthentication';
+import { preventScreenCaptureAsync } from '@/tests/mocks/media';
 import { router, setSearchParams } from '@/tests/mocks/expoRouter';
 import { renderWithProviders } from '@/tests/render';
 
@@ -18,14 +19,17 @@ const TOKENS = {
   tokenType: 'Bearer',
 };
 
+const THIS_DEVICE = 'device-login-1';
+
 describe('LoginScreen', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     setSearchParams({});
     await secureStorage.clearAll();
+    localAuth.reset();
   });
 
-  it('shows the design copy and links', async () => {
+  it('shows the design copy and links without a sticky footer', async () => {
     installFetchMock({});
     await renderWithProviders(<LoginScreen />);
 
@@ -33,11 +37,55 @@ describe('LoginScreen', () => {
     expect(screen.getByText('Login to your account')).toBeTruthy();
     expect(screen.getByText('Forgot Password?')).toBeTruthy();
     expect(screen.getByText('Login')).toBeTruthy();
+    expect(screen.getByText('Need help?')).toBeTruthy();
+    expect(screen.queryByTestId('login-biometric')).toBeNull();
 
     await fireEvent.press(screen.getByTestId('go-register'));
     expect(router.push).toHaveBeenCalledWith('/enter-phone');
     await fireEvent.press(screen.getByTestId('go-forgot-password'));
     expect(router.push).toHaveBeenCalledWith('/forgot-password');
+    await fireEvent.press(screen.getByTestId('go-support'));
+    expect(router.push).toHaveBeenCalledWith('/support');
+  });
+
+  it('offers fingerprint login when biometric unlock is set up for a parked session', async () => {
+    await secureStorage.saveSession({
+      refreshToken: 'refresh-parked',
+      userId: 'u-1',
+      email: 'ada@example.com',
+    });
+    await secureStorage.setBiometricUserId('u-1');
+    await secureStorage.setDeviceIdentifier(THIS_DEVICE);
+    installFetchMock({
+      'GET /security/devices': ok([
+        {
+          id: 'd-1',
+          deviceIdentifier: THIS_DEVICE,
+          deviceName: 'Phone',
+          platform: 'ANDROID',
+          enabled: true,
+          createdAt: '2026-01-01T00:00:00Z',
+          lastUsedAt: null,
+        },
+      ]),
+      'POST /auth/refresh': ok({
+        userId: 'u-1',
+        accessToken: 'access-bio',
+        refreshToken: 'refresh-bio',
+        tokenType: 'Bearer',
+      }),
+    });
+
+    const { store } = await renderWithProviders(<LoginScreen />);
+
+    expect(await screen.findByTestId('login-biometric')).toBeTruthy();
+    expect(screen.getByTestId('login-email').props.value).toBe('ada@example.com');
+    await fireEvent.press(screen.getByTestId('login-biometric'));
+
+    await waitFor(() => expect(sessionManager.getAccessToken()).toBe('access-bio'));
+    expect(store.getState().session.status).toBe('authenticated');
+    expect(store.getState().appLock.biometricEnabled).toBe(true);
+    expect(store.getState().appLock.locked).toBe(false);
   });
 
   it('validates required fields before calling the API', async () => {
@@ -62,7 +110,12 @@ describe('LoginScreen', () => {
     expect(calls[0]).toMatchObject({
       method: 'POST',
       path: '/auth/login',
-      body: { email: '+2348000000000', password: 'correct-horse' },
+      body: {
+        email: '+2348000000000',
+        password: 'correct-horse',
+        deviceIdentifier: expect.any(String),
+        platform: expect.any(String),
+      },
     });
     expect(await secureStorage.loadSession()).toEqual({
       refreshToken: 'refresh-1',
@@ -83,7 +136,12 @@ describe('LoginScreen', () => {
     expect(calls[0]).toMatchObject({
       method: 'POST',
       path: '/auth/login',
-      body: { email: 'Ada@Example.com', password: 'correct-horse' },
+      body: {
+        email: 'Ada@Example.com',
+        password: 'correct-horse',
+        deviceIdentifier: expect.any(String),
+        platform: expect.any(String),
+      },
     });
     expect(calls[0]?.headers.Authorization).toBeUndefined();
     expect(await secureStorage.loadSession()).toEqual({
@@ -100,8 +158,10 @@ describe('LoginScreen', () => {
   it('blocks screen capture while credentials are on screen', async () => {
     installFetchMock({});
     await renderWithProviders(<LoginScreen />);
-    expect(usePreventScreenCapture).toHaveBeenCalledWith(
-      expect.stringMatching(/^palpeer-sensitive-/),
+    await waitFor(() =>
+      expect(preventScreenCaptureAsync).toHaveBeenCalledWith(
+        expect.stringMatching(/^palpeer-sensitive-/),
+      ),
     );
   });
 

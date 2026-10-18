@@ -40,4 +40,16 @@ public interface FundingTransactionRepository
     Optional<FundingTransaction> findByIdForUpdate(@Param("id") UUID id);
 
     Optional<FundingTransaction> findByProviderNameAndProviderReference(String providerName, String providerReference);
+
+    /**
+     * Successful funding totals keyed by provider + currency.
+     * Rows: [providerName (nullable), currencyCode, sum(amount)].
+     */
+    @Query("""
+            select f.providerName, f.currencyCode, coalesce(sum(f.amount), 0)
+            from FundingTransaction f
+            where f.status = :status
+            group by f.providerName, f.currencyCode
+            """)
+    List<Object[]> sumAmountByProviderAndCurrency(@Param("status") MoneyMovementStatus status);
 }

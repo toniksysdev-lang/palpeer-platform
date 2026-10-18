@@ -37,6 +37,7 @@ const settle = () =>
 const ROOM: ChatRoomResponse = {
   id: 'room-1',
   p2pOrderId: 'o-1',
+  negotiationId: null,
   participantAId: OTHER,
   participantBId: ME,
   createdAt: '2026-09-29T09:00:00Z',

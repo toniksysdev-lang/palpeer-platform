@@ -5,6 +5,9 @@ export type WalletSummary = {
   /** Backend-authoritative. Never recalculate on the client. */
   availableBalance: string | number;
   pendingBalance: string | number;
+  userEmail?: string | null;
+  userFirstName?: string | null;
+  userLastName?: string | null;
 };
 
 export type LedgerTransactionSummary = {

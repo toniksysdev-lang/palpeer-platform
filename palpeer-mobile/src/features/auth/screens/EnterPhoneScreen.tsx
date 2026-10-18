@@ -17,12 +17,14 @@ import {
   DEFAULT_SIGNUP_COUNTRY,
   SIGNUP_COUNTRIES,
   digitsOnly,
+  formatNationalPhone,
   toE164,
   type SignupCountry,
 } from '../signupCountries';
 
 const PHONE_MAX_DIGITS = 10;
 
+/** Phone signup step — custom dialer pad opens only when the phone field is tapped. */
 export function EnterPhoneScreen() {
   const theme = useTheme();
   const [country, setCountry] = useState<SignupCountry>(DEFAULT_SIGNUP_COUNTRY);
@@ -41,7 +43,8 @@ export function EnterPhoneScreen() {
     maxLength: PHONE_MAX_DIGITS,
     bottomLeft: '*',
     variant: 'phone',
-    autoFocus: true,
+    // Pad stays hidden until the user taps the phone field.
+    autoFocus: false,
   });
   const pad = useOptionalNumberPad();
 
@@ -52,7 +55,6 @@ export function EnterPhoneScreen() {
       return;
     }
     setError(null);
-    // Hide the dialer before leaving so it does not flash on the next screen.
     pad?.close();
     const phone = toE164(country.dialCode, local);
     router.push({ pathname: '/verify-phone', params: { phone, signup: '1' } });
@@ -76,7 +78,10 @@ export function EnterPhoneScreen() {
 
       <View style={[styles.row, { gap: theme.spacing.sm }]}>
         <Pressable
-          onPress={() => setPickerOpen(true)}
+          onPress={() => {
+            pad?.close();
+            setPickerOpen(true);
+          }}
           accessibilityRole="button"
           accessibilityLabel={`Country code ${country.dialCode}`}
           testID="enter-phone-country"
@@ -123,7 +128,7 @@ export function EnterPhoneScreen() {
             tone={national ? 'primary' : 'muted'}
             style={{ fontSize: theme.typography.body.fontSize }}
           >
-            {national || 'Phone number'}
+            {national ? formatNationalPhone(national, country.iso2) : 'Phone number'}
           </AppText>
         </Pressable>
       </View>
@@ -148,7 +153,6 @@ export function EnterPhoneScreen() {
               onPress={() => {
                 setCountry(item);
                 setPickerOpen(false);
-                select();
               }}
               accessibilityRole="button"
               testID={`enter-phone-country-${item.iso2}`}

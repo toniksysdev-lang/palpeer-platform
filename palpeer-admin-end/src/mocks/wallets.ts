@@ -16,6 +16,9 @@ const catalog: WalletSummary[] = [
     currencyCode: 'CAD',
     availableBalance: '1250.55',
     pendingBalance: '0.00',
+    userEmail: 'ada@example.com',
+    userFirstName: 'Ada',
+    userLastName: 'Lovelace',
   },
   {
     id: 'w-2',
@@ -23,6 +26,9 @@ const catalog: WalletSummary[] = [
     currencyCode: 'NGN',
     availableBalance: '480000.00',
     pendingBalance: '15000.00',
+    userEmail: 'ada@example.com',
+    userFirstName: 'Ada',
+    userLastName: 'Lovelace',
   },
   {
     id: 'w-3',
@@ -30,6 +36,9 @@ const catalog: WalletSummary[] = [
     currencyCode: 'CAD',
     availableBalance: '80.00',
     pendingBalance: '20.00',
+    userEmail: 'grace@example.com',
+    userFirstName: 'Grace',
+    userLastName: 'Hopper',
   },
 ];
 

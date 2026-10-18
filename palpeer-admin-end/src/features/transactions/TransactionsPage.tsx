@@ -118,24 +118,27 @@ export function TransactionsPage() {
         cell: (row) => <span className="font-mono text-[11px]">{row.id}</span>,
       },
       {
-        id: 'user',
-        header: 'User',
-        cell: (row) =>
-          row.userId ? (
-            canUsers ? (
+        id: 'userEmail',
+        header: 'User Email',
+        cell: (row) => {
+          const label = row.userEmail?.trim() || null;
+          if (!label) {
+            return <span className="text-xs text-text-muted">—</span>;
+          }
+          if (row.userId && canUsers) {
+            return (
               <Link
                 to={`/admin/users/${row.userId}`}
-                className="font-mono text-[11px] text-primary hover:underline"
+                className="text-xs text-primary hover:underline"
                 onClick={(event) => event.stopPropagation()}
+                title={row.userId}
               >
-                {row.userId}
+                {label}
               </Link>
-            ) : (
-              <span className="font-mono text-[11px]">{row.userId}</span>
-            )
-          ) : (
-            <span className="font-mono text-[11px] text-text-muted">—</span>
-          ),
+            );
+          }
+          return <span className="text-xs text-text-primary">{label}</span>;
+        },
       },
       {
         id: 'status',
@@ -289,7 +292,9 @@ export function TransactionsPage() {
                       ? 'Withdrawal'
                       : value === 'EXCHANGE'
                         ? 'Exchange'
-                        : value}
+                        : value === 'TRANSFER'
+                          ? 'Transfer'
+                          : value}
                 </option>
               ))}
             </Select>

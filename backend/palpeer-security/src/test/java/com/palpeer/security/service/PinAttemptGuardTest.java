@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 import com.palpeer.common.audit.AuditRecord;
 import com.palpeer.common.audit.AuditRecorder;
 import com.palpeer.common.exception.BusinessException;
-import com.palpeer.security.config.PinSecurityProperties;
 import com.palpeer.security.domain.PinCredential;
 import com.palpeer.security.repository.PinCredentialRepository;
 import java.time.Clock;
@@ -23,14 +22,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.http.HttpStatus;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class PinAttemptGuardTest {
 
     private static final Instant NOW = Instant.parse("2026-09-28T12:00:00Z");
 
     @Mock private PinCredentialRepository repository;
+    @Mock private PinPolicyService pinPolicyService;
     @Mock private AuditRecorder auditRecorder;
 
     private PinAttemptGuard guard;
@@ -39,10 +42,10 @@ class PinAttemptGuardTest {
 
     @BeforeEach
     void setUp() {
-        PinSecurityProperties properties = new PinSecurityProperties();
-        properties.setMaxAttempts(3);
-        properties.setLockoutDuration(Duration.ofMinutes(15));
-        guard = new PinAttemptGuard(repository, properties, auditRecorder, Clock.fixed(NOW, ZoneOffset.UTC));
+        when(pinPolicyService.maxAttempts()).thenReturn(3);
+        when(pinPolicyService.lockoutDuration()).thenReturn(Duration.ofMinutes(15));
+        guard = new PinAttemptGuard(
+                repository, pinPolicyService, auditRecorder, Clock.fixed(NOW, ZoneOffset.UTC));
 
         userId = UUID.randomUUID();
         credential = new PinCredential();

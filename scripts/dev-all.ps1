@@ -22,14 +22,30 @@ $Command
 
 Write-Host 'Starting PALPEER local apps...' -ForegroundColor Green
 
-Start-NamedWindow 'PALPEER API :8085' $Backend @'
+Start-NamedWindow 'PALPEER API :8085' $Backend @"
+`$envFile = Join-Path '$Root' '.env'
+if (Test-Path `$envFile) {
+  Get-Content `$envFile | ForEach-Object {
+    `$line = `$_.Trim()
+    if (-not `$line -or `$line.StartsWith('#')) { return }
+    if (`$line.StartsWith('export ')) { `$line = `$line.Substring(7).Trim() }
+    `$eq = `$line.IndexOf('=')
+    if (`$eq -lt 1) { return }
+    `$name = `$line.Substring(0, `$eq).Trim()
+    `$value = `$line.Substring(`$eq + 1).Trim().Trim('`"').Trim("'")
+    if (-not [string]::IsNullOrWhiteSpace(`$name) -and -not [Environment]::GetEnvironmentVariable(`$name)) {
+      Set-Item -Path ('Env:' + `$name) -Value `$value
+    }
+  }
+  Write-Host 'Loaded repo-root .env into process environment' -ForegroundColor DarkGray
+}
 .\mvnw.cmd -pl palpeer-app -am install -DskipTests
-if ($LASTEXITCODE -ne 0) { Write-Host 'Backend install failed' -ForegroundColor Red; exit 1 }
+if (`$LASTEXITCODE -ne 0) { Write-Host 'Backend install failed' -ForegroundColor Red; exit 1 }
 Set-Location palpeer-app
-$env:SPRING_PROFILES_ACTIVE = 'dev'
-$env:SERVER_PORT = '8085'
-..\mvnw.cmd spring-boot:run "-Dspring-boot.run.jvmArguments=-Dfile.encoding=UTF-8"
-'@
+`$env:SPRING_PROFILES_ACTIVE = 'dev'
+`$env:SERVER_PORT = '8085'
+..\mvnw.cmd spring-boot:run `"-Dspring-boot.run.jvmArguments=-Dfile.encoding=UTF-8`"
+"@
 
 Start-NamedWindow 'PALPEER Expo web :8081' (Join-Path $Root 'palpeer-mobile') @'
 $env:EXPO_PUBLIC_ENV = 'development'

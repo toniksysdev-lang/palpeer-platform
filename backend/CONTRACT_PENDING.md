@@ -192,7 +192,7 @@
 
 | ID | Topic | Question | Current provisional behavior |
 |----|-------|----------|------------------------------|
-| P11-01 | Activity catalog | Which products appear in the feed? | FUNDING, WITHDRAWAL, EXCHANGE only (ledger-backed); P2P deferred |
+| P11-01 | Activity catalog | Which products appear in the feed? | FUNDING, WITHDRAWAL, EXCHANGE, TRANSFER, settled P2P (ACCEPTED/COMPLETED) |
 | P11-02 | Detail identity | Single UUID vs type+id? | Path `/api/v1/transactions/{type}/{id}` |
 | P11-03 | History pagination | SQL UNION vs merge? | In-memory merge of bounded per-source fetches |
 | P11-04 | Summary metrics / window | Exact KPIs and default period? | Counts by type; status keys `TYPE:STATUS`; SUCCESS funding/withdrawal totals by currency; exchange SUCCESS count; default 30 days |
@@ -204,7 +204,7 @@
 - Fixed: `countByStatus` keys namespaced as `TYPE:STATUS` (no enum collision)
 - Added: ownership-negative unit test
 - Unit tests: `TransactionQueryServiceTest` — BUILD SUCCESS
-- Open: P2P still excluded until ledger-settled (P11-01); in-memory history merge (P11-03)
+- Open: in-memory history merge (P11-03); card/bonus still out of feed
 - Mobile Phase 10 (Activity, transaction detail, Home recent) uses these four endpoints as-is; no backend change. Customer history has no search/status/currency filter (mobile T-1).
 
 ## Phase 12 — Notification
@@ -215,7 +215,7 @@
 | P12-02 | Channels | Required channels in v1? | `IN_APP`, `PUSH`, `BOTH` |
 | P12-03 | Status / unread | Status catalog and unread definition? | `PENDING`/`SENT`/`FAILED`/`READ`; unread = PENDING + SENT |
 | P12-04 | Category / deep links | Category catalog and reference model? | Free-form `category`; optional `referenceType`/`referenceId` |
-| P12-05 | Push provider | FCM / APNs / web-push? | `PushNotifier` + `LoggingPushNotifier` stub |
+| P12-05 | Push provider | **Resolved:** FCM via Firebase Admin (`FcmPushNotifier`); stub when `palpeer.fcm.enabled=false` | Set `PALPEER_FCM_ENABLED` + service-account credentials |
 | P12-06 | Who may create | System-only vs admin vs self? | `NotificationService.create` for internal callers; no public create REST yet |
 
 ### Phase 12 validation + tests

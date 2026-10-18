@@ -2,6 +2,7 @@ package com.palpeer.exchange.service;
 
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
+import com.palpeer.common.notify.UserNotifyEvent;
 import com.palpeer.exchange.domain.ExchangeQuote;
 import com.palpeer.exchange.domain.ExchangeQuoteStatus;
 import com.palpeer.exchange.domain.ExchangeTransaction;
@@ -14,9 +15,11 @@ import com.palpeer.ledger.domain.LedgerEntry;
 import com.palpeer.ledger.domain.LedgerEntryType;
 import com.palpeer.ledger.service.LedgerPostingRequest;
 import com.palpeer.ledger.service.LedgerService;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -29,6 +32,7 @@ public class ExchangeExecutionService {
     private final ExchangeQuoteRepository exchangeQuoteRepository;
     private final ExchangeTransactionRepository exchangeTransactionRepository;
     private final LedgerService ledgerService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public ExchangeTransactionResponse execute(UUID userId, String idempotencyKey, ExecuteExchangeRequest request) {
@@ -112,11 +116,37 @@ public class ExchangeExecutionService {
 
             quote.setStatus(ExchangeQuoteStatus.EXECUTED);
             exchangeQuoteRepository.save(quote);
+            eventPublisher.publishEvent(new UserNotifyEvent(
+                    userId,
+                    "Exchange successful",
+                    "You exchanged "
+                            + formatMoney(quote.getSourceAmount(), quote.getSourceCurrencyCode())
+                            + " for "
+                            + formatMoney(quote.getTargetAmount(), quote.getTargetCurrencyCode())
+                            + " at rate "
+                            + formatAmount(quote.getAppliedRate())
+                            + ".",
+                    "TRANSACTION",
+                    "EXCHANGE",
+                    tx.getId(),
+                    true,
+                    true));
             return toResponse(tx);
         } catch (RuntimeException ex) {
             tx.setStatus(ExchangeTransactionStatus.FAILED);
             tx.setFailureReason(ex.getMessage());
             exchangeTransactionRepository.save(tx);
+            eventPublisher.publishEvent(new UserNotifyEvent(
+                    userId,
+                    "Exchange failed",
+                    "Your exchange of "
+                            + formatMoney(quote.getSourceAmount(), quote.getSourceCurrencyCode())
+                            + " could not be completed.",
+                    "TRANSACTION",
+                    "EXCHANGE",
+                    tx.getId(),
+                    true,
+                    true));
             throw ex;
         }
     }
@@ -147,5 +177,13 @@ public class ExchangeExecutionService {
                 tx.getFailureReason(),
                 tx.getCreatedAt()
         );
+    }
+
+    private static String formatMoney(BigDecimal amount, String currency) {
+        return formatAmount(amount) + " " + (currency == null ? "" : currency);
+    }
+
+    private static String formatAmount(BigDecimal amount) {
+        return amount == null ? "0" : amount.stripTrailingZeros().toPlainString();
     }
 }

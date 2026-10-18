@@ -2,8 +2,9 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import { fail, installFetchMock, ok } from '@/tests/fetchMock';
 import { router, setSearchParams } from '@/tests/mocks/expoRouter';
-import { typeOnNumberPad } from '@/tests/numberPad';
+import { typeIntoNumberField } from '@/tests/numberPad';
 import { renderWithProviders } from '@/tests/render';
+
 
 import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
 import { ResetPasswordScreen } from '../screens/ResetPasswordScreen';
@@ -49,7 +50,7 @@ describe('ResetPasswordScreen', () => {
   });
 
   async function fill(code: string, password = 'new-password-1', confirm = password) {
-    await typeOnNumberPad(code);
+    await typeIntoNumberField('reset-code-cells', code);
     await fireEvent.changeText(screen.getByTestId('reset-password'), password);
     await fireEvent.changeText(screen.getByTestId('reset-confirm'), confirm);
     await fireEvent.press(screen.getByTestId('reset-submit'));

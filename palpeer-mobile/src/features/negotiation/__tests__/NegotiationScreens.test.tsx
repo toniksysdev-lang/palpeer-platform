@@ -60,13 +60,13 @@ describe('MakeOfferScreen', () => {
     expect(await screen.findByText('What is your best offer?')).toBeTruthy();
     expect(screen.getByTestId('offer-request-rate')).toHaveTextContent('1 USD = 1,500 NGN');
     expect(screen.getByTestId('offer-amount')).toHaveTextContent(/100/);
-    expect(screen.getByTestId('offer-rate')).toHaveTextContent(/1500/);
+    expect(screen.getByTestId('offer-rate')).toHaveTextContent(/1,500/);
 
-    await fireEvent.press(screen.getByTestId('offer-rate'));
+    await fireEvent.press(screen.getByTestId('offer-amount'));
     for (let i = 0; i < 10; i += 1) {
       await fireEvent.press(screen.getByTestId('number-pad-dock-key-back'));
     }
-    await typeIntoNumberField('offer-rate', '1450.123456');
+    await typeIntoNumberField('offer-amount', '90.50');
     await fireEvent.press(screen.getByTestId('offer-submit'));
 
     await waitFor(() =>
@@ -76,7 +76,7 @@ describe('MakeOfferScreen', () => {
       }),
     );
     expect(callsTo(calls, 'POST', '/negotiations/offers')[0]?.rawBody).toBe(
-      '{"p2pRequestId":"r-1","amount":100,"rate":1450.123456}',
+      '{"p2pRequestId":"r-1","amount":90.5,"rate":1500}',
     );
   });
 
@@ -236,23 +236,19 @@ describe('NegotiationDetailScreen', () => {
 
     await fireEvent.press(await screen.findByTestId('negotiation-counter'));
     expect(screen.getByTestId('counter-amount')).toHaveTextContent(/90/);
+    expect(screen.getByTestId('counter-rate')).toHaveTextContent(/1,480/);
     await fireEvent.press(screen.getByTestId('counter-amount'));
     for (let i = 0; i < 10; i += 1) {
       await fireEvent.press(screen.getByTestId('number-pad-dock-key-back'));
     }
     await typeIntoNumberField('counter-amount', '95');
-    await fireEvent.press(screen.getByTestId('counter-rate'));
-    for (let i = 0; i < 12; i += 1) {
-      await fireEvent.press(screen.getByTestId('number-pad-dock-key-back'));
-    }
-    await typeIntoNumberField('counter-rate', '1495.5');
     await fireEvent.press(screen.getByTestId('negotiation-counter-submit'));
 
     expect(await screen.findByTestId('negotiation-notice')).toHaveTextContent(
       'Counter-offer sent.',
     );
     expect(callsTo(calls, 'POST', '/negotiations/n-1/counter')[0]?.rawBody).toBe(
-      '{"amount":95,"rate":1495.5}',
+      '{"amount":95,"rate":1480}',
     );
     expect(await screen.findByTestId('negotiation-turn')).toHaveTextContent(
       'Waiting for their reply',

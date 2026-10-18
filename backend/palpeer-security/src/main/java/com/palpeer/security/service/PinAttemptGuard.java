@@ -4,7 +4,6 @@ import com.palpeer.common.audit.AuditRecord;
 import com.palpeer.common.audit.AuditRecorder;
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
-import com.palpeer.security.config.PinSecurityProperties;
 import com.palpeer.security.domain.PinCredential;
 import com.palpeer.security.repository.PinCredentialRepository;
 import java.time.Clock;
@@ -22,14 +21,15 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * Callers must {@link #reserve} before comparing, then report {@link #recordFailure} or
  * {@link #recordSuccess}. Reserving counts the attempt up front, so parallel requests can never
- * exceed {@code maxAttempts} guesses per lockout window.
+ * exceed {@code maxAttempts} guesses per lockout window. Limits come from {@link PinPolicyService}
+ * (admin Settings → No of PIN entries / hours).
  */
 @Component
 @RequiredArgsConstructor
 public class PinAttemptGuard {
 
     private final PinCredentialRepository pinCredentialRepository;
-    private final PinSecurityProperties properties;
+    private final PinPolicyService pinPolicyService;
     private final AuditRecorder auditRecorder;
     private final Clock clock;
 
@@ -44,7 +44,7 @@ public class PinAttemptGuard {
             credential.setLockedUntil(null);
             credential.setFailedAttempts(0);
         }
-        if (credential.getFailedAttempts() >= properties.getMaxAttempts()) {
+        if (credential.getFailedAttempts() >= pinPolicyService.maxAttempts()) {
             throw locked();
         }
         credential.setFailedAttempts(credential.getFailedAttempts() + 1);
@@ -55,10 +55,10 @@ public class PinAttemptGuard {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean recordFailure(UUID userId) {
         PinCredential credential = lock(userId);
-        if (credential.getFailedAttempts() < properties.getMaxAttempts()) {
+        if (credential.getFailedAttempts() < pinPolicyService.maxAttempts()) {
             return false;
         }
-        credential.setLockedUntil(clock.instant().plus(properties.getLockoutDuration()));
+        credential.setLockedUntil(clock.instant().plus(pinPolicyService.lockoutDuration()));
         credential.setFailedAttempts(0);
         pinCredentialRepository.save(credential);
         auditRecorder.record(AuditRecord.builder("SECURITY_PIN_LOCKED")

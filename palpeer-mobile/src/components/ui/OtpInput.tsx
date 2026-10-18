@@ -13,21 +13,20 @@ type Props = {
   onComplete?: (value: string) => void;
   length?: number;
   error?: string | null;
+  /** When true, opens the shared pad on mount. Default false — pad opens on tap. */
   autoFocus?: boolean;
   editable?: boolean;
   testID?: string;
 };
 
-/**
- * OTP boxes driven by the shared in-app number pad. Digits are never logged.
- */
+/** OTP boxes driven by the shared in-app number pad. Digits are never logged. */
 export function OtpInput({
   value,
   onChangeText,
   onComplete,
   length = 6,
   error,
-  autoFocus = true,
+  autoFocus = false,
   editable = true,
   testID,
 }: Props) {

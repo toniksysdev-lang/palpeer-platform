@@ -36,25 +36,29 @@ export function QuickAction({ icon, label, onPress, tone = 'surface', disabled, 
       accessibilityState={{ disabled: !!disabled }}
       style={[
         {
-          width: '18%',
-          minWidth: 64,
-          flexGrow: 1,
+          flex: 1,
+          minWidth: 0,
           alignItems: 'center',
-          gap: theme.spacing.sm,
+          gap: theme.spacing.xs,
           opacity: disabled ? 0.5 : 1,
         },
         press.animatedStyle,
       ]}
     >
-      <IconTile icon={icon} shape="rounded" size="lg" tone={tone} />
-      <AppText variant="caption" align="center" numberOfLines={1}>
+      <IconTile icon={icon} shape="rounded" size="md" tone={tone} />
+      <AppText
+        variant="caption"
+        align="center"
+        numberOfLines={2}
+        style={{ fontSize: 11, lineHeight: 14, width: '100%' }}
+      >
         {label}
       </AppText>
     </AnimatedPressable>
   );
 }
 
-/** Lays out `QuickAction`s in a wrapping row (supports Fund / InstantEX / P2P / Withdraw / Transfer). */
+/** Lays out `QuickAction`s on a single non-wrapping row (Fund / InstantEX / P2P / Withdraw / Transfer). */
 export function QuickActionBar({ children, testID }: { children: ReactNode; testID?: string }) {
   const theme = useTheme();
   return (
@@ -62,10 +66,11 @@ export function QuickActionBar({ children, testID }: { children: ReactNode; test
       testID={testID}
       style={{
         flexDirection: 'row',
-        flexWrap: 'wrap',
+        flexWrap: 'nowrap',
+        alignItems: 'flex-start',
         justifyContent: 'space-between',
-        rowGap: theme.spacing.md,
-        columnGap: theme.spacing.sm,
+        width: '100%',
+        gap: theme.spacing.xs,
       }}
     >
       {children}

@@ -12,6 +12,7 @@ const MESSAGES: Record<string, string> = {
   COMPLYCUBE_DISABLED:
     "Identity verification isn't available yet. Your uploads are saved on your account — please try again later.",
   STORAGE_WRITE_FAILED: "We couldn't save your photo. Please try again.",
+  FILE_TOO_LARGE: 'That photo is too large. Choose a smaller one or take it again.',
 };
 
 export function kycErrorMessage(error: AppError): string {

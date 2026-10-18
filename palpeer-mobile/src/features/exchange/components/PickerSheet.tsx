@@ -1,5 +1,6 @@
 import { Check, ChevronDown } from 'lucide-react-native';
-import { Pressable, ScrollView, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { BottomSheet } from '@/components/ui/BottomSheet';
@@ -126,6 +127,8 @@ export function PickerSheet({
   selectedKey,
   onSelect,
   onClose,
+  searchable = false,
+  searchPlaceholder = 'Search…',
   testID,
 }: {
   visible: boolean;
@@ -134,46 +137,104 @@ export function PickerSheet({
   selectedKey: string | null;
   onSelect: (key: string) => void;
   onClose: () => void;
+  searchable?: boolean;
+  searchPlaceholder?: string;
   testID: string;
 }) {
   const theme = useTheme();
+  const [query, setQuery] = useState('');
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return options;
+    return options.filter((option) => {
+      const haystack = `${option.title} ${option.subtitle ?? ''} ${option.key}`.toLowerCase();
+      return haystack.includes(needle);
+    });
+  }, [options, query]);
+
   return (
-    <BottomSheet visible={visible} onClose={onClose} title={title} testID={testID}>
-      <ScrollView style={{ maxHeight: 420 }} accessibilityRole="radiogroup">
-        {options.map((option) => {
-          const active = option.key === selectedKey;
-          return (
-            <Pressable
-              key={option.key}
-              onPress={() => {
-                onSelect(option.key);
-                onClose();
-              }}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={
-                option.subtitle ? `${option.title}, ${option.subtitle}` : option.title
-              }
-              testID={`${testID}-option-${option.key}`}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: theme.spacing.md,
-                paddingVertical: theme.spacing.md,
-              }}
-            >
-              <View style={{ flex: 1, gap: theme.spacing.xxs }}>
-                <AppText variant="bodyStrong">{option.title}</AppText>
-                {option.subtitle ? (
-                  <AppText variant="caption" tone="secondary">
-                    {option.subtitle}
-                  </AppText>
-                ) : null}
-              </View>
-              {active ? <Icon icon={Check} color={theme.colors.primary} /> : null}
-            </Pressable>
-          );
-        })}
+    <BottomSheet
+      visible={visible}
+      onClose={() => {
+        setQuery('');
+        onClose();
+      }}
+      title={title}
+      testID={testID}
+    >
+      {searchable ? (
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder={searchPlaceholder}
+          placeholderTextColor={theme.colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          clearButtonMode="while-editing"
+          accessibilityLabel={searchPlaceholder}
+          testID={`${testID}-search`}
+          style={[
+            theme.typography.body,
+            {
+              marginBottom: theme.spacing.sm,
+              paddingHorizontal: theme.spacing.md,
+              paddingVertical: theme.spacing.sm,
+              borderRadius: theme.radius.md,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surface,
+              color: theme.colors.text,
+            },
+          ]}
+        />
+      ) : null}
+      <ScrollView
+        style={{ maxHeight: searchable ? 360 : 420 }}
+        keyboardShouldPersistTaps="handled"
+        accessibilityRole="radiogroup"
+      >
+        {filtered.length === 0 ? (
+          <AppText tone="secondary" style={{ paddingVertical: theme.spacing.md }}>
+            No matches.
+          </AppText>
+        ) : (
+          filtered.map((option) => {
+            const active = option.key === selectedKey;
+            return (
+              <Pressable
+                key={option.key}
+                onPress={() => {
+                  onSelect(option.key);
+                  setQuery('');
+                  onClose();
+                }}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={
+                  option.subtitle ? `${option.title}, ${option.subtitle}` : option.title
+                }
+                testID={`${testID}-option-${option.key}`}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: theme.spacing.md,
+                  paddingVertical: theme.spacing.md,
+                }}
+              >
+                <View style={{ flex: 1, gap: theme.spacing.xxs }}>
+                  <AppText variant="bodyStrong">{option.title}</AppText>
+                  {option.subtitle ? (
+                    <AppText variant="caption" tone="secondary">
+                      {option.subtitle}
+                    </AppText>
+                  ) : null}
+                </View>
+                {active ? <Icon icon={Check} color={theme.colors.primary} /> : null}
+              </Pressable>
+            );
+          })
+        )}
       </ScrollView>
     </BottomSheet>
   );

@@ -10,6 +10,9 @@ public record SessionResponse(
         UUID id,
         Instant createdAt,
         Instant expiresAt,
-        boolean current
+        boolean current,
+        String deviceIdentifier,
+        String deviceName,
+        String platform
 ) {
 }

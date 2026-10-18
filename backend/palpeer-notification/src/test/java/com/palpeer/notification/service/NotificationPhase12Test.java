@@ -21,6 +21,7 @@ import com.palpeer.notification.web.dto.CreateNotificationRequest;
 import com.palpeer.notification.web.dto.DeviceTokenResponse;
 import com.palpeer.notification.web.dto.NotificationResponse;
 import com.palpeer.notification.web.dto.RegisterDeviceTokenRequest;
+import com.palpeer.user.domain.User;
 import com.palpeer.user.repository.UserRepository;
 import java.util.List;
 import java.util.Optional;
@@ -129,6 +130,67 @@ class NotificationPhase12Test {
 
         assertThat(response.status()).isEqualTo(NotificationStatus.FAILED);
         assertThat(response.failureReason()).contains("No enabled device tokens");
+    }
+
+    @Test
+    void createBoth_sendsEmailAndPush() {
+        UUID userId = UUID.randomUUID();
+        User user = new User();
+        user.setId(userId);
+        user.setEmail("user@example.com");
+
+        DeviceToken token = new DeviceToken();
+        token.setId(UUID.randomUUID());
+        token.setUserId(userId);
+        token.setToken("tok");
+        token.setPlatform(DeviceTokenPlatform.ANDROID);
+        token.setEnabled(true);
+
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> {
+            Notification n = inv.getArgument(0);
+            if (n.getId() == null) {
+                n.setId(UUID.randomUUID());
+            }
+            return n;
+        });
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(deviceTokenRepository.findByUserIdAndEnabledTrue(userId)).thenReturn(List.of(token));
+
+        NotificationResponse response = notificationService.create(
+                userId,
+                new CreateNotificationRequest(
+                        "Funding successful",
+                        "Your funding of 100 NGN has been credited.",
+                        "TRANSACTION",
+                        NotificationChannel.BOTH,
+                        "FUNDING",
+                        UUID.randomUUID()));
+
+        assertThat(response.status()).isEqualTo(NotificationStatus.SENT);
+        verify(emailSender).send(any(), any(), any(), any());
+        verify(pushNotifier).send(any(DeviceToken.class), any(Notification.class));
+    }
+
+    @Test
+    void broadcastPush_skipsExcludedUser() {
+        UUID poster = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        when(userRepository.findAllIds()).thenReturn(List.of(poster, other));
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> {
+            Notification n = inv.getArgument(0);
+            if (n.getId() == null) {
+                n.setId(UUID.randomUUID());
+            }
+            return n;
+        });
+        when(deviceTokenRepository.findByUserIdAndEnabledTrue(other)).thenReturn(List.of());
+
+        int sent = notificationService.broadcastPush(
+                poster, "New P2P SELL order", "Sell 100 NGN for CAD at rate 0.001", "P2P", "P2P_REQUEST", UUID.randomUUID());
+
+        assertThat(sent).isEqualTo(1);
+        verify(deviceTokenRepository).findByUserIdAndEnabledTrue(other);
+        verify(deviceTokenRepository, never()).findByUserIdAndEnabledTrue(poster);
     }
 
     @Test

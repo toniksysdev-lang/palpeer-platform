@@ -1,11 +1,14 @@
 import { fireEvent, screen } from '@testing-library/react-native';
 
-/** Types a PIN on a PinEntry's keypad and presses its submit button. */
+/** Types a PIN on a PinEntry's keypad and presses submit when that button is shown. */
 export async function enterPin(entryTestID: string, pin: string) {
   for (const digit of pin) {
     await fireEvent.press(await screen.findByTestId(`${entryTestID}-pad-key-${digit}`));
   }
-  await fireEvent.press(screen.getByTestId(`${entryTestID}-submit`));
+  const submit = screen.queryByTestId(`${entryTestID}-submit`);
+  if (submit) {
+    await fireEvent.press(submit);
+  }
 }
 
 export const PIN_STATUS = (pinSet: boolean, lockedUntil: string | null = null) => ({

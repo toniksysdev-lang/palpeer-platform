@@ -233,9 +233,14 @@ public class AdminRbacService {
     }
 
     private AdminUserResponse toAdminResponse(AdminUser adminUser) {
+        String email = userRepository
+                .findById(adminUser.getUserId())
+                .map(u -> u.getEmail())
+                .orElse(null);
         return new AdminUserResponse(
                 adminUser.getId(),
                 adminUser.getUserId(),
+                email,
                 adminUser.isEnabled(),
                 roleCodesOf(adminUser));
     }

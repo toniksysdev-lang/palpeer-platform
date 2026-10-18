@@ -2,10 +2,10 @@ import { fireEvent, screen } from '@testing-library/react-native';
 import { useState } from 'react';
 
 import { NumberPadDock } from '@/components/ui/NumberPadContext';
-import { typeOnNumberPad } from '@/tests/numberPad';
+import { typeIntoNumberField, typeOnNumberPad } from '@/tests/numberPad';
 import { renderWithProviders } from '@/tests/render';
 
-import { AmountInput, sanitizeAmount } from '../AmountInput';
+import { AmountInput, formatAmountDisplay, sanitizeAmount } from '../AmountInput';
 import { Input } from '../Input';
 import { PasswordInput } from '../PasswordInput';
 
@@ -20,7 +20,7 @@ describe('Input', () => {
     expect(screen.queryByText('We never share it')).toBeNull();
   });
 
-  it('opens the shared number pad for digit fields', async () => {
+  it('opens the shared number pad when a digit field is tapped', async () => {
     function Harness() {
       const [value, setValue] = useState('');
       return (
@@ -75,6 +75,22 @@ describe('sanitizeAmount', () => {
   });
 });
 
+describe('formatAmountDisplay', () => {
+  it('groups thousands and pads decimals when blurred', () => {
+    expect(formatAmountDisplay('1234.5', 2, { padFraction: true })).toBe('1,234.50');
+    expect(formatAmountDisplay('100', 2, { padFraction: true })).toBe('100.00');
+  });
+
+  it('keeps a trailing dot while editing', () => {
+    expect(formatAmountDisplay('5.', 2, { padFraction: false })).toBe('5.');
+  });
+
+  it('does not pad typed decimals unless padFraction is set', () => {
+    expect(formatAmountDisplay('0.00', 6, { padFraction: false })).toBe('0.00');
+    expect(formatAmountDisplay('0.00', 6, { padFraction: true })).toBe('0.000000');
+  });
+});
+
 describe('AmountInput', () => {
   function Harness() {
     const [value, setValue] = useState('');
@@ -96,8 +112,8 @@ describe('AmountInput', () => {
   it('keeps the value as a sanitized string and shows the currency', async () => {
     await renderWithProviders(<Harness />);
 
-    await fireEvent.press(screen.getByTestId('amount'));
-    await typeOnNumberPad('150.555');
+    expect(screen.queryByTestId('number-pad-dock-grid')).toBeNull();
+    await typeIntoNumberField('amount', '150.555');
     expect(screen.getByTestId('amount')).toHaveTextContent(/150\.55/);
     expect(screen.getByText('USD')).toBeTruthy();
   });

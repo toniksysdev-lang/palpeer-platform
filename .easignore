@@ -1,0 +1,48 @@
+# EAS packs from the git root for this monorepo. Keep the upload to mobile sources only.
+# Dependencies are installed on EAS builders.
+
+# Sibling packages / platform (not needed for Expo remote builds)
+backend/
+palpeer-admin-end/
+docs/
+data/
+scripts/
+render.yaml
+docker-compose*.yml
+Dockerfile*
+*.md
+!palpeer-mobile/README.md
+
+# VCS / IDE
+.git/
+**/.git/
+.idea/
+.vscode/
+**/.DS_Store
+
+# All dependency trees
+node_modules/
+**/node_modules/
+
+# Mobile local/build artifacts (regenerated on EAS)
+palpeer-mobile/node_modules/
+palpeer-mobile/.expo/
+palpeer-mobile/dist/
+palpeer-mobile/web-build/
+palpeer-mobile/coverage/
+palpeer-mobile/ios/
+palpeer-mobile/android/
+palpeer-mobile/.kotlin/
+palpeer-mobile/e2e/
+palpeer-mobile/web-emulator/
+palpeer-mobile/docs/
+palpeer-mobile/.env
+palpeer-mobile/.env.*
+!palpeer-mobile/.env.example
+palpeer-mobile/**/*.log
+palpeer-mobile/**/*.tsbuildinfo
+palpeer-mobile/jest-*-out*.txt
+palpeer-mobile/target-state*.png
+palpeer-mobile/**/npm-debug.*
+palpeer-mobile/**/*.apk
+palpeer-mobile/palpeer-preview.apk

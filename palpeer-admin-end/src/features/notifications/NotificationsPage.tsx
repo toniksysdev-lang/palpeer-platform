@@ -1,14 +1,12 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Bell, Megaphone } from 'lucide-react';
 import { StatusBadge } from '@/components/data-display/StatusBadge';
-import { ContractPendingState } from '@/components/feedback/ContractPendingState';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { DataTable, type DataColumn } from '@/components/tables/DataTable';
 import { Pagination } from '@/components/tables/Pagination';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { appConfig } from '@/config/env';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -22,6 +20,7 @@ export function NotificationsPage() {
   const { can } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const allowed = can('notifications:read');
+  const canBroadcast = can('notifications:write');
   const page = Number(searchParams.get('page') ?? '0') || 0;
   const size = Number(searchParams.get('size') ?? '20') || 20;
 
@@ -109,9 +108,18 @@ export function NotificationsPage() {
               <h1 className="text-xl font-semibold text-text-primary">Notifications</h1>
             </div>
             <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-              Notifications sent to app users. Broadcasting is not available yet.
+              Notifications sent to app users across channels.
             </p>
           </div>
+          {canBroadcast ? (
+            <Link
+              to="/admin/push-message"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[0.6rem] border border-primary bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-smooth hover:bg-primary-hover"
+            >
+              <Megaphone className="h-4 w-4" aria-hidden />
+              Push Message
+            </Link>
+          ) : null}
         </div>
 
         <div className="mt-4 max-w-xs">
@@ -156,23 +164,23 @@ export function NotificationsPage() {
         />
       ) : null}
 
-      <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
-        <div className="flex items-center gap-2">
-          <Megaphone className="h-4 w-4 text-warning" aria-hidden />
-          <h3 className="text-base font-semibold text-text-primary">Broadcast / send</h3>
-        </div>
-        <p className="mt-2 text-sm text-text-secondary">
-          Sending and targeting notifications is not available yet.
-        </p>
-        <Button className="mt-4" disabled title="Not available yet">
-          Compose broadcast (unavailable)
-        </Button>
-      </section>
-
-      <ContractPendingState
-        title="Templates, delivery receipts, push targeting"
-        description="These tools are not available yet."
-      />
+      {canBroadcast ? (
+        <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
+          <div className="flex items-center gap-2">
+            <Megaphone className="h-4 w-4 text-primary" aria-hidden />
+            <h3 className="text-base font-semibold text-text-primary">Broadcast / send</h3>
+          </div>
+          <p className="mt-2 text-sm text-text-secondary">
+            Send a push notification to every app user from Push Message.
+          </p>
+          <Link
+            to="/admin/push-message"
+            className="mt-4 inline-flex h-10 items-center justify-center gap-1.5 rounded-[0.6rem] border border-primary bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-smooth hover:bg-primary-hover"
+          >
+            Open Push Message
+          </Link>
+        </section>
+      ) : null}
     </div>
   );
 }

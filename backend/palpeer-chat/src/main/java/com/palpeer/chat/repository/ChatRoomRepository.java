@@ -17,6 +17,8 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, UUID>, JpaSp
 
     Optional<ChatRoom> findByP2pOrderId(UUID p2pOrderId);
 
+    Optional<ChatRoom> findByNegotiationId(UUID negotiationId);
+
     @Query("""
             select r from ChatRoom r
             where r.id = :roomId

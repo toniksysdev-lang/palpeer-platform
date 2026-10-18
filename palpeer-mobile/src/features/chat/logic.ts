@@ -114,9 +114,28 @@ export function orderPairLabel(order: P2POrderSummaryResponse | undefined): stri
   return `${order.baseCurrencyCode}/${order.quoteCurrencyCode} order`;
 }
 
+export function negotiationPairLabel(base?: string | null, quote?: string | null): string {
+  if (!base || !quote) return 'Negotiation';
+  return `${base}/${quote} negotiation`;
+}
+
+/** Prefill chips for negotiation chat (sent as-is; amount composer is separate). */
+export const NEGOTIATION_PREFILLS: readonly string[] = [
+  "Can you meet at this amount?",
+  "I'm ready to accept when you are.",
+  'Please send a counter on amount only.',
+  'Thanks — looking forward to closing this.',
+];
+
+/** Message body when the user sends a currency amount in a negotiation chat. */
+export function negotiationAmountMessage(formattedAmount: string): string {
+  return `Proposed amount: ${formattedAmount}`;
+}
+
 /** VERIFIED codes from `ChatService`. */
 const MESSAGES: Record<string, string> = {
   CHAT_NOT_PARTICIPANT: "You're not part of this conversation.",
+  CHAT_SCOPE_REQUIRED: "Couldn't open this chat. Pull to refresh and try again.",
 };
 
 export function chatErrorMessage(error: AppError): string {

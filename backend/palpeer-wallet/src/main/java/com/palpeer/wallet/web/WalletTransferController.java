@@ -4,6 +4,7 @@ import com.palpeer.auth.security.UserPrincipal;
 import com.palpeer.common.api.ApiResponse;
 import com.palpeer.wallet.transfer.WalletTransferService;
 import com.palpeer.wallet.transfer.dto.CreateWalletTransferRequest;
+import com.palpeer.wallet.transfer.dto.TransferRecipientResponse;
 import com.palpeer.wallet.transfer.dto.WalletTransferResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -41,6 +43,16 @@ public class WalletTransferController {
         return ApiResponse.ok(
                 "Transfer completed",
                 walletTransferService.transfer(principal.getId(), idempotencyKey, request));
+    }
+
+    @GetMapping("/recipient")
+    @Operation(summary = "Confirm a transfer recipient by email or phone (returns full name)")
+    public ApiResponse<TransferRecipientResponse> lookupRecipient(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam("q") String q,
+            @RequestParam(value = "currencyCode", required = false) String currencyCode) {
+        return ApiResponse.ok(
+                walletTransferService.lookupRecipient(principal.getId(), q, currencyCode));
     }
 
     @GetMapping("/{transferId}")

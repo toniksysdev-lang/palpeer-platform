@@ -1,11 +1,11 @@
 import { FormAlert } from '@/components/feedback/FormAlert';
 
-/** P2P has no escrow, hold or settlement (R-P-5, P-2); balances never change because of it. */
+/** Sell listings hold base until accept settles (or cancel/expire returns it). */
 export function NoSettlementNotice() {
   return (
     <FormAlert
       tone="info"
-      message="Palpeer doesn't hold or move money for P2P orders yet, so your wallet balances won't change."
+      message="Sell requests temporarily hold the base amount from your wallet. On accept, wallets settle automatically: base moves to the buyer and quote moves to the seller. The hold is returned if the request expires or is cancelled."
       testID="p2p-no-settlement"
     />
   );

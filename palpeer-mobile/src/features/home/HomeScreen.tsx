@@ -34,12 +34,14 @@ import { StaleDataNotice } from '@/features/wallets/components/StaleDataNotice';
 import { useTheme } from '@/providers/ThemeProvider';
 import { toAppError } from '@/services/api/errors';
 import { useGetKycStatusQuery } from '@/services/api/kycApi';
+import { useGetMarketingAdvertsQuery } from '@/services/api/marketingApi';
 import { useGetActivePromotionsQuery } from '@/services/api/promotionApi';
 import { useGetRecentTransactionsQuery, useGetWalletsQuery } from '@/services/api/walletApi';
 
+import { MarketingCarousel } from './components/MarketingCarousel';
 import { RecentTransactions } from './components/RecentTransactions';
 
-const HOME_ACTIVITY = 6;
+const HOME_ACTIVITY = 5;
 
 /** Balances are shown one currency per card and never added together (R-G-3). */
 export function HomeScreen() {
@@ -49,6 +51,7 @@ export function HomeScreen() {
   const { profile, loading: profileLoading } = useEnsureProfile();
   const recent = useGetRecentTransactionsQuery(HOME_ACTIVITY);
   const promotions = useGetActivePromotionsQuery();
+  const marketing = useGetMarketingAdvertsQuery();
   const [walletIndex, setWalletIndex] = useState(0);
   const [balanceHidden, setBalanceHidden] = useState(false);
 
@@ -65,6 +68,7 @@ export function HomeScreen() {
     void kyc.refetch();
     void recent.refetch();
     void promotions.refetch();
+    void marketing.refetch();
   };
 
   const moveMoney = (action: 'fund' | 'withdraw' | 'transfer') => {
@@ -180,6 +184,10 @@ export function HomeScreen() {
           testID="home-action-transfer"
         />
       </QuickActionBar>
+
+      {marketing.data && marketing.data.length > 0 ? (
+        <MarketingCarousel adverts={marketing.data} />
+      ) : null}
 
       {!profileLoading && profileIncomplete ? (
         <Card

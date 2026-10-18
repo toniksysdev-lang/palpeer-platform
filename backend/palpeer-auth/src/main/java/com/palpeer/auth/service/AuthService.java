@@ -1,16 +1,20 @@
 package com.palpeer.auth.service;
 
 import com.palpeer.auth.config.AuthProperties;
+import com.palpeer.auth.domain.AccountSuspendToken;
 import com.palpeer.auth.domain.OtpChallenge;
 import com.palpeer.auth.domain.OtpChannel;
 import com.palpeer.auth.domain.OtpPurpose;
 import com.palpeer.auth.domain.RefreshToken;
 import com.palpeer.auth.otp.OtpSender;
+import com.palpeer.auth.repository.AccountSuspendTokenRepository;
 import com.palpeer.auth.repository.OtpChallengeRepository;
 import com.palpeer.auth.repository.RefreshTokenRepository;
+import com.palpeer.auth.spi.TransactionPinMatcher;
 import com.palpeer.auth.util.TokenHashing;
 import com.palpeer.auth.web.dto.AuthTokensResponse;
 import com.palpeer.auth.web.dto.ChangePasswordRequest;
+import com.palpeer.auth.web.dto.DeviceLoginInfo;
 import com.palpeer.auth.web.dto.LoginRequest;
 import com.palpeer.auth.web.dto.OtpResendRequest;
 import com.palpeer.auth.web.dto.OtpResendResponse;
@@ -20,10 +24,12 @@ import com.palpeer.auth.web.dto.PasswordResetRequestDto;
 import com.palpeer.auth.web.dto.RegisterRequest;
 import com.palpeer.auth.web.dto.RegisterResponse;
 import com.palpeer.auth.web.dto.SessionResponse;
+import com.palpeer.auth.web.dto.SuspendAccountRequest;
 import com.palpeer.common.audit.AuditRecord;
 import com.palpeer.common.audit.AuditRecorder;
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
+import com.palpeer.common.mail.EmailBrand;
 import com.palpeer.common.mail.EmailSender;
 import com.palpeer.common.mail.PalpeerEmailTemplates;
 import com.palpeer.user.domain.User;
@@ -31,24 +37,32 @@ import com.palpeer.user.domain.UserStatus;
 import com.palpeer.user.repository.UserRepository;
 import io.jsonwebtoken.JwtException;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.util.HtmlUtils;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
+    private static final DateTimeFormatter ALERT_WHEN =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'").withZone(ZoneOffset.UTC);
+
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final OtpChallengeRepository otpChallengeRepository;
+    private final AccountSuspendTokenRepository accountSuspendTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthProperties authProperties;
@@ -56,6 +70,7 @@ public class AuthService {
     private final EmailSender emailSender;
     private final AuditRecorder auditRecorder;
     private final GoogleIdTokenService googleIdTokenService;
+    private final ObjectProvider<TransactionPinMatcher> pinMatcher;
 
     @Transactional
     public RegisterResponse register(RegisterRequest request) {
@@ -79,17 +94,16 @@ public class AuthService {
 
         String emailOtp = issueOtp(user, OtpPurpose.EMAIL_VERIFICATION, OtpChannel.EMAIL);
         issueOtp(user, OtpPurpose.PHONE_VERIFICATION, OtpChannel.SMS);
-        sendWelcomeEmail(user);
+        // Welcome email is sent after EMAIL_VERIFICATION succeeds (see verifyOtp).
 
-        // Always return debugOtp while outbound SMTP is unreliable on free hosts (Render).
-        // Clients autofill verification; re-gate on log-code once real email delivery works.
+        // Only expose the code when log-code is on (dev logs / troubleshooting). Clients never autofill.
         return new RegisterResponse(
                 user.getId(),
                 user.getEmail(),
                 user.getPhone(),
                 user.getStatus().name(),
                 "Registration successful. OTP verification required.",
-                emailOtp
+                authProperties.getOtp().isLogCode() ? emailOtp : null
         );
     }
 
@@ -113,7 +127,7 @@ public class AuthService {
 
         // CONTRACT_PENDING: whether unverified users may obtain tokens
         boolean remember = Boolean.TRUE.equals(request.rememberMe());
-        return issueTokenPair(user, remember);
+        return completeLogin(user, remember, request.device());
     }
 
     /**
@@ -121,7 +135,7 @@ public class AuthService {
      * new accounts are created with a verified email and no password/phone.
      */
     @Transactional
-    public AuthTokensResponse loginWithGoogle(String idToken) {
+    public AuthTokensResponse loginWithGoogle(String idToken, DeviceLoginInfo device) {
         GoogleIdTokenService.GoogleIdentity identity = googleIdTokenService.verify(idToken);
 
         User user = userRepository.findByGoogleSub(identity.subject()).orElse(null);
@@ -167,7 +181,7 @@ public class AuthService {
                 .newValue("googleSub=" + identity.subject())
                 .build());
 
-        return issueTokenPair(user);
+        return completeLogin(user, false, device);
     }
 
     private Optional<User> findByEmailOrPhone(String identifier) {
@@ -207,7 +221,9 @@ public class AuthService {
         stored.setRevoked(true);
         stored.setRevokedAt(Instant.now());
 
-        AuthTokensResponse pair = issueTokenPair(user);
+        DeviceLoginInfo device = DeviceLoginInfo.of(
+                stored.getDeviceIdentifier(), stored.getDeviceName(), stored.getPlatform());
+        AuthTokensResponse pair = issueTokenPair(user, false, device);
         stored.setReplacedByHash(TokenHashing.sha256(pair.refreshToken()));
         refreshTokenRepository.save(stored);
         return pair;
@@ -238,6 +254,9 @@ public class AuthService {
         challenge.setConsumedAt(Instant.now());
         otpChallengeRepository.save(challenge);
 
+        boolean firstEmailVerification =
+                request.purpose() == OtpPurpose.EMAIL_VERIFICATION && !user.isEmailVerified();
+
         applyVerificationFlags(user, request.purpose());
         userRepository.save(user);
         auditRecorder.record(AuditRecord.builder("SECURITY_OTP_VERIFY")
@@ -248,6 +267,10 @@ public class AuthService {
                         + ";phoneVerified=" + user.isPhoneVerified()
                         + ";status=" + user.getStatus())
                 .build());
+
+        if (firstEmailVerification) {
+            sendWelcomeEmail(user);
+        }
     }
 
     @Transactional
@@ -261,7 +284,7 @@ public class AuthService {
 
         User user = requireUserByEmail(request.email());
         String code = issueOtp(user, request.purpose(), request.channel());
-        return new OtpResendResponse(code);
+        return new OtpResendResponse(authProperties.getOtp().isLogCode() ? code : null);
     }
 
     @Transactional
@@ -343,7 +366,10 @@ public class AuthService {
                         t.getId(),
                         t.getCreatedAt(),
                         t.getExpiresAt(),
-                        currentHash != null && currentHash.equals(t.getTokenHash())))
+                        currentHash != null && currentHash.equals(t.getTokenHash()),
+                        t.getDeviceIdentifier(),
+                        t.getDeviceName(),
+                        t.getPlatform()))
                 .toList();
     }
 
@@ -373,11 +399,33 @@ public class AuthService {
         refreshTokenRepository.saveAll(active);
     }
 
-    private AuthTokensResponse issueTokenPair(User user) {
-        return issueTokenPair(user, false);
+    /**
+     * Enforces one active device: revokes every other refresh token, issues a new pair bound to
+     * {@code device}, and emails a suspend link when this install has never signed in before.
+     */
+    private AuthTokensResponse completeLogin(User user, boolean rememberMe, DeviceLoginInfo device) {
+        boolean newDevice = device != null
+                && !refreshTokenRepository.existsByUserIdAndDeviceIdentifier(
+                        user.getId(), device.deviceIdentifier());
+
+        revokeAllRefreshTokens(user.getId());
+        AuthTokensResponse tokens = issueTokenPair(user, rememberMe, device);
+
+        if (newDevice) {
+            sendNewDeviceLoginAlert(user, device);
+        }
+
+        auditRecorder.record(AuditRecord.builder("SECURITY_LOGIN")
+                .entity("User:" + user.getId())
+                .userRef(user.getId())
+                .newValue("singleDevice=true;newDevice="
+                        + newDevice
+                        + (device == null ? "" : ";device=" + device.deviceIdentifier()))
+                .build());
+        return tokens;
     }
 
-    private AuthTokensResponse issueTokenPair(User user, boolean rememberMe) {
+    private AuthTokensResponse issueTokenPair(User user, boolean rememberMe, DeviceLoginInfo device) {
         String access = jwtService.createAccessToken(user.getId(), user.getEmail());
         var refreshTtl = rememberMe
                 ? authProperties.getJwt().getRefreshTokenTtlRemembered()
@@ -389,9 +437,207 @@ public class AuthService {
         entity.setTokenHash(TokenHashing.sha256(refresh));
         entity.setExpiresAt(jwtService.extractExpiry(refresh));
         entity.setRevoked(false);
+        if (device != null) {
+            entity.setDeviceIdentifier(device.deviceIdentifier());
+            entity.setDeviceName(device.deviceName());
+            entity.setPlatform(device.platform());
+        }
         refreshTokenRepository.save(entity);
 
         return AuthTokensResponse.of(user.getId(), access, refresh);
+    }
+
+    private void sendNewDeviceLoginAlert(User user, DeviceLoginInfo device) {
+        String rawToken = TokenHashing.opaqueToken(32);
+        AccountSuspendToken row = new AccountSuspendToken();
+        row.setUserId(user.getId());
+        row.setTokenHash(TokenHashing.sha256(rawToken));
+        row.setDeviceIdentifier(device.deviceIdentifier());
+        row.setDeviceName(device.deviceName());
+        row.setPlatform(device.platform());
+        row.setExpiresAt(Instant.now().plus(authProperties.getSuspendTokenTtl()));
+        row.setConsumed(false);
+        accountSuspendTokenRepository.save(row);
+
+        String base = trimTrailingSlash(authProperties.getPublicBaseUrl());
+        String suspendUrl = base + "/api/v1/auth/account-suspend?token=" + rawToken;
+        String deviceLabel = describeDevice(device);
+        try {
+            var rendered = PalpeerEmailTemplates.newDeviceLogin(
+                    user.getEmail(),
+                    deviceLabel,
+                    ALERT_WHEN.format(Instant.now()),
+                    suspendUrl,
+                    EmailBrand.SUPPORT_EMAIL);
+            emailSender.send(user.getEmail(), rendered.subject(), rendered.text(), rendered.html());
+            log.info(
+                    "New-device login email sent [userId={}, device={}]",
+                    user.getId(),
+                    device.deviceIdentifier());
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "New-device login email failed [userId={}, device={}]: {}",
+                    user.getId(),
+                    device.deviceIdentifier(),
+                    ex.getMessage());
+        }
+    }
+
+    /**
+     * HTML form for the emailed suspend link. Credentials are entered here — never carried in the
+     * URL. Invalid/expired tokens still show a form that will fail on submit (no account leak).
+     */
+    @Transactional(readOnly = true)
+    public String suspendAccountFormHtml(String rawToken) {
+        String safeToken = rawToken == null ? "" : HtmlUtils.htmlEscape(rawToken.trim());
+        return """
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                  <meta charset="utf-8"/>
+                  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                  <title>Suspend PALPEER account</title>
+                  <style>
+                    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+                      background:#0F1A14;color:#F4F6F4;margin:0;padding:24px}
+                    .card{max-width:420px;margin:40px auto;background:#14201A;border:1px solid #24352C;
+                      border-radius:12px;padding:24px}
+                    h1{font-size:1.25rem;margin:0 0 12px}
+                    p{color:#A8B5AE;line-height:1.5;font-size:0.95rem}
+                    label{display:block;margin:14px 0 6px;font-size:0.85rem;color:#A8B5AE}
+                    input{width:100%%;box-sizing:border-box;padding:10px 12px;border-radius:8px;
+                      border:1px solid #24352C;background:#1A2921;color:#F4F6F4}
+                    button{margin-top:18px;width:100%%;padding:12px;border:0;border-radius:8px;
+                      background:#3DD68C;color:#0F1A14;font-weight:600;cursor:pointer}
+                    .warn{color:#F5A623;font-size:0.85rem}
+                  </style>
+                </head>
+                <body>
+                  <div class="card">
+                    <h1>Suspend your account</h1>
+                    <p>If you did not authorize the recent sign-in, confirm your identity below.
+                      This permanently disables login until support reactivates the account.</p>
+                    <p class="warn">Never share your password or PIN. They are not in the email link.</p>
+                    <form method="post" action="/api/v1/auth/account-suspend">
+                      <input type="hidden" name="token" value="%s"/>
+                      <label for="email">Email</label>
+                      <input id="email" name="email" type="email" required autocomplete="username"/>
+                      <label for="password">Password</label>
+                      <input id="password" name="password" type="password" required autocomplete="current-password"/>
+                      <label for="pin">Transaction PIN</label>
+                      <input id="pin" name="pin" type="password" inputmode="numeric" required
+                        autocomplete="one-time-code"/>
+                      <button type="submit">Suspend account</button>
+                    </form>
+                    <p>Or contact <a href="mailto:%s" style="color:#3DD68C">%s</a>.</p>
+                  </div>
+                </body>
+                </html>
+                """
+                .formatted(safeToken, EmailBrand.SUPPORT_EMAIL, EmailBrand.SUPPORT_EMAIL);
+    }
+
+    /**
+     * Suspends the account when the one-time email token is valid and email/password/PIN match
+     * the user in the database. Revokes all sessions.
+     */
+    @Transactional
+    public void suspendAccount(SuspendAccountRequest request) {
+        String rawToken = request.token().trim();
+        AccountSuspendToken challenge = accountSuspendTokenRepository
+                .findByTokenHashAndConsumedFalse(TokenHashing.sha256(rawToken))
+                .orElseThrow(() -> new BusinessException(
+                        "SUSPEND_TOKEN_INVALID",
+                        "Suspend link is invalid or already used",
+                        HttpStatus.BAD_REQUEST));
+
+        if (challenge.getExpiresAt().isBefore(Instant.now())) {
+            throw new BusinessException(
+                    "SUSPEND_TOKEN_EXPIRED", "Suspend link has expired", HttpStatus.BAD_REQUEST);
+        }
+
+        User user = userRepository
+                .findById(challenge.getUserId())
+                .orElseThrow(() -> new BusinessException(
+                        "USER_NOT_FOUND", "User not found", HttpStatus.NOT_FOUND));
+
+        String email = request.email().trim().toLowerCase();
+        if (!user.getEmail().equalsIgnoreCase(email)) {
+            throw new BusinessException(
+                    "SUSPEND_CREDENTIALS_INVALID",
+                    "Email, password, or PIN does not match",
+                    HttpStatus.UNAUTHORIZED);
+        }
+
+        if (user.getPasswordHash() == null || user.getPasswordHash().isBlank()) {
+            throw new BusinessException(
+                    "PASSWORD_LOGIN_UNAVAILABLE",
+                    "This account cannot be suspended with a password. Contact support.",
+                    HttpStatus.BAD_REQUEST);
+        }
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            throw new BusinessException(
+                    "SUSPEND_CREDENTIALS_INVALID",
+                    "Email, password, or PIN does not match",
+                    HttpStatus.UNAUTHORIZED);
+        }
+
+        TransactionPinMatcher pins = pinMatcher.getIfAvailable();
+        if (pins == null || !pins.hasPin(user.getId())) {
+            throw new BusinessException(
+                    "PIN_NOT_SET",
+                    "Set a transaction PIN in the app before using emergency suspend, or contact support.",
+                    HttpStatus.CONFLICT);
+        }
+        if (!pins.matches(user.getId(), request.pin())) {
+            throw new BusinessException(
+                    "SUSPEND_CREDENTIALS_INVALID",
+                    "Email, password, or PIN does not match",
+                    HttpStatus.UNAUTHORIZED);
+        }
+
+        challenge.setConsumed(true);
+        challenge.setConsumedAt(Instant.now());
+        accountSuspendTokenRepository.save(challenge);
+
+        user.setEnabled(false);
+        user.setStatus(UserStatus.SUSPENDED);
+        userRepository.save(user);
+        revokeAllRefreshTokens(user.getId());
+
+        auditRecorder.record(AuditRecord.builder("SECURITY_ACCOUNT_SUSPEND_SELF")
+                .entity("User:" + user.getId())
+                .userRef(user.getId())
+                .newValue("status=SUSPENDED;enabled=false;via=newDeviceAlert")
+                .build());
+    }
+
+    private static String describeDevice(DeviceLoginInfo device) {
+        StringBuilder label = new StringBuilder();
+        if (device.deviceName() != null) {
+            label.append(device.deviceName());
+        }
+        if (device.platform() != null) {
+            if (!label.isEmpty()) {
+                label.append(" · ");
+            }
+            label.append(device.platform());
+        }
+        if (label.isEmpty()) {
+            label.append("device ").append(device.deviceIdentifier());
+        }
+        return label.toString();
+    }
+
+    private static String trimTrailingSlash(String url) {
+        if (url == null || url.isBlank()) {
+            return "http://localhost:8085";
+        }
+        String trimmed = url.trim();
+        while (trimmed.endsWith("/")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        return trimmed;
     }
 
     private String issueOtp(User user, OtpPurpose purpose, OtpChannel channel) {

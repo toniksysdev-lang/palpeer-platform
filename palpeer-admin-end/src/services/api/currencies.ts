@@ -25,11 +25,13 @@ export async function createCurrency(input: CreateCurrencyInput): Promise<Curren
 export async function getLatestExchangeRate(params: {
   base: string;
   quote: string;
+  channel?: string;
   asOf?: string;
 }): Promise<ExchangeRate> {
   const search = new URLSearchParams({
     base: params.base.trim().toUpperCase(),
     quote: params.quote.trim().toUpperCase(),
+    channel: (params.channel ?? 'SWAP').trim().toUpperCase(),
   });
   if (params.asOf) {
     search.set('asOf', params.asOf);
@@ -40,10 +42,12 @@ export async function getLatestExchangeRate(params: {
 export async function listExchangeRateHistory(params: {
   base: string;
   quote: string;
+  channel?: string;
 }): Promise<ExchangeRate[]> {
   const search = new URLSearchParams({
     base: params.base.trim().toUpperCase(),
     quote: params.quote.trim().toUpperCase(),
+    channel: (params.channel ?? 'SWAP').trim().toUpperCase(),
   });
   return apiRequest<ExchangeRate[]>(`/exchange-rates?${search.toString()}`);
 }

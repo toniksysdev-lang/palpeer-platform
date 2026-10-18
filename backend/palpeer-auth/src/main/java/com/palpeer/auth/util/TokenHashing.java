@@ -33,4 +33,14 @@ public final class TokenHashing {
         }
         return sb.toString();
     }
+
+    /** URL-safe opaque token (hex) for emailed one-time actions. */
+    public static String opaqueToken(int byteLength) {
+        if (byteLength <= 0) {
+            throw new IllegalArgumentException("byteLength must be positive");
+        }
+        byte[] bytes = new byte[byteLength];
+        SECURE_RANDOM.nextBytes(bytes);
+        return HexFormat.of().formatHex(bytes);
+    }
 }

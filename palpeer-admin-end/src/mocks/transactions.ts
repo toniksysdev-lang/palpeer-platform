@@ -4,6 +4,11 @@ import type { TransactionItem, TransactionPage } from '@/types/users';
 
 const now = Date.now();
 
+const EMAILS: Record<string, string> = {
+  'u-2': 'member@palpeer.local',
+  'u-3': 'trader@palpeer.local',
+};
+
 function itemsForUser(userId: string): TransactionItem[] {
   return [
     {
@@ -44,6 +49,8 @@ function itemsForUser(userId: string): TransactionItem[] {
     },
   ].map((row) => ({
     ...row,
+    userId,
+    userEmail: EMAILS[userId] ?? `${userId}@palpeer.local`,
     // Keep fixture ids stable; userId is only used for query routing in mock mode.
     failureReason:
       row.type === 'WITHDRAWAL' ? `${row.failureReason} · user ${userId}` : row.failureReason,
@@ -55,6 +62,7 @@ const globalCatalog: TransactionItem[] = [
     type: 'FUNDING',
     id: '33333333-3333-4333-8333-333333333301',
     userId: 'u-2',
+    userEmail: EMAILS['u-2'],
     status: 'SUCCESS',
     walletId: 'w-1',
     currencyCode: 'CAD',
@@ -66,6 +74,7 @@ const globalCatalog: TransactionItem[] = [
     type: 'EXCHANGE',
     id: '33333333-3333-4333-8333-333333333302',
     userId: 'u-2',
+    userEmail: EMAILS['u-2'],
     status: 'SUCCESS',
     walletId: 'w-1',
     secondaryWalletId: 'w-2',
@@ -82,6 +91,7 @@ const globalCatalog: TransactionItem[] = [
     type: 'WITHDRAWAL',
     id: '33333333-3333-4333-8333-333333333303',
     userId: 'u-3',
+    userEmail: EMAILS['u-3'],
     status: 'FAILED',
     walletId: 'w-3',
     currencyCode: 'CAD',
@@ -94,6 +104,7 @@ const globalCatalog: TransactionItem[] = [
     type: 'FUNDING',
     id: '33333333-3333-4333-8333-333333333304',
     userId: 'u-3',
+    userEmail: EMAILS['u-3'],
     status: 'PENDING',
     walletId: 'w-3',
     currencyCode: 'CAD',
@@ -105,12 +116,27 @@ const globalCatalog: TransactionItem[] = [
     type: 'WITHDRAWAL',
     id: '33333333-3333-4333-8333-333333333305',
     userId: 'u-2',
+    userEmail: EMAILS['u-2'],
     status: 'SUCCESS',
     walletId: 'w-2',
     currencyCode: 'NGN',
     amount: '15000.00',
     createdAt: new Date(now - 86400000 * 5).toISOString(),
     updatedAt: new Date(now - 86400000 * 5).toISOString(),
+  },
+  {
+    type: 'TRANSFER',
+    id: '33333333-3333-4333-8333-333333333306',
+    userId: 'u-2',
+    userEmail: EMAILS['u-2'],
+    status: 'SUCCESS',
+    walletId: 'w-1',
+    secondaryWalletId: 'w-3',
+    currencyCode: 'CAD',
+    amount: '50.00',
+    failureReason: 'Lunch reimbursement',
+    createdAt: new Date(now - 86400000 * 3).toISOString(),
+    updatedAt: new Date(now - 86400000 * 3).toISOString(),
   },
 ];
 
@@ -171,9 +197,9 @@ function csvCell(value: unknown): string {
 }
 
 export function mockExportTransactions(params: MockTransactionFilters = {}): BinaryResponse {
-  const header = ['type', 'id', 'userId', 'status', 'currencyCode', 'amount', 'createdAt'];
+  const header = ['type', 'id', 'userId', 'userEmail', 'status', 'currencyCode', 'amount', 'createdAt'];
   const lines = filterGlobal(params).map((row) =>
-    [row.type, row.id, row.userId, row.status, row.currencyCode, row.amount, row.createdAt]
+    [row.type, row.id, row.userId, row.userEmail, row.status, row.currencyCode, row.amount, row.createdAt]
       .map(csvCell)
       .join(','),
   );

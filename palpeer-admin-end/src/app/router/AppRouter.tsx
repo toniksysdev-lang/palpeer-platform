@@ -14,10 +14,12 @@ import { NegotiationDetailPage } from '@/features/negotiations/NegotiationDetail
 import { NegotiationsPage } from '@/features/negotiations/NegotiationsPage';
 import { AuditPage } from '@/features/audit/AuditPage';
 import { NotificationsPage } from '@/features/notifications/NotificationsPage';
+import { PushMessagePage } from '@/features/push-message/PushMessagePage';
 import { P2PFeesPage } from '@/features/fees/P2PFeesPage';
 import { P2PDetailPage } from '@/features/p2p/P2PDetailPage';
 import { P2PPage } from '@/features/p2p/P2PPage';
 import { PermissionsPage } from '@/features/permissions/PermissionsPage';
+import { MarketingPage } from '@/features/marketing/MarketingPage';
 import { PromotionsPage } from '@/features/promotions/PromotionsPage';
 import { RatesPage } from '@/features/rates/RatesPage';
 import { ReferralDetailPage } from '@/features/referrals/ReferralDetailPage';
@@ -29,6 +31,7 @@ import { TransactionDetailPage } from '@/features/transactions/TransactionDetail
 import { TransactionsPage } from '@/features/transactions/TransactionsPage';
 import { UserDetailPage } from '@/features/users/UserDetailPage';
 import { UsersPage } from '@/features/users/UsersPage';
+import { PoolFundsPage } from '@/features/pool-funds/PoolFundsPage';
 import { WalletDetailPage } from '@/features/wallets/WalletDetailPage';
 import { WalletsPage } from '@/features/wallets/WalletsPage';
 import { AdminLayout } from '@/layouts/AdminLayout';
@@ -94,6 +97,14 @@ export function AppRouter() {
           element={
             <RequirePermission permission="wallets:read">
               <WalletDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="pool-funds"
+          element={
+            <RequirePermission permission="wallets:read">
+              <PoolFundsPage />
             </RequirePermission>
           }
         />
@@ -192,10 +203,26 @@ export function AppRouter() {
           }
         />
         <Route
+          path="push-message"
+          element={
+            <RequirePermission permission="notifications:write">
+              <PushMessagePage />
+            </RequirePermission>
+          }
+        />
+        <Route
           path="promotions"
           element={
             <RequirePermission permission="promotions:write">
               <PromotionsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="marketing"
+          element={
+            <RequirePermission permission="promotions:write">
+              <MarketingPage />
             </RequirePermission>
           }
         />

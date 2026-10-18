@@ -25,6 +25,14 @@
         </dependency>
         <dependency>
             <groupId>com.palpeer</groupId>
+            <artifactId>palpeer-wallet</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.palpeer</groupId>
+            <artifactId>palpeer-ledger</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.palpeer</groupId>
             <artifactId>palpeer-user</artifactId>
         </dependency>
         <dependency>

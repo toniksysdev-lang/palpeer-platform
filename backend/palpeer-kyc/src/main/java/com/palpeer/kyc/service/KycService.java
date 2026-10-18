@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -110,30 +111,65 @@ public class KycService {
         return toSelfieResponse(selfie);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public KycStatusResponse getStatus(UUID userId) {
-        return kycCaseRepository.findByUserId(userId)
-                .map(KycService::toStatusResponse)
-                .orElseGet(() -> new KycStatusResponse(null, userId, KycStatus.NOT_STARTED, null, null, null));
+        Optional<KycCase> existing = kycCaseRepository.findByUserId(userId);
+        if (existing.isEmpty()) {
+            return new KycStatusResponse(null, userId, KycStatus.NOT_STARTED, null, null, null);
+        }
+        KycCase kycCase = existing.get();
+        syncProviderCheckIfNeeded(kycCase);
+        return toStatusResponse(kycCaseRepository.findById(kycCase.getId()).orElse(kycCase));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public KycProgressResponse getProgress(UUID userId) {
         Optional<KycCase> existing = kycCaseRepository.findByUserId(userId);
         if (existing.isEmpty()) {
-            return new KycProgressResponse(null, KycStatus.NOT_STARTED, false, 0, false, 0);
+            return new KycProgressResponse(null, KycStatus.NOT_STARTED, false, 0, false, 0, List.of());
         }
         KycCase kycCase = existing.get();
+        syncProviderCheckIfNeeded(kycCase);
+        kycCase = kycCaseRepository.findById(kycCase.getId()).orElse(kycCase);
         long documents = kycDocumentRepository.countByKycCaseId(kycCase.getId());
         long selfies = selfieRepository.countByKycCaseId(kycCase.getId());
+        List<KycDocument> uploaded = kycDocumentRepository.findByKycCaseIdOrderByCreatedAtAsc(kycCase.getId());
+        // Distinct types, newest upload first (verification uses the latest document).
+        List<String> documentTypes = new ArrayList<>();
+        for (int i = uploaded.size() - 1; i >= 0; i--) {
+            String type = uploaded.get(i).getDocumentType();
+            if (type == null || type.isBlank()) {
+                continue;
+            }
+            String normalized = type.trim().toUpperCase(Locale.ROOT);
+            if (!documentTypes.contains(normalized)) {
+                documentTypes.add(normalized);
+            }
+        }
         return new KycProgressResponse(
                 kycCase.getId(),
                 kycCase.getStatus(),
                 documents > 0,
                 documents,
                 selfies > 0,
-                selfies
+                selfies,
+                List.copyOf(documentTypes)
         );
+    }
+
+    /**
+     * When webhooks cannot reach localhost, poll ComplyCube while a case is under review.
+     */
+    private void syncProviderCheckIfNeeded(KycCase kycCase) {
+        if (kycCase.getStatus() != KycStatus.UNDER_REVIEW) {
+            return;
+        }
+        String checkId = kycCase.getProviderCheckId();
+        if (checkId == null || checkId.isBlank() || !kycVerificationProvider.isEnabled()) {
+            return;
+        }
+        kycVerificationProvider.getCheck(checkId).ifPresent(check ->
+                applyProviderCheckResult(check.checkId(), check.result(), check.status()));
     }
 
     /**
@@ -222,27 +258,54 @@ public class KycService {
     public void applyProviderCheckResult(String checkId, String result, String status) {
         KycCase kycCase = kycCaseRepository.findByProviderCheckId(checkId)
                 .orElseThrow(() -> new ResourceNotFoundException("KYC case not found for check " + checkId));
-        String normalized = (result == null ? status : result);
-        if (normalized == null) {
+        // Prefer outcome (clear/attention/…) over status (pending/complete/failed).
+        // ComplyCube status "complete" only means the check finished — not that it passed.
+        String outcome = blankToNull(result);
+        String providerStatus = blankToNull(status);
+        String decisionSource = outcome != null ? outcome : providerStatus;
+        if (decisionSource == null) {
             return;
         }
-        String value = normalized.trim().toLowerCase(Locale.ROOT);
+        String value = decisionSource.trim().toLowerCase(Locale.ROOT);
         String old = String.valueOf(kycCase.getStatus());
-        if (value.contains("clear") || value.equals("complete") || value.equals("approved") || value.equals("pass")) {
-            kycCase.setStatus(KycStatus.APPROVED);
-            kycCase.setRejectionReason(null);
-        } else if (value.contains("reject") || value.contains("consider") || value.equals("fail") || value.contains("attention")) {
-            kycCase.setStatus(KycStatus.REJECTED);
-            kycCase.setRejectionReason("Provider result: " + normalized);
+        KycStatus next;
+        String rejectionReason = null;
+        if (outcome != null) {
+            if (value.equals("clear") || value.equals("approved") || value.equals("pass")) {
+                next = KycStatus.APPROVED;
+            } else if (value.contains("reject")
+                    || value.contains("consider")
+                    || value.equals("fail")
+                    || value.contains("attention")
+                    || value.equals("not_processed")) {
+                next = KycStatus.REJECTED;
+                rejectionReason = "Provider result: " + outcome;
+            } else {
+                next = KycStatus.UNDER_REVIEW;
+            }
+        } else if (value.equals("pending") || value.equals("in_progress") || value.equals("complete")) {
+            // "complete" without an outcome yet — keep polling.
+            next = KycStatus.UNDER_REVIEW;
+        } else if (value.equals("failed") || value.contains("fail")) {
+            next = KycStatus.REJECTED;
+            rejectionReason = "Provider status: " + providerStatus;
         } else {
-            kycCase.setStatus(KycStatus.UNDER_REVIEW);
+            next = KycStatus.UNDER_REVIEW;
         }
+        if (next == kycCase.getStatus()
+                && Objects.equals(rejectionReason, kycCase.getRejectionReason())) {
+            return;
+        }
+        kycCase.setStatus(next);
+        kycCase.setRejectionReason(rejectionReason);
         kycCaseRepository.save(kycCase);
         auditRecorder.record(AuditRecord.builder("KYC_PROVIDER_WEBHOOK")
                 .entity("KycCase:" + kycCase.getId())
                 .userRef(kycCase.getUserId())
                 .oldValue("status=" + old)
-                .newValue("status=" + kycCase.getStatus() + ";providerResult=" + normalized)
+                .newValue("status=" + kycCase.getStatus()
+                        + ";providerResult=" + outcome
+                        + ";providerStatus=" + providerStatus)
                 .build());
     }
 

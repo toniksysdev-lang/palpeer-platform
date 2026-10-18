@@ -1,5 +1,6 @@
+import * as Clipboard from 'expo-clipboard';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChevronRight, Gift, Share2 } from 'lucide-react-native';
+import { Check, ChevronRight, Copy, Gift, Share2, Users } from 'lucide-react-native';
 import { useState } from 'react';
 import { RefreshControl, Share, View } from 'react-native';
 
@@ -45,6 +46,7 @@ export function ReferralsScreen() {
   const [linkedCode, setLinkedCode] = useState(params.code);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   if (params.code !== linkedCode) {
     setLinkedCode(params.code);
@@ -57,6 +59,18 @@ export function ReferralsScreen() {
       await Share.share({ message: shareMessage(myCode.data.referralCode) });
     } catch {
       toast.show({ type: 'error', title: "Couldn't open the share sheet" });
+    }
+  };
+
+  const copyCode = async () => {
+    if (!myCode.data) return;
+    try {
+      await Clipboard.setStringAsync(myCode.data.referralCode);
+      setCopied(true);
+      toast.show({ type: 'success', title: 'Code copied' });
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.show({ type: 'error', title: "Couldn't copy the code" });
     }
   };
 
@@ -91,6 +105,11 @@ export function ReferralsScreen() {
     >
       <StackHeader title="Invite friends" />
 
+      <AppText tone="secondary">
+        Share your code so friends can join PALPEER. When they apply it, you both earn a referral
+        bonus when a promotion is active.
+      </AppText>
+
       <Card variant="elevated" padding="lg" testID="referral-my-code">
         <View style={{ gap: theme.spacing.sm }}>
           <AppText variant="overline" tone="muted">
@@ -108,15 +127,60 @@ export function ReferralsScreen() {
           <AppText variant="caption" tone="secondary">
             Each code works once. After a friend uses it, you get a new one here.
           </AppText>
-          <Button
-            label="Share code"
-            leftIcon={Share2}
-            onPress={() => void share()}
-            disabled={!myCode.data}
-            testID="referral-share"
-          />
+          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+            <View style={{ flex: 1 }}>
+              <Button
+                label={copied ? 'Copied' : 'Copy'}
+                variant="outline"
+                leftIcon={copied ? Check : Copy}
+                onPress={() => void copyCode()}
+                disabled={!myCode.data}
+                testID="referral-copy"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Share"
+                leftIcon={Share2}
+                onPress={() => void share()}
+                disabled={!myCode.data}
+                testID="referral-share"
+              />
+            </View>
+          </View>
         </View>
       </Card>
+
+      <Card variant="outlined" padding="md" testID="referral-stats">
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+          <Icon icon={Users} color={theme.colors.primary} />
+          <View style={{ flex: 1, gap: theme.spacing.xxs }}>
+            <AppText variant="bodyStrong">
+              {referrals.data
+                ? `${used.length} friend${used.length === 1 ? '' : 's'} joined`
+                : 'Friends who joined'}
+            </AppText>
+            <AppText variant="caption" tone="muted">
+              Only completed invites are counted.
+            </AppText>
+          </View>
+        </View>
+      </Card>
+
+      <View style={{ gap: theme.spacing.sm }} testID="referral-how">
+        <AppText variant="h3">How it works</AppText>
+        <Card variant="outlined" padding="md">
+          <View style={{ gap: theme.spacing.sm }}>
+            <AppText tone="secondary">1. Share your code or invite link with a friend.</AppText>
+            <AppText tone="secondary">
+              2. They enter it under Invite friends (or during sign-up).
+            </AppText>
+            <AppText tone="secondary">
+              3. When an active referral promotion exists, bonuses show under My bonuses.
+            </AppText>
+          </View>
+        </Card>
+      </View>
 
       <View style={{ gap: theme.spacing.sm }}>
         <AppText variant="h3">Have a code?</AppText>
@@ -165,7 +229,7 @@ export function ReferralsScreen() {
         ) : !referrals.data ? (
           <Skeleton height={56} />
         ) : used.length === 0 ? (
-          <AppText tone="secondary">No one has used your codes yet.</AppText>
+          <AppText tone="secondary">No one has used your codes yet. Share yours to get started.</AppText>
         ) : (
           used.map((item) => (
             <Card key={item.id} variant="outlined" padding="md" testID={`referral-${item.id}`}>

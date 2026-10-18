@@ -36,4 +36,15 @@ public final class EmailBrand {
     public static final String SITE_URL = "https://palpeer.com";
     public static final String SUPPORT_EMAIL = "support@palpeer.com";
     public static final String TAGLINE = "Your Rate, Your Way";
+
+    /**
+     * Content-ID for the inline logo attached by {@code SmtpEmailSender}
+     * ({@code classpath:mail/palpeer-logo.png}). Templates reference {@code cid:palpeer-logo}.
+     */
+    public static final String LOGO_CONTENT_ID = "palpeer-logo";
+
+    public static final String LOGO_CID_SRC = "cid:" + LOGO_CONTENT_ID;
+
+    /** Display width (px) for the header logo in HTML clients. */
+    public static final int LOGO_WIDTH_PX = 148;
 }

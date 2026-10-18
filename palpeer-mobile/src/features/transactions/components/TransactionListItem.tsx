@@ -1,4 +1,11 @@
-import { ArrowDownToLine, ArrowRightLeft, Plus, type LucideIcon } from 'lucide-react-native';
+import {
+  ArrowDownToLine,
+  ArrowLeftRight,
+  ArrowRightLeft,
+  Plus,
+  Users,
+  type LucideIcon,
+} from 'lucide-react-native';
 
 import { IconTile } from '@/components/ui/IconTile';
 import { ListItem } from '@/components/ui/ListItem';
@@ -13,6 +20,8 @@ const ICONS: Record<TransactionActivityType, LucideIcon> = {
   FUNDING: Plus,
   WITHDRAWAL: ArrowDownToLine,
   EXCHANGE: ArrowRightLeft,
+  TRANSFER: ArrowLeftRight,
+  P2P: Users,
 };
 
 type Props = {
@@ -28,7 +37,7 @@ type Props = {
 export function TransactionListItem({ item, onPress, divider }: Props) {
   const { format } = useMoneyFormat();
   const currencies =
-    item.type === 'EXCHANGE' && item.secondaryCurrencyCode
+    (item.type === 'EXCHANGE' || item.type === 'P2P') && item.secondaryCurrencyCode
       ? `${item.currencyCode}/${item.secondaryCurrencyCode}`
       : item.currencyCode;
   const amount = `${currencies} ${format(item.amount, item.currencyCode, { showCurrency: false })}`;

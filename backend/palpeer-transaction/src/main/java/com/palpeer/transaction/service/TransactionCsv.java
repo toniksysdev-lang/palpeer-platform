@@ -10,7 +10,7 @@ import java.util.List;
 public final class TransactionCsv {
 
     private static final List<String> HEADER = List.of(
-            "type", "id", "userId", "status", "walletId", "secondaryWalletId",
+            "type", "id", "userId", "userEmail", "status", "walletId", "secondaryWalletId",
             "currencyCode", "secondaryCurrencyCode", "amount", "secondaryAmount",
             "appliedRate", "failureReason", "createdAt", "updatedAt");
 
@@ -21,7 +21,7 @@ public final class TransactionCsv {
         CsvWriter csv = new CsvWriter(HEADER);
         for (TransactionItemResponse t : items) {
             csv.row(
-                    t.type(), t.id(), t.userId(), t.status(), t.walletId(), t.secondaryWalletId(),
+                    t.type(), t.id(), t.userId(), t.userEmail(), t.status(), t.walletId(), t.secondaryWalletId(),
                     t.currencyCode(), t.secondaryCurrencyCode(), t.amount(), t.secondaryAmount(),
                     t.appliedRate(), t.failureReason(), t.createdAt(), t.updatedAt());
         }

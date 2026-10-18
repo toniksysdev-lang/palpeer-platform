@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Lock, Mail } from 'lucide-react-native';
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { View, type TextInput } from 'react-native';
 
@@ -11,12 +11,15 @@ import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Input';
+import { useOptionalNumberPad } from '@/components/ui/NumberPadContext';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { TextLink } from '@/components/ui/TextLink';
+import { REFERRAL_CODE_MAX, normalizeReferralCode } from '@/features/promotions/logic';
 import { useSensitiveScreen } from '@/hooks/useSensitiveScreen';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useSecretCommand } from '@/hooks/useSecretCommand';
 import { accountCommands } from '@/services/auth/accountCommands';
+import { referralStorage } from '@/services/storage/referralStorage';
 
 import { AuthLayout } from '../components/AuthLayout';
 import { LegalAgreement } from '../components/LegalAgreement';
@@ -26,10 +29,18 @@ import { registerSchema, type RegisterForm } from '../schemas';
 export function RegisterScreen() {
   useSensitiveScreen();
   const theme = useTheme();
+  const numberPad = useOptionalNumberPad();
   const params = useLocalSearchParams<{ phone?: string }>();
   const phone = typeof params.phone === 'string' ? params.phone.trim() : '';
   const [register] = useSecretCommand(accountCommands.register);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Account form has no digit fields; dismiss pad left open by prior OTP/phone screens.
+  useFocusEffect(
+    useCallback(() => {
+      numberPad?.close();
+    }, [numberPad]),
+  );
   const usernameRef = useRef<TextInput>(null);
   const referralRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
@@ -63,12 +74,11 @@ export function RegisterScreen() {
         phone,
         password: values.password,
       });
+      // Register has no referral field on the API — apply after the user signs in.
+      await referralStorage.save(normalizeReferralCode(values.referralCode ?? ''));
       router.replace({
         pathname: '/verify-email',
-        params: {
-          email: result.email,
-          ...(result.debugOtp ? { otp: result.debugOtp } : {}),
-        },
+        params: { email: result.email },
       });
     } catch (error) {
       setFormError(applyServerErrors(error, setError, ['email', 'password']));
@@ -96,15 +106,6 @@ export function RegisterScreen() {
       header={
         <View style={{ alignItems: 'center', marginBottom: theme.spacing.md }}>
           <PalpeerLogo width={150} />
-        </View>
-      }
-      footer={
-        <View style={{ gap: theme.spacing.md }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: theme.spacing.xs }}>
-            <AppText tone="secondary">Already have an account?</AppText>
-            <TextLink label="Login" tone="info" onPress={() => router.replace('/login')} testID="go-login" />
-          </View>
-          <LegalAgreement prefix="By signing up you agree to our" testID="register-legal" />
         </View>
       }
     >
@@ -165,11 +166,12 @@ export function RegisterScreen() {
             placeholder="Optional"
             appearance="elevated"
             value={field.value ?? ''}
-            onChangeText={field.onChange}
+            onChangeText={(value) => field.onChange(normalizeReferralCode(value))}
             onBlur={field.onBlur}
             error={fieldState.error?.message}
             autoCapitalize="characters"
             autoCorrect={false}
+            maxLength={REFERRAL_CODE_MAX}
             returnKeyType="next"
             onSubmitEditing={() => passwordRef.current?.focus()}
             testID="register-referral"
@@ -228,6 +230,11 @@ export function RegisterScreen() {
         loading={isSubmitting}
         testID="register-submit"
       />
+      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: theme.spacing.xs }}>
+        <AppText tone="secondary">Already have an account?</AppText>
+        <TextLink label="Login" tone="info" onPress={() => router.replace('/login')} testID="go-login" />
+      </View>
+      <LegalAgreement prefix="By signing up you agree to our" testID="register-legal" />
     </AuthLayout>
   );
 }

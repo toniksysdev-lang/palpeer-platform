@@ -8,6 +8,8 @@ const MESSAGES: Record<string, string> = {
   P2P_SELF_ACCEPT: "You can't accept your own request.",
   P2P_SAME_CURRENCY: 'Choose two different currencies.',
   P2P_EXPIRES_INVALID: 'The expiry time has already passed. Choose a later time.',
+  P2P_WALLET_REQUIRED: 'Create a wallet for that currency before posting a sell request.',
+  INSUFFICIENT_AVAILABLE_BALANCE: "You don't have enough available balance for this sell request.",
 };
 
 export function p2pErrorMessage(error: AppError): string {

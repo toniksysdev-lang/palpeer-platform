@@ -64,13 +64,14 @@ export function ChangePinScreen() {
   }
 
   return (
-    <Screen scroll>
+    <Screen edges={['top', 'bottom']}>
       <StackHeader />
       {step.name === 'current' ? (
         <PinEntry
           key="current"
           title="Enter your current PIN"
           error={step.error}
+          autoSubmit
           onSubmit={(currentPin) => setStep({ name: 'new', currentPin })}
           footer={
             <TextLink

@@ -16,7 +16,7 @@ export const HISTORY_PAGE_SIZE = 20;
 
 export const transactionApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
-    /** Funding, withdrawals and exchanges, newest first (P2P, cards and bonuses aren't included). */
+    /** Funding, withdrawals, exchanges, transfers and settled P2P orders, newest first. */
     getTransactionHistory: build.infiniteQuery<
       TransactionPageResponse,
       TransactionHistoryArgs,

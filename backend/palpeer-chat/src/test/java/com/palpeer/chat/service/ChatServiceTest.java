@@ -16,9 +16,14 @@ import com.palpeer.chat.repository.ChatRoomRepository;
 import com.palpeer.chat.web.dto.ChatMessageResponse;
 import com.palpeer.chat.web.dto.ChatReadReceiptResponse;
 import com.palpeer.chat.web.dto.ChatRoomResponse;
+import com.palpeer.chat.web.dto.CreateChatRoomRequest;
 import com.palpeer.chat.web.dto.MarkChatReadRequest;
 import com.palpeer.chat.web.dto.SendChatMessageRequest;
+import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
+import com.palpeer.negotiation.domain.Negotiation;
+import com.palpeer.negotiation.domain.NegotiationStatus;
+import com.palpeer.negotiation.repository.NegotiationRepository;
 import com.palpeer.p2p.repository.P2POrderRepository;
 import java.time.Instant;
 import java.util.Optional;
@@ -28,6 +33,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,6 +42,7 @@ class ChatServiceTest {
     @Mock private ChatRoomRepository chatRoomRepository;
     @Mock private ChatMessageRepository chatMessageRepository;
     @Mock private P2POrderRepository p2POrderRepository;
+    @Mock private NegotiationRepository negotiationRepository;
     @Mock private SimpMessagingTemplate messagingTemplate;
 
     @InjectMocks private ChatService chatService;
@@ -154,6 +161,56 @@ class ChatServiceTest {
 
         assertThatThrownBy(() -> chatService.markRead(userId, roomId, new MarkChatReadRequest(UUID.randomUUID())))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void createRoom_forNegotiation_isIdempotent() {
+        UUID requester = UUID.randomUUID();
+        UUID counterparty = UUID.randomUUID();
+        UUID negotiationId = UUID.randomUUID();
+        Negotiation negotiation = new Negotiation();
+        negotiation.setId(negotiationId);
+        negotiation.setRequesterId(requester);
+        negotiation.setCounterpartyId(counterparty);
+        negotiation.setStatus(NegotiationStatus.OPEN);
+
+        when(negotiationRepository.findById(negotiationId)).thenReturn(Optional.of(negotiation));
+        when(chatRoomRepository.findByNegotiationId(negotiationId)).thenReturn(Optional.empty());
+        when(chatRoomRepository.save(any(ChatRoom.class))).thenAnswer(inv -> {
+            ChatRoom room = inv.getArgument(0);
+            room.setId(UUID.randomUUID());
+            return room;
+        });
+
+        ChatRoomResponse created = chatService.createRoom(
+                counterparty, new CreateChatRoomRequest(null, negotiationId));
+
+        assertThat(created.negotiationId()).isEqualTo(negotiationId);
+        assertThat(created.p2pOrderId()).isNull();
+        assertThat(created.participantAId()).isEqualTo(requester);
+        assertThat(created.participantBId()).isEqualTo(counterparty);
+    }
+
+    @Test
+    void createRoom_requiresExactlyOneScope() {
+        UUID userId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> chatService.createRoom(userId, new CreateChatRoomRequest(null, null)))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> {
+                    BusinessException business = (BusinessException) ex;
+                    assertThat(business.getCode()).isEqualTo("CHAT_SCOPE_REQUIRED");
+                    assertThat(business.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+                });
+
+        UUID orderId = UUID.randomUUID();
+        UUID negotiationId = UUID.randomUUID();
+        assertThatThrownBy(() ->
+                        chatService.createRoom(userId, new CreateChatRoomRequest(orderId, negotiationId)))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getCode()).isEqualTo("CHAT_SCOPE_REQUIRED"));
+
+        verifyNoInteractions(negotiationRepository, p2POrderRepository, chatRoomRepository);
     }
 
     private static ChatRoom room(UUID roomId, UUID participantA, UUID participantB) {

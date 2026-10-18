@@ -3,7 +3,7 @@ import { formatClockTime } from '@/utils/datetime';
 
 /** VERIFIED security error codes (PinService, SecurityQuestionService, DeviceService). */
 const MESSAGES: Record<string, string> = {
-  PIN_INVALID: "That PIN isn't right.",
+  PIN_INVALID: 'Wrong PIN, try again.',
   PIN_ALREADY_SET: 'You already have a PIN. Use Change PIN instead.',
   PIN_NOT_SET: "You haven't set a transaction PIN yet.",
   RESOURCE_NOT_FOUND: "You haven't set a transaction PIN yet.",

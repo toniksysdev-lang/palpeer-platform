@@ -54,9 +54,9 @@ function OfferForm({ request, header }: { request: P2PRequestResponse; header: R
   const userId = useAppSelector((state) => state.session.userId);
   const { format } = useMoneyFormat();
   const [create, createState] = useCreateOfferMutation();
-  // Starts from the posted terms so the user only changes what they want to negotiate.
+  // Amount is editable; rate stays locked to the listing.
   const [amount, setAmount] = useState<string>(() => toMoney(request.amount));
-  const [rate, setRate] = useState<string>(() => toMoney(request.rate));
+  const rate = toMoney(request.rate);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -67,7 +67,6 @@ function OfferForm({ request, header }: { request: P2PRequestResponse; header: R
   const base = request.baseCurrencyCode;
   const quote = request.quoteCurrencyCode;
   const amountError = submitted && !isPositiveMoney(amount) ? 'Enter an amount above zero.' : null;
-  const rateError = submitted && !isPositiveMoney(rate) ? 'Enter a rate above zero.' : null;
 
   const submit = async () => {
     setSubmitted(true);
@@ -120,8 +119,8 @@ function OfferForm({ request, header }: { request: P2PRequestResponse; header: R
       <View style={{ gap: theme.spacing.xs }}>
         <AppText variant="h2">What is your best offer?</AppText>
         <AppText tone="secondary">
-          {sideLabel(request.side, base, quote, 'other')}. Suggest the amount and rate you want;
-          they can accept or reply with a counter-offer.
+          {sideLabel(request.side, base, quote, 'other')}. Suggest the amount you want at their
+          listed rate; they can accept or reply with a counter-offer.
         </AppText>
       </View>
       <Card variant="outlined" padding="md">
@@ -142,9 +141,7 @@ function OfferForm({ request, header }: { request: P2PRequestResponse; header: R
         amount={amount}
         rate={rate}
         onAmountChange={setAmount}
-        onRateChange={setRate}
         amountError={amountError ?? fieldErrors.amount}
-        rateError={rateError ?? fieldErrors.rate}
         testID="offer"
       />
       <FormAlert message={error} testID="offer-error" />

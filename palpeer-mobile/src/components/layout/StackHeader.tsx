@@ -23,7 +23,7 @@ export function StackHeader({ title, onBack, right }: Props) {
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        gap: theme.spacing.sm,
+        justifyContent: 'center',
         marginLeft: -theme.spacing.sm,
         minHeight: 44,
       }}
@@ -35,13 +35,19 @@ export function StackHeader({ title, onBack, right }: Props) {
         testID="header-back"
       />
       {title ? (
-        <AppText variant="h3" accessibilityRole="header" style={{ flex: 1 }} numberOfLines={1}>
+        <AppText
+          variant="h3"
+          accessibilityRole="header"
+          align="center"
+          style={{ flex: 1, marginRight: 40 }}
+          numberOfLines={1}
+        >
           {title}
         </AppText>
       ) : (
         <View style={{ flex: 1 }} />
       )}
-      {right}
+      {right ?? <View style={{ width: 40 }} />}
     </View>
   );
 }

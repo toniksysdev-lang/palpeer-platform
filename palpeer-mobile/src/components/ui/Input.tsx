@@ -4,8 +4,8 @@ import { Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'rea
 import { useTheme } from '@/providers/ThemeProvider';
 
 import { AppText } from './AppText';
-import { useNumberPadField } from './NumberPadContext';
 import type { NumberPadBottomLeft } from './NumberPad';
+import { useNumberPadField } from './NumberPadContext';
 
 export type NumberPadMode = 'digits' | 'phone' | 'decimal';
 

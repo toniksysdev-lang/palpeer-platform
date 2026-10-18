@@ -7,7 +7,7 @@ import { secureStorage } from '@/services/storage/secureStorage';
 import type { AppStore } from '@/store';
 import { fail, installFetchMock, ok, type RecordedCall } from '@/tests/fetchMock';
 import { router, setSearchParams } from '@/tests/mocks/expoRouter';
-import { usePreventScreenCapture } from '@/tests/mocks/media';
+import { preventScreenCaptureAsync } from '@/tests/mocks/media';
 import { typeIntoNumberField } from '@/tests/numberPad';
 import { renderWithProviders } from '@/tests/render';
 import { toMoney } from '@/utils/money';
@@ -85,21 +85,17 @@ describe('ExchangeScreen', () => {
     expect(screen.getByTestId('exchange-continue').props.accessibilityState?.disabled).toBe(false);
   });
 
-  it('asks the backend for the send amount when the receive side is typed', async () => {
-    const { calls } = installFetchMock({
+  it('keeps You receive read-only', async () => {
+    installFetchMock({
       'GET /wallets': WALLETS,
       'GET /currencies': CURRENCIES,
-      'POST /exchange/calculate': ok(
-        calculation({ sourceAmount: '9.52', targetAmount: '10000.00' }),
-      ),
+      'POST /exchange/calculate': ok(calculation({ targetAmount: '105000.00' })),
     });
     await renderWithProviders(<ExchangeScreen />);
 
-    await typeIntoNumberField('exchange-receive', '10000');
-    await waitFor(() => expect(screen.getByTestId('exchange-send')).toHaveTextContent(/9\.52/));
-    expect(posts(calls, '/exchange/calculate')[0]?.rawBody).toBe(
-      '{"sourceWalletId":"w-cad","targetWalletId":"w-ngn","targetAmount":10000}',
-    );
+    await typeIntoNumberField('exchange-send', '100');
+    expect(await screen.findByTestId('exchange-receive')).toHaveTextContent(/105000\.00/);
+    expect(screen.getByTestId('exchange-receive').props.accessibilityState?.disabled).toBe(true);
   });
 
   it('says the pair cannot be swapped when no rate exists', async () => {
@@ -129,7 +125,7 @@ describe('ExchangeScreen', () => {
     });
     await renderWithProviders(<ExchangeScreen />);
 
-    await typeIntoNumberField('exchange-receive', '630000');
+    await typeIntoNumberField('exchange-send', '600');
     expect(await screen.findByText('You can exchange up to 500.00 CAD.')).toBeTruthy();
     expect(screen.getByTestId('exchange-continue').props.accessibilityState?.disabled).toBe(true);
     expect(posts(calls, '/exchange/preview')).toHaveLength(0);
@@ -304,10 +300,10 @@ describe('ExchangeReviewScreen', () => {
     );
     await renderWithProviders(<ExchangeReviewScreen />, { prepareStore: withQuote });
 
-    usePreventScreenCapture.mockClear();
+    preventScreenCaptureAsync.mockClear();
     await fireEvent.press(await screen.findByTestId('exchange-confirm'));
     await screen.findByTestId('pin-prompt-cancel');
-    expect(usePreventScreenCapture).toHaveBeenCalled();
+    await waitFor(() => expect(preventScreenCaptureAsync).toHaveBeenCalled());
     await fireEvent.press(screen.getByTestId('pin-prompt-cancel'));
     await waitFor(() => expect(screen.queryByTestId('pin-prompt-entry')).toBeNull());
     expect(posts(calls, '/exchange/execute')).toHaveLength(0);

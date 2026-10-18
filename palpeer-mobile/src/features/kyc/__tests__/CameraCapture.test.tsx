@@ -1,10 +1,11 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 
 import { BLOCKED, GRANTED, media, UNDETERMINED } from '@/tests/mocks/media';
 import { renderWithProviders } from '@/tests/render';
 
 import { CameraCapture } from '../components/CameraCapture';
+import * as webCamera from '../components/webCamera';
 
 jest.mock('expo-router', () => require('../../../tests/mocks/expoRouter'));
 
@@ -22,9 +23,18 @@ async function renderCamera(overrides: Partial<Parameters<typeof CameraCapture>[
 }
 
 describe('CameraCapture', () => {
+  const platform = Platform as { OS: string };
+  const originalOs = platform.OS;
+
   beforeEach(() => {
     media.reset();
+    platform.OS = originalOs;
     jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    platform.OS = originalOs;
+    jest.restoreAllMocks();
   });
 
   it('asks for permission only when the user taps Allow, then opens the camera', async () => {
@@ -39,6 +49,37 @@ describe('CameraCapture', () => {
 
     expect(media.requestPermission).toHaveBeenCalledTimes(1);
     expect(await screen.findByTestId('camera-view')).toBeTruthy();
+  });
+
+  it('on web opens getUserMedia from the Allow button gesture', async () => {
+    platform.OS = 'web';
+    const stream = {
+      id: 'web-stream',
+      getTracks: () => [],
+    } as unknown as MediaStream;
+    jest.spyOn(webCamera, 'openWebCameraStream').mockResolvedValue(stream);
+
+    await renderCamera({ facing: 'front', overlay: 'face' });
+
+    expect(await screen.findByTestId('camera-allow')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('camera-allow'));
+
+    await waitFor(() => expect(webCamera.openWebCameraStream).toHaveBeenCalledWith('front'));
+    expect(await screen.findByTestId('camera-view')).toBeTruthy();
+  });
+
+  it('on web shows a retry state when getUserMedia is blocked', async () => {
+    platform.OS = 'web';
+    jest
+      .spyOn(webCamera, 'openWebCameraStream')
+      .mockRejectedValue(Object.assign(new Error('blocked'), { name: 'NotAllowedError' }));
+
+    await renderCamera();
+    await fireEvent.press(await screen.findByTestId('camera-allow'));
+
+    expect(await screen.findByTestId('camera-unavailable')).toBeTruthy();
+    expect(screen.getByText(/address bar/i)).toBeTruthy();
+    expect(screen.getByTestId('camera-retry')).toBeTruthy();
   });
 
   it('stays on the explanation when permission is denied again', async () => {

@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.mail.MailProperties;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -32,10 +33,16 @@ public class SmtpEmailSender implements EmailSender {
                     "SMTP is not configured. Set PALPEER_SMTP_HOST, PALPEER_SMTP_USERNAME, and PALPEER_SMTP_PASSWORD.");
         }
         try {
-            boolean multipart = StringUtils.hasText(htmlBody);
+            boolean hasHtml = StringUtils.hasText(htmlBody);
             MimeMessage message = mailSender.createMimeMessage();
+            // MIXED_RELATED builds a proper multipart/alternative (text + HTML) that clients prefer.
             MimeMessageHelper helper =
-                    new MimeMessageHelper(message, multipart, StandardCharsets.UTF_8.name());
+                    new MimeMessageHelper(
+                            message,
+                            hasHtml
+                                    ? MimeMessageHelper.MULTIPART_MODE_MIXED_RELATED
+                                    : MimeMessageHelper.MULTIPART_MODE_NO,
+                            StandardCharsets.UTF_8.name());
             String fromEmail = properties.getFrom();
             String fromName = properties.getFromName();
             helper.setFrom(new InternetAddress(fromEmail, fromName, StandardCharsets.UTF_8.name()));
@@ -44,17 +51,24 @@ public class SmtpEmailSender implements EmailSender {
             }
             helper.setTo(to);
             helper.setSubject(subject);
-            if (multipart) {
+            if (hasHtml) {
                 helper.setText(textBody == null ? "" : textBody, htmlBody);
+                ClassPathResource logo = new ClassPathResource("mail/palpeer-logo.png");
+                if (logo.exists()) {
+                    helper.addInline(EmailBrand.LOGO_CONTENT_ID, logo, "image/png");
+                } else {
+                    log.warn("Email logo missing on classpath (mail/palpeer-logo.png); HTML will show broken image");
+                }
             } else {
                 helper.setText(textBody == null ? "" : textBody, false);
             }
             mailSender.send(message);
             log.info(
-                    "Email sent to={} subject={} html={} via {}:{}",
+                    "Email sent to={} subject={} html={} htmlChars={} via {}:{}",
                     to,
                     subject,
-                    multipart,
+                    hasHtml,
+                    hasHtml ? htmlBody.length() : 0,
                     mailProperties.getHost(),
                     mailProperties.getPort());
         } catch (MessagingException | UnsupportedEncodingException | MailException ex) {

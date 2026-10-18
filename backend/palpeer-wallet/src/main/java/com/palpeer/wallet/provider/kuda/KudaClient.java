@@ -79,6 +79,59 @@ public class KudaClient {
         return amount.movePointRight(2).setScale(0, RoundingMode.HALF_EVEN).longValueExact();
     }
 
+    /**
+     * Main business account available balance in NGN (not kobo). Null when Kuda is disabled.
+     */
+    public BigDecimal getMainAccountBalance() {
+        if (!isConfigured()) {
+            return null;
+        }
+        JsonNode root = invoke("ADMIN_RETRIEVE_MAIN_ACCOUNT_BALANCE", Map.of());
+        JsonNode data = root.path("data");
+        if (data.isMissingNode() || data.isNull()) {
+            data = root.path("Data");
+        }
+        if (data.isMissingNode() || data.isNull()) {
+            data = root;
+        }
+        Long kobo = firstLong(
+                data,
+                "availableBalance",
+                "AvailableBalance",
+                "withdrawableBalance",
+                "WithdrawableBalance",
+                "ledgerBalance",
+                "LedgerBalance");
+        if (kobo == null) {
+            log.warn("Kuda balance response did not include a recognised balance field: {}", root);
+            return null;
+        }
+        return BigDecimal.valueOf(kobo).movePointLeft(2);
+    }
+
+    private static Long firstLong(JsonNode node, String... fields) {
+        if (node == null) {
+            return null;
+        }
+        for (String field : fields) {
+            JsonNode child = node.path(field);
+            if (child.isMissingNode() || child.isNull()) {
+                continue;
+            }
+            if (child.isNumber()) {
+                return child.longValue();
+            }
+            if (child.isTextual()) {
+                try {
+                    return new BigDecimal(child.asText().trim()).longValue();
+                } catch (NumberFormatException ignored) {
+                    // continue
+                }
+            }
+        }
+        return null;
+    }
+
     private String token(boolean forceRefresh) {
         if (!forceRefresh) {
             String existing = cachedToken.get();

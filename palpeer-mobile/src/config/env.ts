@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 export type AppEnvironment = 'development' | 'staging' | 'production';
 
 /** Contact and legal details supplied per build. Anything missing or malformed is null (SP-1). */
@@ -110,8 +112,17 @@ export function buildConfig(raw: RawEnv): AppConfig {
   };
 }
 
+/**
+ * Android emulator maps the host machine to 10.0.2.2; browsers cannot reach that address.
+ * On web, rewrite it to localhost so the same .env.development works for Expo web preview.
+ */
+export function rewriteEmulatorHostForWeb(url: string, platform: string = Platform.OS): string {
+  if (platform !== 'web' || !url) return url;
+  return url.replace(/\/\/10\.0\.2\.2(?=[:/]|$)/g, '//localhost');
+}
+
 // EXPO_PUBLIC_* values are inlined at build time, so each must be read with a static member access.
-export const appConfig: AppConfig = buildConfig({
+const rawConfig = buildConfig({
   EXPO_PUBLIC_ENV: process.env.EXPO_PUBLIC_ENV,
   EXPO_PUBLIC_API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL,
   EXPO_PUBLIC_WS_URL: process.env.EXPO_PUBLIC_WS_URL,
@@ -123,6 +134,12 @@ export const appConfig: AppConfig = buildConfig({
   EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
   EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
 });
+
+export const appConfig: AppConfig = {
+  ...rawConfig,
+  apiBaseUrl: rewriteEmulatorHostForWeb(rawConfig.apiBaseUrl),
+  wsUrl: rewriteEmulatorHostForWeb(rawConfig.wsUrl),
+};
 
 export function isApiConfigured(config: AppConfig = appConfig): boolean {
   return config.apiBaseUrl.length > 0;

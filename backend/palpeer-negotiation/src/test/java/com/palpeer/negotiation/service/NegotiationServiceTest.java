@@ -9,9 +9,11 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.argThat;
 
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
+import com.palpeer.common.notify.UserNotifyEvent;
 import com.palpeer.negotiation.domain.Negotiation;
 import com.palpeer.negotiation.domain.NegotiationCloseReason;
 import com.palpeer.negotiation.domain.NegotiationOffer;
@@ -24,6 +26,7 @@ import com.palpeer.negotiation.web.dto.CounterOfferRequest;
 import com.palpeer.negotiation.web.dto.CreateOfferRequest;
 import com.palpeer.negotiation.web.dto.NegotiationResponse;
 import com.palpeer.p2p.domain.P2PRequest;
+import com.palpeer.p2p.domain.P2PSide;
 import com.palpeer.p2p.domain.P2PStatus;
 import com.palpeer.p2p.repository.P2PRequestRepository;
 import com.palpeer.p2p.service.P2PRequestClosedEvent;
@@ -91,6 +94,18 @@ class NegotiationServiceTest {
         assertThat(response.status()).isEqualTo(NegotiationStatus.OPEN);
         assertThat(response.requesterId()).isEqualTo(ownerId);
         assertThat(response.counterpartyId()).isEqualTo(counterpartyId);
+        verify(eventPublisher).publishEvent(argThat((Object event) -> {
+            if (!(event instanceof UserNotifyEvent notify)) {
+                return false;
+            }
+            return notify.userId().equals(ownerId)
+                    && notify.sendEmail()
+                    && notify.sendPush()
+                    && "NEGOTIATION".equals(notify.referenceType())
+                    && notify.referenceId().equals(response.id())
+                    && notify.title().contains("negotiation");
+        }));
+        verify(eventPublisher).publishEvent(any(NegotiationChangedEvent.class));
     }
 
     @Test
@@ -325,6 +340,11 @@ class NegotiationServiceTest {
         request.setId(requestId);
         request.setUserId(ownerId);
         request.setStatus(P2PStatus.OPEN);
+        request.setSide(P2PSide.SELL);
+        request.setBaseCurrencyCode("CAD");
+        request.setQuoteCurrencyCode("NGN");
+        request.setAmount(new BigDecimal("100.00"));
+        request.setRate(new BigDecimal("1500.00"));
         return request;
     }
 

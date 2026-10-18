@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { formatRateValue } from '@/features/exchange/format';
+import { ExpiryCountdown } from '@/features/p2p/components/ExpiryCountdown';
 import { useTheme } from '@/providers/ThemeProvider';
 import {
   useGetPublicInstantRatesQuery,
@@ -164,6 +165,12 @@ function PublicP2PRateCard({ row }: { row: PublicP2PRateResponse }) {
         <AppText tone="secondary">
           1 {row.baseCurrencyCode} = {formatRateValue(row.rate)} {row.quoteCurrencyCode}
         </AppText>
+        {row.expiresAt ? (
+          <ExpiryCountdown
+            expiresAt={row.expiresAt}
+            testID={`view-rates-p2p-expires-${row.id}`}
+          />
+        ) : null}
         <AppText variant="caption" tone="muted">
           Posted {formatDateTime(row.createdAt) ?? '—'}
         </AppText>
@@ -174,6 +181,9 @@ function PublicP2PRateCard({ row }: { row: PublicP2PRateResponse }) {
 
 function InstantRateCard({ row }: { row: PublicInstantRateResponse }) {
   const theme = useTheme();
+  // Admin buy/sell is the platform rail: user Buy = platform Sell, user Sell = platform Buy.
+  const userBuyRate = row.sellRate;
+  const userSellRate = row.buyRate;
   return (
     <Card variant="outlined" padding="md" testID={`view-rates-instant-${row.id}`}>
       <View style={{ gap: theme.spacing.xs }}>
@@ -185,18 +195,19 @@ function InstantRateCard({ row }: { row: PublicInstantRateResponse }) {
             <AppText variant="caption" tone="muted">
               Buy
             </AppText>
-            <AppText variant="h3">{formatRateValue(row.buyRate)}</AppText>
+            <AppText variant="h3" testID={`view-rates-instant-buy-${row.id}`}>
+              {formatRateValue(userBuyRate)}
+            </AppText>
           </View>
           <View style={{ flex: 1, gap: theme.spacing.xxs }}>
             <AppText variant="caption" tone="muted">
               Sell
             </AppText>
-            <AppText variant="h3">{formatRateValue(row.sellRate)}</AppText>
+            <AppText variant="h3" testID={`view-rates-instant-sell-${row.id}`}>
+              {formatRateValue(userSellRate)}
+            </AppText>
           </View>
         </View>
-        <AppText variant="caption" tone="muted">
-          Published {formatDateTime(row.effectiveDate) ?? '—'}
-        </AppText>
       </View>
     </Card>
   );

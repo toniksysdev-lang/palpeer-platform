@@ -39,22 +39,25 @@ export function WalletsPage() {
   const columns = useMemo<DataColumn<WalletSummary>[]>(
     () => [
       {
-        id: 'id',
-        header: 'Wallet',
-        cell: (row) => <span className="font-mono text-xs">{row.id}</span>,
-      },
-      {
-        id: 'userId',
+        id: 'user',
         header: 'User',
-        cell: (row) => (
-          <Link
-            to={`/admin/users/${row.userId}`}
-            className="font-mono text-xs text-primary hover:underline"
-            onClick={(event) => event.stopPropagation()}
-          >
-            {row.userId}
-          </Link>
-        ),
+        cell: (row) => {
+          const name = [row.userFirstName, row.userLastName].filter(Boolean).join(' ').trim();
+          return (
+            <div className="min-w-0">
+              <Link
+                to={`/admin/users/${row.userId}`}
+                className="block truncate text-sm font-medium text-primary hover:underline"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {name || row.userEmail || row.userId}
+              </Link>
+              {row.userEmail ? (
+                <p className="truncate text-xs text-text-secondary">{row.userEmail}</p>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         id: 'currency',
@@ -76,6 +79,11 @@ export function WalletsPage() {
             {formatDecimal(row.pendingBalance)}
           </span>
         ),
+      },
+      {
+        id: 'id',
+        header: 'Wallet ID',
+        cell: (row) => <span className="font-mono text-xs text-text-secondary">{row.id}</span>,
       },
       {
         id: 'actions',

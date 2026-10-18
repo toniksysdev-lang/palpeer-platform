@@ -58,6 +58,8 @@ export const media = {
     media.resize.mockClear();
     launchImageLibraryAsync.mockClear();
     usePreventScreenCapture.mockClear();
+    preventScreenCaptureAsync.mockClear();
+    allowScreenCaptureAsync.mockClear();
   },
 };
 
@@ -112,6 +114,8 @@ export const ImageManipulator = {
       },
       async renderAsync() {
         return {
+          width: size.width,
+          height: size.height,
           async saveAsync(options: { format: string; compress: number }) {
             return { uri: `file:///prepared.${options.format}`, ...size };
           },
@@ -124,5 +128,7 @@ export const ImageManipulator = {
 
 // expo-screen-capture
 export const usePreventScreenCapture = jest.fn();
+export const preventScreenCaptureAsync = jest.fn(async () => undefined);
+export const allowScreenCaptureAsync = jest.fn(async () => undefined);
 export const enableAppSwitcherProtectionAsync = jest.fn(async () => undefined);
 export const disableAppSwitcherProtectionAsync = jest.fn(async () => undefined);

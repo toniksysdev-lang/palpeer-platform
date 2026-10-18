@@ -10,6 +10,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import type { P2POrderSummaryResponse } from '@/types/api/p2p';
 import { formatDateTime } from '@/utils/datetime';
 
+import { ExpiryCountdown } from './ExpiryCountdown';
 import { orderRole, p2pRateLine } from '../logic';
 
 export function OrderCard({
@@ -28,6 +29,10 @@ export function OrderCard({
   const role =
     orderRole(order, userId) === 'acceptor' ? 'You accepted' : 'Your request was accepted';
   const amount = base ? format(order.amount, base) : order.amount;
+  const showCountdown =
+    order.status === 'ACCEPTED' &&
+    !!order.expiresAt &&
+    new Date(order.expiresAt).getTime() > Date.now();
 
   return (
     <Card
@@ -47,9 +52,17 @@ export function OrderCard({
           {base && quote ? (
             <AppText tone="secondary">{p2pRateLine(order.rate, base, quote)}</AppText>
           ) : null}
-          <AppText variant="caption" tone="muted">
-            {formatDateTime(order.createdAt)}
-          </AppText>
+          {showCountdown ? (
+            <ExpiryCountdown
+              expiresAt={order.expiresAt}
+              active
+              testID={`p2p-order-expiry-${order.id}`}
+            />
+          ) : (
+            <AppText variant="caption" tone="muted">
+              {formatDateTime(order.createdAt)}
+            </AppText>
+          )}
         </View>
         <StatusBadge status={order.status} />
         <Icon icon={ChevronRight} color={theme.colors.textMuted} />

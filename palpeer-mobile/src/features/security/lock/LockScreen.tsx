@@ -36,7 +36,8 @@ export function LockScreen() {
 
   const signInWithPassword = useCallback(async () => {
     setBusy(true);
-    await sessionManager.signOut();
+    // Keep the refresh token + biometric binding so Login can offer fingerprint sign-in.
+    await sessionManager.dismissToLogin();
   }, []);
 
   const unlock = useCallback(async () => {

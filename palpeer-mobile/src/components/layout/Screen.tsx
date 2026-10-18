@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets, type Edge } from 'react-native-safe-area-context';
 
-import { NumberPadDock } from '@/components/ui/NumberPadContext';
+import { NumberPadDock, useOptionalNumberPad } from '@/components/ui/NumberPadContext';
 import { useTheme } from '@/providers/ThemeProvider';
 
 import { useInsideTabs } from './tabScreen';
@@ -41,10 +41,17 @@ export function Screen({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const insideTabs = useInsideTabs();
+  const numberPad = useOptionalNumberPad();
+  const padOpen = !!numberPad?.active;
   const padding = padded ? theme.spacing.xl : 0;
   // Stack screens draw under the home indicator / Android navigation bar (edge-to-edge).
   const bottomInset = insideTabs || edges.includes('bottom') ? 0 : insets.bottom;
+  // When the pad is open it owns the bottom safe area; don't double-pad the sticky footer.
+  const footerBottomInset = padOpen ? 0 : bottomInset;
   const column: ViewStyle = { width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' };
+  const dismissPad = () => {
+    if (padOpen) numberPad?.close();
+  };
 
   const body = scroll ? (
     <ScrollView
@@ -52,7 +59,7 @@ export function Screen({
         column,
         {
           padding,
-          paddingBottom: padding + (footer ? 0 : bottomInset),
+          paddingBottom: padding + (footer || padOpen ? 0 : bottomInset),
           gap: theme.spacing.lg,
           flexGrow: 1,
         },
@@ -60,6 +67,8 @@ export function Screen({
       keyboardShouldPersistTaps="handled"
       refreshControl={refreshControl}
       showsVerticalScrollIndicator={false}
+      onScrollBeginDrag={dismissPad}
+      onTouchStart={dismissPad}
     >
       {children}
     </ScrollView>
@@ -70,10 +79,11 @@ export function Screen({
         column,
         {
           padding,
-          paddingBottom: padding + (footer ? 0 : bottomInset),
+          paddingBottom: padding + (footer || padOpen ? 0 : bottomInset),
           gap: theme.spacing.lg,
         },
       ]}
+      onTouchStart={dismissPad}
     >
       {children}
     </View>
@@ -86,23 +96,24 @@ export function Screen({
         <View
           style={[
             column,
-            { paddingHorizontal: padding, paddingBottom: theme.spacing.md },
+            {
+              paddingHorizontal: padding,
+              paddingBottom: theme.spacing.md + footerBottomInset,
+            },
           ]}
+          onTouchStart={dismissPad}
         >
           {footer}
         </View>
       ) : null}
-      <View
-        style={[
+      <NumberPadDock
+        contentStyle={[
           column,
           {
             paddingHorizontal: padding,
-            paddingBottom: theme.spacing.lg + bottomInset,
           },
         ]}
-      >
-        <NumberPadDock />
-      </View>
+      />
     </>
   );
 

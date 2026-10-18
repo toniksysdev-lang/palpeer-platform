@@ -88,7 +88,7 @@ export function TransactionDetailPage() {
     return (
       <ErrorState
         title="Transaction type required"
-        description="Open this page with ?type=FUNDING|WITHDRAWAL|EXCHANGE (or a legacy ?userId=) from the transactions list."
+        description="Open this page with ?type=FUNDING|WITHDRAWAL|EXCHANGE|TRANSFER (or a legacy ?userId=) from the transactions list."
       />
     );
   }
@@ -140,8 +140,10 @@ export function TransactionDetailPage() {
       <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
         <dl className="grid gap-4 sm:grid-cols-2">
           <div>
-            <dt className="text-xs uppercase tracking-wide text-text-muted">User</dt>
-            <dd className="mt-1 break-all font-mono text-xs">{userId || '—'}</dd>
+            <dt className="text-xs uppercase tracking-wide text-text-muted">User Email</dt>
+            <dd className="mt-1 break-all text-xs">
+              {tx.userEmail?.trim() || userId || '—'}
+            </dd>
           </div>
           <div>
             <dt className="text-xs uppercase tracking-wide text-text-muted">Amount</dt>
@@ -164,7 +166,9 @@ export function TransactionDetailPage() {
             </div>
           ) : null}
           <div>
-            <dt className="text-xs uppercase tracking-wide text-text-muted">Wallet</dt>
+            <dt className="text-xs uppercase tracking-wide text-text-muted">
+              {tx.type === 'TRANSFER' ? 'Source wallet' : 'Wallet'}
+            </dt>
             <dd className="mt-1 break-all font-mono text-xs">
               {tx.walletId && can('wallets:read') ? (
                 <Link to={`/admin/wallets/${tx.walletId}`} className="text-primary hover:underline">
@@ -177,8 +181,21 @@ export function TransactionDetailPage() {
           </div>
           {tx.secondaryWalletId ? (
             <div>
-              <dt className="text-xs uppercase tracking-wide text-text-muted">Secondary wallet</dt>
-              <dd className="mt-1 break-all font-mono text-xs">{tx.secondaryWalletId}</dd>
+              <dt className="text-xs uppercase tracking-wide text-text-muted">
+                {tx.type === 'TRANSFER' ? 'Destination wallet' : 'Secondary wallet'}
+              </dt>
+              <dd className="mt-1 break-all font-mono text-xs">
+                {tx.type === 'TRANSFER' && can('wallets:read') ? (
+                  <Link
+                    to={`/admin/wallets/${tx.secondaryWalletId}`}
+                    className="text-primary hover:underline"
+                  >
+                    {tx.secondaryWalletId}
+                  </Link>
+                ) : (
+                  tx.secondaryWalletId
+                )}
+              </dd>
             </div>
           ) : null}
           <div>
@@ -201,8 +218,14 @@ export function TransactionDetailPage() {
           </div>
           {tx.failureReason ? (
             <div className="sm:col-span-2">
-              <dt className="text-xs uppercase tracking-wide text-text-muted">Failure reason</dt>
-              <dd className="mt-1 text-sm text-danger">{tx.failureReason}</dd>
+              <dt className="text-xs uppercase tracking-wide text-text-muted">
+                {tx.type === 'TRANSFER' ? 'Note' : 'Failure reason'}
+              </dt>
+              <dd
+                className={`mt-1 text-sm ${tx.type === 'TRANSFER' ? 'text-text-primary' : 'text-danger'}`}
+              >
+                {tx.failureReason}
+              </dd>
             </div>
           ) : null}
         </dl>

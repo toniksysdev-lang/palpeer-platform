@@ -45,11 +45,19 @@ public class LoggingOtpSender implements OtpSender {
     }
 
     private void sendEmailOtp(String destination, OtpPurpose purpose, String code) {
-        String purposeLabel = purpose.name().toLowerCase().replace('_', ' ');
-        var rendered = PalpeerEmailTemplates.otp(purposeLabel, code);
+        var rendered =
+                purpose == OtpPurpose.EMAIL_VERIFICATION
+                        ? PalpeerEmailTemplates.emailVerification(code)
+                        : PalpeerEmailTemplates.otp(
+                                purpose.name().toLowerCase().replace('_', ' '), code);
         try {
             emailSender.send(destination, rendered.subject(), rendered.text(), rendered.html());
-            log.info("OTP email sent [destination={}, purpose={}]", destination, purpose);
+            log.info(
+                    "OTP email sent [destination={}, purpose={}, subject={}, htmlChars={}]",
+                    destination,
+                    purpose,
+                    rendered.subject(),
+                    rendered.html() == null ? 0 : rendered.html().length());
         } catch (RuntimeException ex) {
             // Free hosts (e.g. Render) often block outbound SMTP (connect timeout on :587/:465).
             // Soft-fail so registration can continue; the OTP is still stored and returned as

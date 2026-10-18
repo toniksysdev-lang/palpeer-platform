@@ -88,6 +88,13 @@ springdoc:
 palpeer:
   api:
     version: v1
+  fcm:
+    # Firebase Cloud Messaging via Admin SDK. When false, pushes are logged only.
+    enabled: ${PALPEER_FCM_ENABLED:false}
+    # Path to Firebase service-account JSON (local/dev). Ignored if credentials-json is set.
+    credentials-file: ${PALPEER_FCM_CREDENTIALS_FILE:}
+    # Inline service-account JSON (preferred on PaaS). Takes precedence over credentials-file.
+    credentials-json: ${PALPEER_FCM_CREDENTIALS_JSON:}
   mail:
     from: ${PALPEER_MAIL_FROM:noreply@palpeer.com.ng}
     from-name: ${PALPEER_MAIL_FROM_NAME:PALPEER SUPPORT}
@@ -105,8 +112,11 @@ palpeer:
     bootstrap-email: ${ADMIN_BOOTSTRAP_EMAIL:}
   cors:
     # Comma-separated browser origins allowed to call the API (Admin-End Vite, etc.)
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173,http://localhost:8081,http://127.0.0.1:8081}
   security:
+    # Origin used in emailed security links (no trailing slash).
+    public-base-url: ${PUBLIC_API_BASE_URL:http://localhost:8085}
+    suspend-token-ttl: ${SUSPEND_TOKEN_TTL:24h}
     jwt:
       secret: ${JWT_SECRET:CHANGE_ME_PALPEER_DEV_JWT_SECRET_AT_LEAST_32_CHARS}
       access-token-ttl: ${JWT_ACCESS_TTL:15m}
@@ -128,12 +138,21 @@ palpeer:
     webhook-secret: ${COMPLYCUBE_WEBHOOK_SECRET:}
   apaylo:
     enabled: ${APAYLO_ENABLED:false}
+    sandbox: ${APAYLO_SANDBOX:false}
+    auto-sandbox-settle: ${APAYLO_AUTO_SANDBOX_SETTLE:true}
+    offline-sandbox-settle: ${APAYLO_OFFLINE_SANDBOX_SETTLE:true}
     api-key: ${APAYLO_API_KEY:}
     shared-key: ${APAYLO_SHARED_KEY:}
-    base-url: ${APAYLO_BASE_URL:https://api.apaylo.com}
-    create-searchable-etransfer-path: ${APAYLO_CREATE_SEARCHABLE_PATH:/api/Merchant/CreateSearchableEtransfer}
-    send-interac-etransfer-path: ${APAYLO_SEND_INTERAC_PATH:/api/Merchant/SendInteracEtransfer}
-    send-eft-path: ${APAYLO_SEND_EFT_PATH:/api/Merchant/CreateEFTTransaction}
+    # env2 hosts are documented as host/host/api; method paths are /Merchant/... or /EFT/...
+    base-url: ${APAYLO_BASE_URL:https://api.etransfer.apaylo.com/api.apaylo.com/api}
+    sandbox-base-url: ${APAYLO_SANDBOX_BASE_URL:https://sandboxapi.apaylo.com/sandboxapi.apaylo.com/api}
+    account-id: ${APAYLO_ACCOUNT_ID:}
+    create-searchable-etransfer-path: ${APAYLO_CREATE_SEARCHABLE_PATH:/Merchant/RequestInteracEtransferEmail}
+    send-interac-etransfer-path: ${APAYLO_SEND_INTERAC_PATH:/Merchant/SendInteracEtransfer}
+    send-eft-path: ${APAYLO_SEND_EFT_PATH:/EFT/CreateEFTTransaction}
+    interac-security-question: ${APAYLO_INTERAC_SECURITY_QUESTION:What is the name of this transfer?}
+    interac-security-answer: ${APAYLO_INTERAC_SECURITY_ANSWER:PALPEER}
+    account-balance-path: ${APAYLO_ACCOUNT_BALANCE_PATH:/Merchant/GetBalance}
     webhook-secret: ${APAYLO_WEBHOOK_SECRET:}
     webhook-signature-header: ${APAYLO_WEBHOOK_SIGNATURE_HEADER:X-Webhook-Signature}
   kuda:
@@ -145,6 +164,24 @@ palpeer:
     sender-name: ${KUDA_SENDER_NAME:PALPEER}
     webhook-secret: ${KUDA_WEBHOOK_SECRET:}
     webhook-signature-header: ${KUDA_WEBHOOK_SIGNATURE_HEADER:X-Webhook-Signature}
+  korapay:
+    enabled: ${KORAPAY_ENABLED:false}
+    sandbox: ${KORAPAY_SANDBOX:true}
+    auto-sandbox-credit: ${KORAPAY_AUTO_SANDBOX_CREDIT:true}
+    offline-sandbox-settle: ${KORAPAY_OFFLINE_SANDBOX_SETTLE:true}
+    auto-sandbox-settle: ${KORAPAY_AUTO_SANDBOX_SETTLE:true}
+    public-key: ${KORAPAY_PUBLIC_KEY:}
+    secret-key: ${KORAPAY_SECRET_KEY:}
+    base-url: ${KORAPAY_BASE_URL:https://api.korapay.com}
+    bank-transfer-path: ${KORAPAY_BANK_TRANSFER_PATH:/merchant/api/v1/charges/bank-transfer}
+    sandbox-credit-path: ${KORAPAY_SANDBOX_CREDIT_PATH:/merchant/api/v1/virtual-bank-account/sandbox/credit}
+    charge-query-path: ${KORAPAY_CHARGE_QUERY_PATH:/merchant/api/v1/charges}
+    disburse-path: ${KORAPAY_DISBURSE_PATH:/merchant/api/v1/transactions/disburse}
+    transaction-query-path: ${KORAPAY_TRANSACTION_QUERY_PATH:/merchant/api/v1/transactions}
+    banks-path: ${KORAPAY_BANKS_PATH:/merchant/api/v1/misc/banks}
+    balances-path: ${KORAPAY_BALANCES_PATH:/merchant/api/v1/balances}
+    webhook-secret: ${KORAPAY_WEBHOOK_SECRET:}
+    webhook-signature-header: ${KORAPAY_WEBHOOK_SIGNATURE_HEADER:x-korapay-signature}
 
 logging:
   level:

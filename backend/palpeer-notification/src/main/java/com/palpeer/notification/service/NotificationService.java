@@ -15,6 +15,7 @@ import com.palpeer.notification.web.dto.NotificationResponse;
 import com.palpeer.user.domain.User;
 import com.palpeer.user.repository.UserRepository;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +55,37 @@ public class NotificationService {
 
         deliverIfNeeded(notification);
         return toResponse(notification);
+    }
+
+    /**
+     * Push + in-app notification for every user (optionally excluding one actor).
+     * Failures for individual recipients are logged and do not abort the broadcast.
+     */
+    @Transactional
+    public int broadcastPush(
+            UUID excludeUserId,
+            String title,
+            String body,
+            String category,
+            String referenceType,
+            UUID referenceId) {
+        List<UUID> userIds = userRepository.findAllIds();
+        int sent = 0;
+        for (UUID userId : userIds) {
+            if (excludeUserId != null && excludeUserId.equals(userId)) {
+                continue;
+            }
+            try {
+                create(
+                        userId,
+                        new CreateNotificationRequest(
+                                title, body, category, NotificationChannel.PUSH, referenceType, referenceId));
+                sent++;
+            } catch (RuntimeException ex) {
+                log.warn("Broadcast push failed for user {}: {}", userId, ex.getMessage());
+            }
+        }
+        return sent;
     }
 
     @Transactional(readOnly = true)
@@ -102,56 +134,91 @@ public class NotificationService {
             return;
         }
 
+        List<String> failures = new ArrayList<>();
+        boolean emailOk = true;
+        boolean pushOk = true;
+
+        if (channel == NotificationChannel.EMAIL || channel == NotificationChannel.BOTH) {
+            emailOk = deliverEmail(notification, failures);
+        }
+
+        if (channel == NotificationChannel.PUSH || channel == NotificationChannel.BOTH) {
+            pushOk = deliverPush(notification, failures);
+        }
+
         if (channel == NotificationChannel.EMAIL) {
-            deliverEmail(notification);
-            return;
-        }
-
-        // PUSH or BOTH (in-app + push)
-        List<DeviceToken> tokens = deviceTokenRepository.findByUserIdAndEnabledTrue(notification.getUserId());
-        if (tokens.isEmpty()) {
-            if (channel == NotificationChannel.PUSH) {
-                notification.setStatus(NotificationStatus.FAILED);
-                notification.setFailureReason("No enabled device tokens");
-                notificationRepository.save(notification);
+            if (emailOk) {
+                markSent(notification, null);
             } else {
-                markSent(notification, "No enabled device tokens for push");
+                markFailed(notification, joinFailures(failures));
             }
             return;
         }
 
-        try {
-            for (DeviceToken token : tokens) {
-                pushNotifier.send(token, notification);
+        if (channel == NotificationChannel.PUSH) {
+            if (pushOk) {
+                markSent(notification, null);
+            } else {
+                markFailed(notification, joinFailures(failures));
             }
-            markSent(notification, null);
-        } catch (RuntimeException ex) {
-            log.warn("Push delivery failed for notification {}: {}", notification.getId(), ex.getMessage());
-            notification.setStatus(NotificationStatus.FAILED);
-            notification.setFailureReason(truncate(ex.getMessage(), 500));
-            notificationRepository.save(notification);
+            return;
+        }
+
+        // BOTH: keep in-app as SENT when either channel works; record partial failures
+        if (emailOk || pushOk) {
+            markSent(notification, failures.isEmpty() ? null : joinFailures(failures));
+        } else {
+            markFailed(notification, joinFailures(failures));
         }
     }
 
-    private void deliverEmail(Notification notification) {
-        User user = userRepository.findById(notification.getUserId())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found for notification"));
+    /** @return true when email was accepted by the sender */
+    private boolean deliverEmail(Notification notification, List<String> failures) {
+        User user = userRepository.findById(notification.getUserId()).orElse(null);
+        if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
+            failures.add("User email not found");
+            return false;
+        }
         try {
             var rendered =
                     PalpeerEmailTemplates.notification(notification.getTitle(), notification.getBody());
             emailSender.send(user.getEmail(), rendered.subject(), rendered.text(), rendered.html());
-            markSent(notification, null);
+            return true;
         } catch (RuntimeException ex) {
             log.warn("Email delivery failed for notification {}: {}", notification.getId(), ex.getMessage());
-            notification.setStatus(NotificationStatus.FAILED);
-            notification.setFailureReason(truncate(ex.getMessage(), 500));
-            notificationRepository.save(notification);
+            failures.add(truncate(ex.getMessage(), 200));
+            return false;
+        }
+    }
+
+    /** @return true when at least one device token was notified */
+    private boolean deliverPush(Notification notification, List<String> failures) {
+        List<DeviceToken> tokens = deviceTokenRepository.findByUserIdAndEnabledTrue(notification.getUserId());
+        if (tokens.isEmpty()) {
+            failures.add("No enabled device tokens");
+            return false;
+        }
+        try {
+            for (DeviceToken token : tokens) {
+                pushNotifier.send(token, notification);
+            }
+            return true;
+        } catch (RuntimeException ex) {
+            log.warn("Push delivery failed for notification {}: {}", notification.getId(), ex.getMessage());
+            failures.add(truncate(ex.getMessage(), 200));
+            return false;
         }
     }
 
     private void markSent(Notification notification, String failureReason) {
         notification.setStatus(NotificationStatus.SENT);
         notification.setSentAt(Instant.now());
+        notification.setFailureReason(failureReason);
+        notificationRepository.save(notification);
+    }
+
+    private void markFailed(Notification notification, String failureReason) {
+        notification.setStatus(NotificationStatus.FAILED);
         notification.setFailureReason(failureReason);
         notificationRepository.save(notification);
     }
@@ -190,5 +257,12 @@ public class NotificationService {
             return null;
         }
         return value.length() <= max ? value : value.substring(0, max);
+    }
+
+    private static String joinFailures(List<String> failures) {
+        if (failures == null || failures.isEmpty()) {
+            return null;
+        }
+        return truncate(String.join("; ", failures), 500);
     }
 }

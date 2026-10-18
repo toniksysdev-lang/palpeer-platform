@@ -14,7 +14,7 @@ export type KycStatusResponse = {
   updatedAt: IsoInstant | null;
 };
 
-/** VERIFIED: GET /kyc/progress. Counts only; no required-document list or percentage. */
+/** VERIFIED: GET /kyc/progress. Counts + uploaded document types; no percentage. */
 export type KycProgressResponse = {
   caseId: Uuid | null;
   status: KycStatus;
@@ -22,6 +22,8 @@ export type KycProgressResponse = {
   documentCount: number;
   hasSelfie: boolean;
   selfieCount: number;
+  /** Distinct uploaded types (e.g. PASSPORT), newest first. Absent on older backends. */
+  documentTypes?: string[];
 };
 
 /** VERIFIED: 201 from POST /kyc/documents (multipart: documentType + file). */

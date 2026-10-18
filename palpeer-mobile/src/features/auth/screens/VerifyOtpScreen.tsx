@@ -1,14 +1,14 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { View } from 'react-native';
 
 import { FormAlert } from '@/components/feedback/FormAlert';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
+import { useOptionalNumberPad } from '@/components/ui/NumberPadContext';
 import { OtpInput } from '@/components/ui/OtpInput';
 import { TextLink } from '@/components/ui/TextLink';
 import { useSensitiveScreen } from '@/hooks/useSensitiveScreen';
-import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { useSecretCommand } from '@/hooks/useSecretCommand';
 import { useResendOtpMutation } from '@/services/api/authApi';
@@ -33,38 +33,26 @@ const CODE_ERRORS = new Set([
   'OTP_CHANNEL_MISMATCH',
 ]);
 
-/** Pre-registration phone step has no SMS yet — any 6-digit code continues; autofill this one. */
-const PHONE_SIGNUP_OTP = '123456';
-
-function sanitizeOtp(raw: string | undefined): string {
-  if (typeof raw !== 'string') return '';
-  return raw.replace(/\D/g, '').slice(0, OTP_LENGTH);
-}
-
 /**
  * Signup order: phone entry → phone OTP (client gate; SMS provider pending) → create account →
- * email OTP (real). Email OTP is autofilled when the API returns `debugOtp` (OTP_LOG_CODE).
+ * email OTP (real). The code field is never autofilled — users enter the code from SMS/email.
  */
 export function VerifyOtpScreen({ purpose }: Props) {
   useSensitiveScreen();
-  const theme = useTheme();
   const toast = useToast();
+  const numberPad = useOptionalNumberPad();
   const params = useLocalSearchParams<{
     email?: string;
     phone?: string;
     signup?: string;
-    otp?: string;
   }>();
   const email = typeof params.email === 'string' ? params.email : '';
   const phone = typeof params.phone === 'string' ? params.phone : '';
   const isPhone = purpose === 'PHONE_VERIFICATION';
   const preRegisterPhone = isPhone && params.signup === '1' && phone.length > 0;
   const channel = isPhone ? 'SMS' : 'EMAIL';
-  const initialOtp = preRegisterPhone
-    ? PHONE_SIGNUP_OTP
-    : sanitizeOtp(typeof params.otp === 'string' ? params.otp : undefined);
 
-  const [code, setCode] = useState(initialOtp);
+  const [code, setCode] = useState('');
   const [codeError, setCodeError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -72,15 +60,13 @@ export function VerifyOtpScreen({ purpose }: Props) {
   const [resendOtp, { isLoading: resending }] = useResendOtpMutation();
   const cooldown = useResendCooldown(60);
 
-  useEffect(() => {
-    if (initialOtp.length === OTP_LENGTH) setCode(initialOtp);
-  }, [initialOtp]);
-
   const goToLogin = () =>
     router.replace({ pathname: '/login', params: { email, notice: 'verified' } });
 
-  const goToRegister = () =>
+  const goToRegister = () => {
+    numberPad?.close();
     router.push({ pathname: '/register', params: { phone } });
+  };
 
   const submit = async (value: string) => {
     if (value.length !== OTP_LENGTH || busy) return;
@@ -120,20 +106,19 @@ export function VerifyOtpScreen({ purpose }: Props) {
     setFormError(null);
 
     if (preRegisterPhone) {
-      setCode(PHONE_SIGNUP_OTP);
+      setCode('');
       cooldown.restart();
       toast.show({
         type: 'info',
         title: 'SMS delivery isn’t available yet',
-        message: 'Your code was filled in again. Continue, or skip and verify later.',
+        message: 'Enter any 6-digit code to continue, or skip and verify later.',
       });
       return;
     }
 
     try {
-      const result = await resendOtp({ email, purpose, channel }).unwrap();
-      const next = sanitizeOtp(result?.debugOtp ?? undefined);
-      setCode(next.length === OTP_LENGTH ? next : '');
+      await resendOtp({ email, purpose, channel }).unwrap();
+      setCode('');
       cooldown.restart();
       toast.show({ type: 'success', title: 'New code sent' });
     } catch (raw) {
@@ -150,7 +135,7 @@ export function VerifyOtpScreen({ purpose }: Props) {
         </AppText>
         <FormAlert
           tone="info"
-          message="Text message delivery isn’t available yet. Your code is filled in — tap Submit to continue, or skip and verify later."
+          message="Text message delivery isn’t available yet. Enter any 6-digit code to continue, or skip and verify later."
         />
         <FormAlert message={formError} testID="verify-error" />
 

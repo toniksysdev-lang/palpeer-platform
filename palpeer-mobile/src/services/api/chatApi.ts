@@ -2,6 +2,7 @@ import type {
   ChatMessageResponse,
   ChatReadReceipt,
   ChatRoomResponse,
+  OpenChatRoomRequest,
   SendChatMessageRequest,
 } from '@/types/api/chat';
 import type { SpringPage } from '@/types/api/common';
@@ -22,9 +23,17 @@ export const chatApi = baseApi.injectEndpoints({
       query: (roomId) => ({ path: `/chat/rooms/${encodeURIComponent(roomId)}` }),
       providesTags: (_result, _error, roomId) => [{ type: 'ChatRoom', id: roomId }],
     }),
-    /** Returns the existing room for the order if there is one (still 201). */
-    openChatRoom: build.mutation<ChatRoomResponse, string>({
-      query: (p2pOrderId) => ({ path: '/chat/rooms', method: 'POST', body: { p2pOrderId } }),
+    /** Returns the existing room for the order/negotiation if there is one (still 201). */
+    openChatRoom: build.mutation<ChatRoomResponse, OpenChatRoomRequest>({
+      // Send only the scoped id — never both keys (XOR) and never `undefined` (JSON omits it → {}).
+      query: (request) => ({
+        path: '/chat/rooms',
+        method: 'POST',
+        body:
+          'negotiationId' in request
+            ? { negotiationId: request.negotiationId }
+            : { p2pOrderId: request.p2pOrderId },
+      }),
       invalidatesTags: (_result, error) => (error ? [] : [ROOMS]),
     }),
     /** History pages, newest first. Page 0 is re-read after a reconnect to backfill. */

@@ -9,9 +9,54 @@ public final class PalpeerEmailTemplates {
 
     public record RenderedEmail(String subject, String html, String text) {}
 
+    /**
+     * Registration email-verification OTP — branded shell from {@link EmailLayout} /
+     * {@link EmailBrand}.
+     */
+    public static RenderedEmail emailVerification(String code) {
+        String subject = "Verify your PALPEER email";
+
+        String html = EmailLayout.wrap(
+                "Your PALPEER verification code is " + code,
+                subject,
+                EmailLayout.heading("Confirm your email")
+                        + EmailLayout.paragraph(
+                                "Thanks for signing up for PALPEER. Enter this one-time code in the"
+                                        + " app to verify your email and finish creating your"
+                                        + " account.")
+                        + EmailLayout.otpCodeBox(code)
+                        + EmailLayout.paragraph(
+                                "The code expires in 10 minutes. For your security, don’t share it"
+                                        + " with anyone.")
+                        + EmailLayout.mutedNote(
+                                "If you didn’t create a PALPEER account, you can safely ignore this"
+                                        + " email.")
+                        + EmailLayout.primaryButton("Open Palpeer", EmailBrand.SITE_URL));
+
+        String text =
+                """
+                PALPEER — Verify your email
+
+                Thanks for signing up. Enter this code in the app to verify your email:
+
+                %s
+
+                This code expires in 10 minutes. If you did not create a PALPEER account, ignore this email.
+
+                %s
+                """
+                        .formatted(code, EmailBrand.SITE_URL);
+
+        return new RenderedEmail(subject, html, text);
+    }
+
     public static RenderedEmail otp(String purposeLabel, String code) {
-        String subject = switch (purposeLabel.toLowerCase()) {
-            case "email verification" -> "Verify your PALPEER email";
+        String normalized = purposeLabel == null ? "" : purposeLabel.toLowerCase();
+        if (normalized.equals("email verification")) {
+            return emailVerification(code);
+        }
+
+        String subject = switch (normalized) {
             case "password reset" -> "Reset your PALPEER password";
             default -> "Your PALPEER verification code";
         };
@@ -83,6 +128,72 @@ public final class PalpeerEmailTemplates {
                                 EmailBrand.TAGLINE,
                                 EmailBrand.SITE_URL,
                                 EmailBrand.SUPPORT_EMAIL);
+
+        return new RenderedEmail(subject, html, text);
+    }
+
+    /**
+     * New-device sign-in alert. Warns that if this was them they can ignore it; otherwise contact
+     * support or use the suspend link (token only — never password/PIN in the URL).
+     */
+    public static RenderedEmail newDeviceLogin(
+            String email,
+            String deviceLabel,
+            String whenLabel,
+            String suspendUrl,
+            String supportEmail) {
+        String subject = "New device signed in to your PALPEER account";
+        String safeEmail = email == null || email.isBlank() ? "your account" : email.trim();
+        String device = deviceLabel == null || deviceLabel.isBlank() ? "a new device" : deviceLabel.trim();
+        String when = whenLabel == null || whenLabel.isBlank() ? "just now" : whenLabel.trim();
+        String support =
+                supportEmail == null || supportEmail.isBlank()
+                        ? EmailBrand.SUPPORT_EMAIL
+                        : supportEmail.trim();
+
+        String html = EmailLayout.wrap(
+                subject,
+                subject,
+                EmailLayout.heading("New device sign-in")
+                        + EmailLayout.paragraph(
+                                "Someone just signed in to "
+                                        + safeEmail
+                                        + " from "
+                                        + device
+                                        + " ("
+                                        + when
+                                        + "). For your security, that sign-in ends any other open"
+                                        + " sessions on your account.")
+                        + EmailLayout.paragraph(
+                                "If this was you, you can ignore this email — no further action is"
+                                        + " needed.")
+                        + EmailLayout.paragraph(
+                                "If this was not you, contact support immediately at "
+                                        + support
+                                        + ", or suspend the account now. You will be asked for your"
+                                        + " email, password, and PIN to confirm. Never share those"
+                                        + " secrets in email or chat.")
+                        + EmailLayout.primaryButton("Suspend my account", suspendUrl)
+                        + EmailLayout.mutedNote(
+                                "This suspend link expires in 24 hours and can be used once."));
+
+        String text =
+                """
+                PALPEER — New device sign-in
+
+                Someone signed in to %s from %s (%s). Other sessions on your account were ended.
+
+                If this was you, ignore this email.
+
+                If this was not you, contact %s immediately, or open this one-time link to suspend
+                your account (you will confirm with email, password, and PIN — those are never in
+                the link itself):
+
+                %s
+
+                The link expires in 24 hours.
+                """
+                        .formatted(safeEmail, device, when, support, suspendUrl);
 
         return new RenderedEmail(subject, html, text);
     }

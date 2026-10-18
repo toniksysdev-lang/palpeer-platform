@@ -1,20 +1,22 @@
 import { View } from 'react-native';
 
 import { AmountInput } from '@/components/ui/AmountInput';
+import { AppText } from '@/components/ui/AppText';
 import { useMoneyFormat } from '@/features/wallets/useMoneyFormat';
-import { RATE_INPUT_DECIMALS } from '@/features/p2p/logic';
+import { p2pRateLine } from '@/features/p2p/logic';
 import { useTheme } from '@/providers/ThemeProvider';
 
-/** Amount (base currency) and rate (quote for 1 base), as on P2P requests. */
+/**
+ * Amount in base currency (currency-formatted). Rate is locked to the listing/current
+ * offer so negotiators only edit the amount.
+ */
 export function OfferTermsForm({
   base,
   quote,
   amount,
   rate,
   onAmountChange,
-  onRateChange,
   amountError,
-  rateError,
   testID,
 }: {
   base: string;
@@ -22,7 +24,8 @@ export function OfferTermsForm({
   amount: string;
   rate: string;
   onAmountChange: (value: string) => void;
-  onRateChange: (value: string) => void;
+  /** Kept for call-site compatibility; rate is not editable. */
+  onRateChange?: (value: string) => void;
   amountError?: string | null;
   rateError?: string | null;
   testID: string;
@@ -41,16 +44,15 @@ export function OfferTermsForm({
         error={amountError}
         testID={`${testID}-amount`}
       />
-      <AmountInput
-        label={`Rate (${quote} for 1 ${base})`}
-        value={rate}
-        onChangeText={onRateChange}
-        precision={RATE_INPUT_DECIMALS}
-        currencyCode={quote}
-        placeholder="0.00"
-        error={rateError}
-        testID={`${testID}-rate`}
-      />
+      <View style={{ gap: theme.spacing.xxs }} testID={`${testID}-rate`}>
+        <AppText variant="caption" tone="muted">
+          Rate ({quote} for 1 {base})
+        </AppText>
+        <AppText variant="bodyStrong">{p2pRateLine(rate, base, quote)}</AppText>
+        <AppText variant="caption" tone="secondary">
+          Rate is fixed for this negotiation. Change the amount only.
+        </AppText>
+      </View>
     </View>
   );
 }

@@ -12,6 +12,7 @@ import { RequirePinSetup } from '@/features/security/RequirePinSetup';
 import { LockScreen } from '@/features/security/lock/LockScreen';
 import { useAppLockLifecycle } from '@/features/security/lock/useAppLockLifecycle';
 import { useAppSwitcherPrivacy } from '@/features/security/lock/useAppSwitcherPrivacy';
+import { useApplyPendingReferral } from '@/features/promotions/useApplyPendingReferral';
 import { useAppBootstrap } from '@/hooks/useAppBootstrap';
 import { useSignedOutWelcomeLanding } from '@/hooks/useSignedOutWelcomeLanding';
 import { AppProviders } from '@/providers/AppProviders';
@@ -33,11 +34,14 @@ function RootNavigator() {
   useAppLockLifecycle();
   useAppSwitcherPrivacy(isAuthenticated);
   useSignedOutWelcomeLanding(ready, isAuthenticated);
+  useApplyPendingReferral();
 
   useEffect(() => {
+    // Hand off from the native splash to the in-app BrandSplash (logo + loading bar).
     SplashScreen.hideAsync().catch(() => undefined);
   }, []);
 
+  // BrandSplash runs on every cold open until bootstrap + minimum splash time complete.
   if (!ready) return <BrandSplash />;
 
   return (

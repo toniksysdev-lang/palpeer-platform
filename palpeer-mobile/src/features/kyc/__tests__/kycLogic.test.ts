@@ -50,9 +50,11 @@ describe('image preparation', () => {
   beforeEach(() => media.reset());
 
   it('rejects photos below the minimum resolution', () => {
-    expect(() => checkImageQuality({ width: 640, height: 480 }, 'document')).toThrow(
+    expect(() => checkImageQuality({ width: 320, height: 240 }, 'document')).toThrow(
       ImageQualityError,
     );
+    // VGA (640×480) is the typical Expo web-camera capture — must be accepted.
+    expect(() => checkImageQuality({ width: 640, height: 480 }, 'document')).not.toThrow();
     expect(() => checkImageQuality({ width: 640, height: 480 }, 'selfie')).not.toThrow();
   });
 
@@ -77,6 +79,48 @@ describe('image preparation', () => {
   it('keeps small-enough photos at their size', async () => {
     media.sizes['file:///ok.jpg'] = { width: 1080, height: 1440 };
     await prepareImage({ uri: 'file:///ok.jpg', width: 1080, height: 1440 }, 'selfie');
+    expect(media.resize).not.toHaveBeenCalled();
+  });
+
+  it('measures the file when the camera/picker under-reports dimensions', async () => {
+    media.sizes['file:///misreported.jpg'] = { width: 3000, height: 4000 };
+
+    const prepared = await prepareImage(
+      { uri: 'file:///misreported.jpg', width: 0, height: 0 },
+      'document',
+    );
+
+    expect(media.resize).toHaveBeenCalledWith({ height: 2000 });
+    expect(prepared).toMatchObject({
+      uri: 'file:///prepared.jpeg',
+      width: 1500,
+      height: 2000,
+      mimeType: 'image/jpeg',
+    });
+  });
+
+  it('rejects when the measured file is too small even if reported size looks fine', async () => {
+    media.sizes['file:///tiny.jpg'] = { width: 320, height: 240 };
+
+    await expect(
+      prepareImage({ uri: 'file:///tiny.jpg', width: 3000, height: 4000 }, 'document'),
+    ).rejects.toBeInstanceOf(ImageQualityError);
+  });
+
+  it('accepts a VGA webcam capture even when metadata reports 0×0', async () => {
+    media.sizes['file:///webcam.jpg'] = { width: 640, height: 480 };
+
+    const prepared = await prepareImage(
+      { uri: 'file:///webcam.jpg', width: 0, height: 0 },
+      'document',
+    );
+
+    expect(prepared).toMatchObject({
+      uri: 'file:///prepared.jpeg',
+      width: 640,
+      height: 480,
+      mimeType: 'image/jpeg',
+    });
     expect(media.resize).not.toHaveBeenCalled();
   });
 });

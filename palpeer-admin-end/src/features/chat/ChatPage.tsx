@@ -81,17 +81,28 @@ export function ChatPage() {
         cell: (row) => <span className="font-mono text-[11px]">{row.id}</span>,
       },
       {
-        id: 'order',
-        header: 'P2P order',
-        cell: (row) => (
-          <Link
-            to={`/admin/p2p/${row.p2pOrderId}?kind=order`}
-            className="font-mono text-xs text-primary hover:underline"
-            onClick={(event) => event.stopPropagation()}
-          >
-            {row.p2pOrderId}
-          </Link>
-        ),
+        id: 'scope',
+        header: 'Linked to',
+        cell: (row) =>
+          row.negotiationId ? (
+            <Link
+              to={`/admin/negotiations/${row.negotiationId}`}
+              className="font-mono text-xs text-primary hover:underline"
+              onClick={(event) => event.stopPropagation()}
+            >
+              Negotiation {row.negotiationId}
+            </Link>
+          ) : row.p2pOrderId ? (
+            <Link
+              to={`/admin/p2p/${row.p2pOrderId}?kind=order`}
+              className="font-mono text-xs text-primary hover:underline"
+              onClick={(event) => event.stopPropagation()}
+            >
+              Order {row.p2pOrderId}
+            </Link>
+          ) : (
+            <span className="text-xs text-text-muted">—</span>
+          ),
       },
       {
         id: 'participants',

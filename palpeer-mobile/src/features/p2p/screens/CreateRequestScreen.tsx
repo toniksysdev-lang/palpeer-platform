@@ -14,10 +14,12 @@ import { Input } from '@/components/ui/Input';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { PickerField, PickerSheet } from '@/features/exchange/components/PickerSheet';
+import { useMoneyFormat } from '@/features/wallets/useMoneyFormat';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useGetCurrenciesQuery } from '@/services/api/currencyApi';
 import { toAppError } from '@/services/api/errors';
 import { useCreateRequestMutation } from '@/services/api/p2pApi';
+import { useGetWalletsQuery } from '@/services/api/walletApi';
 import type { P2PSide } from '@/types/api/p2p';
 import { isPositiveMoney, toMoney } from '@/utils/money';
 
@@ -41,7 +43,9 @@ type Picker = 'base' | 'quote' | 'expiry';
 /** Fields are exactly `CreateP2PRequestDto`; there is no payment-method field (P-6). */
 export function CreateRequestScreen() {
   const theme = useTheme();
+  const { format } = useMoneyFormat();
   const currencies = useGetCurrenciesQuery();
+  const wallets = useGetWalletsQuery();
   const [create, createState] = useCreateRequestMutation();
 
   const [side, setSide] = useState<P2PSide>('BUY');
@@ -99,6 +103,10 @@ export function CreateRequestScreen() {
 
   const amountError = submitted && !isPositiveMoney(amount) ? 'Enter an amount above zero.' : null;
   const rateError = submitted && !isPositiveMoney(rate) ? 'Enter a rate above zero.' : null;
+  const baseWallet = (wallets.data ?? []).find(
+    (wallet) => wallet.currencyCode.toUpperCase() === base.code.toUpperCase(),
+  );
+  const showWalletBalance = amount.trim().length > 0;
 
   /** Picking the other side's currency swaps the pair instead of making base = quote. */
   const choose = (which: 'base' | 'quote', code: string) => {
@@ -191,6 +199,13 @@ export function CreateRequestScreen() {
         error={amountError ?? fieldErrors.amount}
         testID="p2p-create-amount"
       />
+      {showWalletBalance ? (
+        <AppText variant="caption" tone="secondary" testID="p2p-create-wallet-balance">
+          {baseWallet
+            ? `Wallet balance: ${format(baseWallet.availableBalance, base.code)}`
+            : `No ${base.code} wallet yet — create one to post a sell request.`}
+        </AppText>
+      ) : null}
       <AmountInput
         label={`Rate (${quote.code} for 1 ${base.code})`}
         value={rate}
@@ -198,6 +213,7 @@ export function CreateRequestScreen() {
         precision={RATE_INPUT_DECIMALS}
         currencyCode={quote.code}
         placeholder="0.00"
+        padOnBlur={false}
         error={rateError ?? fieldErrors.rate}
         testID="p2p-create-rate"
       />
@@ -220,7 +236,7 @@ export function CreateRequestScreen() {
       <FormAlert message={error} testID="p2p-create-error" />
       <AppText variant="caption" tone="secondary">
         Your request is shown to other Palpeer users until someone accepts it, you cancel it, or it
-        expires.
+        expires. Sell requests temporarily hold the amount from your wallet until then.
       </AppText>
 
       <PickerSheet

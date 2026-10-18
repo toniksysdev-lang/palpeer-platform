@@ -1,4 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 import { logger } from '@/utils/logger';
 
@@ -24,8 +26,11 @@ export type StoredSession = {
   email: string | null;
 };
 
+const useWebStorage = Platform.OS === 'web';
+
 async function read(key: string): Promise<string | null> {
   try {
+    if (useWebStorage) return await AsyncStorage.getItem(key);
     return await SecureStore.getItemAsync(key, OPTIONS);
   } catch (error) {
     logger.warn('Secure storage read failed', { key, error });
@@ -34,11 +39,24 @@ async function read(key: string): Promise<string | null> {
 }
 
 async function write(key: string, value: string): Promise<void> {
-  await SecureStore.setItemAsync(key, value, OPTIONS);
+  try {
+    if (useWebStorage) {
+      await AsyncStorage.setItem(key, value);
+      return;
+    }
+    await SecureStore.setItemAsync(key, value, OPTIONS);
+  } catch (error) {
+    logger.warn('Secure storage write failed', { key, error });
+    throw error;
+  }
 }
 
 async function remove(key: string): Promise<void> {
   try {
+    if (useWebStorage) {
+      await AsyncStorage.removeItem(key);
+      return;
+    }
     await SecureStore.deleteItemAsync(key, OPTIONS);
   } catch (error) {
     logger.warn('Secure storage delete failed', { key, error });

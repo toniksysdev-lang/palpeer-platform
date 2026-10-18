@@ -124,19 +124,24 @@ public class ExchangeQuoteService {
     /**
      * CONTRACT_PENDING (P7-01): buy vs sell rate selection.
      * Provisional: use sellRate for base=source, quote=target; else inverse of buyRate for opposite pair.
+     * Uses optional lookup (not thrown 404) so a missing direct pair does not mark this
+     * transaction rollback-only before the inverse rate is applied.
      */
     private RateSelection selectRate(String sourceCode, String targetCode) {
-        try {
-            ExchangeRateResponse direct =
-                    exchangeRateService.getLatest(sourceCode, targetCode, Instant.now(), RateChannel.SWAP);
-            return new RateSelection(direct.sellRate(), "SELL");
-        } catch (ResourceNotFoundException ignored) {
-            ExchangeRateResponse inverse =
-                    exchangeRateService.getLatest(targetCode, sourceCode, Instant.now(), RateChannel.SWAP);
-            // inverse: source/target = 1 / buyRate of target/source (provisional)
-            BigDecimal rate = BigDecimal.ONE.divide(inverse.buyRate(), 12, FixedDecimalMoney.FX_ROUNDING);
-            return new RateSelection(rate, "INVERSE_BUY");
-        }
+        Instant asOf = Instant.now();
+        return exchangeRateService
+                .findLatestOptional(sourceCode, targetCode, asOf, RateChannel.SWAP)
+                .map(direct -> new RateSelection(direct.sellRate(), "SELL"))
+                .orElseGet(() -> {
+                    ExchangeRateResponse inverse = exchangeRateService
+                            .findLatestOptional(targetCode, sourceCode, asOf, RateChannel.SWAP)
+                            .orElseThrow(() -> new ResourceNotFoundException(
+                                    "No exchange rate for " + sourceCode + "/" + targetCode));
+                    // inverse: source/target = 1 / buyRate of target/source (provisional)
+                    BigDecimal rate =
+                            BigDecimal.ONE.divide(inverse.buyRate(), 12, FixedDecimalMoney.FX_ROUNDING);
+                    return new RateSelection(rate, "INVERSE_BUY");
+                });
     }
 
     private ExchangeQuoteResponse toQuoteResponse(ExchangeQuote quote) {

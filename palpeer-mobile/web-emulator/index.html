@@ -240,7 +240,14 @@
           <span class="side-btn power"></span>
           <span class="side-btn vol-up"></span>
           <span class="side-btn vol-down"></span>
-          <iframe class="screen" id="frame" title="PALPEER mobile" allow="clipboard-read; clipboard-write"></iframe>
+          <!-- camera/microphone required for KYC capture inside this cross-origin Expo iframe -->
+          <iframe
+            class="screen"
+            id="frame"
+            title="PALPEER mobile"
+            allow="camera *; microphone *; clipboard-read *; clipboard-write *"
+            allowfullscreen
+          ></iframe>
         </div>
       </main>
     </div>

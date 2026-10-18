@@ -11,15 +11,18 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Kuda NGN rails — virtual account collections for funding, SINGLE_FUND_TRANSFER for withdrawals.
+ * Kept alongside Korapay; used when Korapay is disabled ({@link Order} 2).
  */
 @Slf4j
 @Component
+@Order(2)
 @RequiredArgsConstructor
 public class KudaPaymentRail implements PaymentRailProvider {
 

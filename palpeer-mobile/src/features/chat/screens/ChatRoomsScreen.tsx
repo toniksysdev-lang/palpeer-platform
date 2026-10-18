@@ -39,13 +39,15 @@ export function ChatRoomsScreen() {
       <EmptyState
         icon={MessageCircle}
         title="No conversations yet"
-        message="Open a P2P order and tap Message to talk to the other person."
+        message="Open a P2P negotiation or order and tap Message to talk to the other person."
       />
     );
   } else {
     body = rooms.data.map((room) => {
       const order = orders.data?.find((item) => item.id === room.p2pOrderId);
-      const title = orderPairLabel(order);
+      const title = room.negotiationId
+        ? 'Negotiation chat'
+        : orderPairLabel(order);
       return (
         <Card
           key={room.id}

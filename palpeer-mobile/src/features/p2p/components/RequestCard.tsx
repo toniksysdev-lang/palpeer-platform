@@ -10,6 +10,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import type { P2PRequestResponse } from '@/types/api/p2p';
 import { formatDateTime } from '@/utils/datetime';
 
+import { ExpiryCountdown } from './ExpiryCountdown';
 import { effectiveStatus, p2pRateLine, sideLabel } from '../logic';
 
 export function RequestCard({
@@ -30,6 +31,8 @@ export function RequestCard({
   const { baseCurrencyCode: base, quoteCurrencyCode: quote } = request;
   const label = sideLabel(request.side, base, quote, own ? 'self' : 'other');
   const amount = format(request.amount, base);
+  const status = effectiveStatus(request, now);
+  const showCountdown = status === 'OPEN' && !!request.expiresAt;
 
   return (
     <Card
@@ -53,11 +56,19 @@ export function RequestCard({
           </AppText>
           <AppText variant="h3">{amount}</AppText>
           <AppText tone="secondary">{p2pRateLine(request.rate, base, quote)}</AppText>
-          <AppText variant="caption" tone="muted">
-            {formatDateTime(request.createdAt)}
-          </AppText>
+          {showCountdown ? (
+            <ExpiryCountdown
+              expiresAt={request.expiresAt}
+              active
+              testID={`p2p-request-expiry-${request.id}`}
+            />
+          ) : (
+            <AppText variant="caption" tone="muted">
+              {formatDateTime(request.createdAt)}
+            </AppText>
+          )}
         </View>
-        {showStatus ? <StatusBadge status={effectiveStatus(request, now)} /> : null}
+        {showStatus ? <StatusBadge status={status} /> : null}
         <Icon icon={ChevronRight} color={theme.colors.textMuted} />
       </View>
     </Card>

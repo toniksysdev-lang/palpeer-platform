@@ -71,7 +71,7 @@ describe('security questions and PIN prompt', () => {
     await fireEvent.press(screen.getByTestId('questions-save'));
 
     await enterPin('pin-prompt-entry', '0000');
-    expect(await screen.findByText("That PIN isn't right.")).toBeTruthy();
+    expect(await screen.findByText('Wrong PIN, try again.')).toBeTruthy();
     expect(calls.some((call) => call.method === 'PUT')).toBe(false);
 
     await enterPin('pin-prompt-entry', '1234');

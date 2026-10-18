@@ -20,6 +20,8 @@ type Props = {
   appearance?: 'outlined' | 'elevated';
   placeholder?: string;
   autoFocus?: boolean;
+  /** When false, do not pad trailing zeros on blur (rates). Default true for money amounts. */
+  padOnBlur?: boolean;
   testID?: string;
 };
 
@@ -37,11 +39,38 @@ export function sanitizeAmount(input: string, precision: number): string {
   return `${integer === '' ? '0' : integer}.${fraction}`;
 }
 
+/**
+ * Display-only currency formatting (thousand separators).
+ * When `padFraction` is true (blurred field), always shows fixed decimals (`1,234.00`).
+ */
+export function formatAmountDisplay(
+  raw: string,
+  precision: number,
+  options: { padFraction?: boolean } = {},
+): string {
+  if (!raw) return '';
+  const padFraction = options.padFraction === true && precision > 0;
+  const trailingDot = precision > 0 && raw.endsWith('.');
+  const sanitized = sanitizeAmount(raw, precision);
+  if (!sanitized) return trailingDot ? '0.' : '';
+  const [intPart = '0', fracPart = ''] = sanitized.split('.');
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  if (trailingDot && !padFraction) return `${grouped}.`;
+  if (precision <= 0) return grouped;
+  // Only pad trailing zeros when explicitly requested (blurred money fields).
+  // While typing (or for rates), show exactly what the user entered.
+  if (padFraction) {
+    return `${grouped}.${fracPart.padEnd(precision, '0').slice(0, precision)}`;
+  }
+  if (sanitized.includes('.')) {
+    return `${grouped}.${fracPart}`;
+  }
+  return grouped;
+}
+
 const AMOUNT_MAX_LENGTH = 32;
 
-/**
- * Amount field driven by the shared in-app number pad (decimal key when precision &gt; 0).
- */
+/** Amount field driven by the shared in-app number pad (decimal key when precision > 0). */
 export function AmountInput({
   label,
   value,
@@ -54,6 +83,7 @@ export function AmountInput({
   appearance = 'outlined',
   placeholder = '0',
   autoFocus = false,
+  padOnBlur = true,
   testID,
 }: Props) {
   const theme = useTheme();
@@ -112,11 +142,14 @@ export function AmountInput({
           },
         ]}
       >
-        <AppText
-          tone={value ? 'primary' : 'muted'}
-          style={[styles.value, theme.typography.body]}
-        >
-          {value || placeholder}
+        <AppText tone={value ? 'primary' : 'muted'} style={[styles.value, theme.typography.body]}>
+          {value
+            ? formatAmountDisplay(value, precision, { padFraction: padOnBlur && !active })
+            : placeholder.includes('.')
+              ? placeholder
+              : precision > 0 && padOnBlur
+                ? `0.${''.padEnd(Math.min(precision, 2), '0')}`
+                : placeholder}
         </AppText>
         {currencyCode ? (
           <AppText variant="bodyStrong" tone="secondary">

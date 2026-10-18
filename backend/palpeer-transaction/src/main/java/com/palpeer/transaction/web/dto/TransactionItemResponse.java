@@ -13,6 +13,8 @@ public record TransactionItemResponse(
         TransactionActivityType type,
         UUID id,
         UUID userId,
+        /** Owner email when resolved (admin lists); null on owner self-service views. */
+        String userEmail,
         String status,
         UUID walletId,
         UUID secondaryWalletId,
@@ -26,4 +28,23 @@ public record TransactionItemResponse(
         Instant createdAt,
         Instant updatedAt
 ) {
+    public TransactionItemResponse withUserEmail(String email) {
+        return new TransactionItemResponse(
+                type,
+                id,
+                userId,
+                email,
+                status,
+                walletId,
+                secondaryWalletId,
+                currencyCode,
+                secondaryCurrencyCode,
+                amount,
+                secondaryAmount,
+                appliedRate,
+                failureReason,
+                ledgerEntryIds,
+                createdAt,
+                updatedAt);
+    }
 }

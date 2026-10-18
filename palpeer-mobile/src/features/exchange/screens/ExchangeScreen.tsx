@@ -52,11 +52,12 @@ export function ExchangeScreen() {
 
   const [sourceId, setSourceId] = useState<string | null>(null);
   const [targetId, setTargetId] = useState<string | null>(null);
-  const [fixedSide, setFixedSide] = useState<ExchangeFixedSide>('SOURCE');
   const [amount, setAmount] = useState('');
   const [picker, setPicker] = useState<'source' | 'target' | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [appliedFrom, setAppliedFrom] = useState<string | undefined>(undefined);
+  /** Receive side is display-only; users always fix the send amount. */
+  const fixedSide: ExchangeFixedSide = 'SOURCE';
 
   // Opening from a wallet's Exchange button preselects that wallet, even if the tab was used before.
   if (from && from !== appliedFrom) {
@@ -139,9 +140,9 @@ export function ExchangeScreen() {
     );
   }
 
-  const sendValue = fixedSide === 'SOURCE' ? amount : (quote?.sourceAmount ?? '');
-  const receiveValue = fixedSide === 'TARGET' ? amount : (quote?.targetAmount ?? '');
-  const sourceAmount = fixedSide === 'SOURCE' ? (validAmount ? amount : null) : quote?.sourceAmount;
+  const sendValue = amount;
+  const receiveValue = quote?.targetAmount ?? '';
+  const sourceAmount = validAmount ? amount : null;
   // Mirrors the backend's 422 at execute; the backend still decides.
   const overBalance =
     !!sourceAmount && compareMoney(sourceAmount, source.availableBalance) > 0
@@ -177,9 +178,8 @@ export function ExchangeScreen() {
     setTargetId(source.id);
   };
 
-  const editSide = (side: ExchangeFixedSide, text: string) => {
+  const editSendAmount = (text: string) => {
     setPreviewError(null);
-    setFixedSide(side);
     setAmount(text);
   };
 
@@ -222,10 +222,10 @@ export function ExchangeScreen() {
         <AmountInput
           label="You send"
           value={sendValue}
-          onChangeText={(text) => editSide('SOURCE', text)}
+          onChangeText={editSendAmount}
           precision={precision(source.currencyCode) ?? 2}
           currencyCode={source.currencyCode}
-          placeholder={fixedSide === 'TARGET' && calculating ? 'Calculating…' : '0.00'}
+          placeholder="0.00"
           error={overBalance}
           testID="exchange-send"
         />
@@ -252,10 +252,11 @@ export function ExchangeScreen() {
         <AmountInput
           label="You receive"
           value={receiveValue}
-          onChangeText={(text) => editSide('TARGET', text)}
+          onChangeText={() => {}}
           precision={precision(target.currencyCode) ?? 2}
           currencyCode={target.currencyCode}
-          placeholder={fixedSide === 'SOURCE' && calculating ? 'Calculating…' : '0.00'}
+          placeholder={calculating ? 'Calculating…' : '0.00'}
+          editable={false}
           testID="exchange-receive"
         />
       </View>

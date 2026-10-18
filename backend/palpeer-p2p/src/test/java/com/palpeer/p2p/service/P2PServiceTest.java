@@ -9,6 +9,10 @@ import static org.mockito.Mockito.when;
 
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.currency.service.CurrencyService;
+import com.palpeer.ledger.domain.LedgerEntry;
+import com.palpeer.ledger.domain.LedgerEntryType;
+import com.palpeer.ledger.service.LedgerPostingRequest;
+import com.palpeer.ledger.service.LedgerService;
 import com.palpeer.p2p.domain.P2POrder;
 import com.palpeer.p2p.domain.P2PRequest;
 import com.palpeer.p2p.domain.P2PSide;
@@ -18,6 +22,8 @@ import com.palpeer.p2p.repository.P2PRequestRepository;
 import com.palpeer.p2p.web.dto.CreateP2PRequestDto;
 import com.palpeer.p2p.web.dto.P2POrderResponse;
 import com.palpeer.p2p.web.dto.P2POrderSummaryResponse;
+import com.palpeer.wallet.domain.Wallet;
+import com.palpeer.wallet.repository.WalletRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -38,6 +44,8 @@ class P2PServiceTest {
     @Mock private P2POrderRepository p2POrderRepository;
     @Mock private CurrencyService currencyService;
     @Mock private P2PRateBoundsService p2PRateBoundsService;
+    @Mock private WalletRepository walletRepository;
+    @Mock private LedgerService ledgerService;
     @Mock private com.palpeer.common.audit.AuditRecorder auditRecorder;
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
@@ -56,12 +64,14 @@ class P2PServiceTest {
     void create_persistsOpenRequest() {
         when(p2PRequestRepository.save(any(P2PRequest.class))).thenAnswer(inv -> {
             P2PRequest r = inv.getArgument(0);
-            r.setId(UUID.randomUUID());
+            if (r.getId() == null) {
+                r.setId(UUID.randomUUID());
+            }
             return r;
         });
 
         var response = p2PService.create(ownerId, new CreateP2PRequestDto(
-                P2PSide.SELL, "USD", "NGN",
+                P2PSide.BUY, "USD", "NGN",
                 new BigDecimal("100.00"), new BigDecimal("1500.00"),
                 null, "cash"));
 
@@ -69,11 +79,55 @@ class P2PServiceTest {
         assertThat(response.baseCurrencyCode()).isEqualTo("USD");
         verify(currencyService).requireExists("USD");
         verify(currencyService).requireExists("NGN");
+        verify(ledgerService, never()).post(any());
     }
 
     @Test
-    void accept_createsOrderAndMarksAccepted() {
+    void create_sellPlacesHoldOnBaseWallet() {
+        UUID walletId = UUID.randomUUID();
+        UUID holdId = UUID.randomUUID();
+        Wallet wallet = new Wallet();
+        wallet.setId(walletId);
+        wallet.setUserId(ownerId);
+        wallet.setCurrencyCode("USD");
+        when(walletRepository.findByUserIdAndCurrencyCodeIgnoreCase(ownerId, "USD"))
+                .thenReturn(Optional.of(wallet));
+        when(p2PRequestRepository.save(any(P2PRequest.class))).thenAnswer(inv -> {
+            P2PRequest r = inv.getArgument(0);
+            if (r.getId() == null) {
+                r.setId(UUID.randomUUID());
+            }
+            return r;
+        });
+        when(ledgerService.post(any(LedgerPostingRequest.class))).thenAnswer(inv -> {
+            LedgerEntry entry = new LedgerEntry();
+            entry.setId(holdId);
+            return entry;
+        });
+
+        var response = p2PService.create(ownerId, new CreateP2PRequestDto(
+                P2PSide.SELL, "USD", "NGN",
+                new BigDecimal("100.00"), new BigDecimal("1500.00"),
+                null, null));
+
+        assertThat(response.status()).isEqualTo(P2PStatus.OPEN);
+        ArgumentCaptor<LedgerPostingRequest> post = ArgumentCaptor.forClass(LedgerPostingRequest.class);
+        verify(ledgerService).post(post.capture());
+        assertThat(post.getValue().entryType()).isEqualTo(LedgerEntryType.HOLD);
+        assertThat(post.getValue().walletId()).isEqualTo(walletId);
+        assertThat(post.getValue().amount()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    void accept_settlesWalletsAndMarksCompleted() {
         P2PRequest request = openRequest();
+        UUID sellerBaseId = UUID.randomUUID();
+        UUID buyerBaseId = UUID.randomUUID();
+        UUID buyerQuoteId = UUID.randomUUID();
+        UUID sellerQuoteId = UUID.randomUUID();
+        request.setHoldWalletId(sellerBaseId);
+        request.setHoldLedgerEntryId(UUID.randomUUID());
+
         when(p2PRequestRepository.findByIdForUpdate(request.getId())).thenReturn(Optional.of(request));
         when(p2PRequestRepository.save(any(P2PRequest.class))).thenAnswer(inv -> inv.getArgument(0));
         when(p2POrderRepository.save(any(P2POrder.class))).thenAnswer(inv -> {
@@ -81,14 +135,43 @@ class P2PServiceTest {
             o.setId(UUID.randomUUID());
             return o;
         });
+        when(currencyService.getByCode("NGN"))
+                .thenReturn(new com.palpeer.currency.web.dto.CurrencyResponse(
+                        UUID.randomUUID(), "NGN", "₦", 2));
+        when(walletRepository.findByUserIdAndCurrencyCodeIgnoreCase(ownerId, "USD"))
+                .thenReturn(Optional.of(wallet(sellerBaseId, ownerId, "USD")));
+        when(walletRepository.findByUserIdAndCurrencyCodeIgnoreCase(acceptorId, "USD"))
+                .thenReturn(Optional.of(wallet(buyerBaseId, acceptorId, "USD")));
+        when(walletRepository.findByUserIdAndCurrencyCodeIgnoreCase(acceptorId, "NGN"))
+                .thenReturn(Optional.of(wallet(buyerQuoteId, acceptorId, "NGN")));
+        when(walletRepository.findByUserIdAndCurrencyCodeIgnoreCase(ownerId, "NGN"))
+                .thenReturn(Optional.of(wallet(sellerQuoteId, ownerId, "NGN")));
+        when(ledgerService.post(any(LedgerPostingRequest.class))).thenAnswer(inv -> {
+            LedgerEntry entry = new LedgerEntry();
+            entry.setId(UUID.randomUUID());
+            return entry;
+        });
 
         P2POrderResponse order = p2PService.accept(acceptorId, request.getId());
 
-        assertThat(order.status()).isEqualTo(P2PStatus.ACCEPTED);
+        assertThat(order.status()).isEqualTo(P2PStatus.COMPLETED);
         assertThat(order.requesterId()).isEqualTo(ownerId);
         assertThat(order.acceptorId()).isEqualTo(acceptorId);
-        assertThat(request.getStatus()).isEqualTo(P2PStatus.ACCEPTED);
-        verify(eventPublisher).publishEvent(new P2PRequestClosedEvent(request.getId(), P2PStatus.ACCEPTED));
+        assertThat(request.getStatus()).isEqualTo(P2PStatus.COMPLETED);
+        verify(eventPublisher).publishEvent(new P2PRequestClosedEvent(request.getId(), P2PStatus.COMPLETED));
+
+        ArgumentCaptor<LedgerPostingRequest> posts = ArgumentCaptor.forClass(LedgerPostingRequest.class);
+        verify(ledgerService, org.mockito.Mockito.atLeast(4)).post(posts.capture());
+        assertThat(posts.getAllValues().stream().map(LedgerPostingRequest::entryType).toList())
+                .contains(LedgerEntryType.RELEASE, LedgerEntryType.DEBIT, LedgerEntryType.CREDIT);
+    }
+
+    private static Wallet wallet(UUID id, UUID userId, String currency) {
+        Wallet wallet = new Wallet();
+        wallet.setId(id);
+        wallet.setUserId(userId);
+        wallet.setCurrencyCode(currency);
+        return wallet;
     }
 
     @Test

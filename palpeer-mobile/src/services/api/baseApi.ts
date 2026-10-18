@@ -35,6 +35,7 @@ export const TAG_TYPES = [
   'Card',
   'Notification',
   'Promotion',
+  'MarketingAdvert',
   'Referral',
   'Bonus',
 ] as const;

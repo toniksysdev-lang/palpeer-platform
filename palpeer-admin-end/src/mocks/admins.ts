@@ -6,12 +6,14 @@ const operators: AdminOperator[] = [
   {
     id: 'admin-1',
     userId: '00000000-0000-4000-8000-000000000001',
+    email: 'admin@palpeer.local',
     enabled: true,
     roleCodes: ['SUPER_ADMIN'],
   },
   {
     id: 'admin-2',
     userId: 'u-3',
+    email: 'ops@palpeer.local',
     enabled: true,
     roleCodes: ['SUPER_ADMIN'],
   },

@@ -5,6 +5,10 @@ import com.palpeer.common.exception.ResourceNotFoundException;
 import com.palpeer.currency.service.CurrencyService;
 import com.palpeer.ledger.domain.LedgerEntry;
 import com.palpeer.ledger.repository.LedgerEntryRepository;
+import com.palpeer.profile.domain.Profile;
+import com.palpeer.profile.repository.ProfileRepository;
+import com.palpeer.user.domain.User;
+import com.palpeer.user.repository.UserRepository;
 import com.palpeer.wallet.domain.Wallet;
 import com.palpeer.wallet.repository.WalletRepository;
 import com.palpeer.wallet.web.dto.CreateWalletRequest;
@@ -15,7 +19,12 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,6 +40,8 @@ public class WalletService {
     private final WalletRepository walletRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
     private final CurrencyService currencyService;
+    private final UserRepository userRepository;
+    private final ProfileRepository profileRepository;
 
     @Transactional
     public WalletResponse create(UUID userId, CreateWalletRequest request) {
@@ -73,7 +84,7 @@ public class WalletService {
                 .map(this::toTransactionResponse);
     }
 
-    /** Admin inventory — no ownership check. */
+    /** Admin inventory — no ownership check; includes owner email/name. */
     @Transactional(readOnly = true)
     public Page<WalletResponse> adminList(UUID userId, String currencyCode, Pageable pageable) {
         Specification<Wallet> spec = (root, query, cb) -> {
@@ -86,15 +97,17 @@ public class WalletService {
             }
             return cb.and(predicates.toArray(Predicate[]::new));
         };
-        return walletRepository.findAll(spec, pageable).map(this::toWalletResponse);
+        Page<Wallet> page = walletRepository.findAll(spec, pageable);
+        OwnerLookup owners = loadOwners(page.getContent());
+        return page.map(wallet -> toAdminWalletResponse(wallet, owners));
     }
 
-    /** Admin inventory — no ownership check. */
+    /** Admin inventory — no ownership check; includes owner email/name. */
     @Transactional(readOnly = true)
     public WalletResponse adminGet(UUID walletId) {
         Wallet wallet = walletRepository.findById(walletId)
                 .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
-        return toWalletResponse(wallet);
+        return toAdminWalletResponse(wallet, loadOwners(List.of(wallet)));
     }
 
     /** Admin inventory — ledger txs for any wallet. */
@@ -122,6 +135,36 @@ public class WalletService {
         );
     }
 
+    private WalletResponse toAdminWalletResponse(Wallet wallet, OwnerLookup owners) {
+        User user = owners.users().get(wallet.getUserId());
+        Profile profile = owners.profiles().get(wallet.getUserId());
+        return new WalletResponse(
+                wallet.getId(),
+                wallet.getUserId(),
+                wallet.getCurrencyCode(),
+                wallet.getAvailableBalance(),
+                wallet.getPendingBalance(),
+                user == null ? null : user.getEmail(),
+                profile == null ? null : profile.getFirstName(),
+                profile == null ? null : profile.getLastName()
+        );
+    }
+
+    private OwnerLookup loadOwners(List<Wallet> wallets) {
+        Set<UUID> userIds = wallets.stream()
+                .map(Wallet::getUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (userIds.isEmpty()) {
+            return new OwnerLookup(Map.of(), Map.of());
+        }
+        Map<UUID, User> users = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+        Map<UUID, Profile> profiles = profileRepository.findByUserIdIn(userIds).stream()
+                .collect(Collectors.toMap(Profile::getUserId, Function.identity(), (a, b) -> a));
+        return new OwnerLookup(users, profiles);
+    }
+
     private LedgerTransactionResponse toTransactionResponse(LedgerEntry entry) {
         return new LedgerTransactionResponse(
                 entry.getId(),
@@ -136,5 +179,8 @@ public class WalletService {
                 entry.getDescription(),
                 entry.getCreatedAt()
         );
+    }
+
+    private record OwnerLookup(Map<UUID, User> users, Map<UUID, Profile> profiles) {
     }
 }

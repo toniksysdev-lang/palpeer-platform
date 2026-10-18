@@ -16,7 +16,9 @@ import com.palpeer.auth.web.dto.RefreshTokenRequest;
 import com.palpeer.auth.web.dto.RegisterRequest;
 import com.palpeer.auth.web.dto.RegisterResponse;
 import com.palpeer.auth.web.dto.SessionResponse;
+import com.palpeer.auth.web.dto.SuspendAccountRequest;
 import com.palpeer.common.api.ApiResponse;
+import com.palpeer.common.exception.BusinessException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,6 +27,8 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,8 +36,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.HtmlUtils;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -59,7 +65,66 @@ public class AuthController {
     @PostMapping("/google")
     @Operation(summary = "Sign in or sign up with a Google ID token")
     public ApiResponse<AuthTokensResponse> google(@Valid @RequestBody GoogleAuthRequest request) {
-        return ApiResponse.ok(authService.loginWithGoogle(request.idToken()));
+        return ApiResponse.ok(authService.loginWithGoogle(request.idToken(), request.device()));
+    }
+
+    @GetMapping(value = "/account-suspend", produces = MediaType.TEXT_HTML_VALUE)
+    @Operation(summary = "HTML form for emergency account suspend (token from new-device email)")
+    public ResponseEntity<String> suspendAccountForm(@RequestParam("token") String token) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_HTML)
+                .body(authService.suspendAccountFormHtml(token));
+    }
+
+    @PostMapping(value = "/account-suspend", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Suspend account with email token + email/password/PIN")
+    public ApiResponse<Void> suspendAccountJson(@Valid @RequestBody SuspendAccountRequest request) {
+        authService.suspendAccount(request);
+        return ApiResponse.ok("Account suspended", null);
+    }
+
+    @PostMapping(
+            value = "/account-suspend",
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            produces = MediaType.TEXT_HTML_VALUE)
+    @Operation(summary = "Suspend account from the emailed HTML form")
+    public ResponseEntity<String> suspendAccountFormSubmit(
+            @RequestParam("token") String token,
+            @RequestParam("email") String email,
+            @RequestParam("password") String password,
+            @RequestParam("pin") String pin) {
+        try {
+            authService.suspendAccount(new SuspendAccountRequest(token, email, password, pin));
+            return ResponseEntity.ok()
+                    .contentType(MediaType.TEXT_HTML)
+                    .body(suspendResultHtml(
+                            true,
+                            "Account suspended",
+                            "Your PALPEER account is suspended and all sessions were ended."
+                                    + " Contact support if you need it reactivated."));
+        } catch (BusinessException ex) {
+            return ResponseEntity.status(ex.getStatus())
+                    .contentType(MediaType.TEXT_HTML)
+                    .body(suspendResultHtml(false, "Could not suspend", ex.getMessage()));
+        }
+    }
+
+    private static String suspendResultHtml(boolean ok, String title, String message) {
+        String color = ok ? "#3DD68C" : "#F5A623";
+        return """
+                <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <title>%s</title>
+                <style>body{font-family:sans-serif;background:#0F1A14;color:#F4F6F4;padding:24px}
+                .card{max-width:420px;margin:40px auto;background:#14201A;border:1px solid #24352C;
+                border-radius:12px;padding:24px}h1{color:%s;font-size:1.2rem}</style></head>
+                <body><div class="card"><h1>%s</h1><p>%s</p></div></body></html>
+                """
+                .formatted(
+                        HtmlUtils.htmlEscape(title),
+                        color,
+                        HtmlUtils.htmlEscape(title),
+                        HtmlUtils.htmlEscape(message));
     }
 
     @PostMapping("/logout")

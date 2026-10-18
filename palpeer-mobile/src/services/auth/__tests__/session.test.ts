@@ -94,4 +94,23 @@ describe('sessionManager', () => {
     expect(sessionManager.getAccessToken()).toBeNull();
     expect(await secureStorage.loadSession()).toBeNull();
   });
+
+  it('dismisses to login without clearing the parked biometric session', async () => {
+    await sessionManager.start(
+      { userId: 'u-1', accessToken: 'access-0', refreshToken: 'refresh-0', tokenType: 'Bearer' },
+      'ada@example.com',
+    );
+    await secureStorage.setBiometricUserId('u-1');
+
+    await sessionManager.dismissToLogin();
+
+    expect(listener.onSignedOut).toHaveBeenCalledTimes(1);
+    expect(sessionManager.getAccessToken()).toBeNull();
+    expect(await secureStorage.loadSession()).toEqual({
+      refreshToken: 'refresh-0',
+      userId: 'u-1',
+      email: 'ada@example.com',
+    });
+    expect(await secureStorage.getBiometricUserId()).toBe('u-1');
+  });
 });

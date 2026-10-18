@@ -12,3 +12,14 @@ export type NotificationSummary = {
   failureReason?: string | null;
   createdAt: string;
 };
+
+export type BroadcastPushInput = {
+  title: string;
+  body: string;
+  category?: string;
+};
+
+export type BroadcastPushResult = {
+  recipientCount: number;
+  title: string;
+};

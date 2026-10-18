@@ -1,5 +1,9 @@
 import type { SpringPage } from '@/types/admin';
-import type { NotificationSummary } from '@/types/notifications';
+import type {
+  BroadcastPushInput,
+  BroadcastPushResult,
+  NotificationSummary,
+} from '@/types/notifications';
 
 const now = Date.now();
 
@@ -61,4 +65,23 @@ export function mockListNotifications(params?: {
     params?.page ?? 0,
     params?.size ?? 20,
   );
+}
+
+export function mockBroadcastPushMessage(input: BroadcastPushInput): BroadcastPushResult {
+  const now = new Date().toISOString();
+  catalog.unshift({
+    id: `ntf-broadcast-${Date.now()}`,
+    title: input.title.trim(),
+    body: input.body.trim(),
+    category: input.category?.trim() || 'ADMIN',
+    channel: 'PUSH',
+    status: 'SENT',
+    referenceType: 'ADMIN_BROADCAST',
+    referenceId: null,
+    readAt: null,
+    sentAt: now,
+    failureReason: null,
+    createdAt: now,
+  });
+  return { recipientCount: 42, title: input.title.trim() };
 }

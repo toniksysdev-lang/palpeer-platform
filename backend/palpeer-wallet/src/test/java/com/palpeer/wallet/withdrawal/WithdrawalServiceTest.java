@@ -12,11 +12,14 @@ import com.palpeer.ledger.domain.LedgerEntry;
 import com.palpeer.ledger.domain.LedgerEntryType;
 import com.palpeer.ledger.service.LedgerPostingRequest;
 import com.palpeer.ledger.service.LedgerService;
+import com.palpeer.profile.repository.ProfileRepository;
 import com.palpeer.user.domain.User;
 import com.palpeer.user.repository.UserRepository;
 import com.palpeer.wallet.domain.Wallet;
 import com.palpeer.wallet.funding.MoneyMovementStatus;
 import com.palpeer.wallet.provider.PaymentRailRouter;
+import com.palpeer.wallet.provider.apaylo.ApayloProperties;
+import com.palpeer.wallet.provider.korapay.KorapayProperties;
 import com.palpeer.wallet.repository.WalletRepository;
 import com.palpeer.wallet.withdrawal.dto.CreateWithdrawalRequest;
 import com.palpeer.wallet.withdrawal.dto.WithdrawalTransactionResponse;
@@ -38,9 +41,16 @@ class WithdrawalServiceTest {
     @Mock private WithdrawalTransactionRepository withdrawalTransactionRepository;
     @Mock private WalletRepository walletRepository;
     @Mock private UserRepository userRepository;
+    @Mock private ProfileRepository profileRepository;
     @Mock private LedgerService ledgerService;
     @Mock private com.palpeer.common.audit.AuditRecorder auditRecorder;
     @Mock private PaymentRailRouter paymentRailRouter;
+    @Mock private KorapayProperties korapayProperties;
+    @Mock private ApayloProperties apayloProperties;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
+    @Mock private com.palpeer.wallet.service.PoolLiquidityGuard poolLiquidityGuard;
+    @Mock private com.palpeer.wallet.service.PoolFundThresholdService poolFundThresholdService;
+    @Mock private com.palpeer.wallet.service.WithdrawalUnverifiedLimitService withdrawalUnverifiedLimitService;
 
     @InjectMocks private WithdrawalService withdrawalService;
 

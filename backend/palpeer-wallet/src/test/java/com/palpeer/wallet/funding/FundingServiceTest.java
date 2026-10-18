@@ -14,11 +14,13 @@ import com.palpeer.ledger.domain.LedgerEntry;
 import com.palpeer.ledger.domain.LedgerEntryType;
 import com.palpeer.ledger.service.LedgerPostingRequest;
 import com.palpeer.ledger.service.LedgerService;
+import com.palpeer.profile.repository.ProfileRepository;
 import com.palpeer.user.repository.UserRepository;
 import com.palpeer.wallet.domain.Wallet;
 import com.palpeer.wallet.funding.dto.CreateFundingRequest;
 import com.palpeer.wallet.funding.dto.FundingTransactionResponse;
 import com.palpeer.wallet.provider.PaymentRailRouter;
+import com.palpeer.wallet.provider.apaylo.ApayloProperties;
 import com.palpeer.wallet.repository.WalletRepository;
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -37,9 +39,12 @@ class FundingServiceTest {
     @Mock private FundingTransactionRepository fundingTransactionRepository;
     @Mock private WalletRepository walletRepository;
     @Mock private UserRepository userRepository;
+    @Mock private ProfileRepository profileRepository;
     @Mock private LedgerService ledgerService;
     @Mock private com.palpeer.common.audit.AuditRecorder auditRecorder;
     @Mock private PaymentRailRouter paymentRailRouter;
+    @Mock private ApayloProperties apayloProperties;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @InjectMocks private FundingService fundingService;
 

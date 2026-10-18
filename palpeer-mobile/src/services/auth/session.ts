@@ -114,6 +114,16 @@ export const sessionManager = {
   },
 
   /**
+   * Leaves the stored refresh token + biometric binding so the login screen can offer
+   * fingerprint / Face ID sign-in. Clears only the in-memory access token and Redux session.
+   * Use from the lock screen "Sign in with password" path — not for a full sign-out.
+   */
+  async dismissToLogin(): Promise<void> {
+    accessToken = null;
+    listener?.onSignedOut();
+  },
+
+  /**
    * `reason` is set when the backend already revoked this session's refresh token (password
    * change, "sign out everywhere"); the logout call is still made and is harmless.
    */

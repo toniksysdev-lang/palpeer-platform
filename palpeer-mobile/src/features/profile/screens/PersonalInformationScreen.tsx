@@ -1,6 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { router } from 'expo-router';
-import { Calendar } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { View } from 'react-native';
@@ -9,7 +8,6 @@ import { Screen } from '@/components/layout/Screen';
 import { StackHeader } from '@/components/layout/StackHeader';
 import { FormAlert } from '@/components/feedback/FormAlert';
 import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
 import {
@@ -21,6 +19,9 @@ import { useToast } from '@/providers/ToastProvider';
 import { toAppError } from '@/services/api/errors';
 import { useUpdateMyProfileMutation } from '@/services/api/profileApi';
 
+import { AddressAutocomplete } from '../AddressAutocomplete';
+import type { StructuredAddress } from '../addressLookup';
+import { DateOfBirthField } from '../DateOfBirthField';
 import {
   MONTHLY_TX_OPTIONS,
   PROFILE_COUNTRIES,
@@ -29,6 +30,7 @@ import {
   optionTitle,
 } from '../profileOptions';
 import {
+  defaultDateOfBirth,
   personalInfoSchema,
   profileToFormDefaults,
   toUpdateProfileRequest,
@@ -50,6 +52,8 @@ export function PersonalInformationScreen() {
   const [update, { isLoading: saving }] = useUpdateMyProfileMutation();
   const [sheet, setSheet] = useState<SheetKey>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const defaultDobDate = useMemo(() => defaultDateOfBirth(15), []);
+  const today = useMemo(() => new Date(), []);
 
   const { control, handleSubmit, reset, setValue, setError } = useForm<PersonalInfoForm>({
     resolver: zodResolver(personalInfoSchema),
@@ -68,6 +72,27 @@ export function PersonalInformationScreen() {
     () => STATES_BY_COUNTRY[country] ?? [{ key: 'N/A', title: 'Not applicable' }],
     [country],
   );
+
+  const applyStructuredAddress = (address: StructuredAddress) => {
+    setValue('addressLine1', address.addressLine1, { shouldValidate: true, shouldDirty: true });
+    setValue('addressLine2', address.addressLine2, { shouldValidate: true, shouldDirty: true });
+    setValue('city', address.city, { shouldValidate: true, shouldDirty: true });
+    setValue('postalCode', address.postalCode, { shouldValidate: true, shouldDirty: true });
+    if (address.countryCode) {
+      setValue('countryOfResidence', address.countryCode, {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
+    }
+    if (address.stateTerritory) {
+      setValue('stateTerritory', address.stateTerritory, {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
+    } else if (address.countryCode && address.countryCode !== country) {
+      setValue('stateTerritory', '', { shouldValidate: false, shouldDirty: true });
+    }
+  };
 
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null);
@@ -173,18 +198,13 @@ export function PersonalInformationScreen() {
         control={control}
         name="dateOfBirth"
         render={({ field, fieldState }) => (
-          <Input
-            appearance="elevated"
+          <DateOfBirthField
             label="Date of Birth"
-            placeholder="dd/mm/yyyy"
             value={field.value}
-            onChangeText={field.onChange}
-            onBlur={field.onBlur}
+            onChange={field.onChange}
             error={fieldState.error?.message}
-            left={<Icon icon={Calendar} color={theme.colors.textMuted} />}
-            keyboardType="numbers-and-punctuation"
-            autoComplete="birthdate-full"
-            maxLength={10}
+            defaultPickerDate={defaultDobDate}
+            maximumDate={today}
             testID="personal-dob"
           />
         )}
@@ -225,16 +245,15 @@ export function PersonalInformationScreen() {
         control={control}
         name="addressLine1"
         render={({ field, fieldState }) => (
-          <Input
-            appearance="elevated"
+          <AddressAutocomplete
             label="Address line 1"
-            placeholder="Address line 1"
             value={field.value}
             onChangeText={field.onChange}
             onBlur={field.onBlur}
             error={fieldState.error?.message}
-            autoComplete="address-line1"
-            textContentType="streetAddressLine1"
+            countryCode={country}
+            onPick={applyStructuredAddress}
+            onPickupMessage={(message, type) => toast.show({ type, title: message })}
             testID="personal-address1"
           />
         )}

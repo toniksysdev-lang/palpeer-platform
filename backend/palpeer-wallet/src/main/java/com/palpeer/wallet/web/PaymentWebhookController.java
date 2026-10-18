@@ -7,6 +7,8 @@ import com.palpeer.common.webhook.WebhookSignatures;
 import com.palpeer.wallet.funding.FundingService;
 import com.palpeer.wallet.provider.apaylo.ApayloPaymentRail;
 import com.palpeer.wallet.provider.apaylo.ApayloProperties;
+import com.palpeer.wallet.provider.korapay.KorapayPaymentRail;
+import com.palpeer.wallet.provider.korapay.KorapayProperties;
 import com.palpeer.wallet.provider.kuda.KudaPaymentRail;
 import com.palpeer.wallet.provider.kuda.KudaProperties;
 import com.palpeer.wallet.withdrawal.WithdrawalService;
@@ -23,7 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Payment provider webhooks for Apaylo (CAD) and Kuda (NGN).
+ * Payment provider webhooks for Apaylo (CAD), Korapay (NGN), and Kuda (NGN).
  * Every request must carry a valid HMAC-SHA256 signature of the raw body; unsigned or
  * mis-signed requests are rejected before any state change.
  */
@@ -37,6 +39,7 @@ public class PaymentWebhookController {
     private final WithdrawalService withdrawalService;
     private final ObjectMapper objectMapper;
     private final ApayloProperties apayloProperties;
+    private final KorapayProperties korapayProperties;
     private final KudaProperties kudaProperties;
 
     @PostMapping("/apaylo")
@@ -44,6 +47,13 @@ public class PaymentWebhookController {
             @RequestBody(required = false) String rawBody, HttpServletRequest request) {
         return handleRail(ApayloPaymentRail.NAME, rawBody, request,
                 apayloProperties.getWebhookSecret(), apayloProperties.getWebhookSignatureHeader());
+    }
+
+    @PostMapping("/korapay")
+    public ResponseEntity<ApiResponse<Void>> korapay(
+            @RequestBody(required = false) String rawBody, HttpServletRequest request) {
+        return handleRail(KorapayPaymentRail.NAME, rawBody, request,
+                korapayProperties.getWebhookSecret(), korapayProperties.getWebhookSignatureHeader());
     }
 
     @PostMapping("/kuda")
@@ -109,6 +119,9 @@ public class PaymentWebhookController {
     static Boolean resolveOutcome(JsonNode root) {
         String status = firstText(root, "status", "Status", "transactionStatus", "event");
         if (status == null) {
+            status = firstText(root.path("data"), "status");
+        }
+        if (status == null) {
             return null;
         }
         String s = status.toLowerCase(Locale.ROOT);
@@ -116,9 +129,10 @@ public class PaymentWebhookController {
                 || s.contains("cancel") || s.contains("expire")) {
             return Boolean.FALSE;
         }
-        if (s.contains("unpaid") || s.contains("pending")) {
+        if (s.contains("unpaid") || s.contains("pending") || s.contains("processing")) {
             return null;
         }
+        // Korapay events: charge.success / charge.failed / transfer.success / transfer.failed
         if (s.contains("success") || s.contains("complete") || s.contains("paid") || s.contains("credit")) {
             return Boolean.TRUE;
         }

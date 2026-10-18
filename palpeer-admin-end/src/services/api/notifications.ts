@@ -1,7 +1,10 @@
 import { apiRequest } from '@/services/api/client';
 import type { SpringPage } from '@/types/admin';
-import { ApiClientError } from '@/types/api';
-import type { NotificationSummary } from '@/types/notifications';
+import type {
+  BroadcastPushInput,
+  BroadcastPushResult,
+  NotificationSummary,
+} from '@/types/notifications';
 
 export type AdminNotificationListParams = {
   page?: number;
@@ -22,11 +25,15 @@ export async function listAdminNotifications(
   );
 }
 
-/** Broadcast/send remains CONTRACT_PENDING (P12-06). */
-export async function broadcastAdminNotification(): Promise<never> {
-  throw new ApiClientError(
-    501,
-    'CONTRACT_PENDING',
-    'Admin notification broadcast/send API is not verified.',
-  );
+export async function broadcastAdminNotification(
+  input: BroadcastPushInput,
+): Promise<BroadcastPushResult> {
+  return apiRequest<BroadcastPushResult>('/admin/notifications/broadcast', {
+    method: 'POST',
+    body: {
+      title: input.title.trim(),
+      body: input.body.trim(),
+      category: input.category?.trim() || 'ADMIN',
+    },
+  });
 }

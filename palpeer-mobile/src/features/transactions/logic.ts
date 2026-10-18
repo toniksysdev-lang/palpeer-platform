@@ -9,6 +9,8 @@ export const TRANSACTION_TYPES: readonly TransactionActivityType[] = [
   'FUNDING',
   'WITHDRAWAL',
   'EXCHANGE',
+  'TRANSFER',
+  'P2P',
 ];
 
 export function isTransactionType(value: unknown): value is TransactionActivityType {
@@ -23,6 +25,10 @@ export function typeLabel(type: TransactionActivityType): string {
       return 'Withdrawal';
     case 'EXCHANGE':
       return 'Exchange';
+    case 'TRANSFER':
+      return 'Transfer';
+    case 'P2P':
+      return 'P2P';
   }
 }
 
@@ -33,6 +39,8 @@ export const TYPE_OPTIONS: readonly { key: TypeFilter; title: string }[] = [
   { key: 'FUNDING', title: 'Funding' },
   { key: 'WITHDRAWAL', title: 'Withdrawals' },
   { key: 'EXCHANGE', title: 'Exchanges' },
+  { key: 'TRANSFER', title: 'Transfers' },
+  { key: 'P2P', title: 'P2P' },
 ];
 
 export type Period = 'ALL' | '7D' | '30D' | '90D';
@@ -161,6 +169,29 @@ export function describeTransaction(item: TransactionItemResponse): {
         title: 'Exchange failed',
         message: `${sentence(item.failureReason)}Nothing was exchanged.`,
       };
+    case 'TRANSFER:SUCCESS':
+      return {
+        title: 'Transfer complete',
+        message: item.failureReason
+          ? `Note: ${item.failureReason}`
+          : 'The money moved between Palpeer wallets.',
+      };
+    case 'P2P:ACCEPTED':
+      return {
+        title: 'P2P order accepted',
+        message: item.failureReason
+          ? `Note: ${item.failureReason}`
+          : 'This peer trade was accepted and settled.',
+      };
+    case 'P2P:COMPLETED':
+      return {
+        title: 'P2P trade complete',
+        message: item.failureReason
+          ? `Note: ${item.failureReason}`
+          : `Base and quote amounts moved between wallets${
+              item.secondaryCurrencyCode ? ` (${item.currencyCode} ↔ ${item.secondaryCurrencyCode})` : ''
+            }.`,
+      };
     default:
       return {
         title: typeLabel(item.type),
@@ -184,6 +215,14 @@ export function recordedSteps(item: TransactionItemResponse): string[] {
     if (has('debit')) steps.push('Sent from your wallet');
     if (has('release')) steps.push('Returned to your available balance');
     if (has('reversal')) steps.push('Returned to your wallet after the payout');
+  } else if (item.type === 'TRANSFER') {
+    steps.push('Debited from the source wallet');
+    steps.push('Credited to the destination wallet');
+  } else if (item.type === 'P2P') {
+    steps.push(`Base amount settled in ${item.currencyCode}`);
+    if (item.secondaryCurrencyCode) {
+      steps.push(`Quote amount settled in ${item.secondaryCurrencyCode}`);
+    }
   } else {
     if (has('debit')) steps.push(`Taken from your ${item.currencyCode} wallet`);
     if (has('credit'))

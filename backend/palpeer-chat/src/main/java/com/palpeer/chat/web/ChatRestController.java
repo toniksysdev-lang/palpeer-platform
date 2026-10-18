@@ -39,10 +39,10 @@ public class ChatRestController {
 
     @PostMapping("/rooms")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Create or get chat room for a P2P order")
+    @Operation(summary = "Create or get chat room for a P2P order or negotiation")
     public ApiResponse<ChatRoomResponse> createRoom(
             @AuthenticationPrincipal UserPrincipal principal,
-            @Valid @RequestBody CreateChatRoomRequest request) {
+            @RequestBody CreateChatRoomRequest request) {
         return ApiResponse.ok("Chat room ready", chatService.createRoom(principal.getId(), request));
     }
 

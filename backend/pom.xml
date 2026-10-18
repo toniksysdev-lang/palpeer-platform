@@ -48,6 +48,7 @@
         <testcontainers.version>1.20.3</testcontainers.version>
         <jjwt.version>0.12.6</jjwt.version>
         <google-api-client.version>2.7.0</google-api-client.version>
+        <firebase-admin.version>9.4.2</firebase-admin.version>
     </properties>
 
     <dependencyManagement>
@@ -172,6 +173,11 @@
                 <groupId>io.jsonwebtoken</groupId>
                 <artifactId>jjwt-jackson</artifactId>
                 <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.firebase</groupId>
+                <artifactId>firebase-admin</artifactId>
+                <version>${firebase-admin.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.api-client</groupId>

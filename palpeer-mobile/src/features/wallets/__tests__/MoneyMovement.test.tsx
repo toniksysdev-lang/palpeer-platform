@@ -235,13 +235,16 @@ describe('WithdrawScreen', () => {
   it('shows the backend decision when the balance changed in the meantime', async () => {
     setSearchParams({ id: 'w-cad' });
     installFetchMock(
-      routes(false, { 'POST /withdrawals': fail(422, 'INSUFFICIENT_AVAILABLE_BALANCE') }),
+      routes(true, {
+        'POST /security/pin/verify': ok(),
+        'POST /withdrawals': fail(422, 'INSUFFICIENT_AVAILABLE_BALANCE'),
+      }),
     );
     await renderWithProviders(<WithdrawScreen />);
 
     await fillEft('100');
-    expect(await screen.findByTestId('withdraw-no-pin')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('withdraw-confirm'));
+    await enterPin('pin-prompt-entry', '1234');
 
     expect(
       await screen.findByText("You don't have enough available balance for this withdrawal."),
@@ -249,12 +252,17 @@ describe('WithdrawScreen', () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
-  it('builds the NGN bank reference', async () => {
+  it('builds the NGN bank reference from the banks dropdown', async () => {
     setSearchParams({ id: 'w-ngn' });
     const { calls } = installFetchMock({
       'GET /wallets/w-ngn': ok(wallet('w-ngn', 'NGN', '90000.00')),
       'GET /currencies': CURRENCIES,
-      'GET /security/pin': ok(PIN_STATUS(false)),
+      'GET /security/pin': ok(PIN_STATUS(true)),
+      'GET /withdrawals/banks': ok([
+        { code: '090267', name: 'Kuda Bank', slug: 'kuda-bank' },
+        { code: '058', name: 'Guaranty Trust Bank', slug: 'gtbank' },
+      ]),
+      'POST /security/pin/verify': ok(),
       'POST /withdrawals': {
         status: 201,
         body: {
@@ -267,10 +275,15 @@ describe('WithdrawScreen', () => {
     await renderWithProviders(<WithdrawScreen />);
 
     await typeIntoNumberField('withdraw-amount', '2500.50');
-    await typeIntoNumberField('withdraw-bank-code', '090267');
+    await fireEvent.press(await screen.findByTestId('withdraw-bank'));
+    await fireEvent.press(await screen.findByTestId('withdraw-bank-sheet-option-090267'));
     await typeIntoNumberField('withdraw-account-number', '0123456789');
     await fireEvent.press(screen.getByTestId('withdraw-continue'));
+    expect(await screen.findByTestId('withdraw-review-destination')).toHaveTextContent(
+      /Kuda Bank · account ending 6789/,
+    );
     await fireEvent.press(await screen.findByTestId('withdraw-confirm'));
+    await enterPin('pin-prompt-entry', '1234');
 
     await waitFor(() => expect(posts(calls, '/withdrawals')).toHaveLength(1));
     expect(posts(calls, '/withdrawals')[0]?.body).toEqual({

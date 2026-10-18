@@ -1,15 +1,15 @@
 /**
- * VERIFIED: the backend hard-wires one payment rail per currency (`ApayloPaymentRail` supports CAD,
- * `KudaPaymentRail` supports NGN). Other currencies have no funding or withdrawal method at all, so
- * the app doesn't start a money movement that nothing could ever complete. Whether a rail is
- * currently enabled can't be read by the app (contract-pending W-8); the backend decides that.
+ * VERIFIED: the backend hard-wires payment rails by currency (`ApayloPaymentRail` = CAD;
+ * NGN funding + withdrawals prefer `KorapayPaymentRail`, with `KudaPaymentRail` as fallback).
+ * Other currencies have no funding or withdrawal method. Whether a rail is currently enabled
+ * can't be read by the app (contract-pending W-8); the backend decides that.
  */
-const RAIL_BY_CURRENCY: Record<string, 'APAYLO' | 'KUDA'> = {
+const RAIL_BY_CURRENCY: Record<string, 'APAYLO' | 'KUDA' | 'KORAPAY'> = {
   CAD: 'APAYLO',
-  NGN: 'KUDA',
+  NGN: 'KORAPAY',
 };
 
-export function railFor(currencyCode: string): 'APAYLO' | 'KUDA' | null {
+export function railFor(currencyCode: string): 'APAYLO' | 'KUDA' | 'KORAPAY' | null {
   return RAIL_BY_CURRENCY[currencyCode.toUpperCase()] ?? null;
 }
 

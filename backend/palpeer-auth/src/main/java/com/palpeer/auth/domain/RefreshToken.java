@@ -32,4 +32,14 @@ public class RefreshToken extends BaseEntity {
 
     @Column(name = "replaced_by_hash", length = 128)
     private String replacedByHash;
+
+    /** Stable per-install id from the mobile client; used for single-device login. */
+    @Column(name = "device_identifier", length = 128)
+    private String deviceIdentifier;
+
+    @Column(name = "device_name", length = 120)
+    private String deviceName;
+
+    @Column(name = "platform", length = 40)
+    private String platform;
 }

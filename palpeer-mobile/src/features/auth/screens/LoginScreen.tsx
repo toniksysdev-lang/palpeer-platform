@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Lock, Mail } from 'lucide-react-native';
-import { useRef, useState } from 'react';
+import { Fingerprint, Lock, Mail } from 'lucide-react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, View, type TextInput } from 'react-native';
 
@@ -13,13 +13,25 @@ import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Input';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { TextLink } from '@/components/ui/TextLink';
+import { checkDeviceTrust } from '@/features/security/biometricUnlock';
+import { useSecretCommand } from '@/hooks/useSecretCommand';
 import { useSensitiveScreen } from '@/hooks/useSensitiveScreen';
 import { useTheme } from '@/providers/ThemeProvider';
-import { useSecretCommand } from '@/hooks/useSecretCommand';
+import { useToast } from '@/providers/ToastProvider';
 import { accountCommands } from '@/services/auth/accountCommands';
 import { sessionManager } from '@/services/auth/session';
+import {
+  authenticateWithBiometrics,
+  getBiometricCapability,
+} from '@/services/biometrics/biometrics';
+import { secureStorage } from '@/services/storage/secureStorage';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { expiredNoticeDismissed, type SignOutReason } from '@/store/slices/sessionSlice';
+import { appUnlocked, biometricChanged } from '@/store/slices/appLockSlice';
+import {
+  expiredNoticeDismissed,
+  sessionStarted,
+  type SignOutReason,
+} from '@/store/slices/sessionSlice';
 
 import { AuthLayout } from '../components/AuthLayout';
 import { GoogleSignInSection } from '../components/GoogleSignInSection';
@@ -35,29 +47,107 @@ const SIGN_OUT_NOTICES: Record<SignOutReason, string> = {
   passwordChanged:
     'Your password was changed and you were signed out everywhere. Sign in with your new password.',
   allSessionsEnded: 'You were signed out on all devices.',
-  sessionEnded: 'This session was ended. Sign in to continue.',
+  sessionEnded:
+    'This session ended — your account may have been signed in on another device. Sign in to continue.',
 };
 
 export function LoginScreen() {
   useSensitiveScreen();
   const theme = useTheme();
+  const toast = useToast();
   const dispatch = useAppDispatch();
   const params = useLocalSearchParams<{ email?: string; notice?: string }>();
   const expiredNotice = useAppSelector((state) => state.session.expiredNotice);
   const signOutReason = useAppSelector((state) => state.session.signOutReason);
   const [login] = useSecretCommand(accountCommands.login);
   const [formError, setFormError] = useState<string | null>(null);
+  const [biometricLabel, setBiometricLabel] = useState<string | null>(null);
+  const [biometricBusy, setBiometricBusy] = useState(false);
   const passwordRef = useRef<TextInput>(null);
 
   const {
     control,
     handleSubmit,
     setError,
+    setValue,
     formState: { isSubmitting },
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: typeof params.email === 'string' ? params.email : '', password: '' },
   });
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const [stored, biometricUserId, capability] = await Promise.all([
+        secureStorage.loadSession(),
+        secureStorage.getBiometricUserId(),
+        getBiometricCapability(),
+      ]);
+      if (!active) return;
+      const eligible =
+        !!stored &&
+        biometricUserId === stored.userId &&
+        capability.status === 'available';
+      if (!eligible) {
+        setBiometricLabel(null);
+        return;
+      }
+      setBiometricLabel(capability.label);
+      if (stored.email && !(typeof params.email === 'string' && params.email)) {
+        setValue('email', stored.email);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [params.email, setValue]);
+
+  const loginWithBiometrics = useCallback(async () => {
+    if (!biometricLabel || biometricBusy) return;
+    setBiometricBusy(true);
+    setFormError(null);
+    const result = await authenticateWithBiometrics(`Sign in to PALPEER with ${biometricLabel}`);
+    if (result !== 'success') {
+      setBiometricBusy(false);
+      if (result === 'lockout') {
+        setFormError('Biometrics are locked after too many attempts. Sign in with your password.');
+      } else if (result === 'unavailable') {
+        setFormError(`${biometricLabel} isn't available right now. Sign in with your password.`);
+      } else if (result === 'failed') {
+        setFormError("We couldn't confirm it's you. Try again or sign in with your password.");
+      }
+      return;
+    }
+
+    const trust = await checkDeviceTrust();
+    if (trust === 'revoked') {
+      await secureStorage.setBiometricUserId(null);
+      await secureStorage.clearSession();
+      setBiometricLabel(null);
+      setBiometricBusy(false);
+      toast.show({
+        type: 'warning',
+        title: 'Biometric unlock was turned off for this device',
+        message: 'Sign in with your password to continue.',
+      });
+      return;
+    }
+
+    const stored = await secureStorage.loadSession();
+    const outcome = await sessionManager.restore();
+    if (outcome !== 'authenticated' || !stored) {
+      setBiometricBusy(false);
+      setFormError('Your saved session expired. Sign in with your password.');
+      setBiometricLabel(null);
+      return;
+    }
+
+    dispatch(sessionStarted({ userId: stored.userId, email: stored.email }));
+    dispatch(biometricChanged(true));
+    dispatch(appUnlocked());
+    setBiometricBusy(false);
+  }, [biometricBusy, biometricLabel, dispatch, toast]);
 
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null);
@@ -86,15 +176,6 @@ export function LoginScreen() {
         <View style={{ alignItems: 'center', marginBottom: theme.spacing.md }}>
           <PalpeerLogo width={150} />
         </View>
-      }
-      footer={
-        <TextLink
-          label="Need help?"
-          align="center"
-          tone="info"
-          onPress={() => router.push('/support')}
-          testID="go-support"
-        />
       }
     >
       {expiredNotice ? (
@@ -163,8 +244,22 @@ export function LoginScreen() {
         shape="pill"
         onPress={onSubmit}
         loading={isSubmitting}
+        disabled={biometricBusy}
         testID="login-submit"
       />
+      {biometricLabel ? (
+        <Button
+          label={`Login with ${biometricLabel}`}
+          leftIcon={Fingerprint}
+          variant="primaryOutline"
+          shape="pill"
+          onPress={() => void loginWithBiometrics()}
+          loading={biometricBusy}
+          loadingLabel="Checking…"
+          disabled={isSubmitting}
+          testID="login-biometric"
+        />
+      ) : null}
       <GoogleSignInSection />
       <View style={styles.signUp}>
         <AppText>Don&apos;t have an account? </AppText>
@@ -175,6 +270,13 @@ export function LoginScreen() {
           testID="go-register"
         />
       </View>
+      <TextLink
+        label="Need help?"
+        align="center"
+        tone="info"
+        onPress={() => router.push('/support')}
+        testID="go-support"
+      />
     </AuthLayout>
   );
 }

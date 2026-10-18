@@ -390,7 +390,6 @@ describe('EditRequestScreen', () => {
     expect(rate).toHaveTextContent(/1500/);
     expect(screen.getByTestId('p2p-edit-submit').props.accessibilityState?.disabled).toBe(true);
     await fireEvent.press(rate);
-    // Clear existing rate then type the new one.
     for (let i = 0; i < 10; i += 1) {
       await fireEvent.press(screen.getByTestId('number-pad-dock-key-back'));
     }
@@ -508,7 +507,7 @@ describe('OrderDetailScreen', () => {
     expect(screen.getByTestId('p2p-order-amount')).toHaveTextContent('100.00 USD');
     expect(screen.getByTestId('p2p-order-rate')).toHaveTextContent('1 USD = 1,500 NGN');
     expect(screen.getByTestId('p2p-order-message')).toHaveTextContent(
-      /no further steps in the app yet/,
+      /Wallet settlement should complete momentarily/,
     );
     expect(screen.getByTestId('p2p-no-settlement')).toBeTruthy();
 

@@ -20,6 +20,7 @@ import com.palpeer.user.domain.User;
 import com.palpeer.user.repository.UserRepository;
 import com.palpeer.wallet.funding.FundingTransactionRepository;
 import com.palpeer.wallet.repository.WalletRepository;
+import com.palpeer.wallet.transfer.WalletTransferRepository;
 import com.palpeer.wallet.withdrawal.WithdrawalTransactionRepository;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -58,6 +59,7 @@ public class AdminSearchService {
     private final FundingTransactionRepository fundingTransactionRepository;
     private final WithdrawalTransactionRepository withdrawalTransactionRepository;
     private final ExchangeTransactionRepository exchangeTransactionRepository;
+    private final WalletTransferRepository walletTransferRepository;
 
     @Transactional(readOnly = true)
     public AdminSearchResponse search(String rawQuery) {
@@ -143,6 +145,21 @@ public class AdminSearchService {
             exchangeTransactionRepository.findById(id).ifPresent(e -> matches.add(transactionMatch(
                     id, e.getUserId(), TransactionActivityType.EXCHANGE, e.getSourceAmount(), null,
                     e.getStatus().name())));
+            walletTransferRepository.findById(id).ifPresent(t -> matches.add(transactionMatch(
+                    id, t.getSenderUserId(), TransactionActivityType.TRANSFER, t.getAmount(),
+                    t.getCurrencyCode(), "SUCCESS")));
+            p2POrderRepository.findById(id).ifPresent(o -> {
+                if (o.getStatus() == com.palpeer.p2p.domain.P2PStatus.ACCEPTED
+                        || o.getStatus() == com.palpeer.p2p.domain.P2PStatus.COMPLETED) {
+                    matches.add(transactionMatch(
+                            id,
+                            o.getRequesterId(),
+                            TransactionActivityType.P2P,
+                            o.getAmount(),
+                            null,
+                            o.getStatus().name()));
+                }
+            });
         }
         return matches;
     }

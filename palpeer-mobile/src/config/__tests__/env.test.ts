@@ -1,4 +1,4 @@
-import { buildConfig, isApiConfigured } from '../env';
+import { buildConfig, isApiConfigured, rewriteEmulatorHostForWeb } from '../env';
 
 describe('buildConfig', () => {
   it('trims trailing slashes and reads the environment', () => {
@@ -99,5 +99,17 @@ describe('buildConfig', () => {
     expect(
       isApiConfigured(buildConfig({ EXPO_PUBLIC_API_BASE_URL: 'http://10.0.2.2:8085/api/v1' })),
     ).toBe(true);
+  });
+
+  it('rewrites Android emulator loopback to localhost for web preview', () => {
+    expect(rewriteEmulatorHostForWeb('http://10.0.2.2:8085/api/v1', 'web')).toBe(
+      'http://localhost:8085/api/v1',
+    );
+    expect(rewriteEmulatorHostForWeb('ws://10.0.2.2:8085/ws/websocket', 'web')).toBe(
+      'ws://localhost:8085/ws/websocket',
+    );
+    expect(rewriteEmulatorHostForWeb('http://10.0.2.2:8085/api/v1', 'android')).toBe(
+      'http://10.0.2.2:8085/api/v1',
+    );
   });
 });

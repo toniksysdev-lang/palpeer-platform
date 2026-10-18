@@ -5,7 +5,8 @@ import com.palpeer.notification.domain.Notification;
 
 /**
  * Push delivery adapter.
- * CONTRACT_PENDING (P12-05): FCM / APNs / web-push provider and payload schema.
+ * Active implementation: {@link FcmPushNotifier} when {@code palpeer.fcm.enabled=true},
+ * otherwise {@link LoggingPushNotifier}.
  */
 public interface PushNotifier {
 

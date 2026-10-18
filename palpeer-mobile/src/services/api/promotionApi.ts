@@ -36,7 +36,7 @@ export const promotionApi = baseApi.injectEndpoints({
     }),
     applyReferral: build.mutation<ReferralResponse, ApplyReferralRequest>({
       query: (body) => ({ path: '/promotions/referrals/apply', method: 'POST', body }),
-      invalidatesTags: (_result, error) => (error ? [] : [BONUSES]),
+      invalidatesTags: (_result, error) => (error ? [] : [BONUSES, MY_REFERRALS, MY_CODE]),
     }),
     getMyBonuses: build.infiniteQuery<SpringPage<BonusResponse>, void, number>({
       infiniteQueryOptions: {

@@ -1,5 +1,6 @@
 package com.palpeer.wallet.withdrawal;
 
+import com.palpeer.wallet.funding.MoneyMovementStatus;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
@@ -40,4 +41,28 @@ public interface WithdrawalTransactionRepository
     Optional<WithdrawalTransaction> findByIdForUpdate(@Param("id") UUID id);
 
     Optional<WithdrawalTransaction> findByProviderNameAndProviderReference(String providerName, String providerReference);
+
+    /**
+     * Successful withdrawal totals keyed by provider + currency.
+     * Rows: [providerName (nullable), currencyCode, sum(amount)].
+     */
+    @Query("""
+            select w.providerName, w.currencyCode, coalesce(sum(w.amount), 0)
+            from WithdrawalTransaction w
+            where w.status = :status
+            group by w.providerName, w.currencyCode
+            """)
+    List<Object[]> sumAmountByProviderAndCurrency(@Param("status") MoneyMovementStatus status);
+
+    @Query("""
+            select coalesce(sum(w.amount), 0)
+            from WithdrawalTransaction w
+            where w.userId = :userId
+              and upper(w.currencyCode) = upper(:currencyCode)
+              and w.status = :status
+            """)
+    java.math.BigDecimal sumAmountByUserCurrencyAndStatus(
+            @Param("userId") UUID userId,
+            @Param("currencyCode") String currencyCode,
+            @Param("status") MoneyMovementStatus status);
 }

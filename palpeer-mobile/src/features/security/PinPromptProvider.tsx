@@ -1,8 +1,10 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
+import { Modal, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
 import { SensitiveScreenGuard } from '@/hooks/useSensitiveScreen';
+import { useTheme } from '@/providers/ThemeProvider';
 import { baseApi } from '@/services/api/baseApi';
 import { securityCommands } from '@/services/security/securityCommands';
 import { useAppDispatch } from '@/store';
@@ -16,12 +18,13 @@ type PinPromptApi = { requestPin: (options?: PromptOptions) => Promise<boolean> 
 const PinPromptContext = createContext<PinPromptApi | null>(null);
 
 /**
- * App-wide "confirm with your PIN" sheet. `requestPin` resolves true only after
- * POST /security/pin/verify succeeds; cancel, lockout or a missing PIN resolve false.
- * The server does not require a PIN on any endpoint yet (mobile-api-map §1.7), so this is a
- * client-side confirmation step.
+ * App-wide full-screen "confirm with your PIN" flow. Uses a native Modal so it stacks above
+ * expo-router / react-native-screens (JS overlays sit underneath native stack windows).
+ * `requestPin` resolves true only after POST /security/pin/verify succeeds.
  */
 export function PinPromptProvider({ children }: { children: ReactNode }) {
+  const theme = useTheme();
+  const { height: windowHeight } = useWindowDimensions();
   const dispatch = useAppDispatch();
   const [request, setRequest] = useState<PromptOptions | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -69,37 +72,64 @@ export function PinPromptProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const open = request !== null;
+
   return (
     <PinPromptContext.Provider value={{ requestPin }}>
       {children}
-      <BottomSheet
-        visible={request !== null}
-        onClose={() => finish(false)}
-        dismissible={!verifying}
+      <Modal
+        visible={open}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        statusBarTranslucent
+        onRequestClose={() => {
+          if (!verifying) finish(false);
+        }}
         testID="pin-prompt"
       >
-        {request !== null ? <SensitiveScreenGuard /> : null}
-        <PinEntry
-          title={request?.title ?? 'Enter your PIN'}
-          subtitle={request?.message}
-          error={error}
-          submitLabel="Confirm"
-          loading={verifying}
-          disabled={blocked}
-          autoSubmit
-          onSubmit={(pin) => void verify(pin)}
-          testID="pin-prompt-entry"
-          footer={
-            <Button
-              label={blocked ? 'Close' : 'Cancel'}
-              variant="ghost"
-              onPress={() => finish(false)}
-              disabled={verifying}
-              testID="pin-prompt-cancel"
-            />
-          }
-        />
-      </BottomSheet>
+        {/* Modal content is portaled outside the app tree — needs its own SafeAreaProvider. */}
+        <SafeAreaProvider>
+          <View style={[styles.fill, { minHeight: windowHeight, backgroundColor: theme.colors.background }]}>
+            <SafeAreaView style={styles.fill} edges={['top', 'bottom', 'left', 'right']}>
+              {open && request ? (
+                <>
+                  <SensitiveScreenGuard />
+                  <View
+                    style={[
+                      styles.fill,
+                      {
+                        paddingHorizontal: theme.spacing.xl,
+                        paddingTop: theme.spacing.md,
+                      },
+                    ]}
+                  >
+                    <PinEntry
+                      title={request.title ?? 'Enter your PIN'}
+                      subtitle={request.message}
+                      error={error}
+                      submitLabel="Confirm"
+                      loading={verifying}
+                      disabled={blocked}
+                      autoSubmit
+                      onSubmit={(pin) => void verify(pin)}
+                      testID="pin-prompt-entry"
+                      footer={
+                        <Button
+                          label={blocked ? 'Close' : 'Cancel'}
+                          variant="ghost"
+                          onPress={() => finish(false)}
+                          disabled={verifying}
+                          testID="pin-prompt-cancel"
+                        />
+                      }
+                    />
+                  </View>
+                </>
+              ) : null}
+            </SafeAreaView>
+          </View>
+        </SafeAreaProvider>
+      </Modal>
     </PinPromptContext.Provider>
   );
 }
@@ -109,3 +139,7 @@ export function usePinPrompt(): PinPromptApi {
   if (!context) throw new Error('usePinPrompt must be used inside PinPromptProvider');
   return context;
 }
+
+const styles = StyleSheet.create({
+  fill: { flex: 1, width: '100%' },
+});

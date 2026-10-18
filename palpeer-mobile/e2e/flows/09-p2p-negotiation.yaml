@@ -24,9 +24,6 @@ tags: [critical, financial]
 - runFlow:
     file: subflows/type.yaml
     env: { FIELD: offer-amount, TEXT: '40' }
-- runFlow:
-    file: subflows/type.yaml
-    env: { FIELD: offer-rate, TEXT: '990' }
 - tapOn:
     id: offer-submit
 - extendedWaitUntil:

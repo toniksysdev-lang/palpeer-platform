@@ -1,5 +1,6 @@
 import type { SpringPage } from '@/types/api/common';
 import type {
+  BankOptionResponse,
   CreateFundingRequest,
   CreateWalletRequest,
   CreateWalletTransferRequest,
@@ -7,6 +8,7 @@ import type {
   FundingTransactionResponse,
   LedgerTransactionResponse,
   TransactionItemResponse,
+  TransferRecipientResponse,
   WalletResponse,
   WalletTransferResponse,
   WithdrawalTransactionResponse,
@@ -72,7 +74,12 @@ export const walletApi = baseApi.injectEndpoints({
         body: { walletId, amount: jsonDecimal(amount) },
         idempotencyKey,
       }),
-      invalidatesTags: ACTIVITY,
+      // Pending funding only needs activity lists; SUCCESS (e.g. sandbox auto-settle) updates balances now.
+      invalidatesTags: (result, error, { walletId }) => {
+        if (error) return [];
+        if (result?.status === 'SUCCESS') return walletBalanceTags(walletId);
+        return ACTIVITY;
+      },
     }),
     getFunding: build.query<FundingTransactionResponse, string>({
       query: (fundingId) => ({ path: `/funding/${encodeURIComponent(fundingId)}` }),
@@ -105,6 +112,14 @@ export const walletApi = baseApi.injectEndpoints({
       providesTags: (_result, _error, id) => [{ type: 'Transaction', id: `WITHDRAWAL-${id}` }],
     }),
 
+    /** Nigerian (default) payout banks for NGN withdrawals. */
+    getWithdrawalBanks: build.query<BankOptionResponse[], string | void>({
+      query: (country) => ({
+        path: '/withdrawals/banks',
+        query: { country: country ?? 'NG' },
+      }),
+    }),
+
     createWalletTransfer: build.mutation<
       WalletTransferResponse,
       WithKey<CreateWalletTransferRequest>
@@ -130,6 +145,17 @@ export const walletApi = baseApi.injectEndpoints({
               { type: 'Wallet', id: `LEDGER-${sourceWalletId}` },
             ],
     }),
+
+    /** Confirms email/phone exists and returns the recipient's full name for review. */
+    lookupTransferRecipient: build.query<
+      TransferRecipientResponse,
+      { q: string; currencyCode?: string }
+    >({
+      query: ({ q, currencyCode }) => ({
+        path: '/transfers/recipient',
+        query: { q, ...(currencyCode ? { currencyCode } : {}) },
+      }),
+    }),
   }),
 });
 
@@ -143,7 +169,9 @@ export const {
   useGetFundingQuery,
   useCreateWithdrawalMutation,
   useGetWithdrawalQuery,
+  useGetWithdrawalBanksQuery,
   useCreateWalletTransferMutation,
+  useLazyLookupTransferRecipientQuery,
 } = walletApi;
 
 /** Tags to refresh once a funding or withdrawal reaches a final status. */

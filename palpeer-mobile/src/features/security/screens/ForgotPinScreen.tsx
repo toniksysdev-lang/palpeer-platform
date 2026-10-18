@@ -132,7 +132,7 @@ export function ForgotPinScreen() {
 
   if (step.name === 'new' || step.name === 'confirm') {
     return (
-      <Screen scroll>
+      <Screen edges={['top', 'bottom']}>
         <StackHeader onBack={() => setStep({ name: 'answers' })} />
         {step.name === 'new' ? (
           <PinEntry

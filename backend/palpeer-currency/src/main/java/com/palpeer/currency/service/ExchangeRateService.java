@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -34,14 +35,24 @@ public class ExchangeRateService {
     @Transactional(readOnly = true)
     public ExchangeRateResponse getLatest(
             String baseCurrencyCode, String quoteCurrencyCode, Instant asOf, RateChannel channel) {
+        return findLatestOptional(baseCurrencyCode, quoteCurrencyCode, asOf, channel)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No exchange rate for " + baseCurrencyCode + "/" + quoteCurrencyCode));
+    }
+
+    /**
+     * Same lookup as {@link #getLatest} but returns empty instead of throwing — safe to call
+     * inside an outer transaction when probing for a direct vs inverse pair.
+     */
+    @Transactional(readOnly = true)
+    public Optional<ExchangeRateResponse> findLatestOptional(
+            String baseCurrencyCode, String quoteCurrencyCode, Instant asOf, RateChannel channel) {
         RateChannel effectiveChannel = channel == null ? RateChannel.SWAP : channel;
         Instant effectiveAsOf = asOf == null ? Instant.now() : asOf;
         return exchangeRateRepository
                 .findLatestPublishedEffective(
                         normalize(baseCurrencyCode), normalize(quoteCurrencyCode), effectiveChannel, effectiveAsOf)
-                .map(this::toResponse)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "No exchange rate for " + baseCurrencyCode + "/" + quoteCurrencyCode));
+                .map(this::toResponse);
     }
 
     @Transactional(readOnly = true)

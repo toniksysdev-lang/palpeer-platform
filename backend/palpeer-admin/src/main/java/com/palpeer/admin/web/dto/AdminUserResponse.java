@@ -6,6 +6,7 @@ import java.util.UUID;
 public record AdminUserResponse(
         UUID id,
         UUID userId,
+        String email,
         boolean enabled,
         Set<String> roleCodes
 ) {

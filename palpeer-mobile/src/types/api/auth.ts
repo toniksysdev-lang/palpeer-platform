@@ -22,11 +22,18 @@ export type LoginRequest = {
   /** Email address or phone number. */
   email: string;
   password: string;
+  /** Stable per-install id — required for single-device login enforcement. */
+  deviceIdentifier: string;
+  deviceName?: string;
+  platform?: string;
 };
 
 /** VERIFIED: POST /auth/google — Google ID token exchange. */
 export type GoogleAuthRequest = {
   idToken: string;
+  deviceIdentifier: string;
+  deviceName?: string;
+  platform?: string;
 };
 
 /** VERIFIED: `RegisterRequest`. email ≤ 320, phone ≤ 32 (no format rule), password 8–128. */
@@ -43,7 +50,7 @@ export type RegisterResponse = {
   phone: string;
   status: string;
   message: string;
-  /** Present only when the API has OTP log-code enabled (local/dev autofill). */
+  /** Present only when the API has OTP log-code enabled (dev troubleshooting; never autofilled). */
   debugOtp?: string | null;
 };
 
@@ -92,13 +99,15 @@ export type ChangePasswordRequest = {
 };
 
 /**
- * VERIFIED: `SessionResponse` from GET /auth/sessions. One session = one active refresh token; no
- * device, IP or location data exists. `current` is only true when the caller sends its refresh
- * token in `X-Refresh-Token`.
+ * VERIFIED: `SessionResponse` from GET /auth/sessions. One session = one active refresh token.
+ * `current` is only true when the caller sends its refresh token in `X-Refresh-Token`.
  */
 export type SessionResponse = {
   id: Uuid;
   createdAt: string;
   expiresAt: string;
   current: boolean;
+  deviceIdentifier: string | null;
+  deviceName: string | null;
+  platform: string | null;
 };

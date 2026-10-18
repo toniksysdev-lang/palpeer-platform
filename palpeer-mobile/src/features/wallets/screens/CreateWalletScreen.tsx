@@ -93,14 +93,14 @@ export function CreateWalletScreen() {
       return;
     }
 
+    const confirmed = await requestPin({
+      title: 'Confirm wallet creation',
+      message: `Enter your 4-digit PIN to create a ${selected} wallet.`,
+    });
+    if (!confirmed) return;
+
     setConfirming(true);
     try {
-      const confirmed = await requestPin({
-        title: 'Confirm wallet creation',
-        message: `Enter your 4-digit PIN to create a ${selected} wallet.`,
-      });
-      if (!confirmed) return;
-
       const result = await createWallet({ currencyCode: selected });
       if ('error' in result) {
         const appError = toAppError(result.error);

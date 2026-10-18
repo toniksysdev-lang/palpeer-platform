@@ -204,6 +204,7 @@ describe('Home recent activity', () => {
       }),
       'GET /notifications/unread-count': ok({ count: 0 }),
       'GET /promotions/active': ok([]),
+      'GET /public/marketing-adverts': ok([]),
       'GET /transactions/recent': ok([exchangeItem(), item()]),
     });
     await renderWithProviders(<HomeScreen />);
@@ -298,7 +299,7 @@ describe('TransactionDetailScreen', () => {
   });
 
   it("doesn't call the backend for a link with an unknown type", async () => {
-    setSearchParams({ type: 'P2P', id: 'o-1' });
+    setSearchParams({ type: 'BONUS', id: 'b-1' });
     const { calls } = installFetchMock({ 'GET /currencies': CURRENCIES });
     await renderWithProviders(<TransactionDetailScreen />);
     expect(await screen.findByText('Transaction not found')).toBeTruthy();

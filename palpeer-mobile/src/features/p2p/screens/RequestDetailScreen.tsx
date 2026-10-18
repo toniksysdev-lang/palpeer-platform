@@ -30,6 +30,7 @@ import {
 import { useAppSelector } from '@/store';
 import { formatDateTime } from '@/utils/datetime';
 
+import { ExpiryCountdown } from '../components/ExpiryCountdown';
 import { NoSettlementNotice } from '../components/NoSettlementNotice';
 import { requestActionErrorMessage } from '../errors';
 import { canAccept, canManage, effectiveStatus, p2pRateLine, sideLabel } from '../logic';
@@ -220,6 +221,9 @@ export function RequestDetailScreen() {
           value={formatDateTime(data.expiresAt) ?? 'No expiry'}
           testID="p2p-request-expires"
         />
+        {status === 'OPEN' && data.expiresAt ? (
+          <ExpiryCountdown expiresAt={data.expiresAt} testID="p2p-request-countdown" />
+        ) : null}
         <ReviewRow label="Posted" value={formatDateTime(data.createdAt) ?? '—'} />
         {own ? <ReviewRow label="Posted by" value="You" /> : null}
       </Card>

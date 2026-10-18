@@ -25,15 +25,14 @@ import { formatDateTime } from '@/utils/datetime';
 import { NoSettlementNotice } from '../components/NoSettlementNotice';
 import { orderRole, p2pRateLine } from '../logic';
 
-/** Customers can't move an order past ACCEPTED; COMPLETED and CANCELLED are set by Palpeer (R-P-4). */
 function statusMessage(status: P2PStatus | string): string {
   switch (status) {
     case 'ACCEPTED':
-      return 'The order is open between you and the other person. There are no further steps in the app yet.';
+      return 'This order was matched. Wallet settlement should complete momentarily.';
     case 'COMPLETED':
-      return 'Palpeer marked this order as completed.';
+      return 'Trade settled. Base currency moved to the buyer and quote currency to the seller.';
     case 'CANCELLED':
-      return 'Palpeer cancelled this order.';
+      return 'This order was cancelled. Any sell hold was returned to the seller.';
     default:
       return '';
   }
@@ -91,7 +90,7 @@ export function OrderDetailScreen() {
 
   const openChat = async () => {
     setChatError(null);
-    const result = await openRoom(data.id);
+    const result = await openRoom({ p2pOrderId: data.id });
     if ('error' in result) {
       setChatError(toAppError(result.error).message);
       return;

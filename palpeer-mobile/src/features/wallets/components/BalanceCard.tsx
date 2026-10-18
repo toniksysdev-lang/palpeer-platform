@@ -22,6 +22,9 @@ const MASK = '••••••';
 const ON_HERO = palette.neutral0;
 const ON_HERO_SOFT = 'rgba(255, 255, 255, 0.86)';
 
+/** Shared with the home marketing carousel (60% of this height). */
+export const BALANCE_CARD_MIN_HEIGHT = 148;
+
 /** Wallet name + available balance on a gradient card (swipeable in the carousel). */
 export function BalanceCard({ wallet, hidden, onToggleHidden, onOpen }: Props) {
   const theme = useTheme();
@@ -42,7 +45,7 @@ export function BalanceCard({ wallet, hidden, onToggleHidden, onOpen }: Props) {
         {
           borderRadius: theme.radius.xl,
           overflow: 'hidden',
-          minHeight: 148,
+          minHeight: BALANCE_CARD_MIN_HEIGHT,
         },
       ]}
     >

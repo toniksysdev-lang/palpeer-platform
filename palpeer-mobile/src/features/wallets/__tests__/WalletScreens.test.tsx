@@ -98,6 +98,7 @@ describe('HomeScreen', () => {
       'GET /currencies': CURRENCIES,
       'GET /notifications/unread-count': ok({ count: 0 }),
       'GET /promotions/active': ok([]),
+      'GET /public/marketing-adverts': ok([]),
       'GET /transactions/recent': ok([]),
     });
     await renderWithProviders(<HomeScreen />);
@@ -114,6 +115,7 @@ describe('HomeScreen', () => {
       'GET /currencies': CURRENCIES,
       'GET /notifications/unread-count': ok({ count: 0 }),
       'GET /promotions/active': ok([]),
+      'GET /public/marketing-adverts': ok([]),
       'GET /transactions/recent': ok([]),
     });
     await renderWithProviders(<HomeScreen />);
@@ -146,6 +148,7 @@ describe('HomeScreen', () => {
       'GET /currencies': CURRENCIES,
       'GET /notifications/unread-count': ok({ count: 0 }),
       'GET /promotions/active': ok([]),
+      'GET /public/marketing-adverts': ok([]),
       'GET /transactions/recent': ok([]),
     });
     await renderWithProviders(<HomeScreen />);
@@ -253,6 +256,7 @@ describe('WalletDetailScreen', () => {
       ],
       'GET /notifications/unread-count': ok({ count: 0 }),
       'GET /promotions/active': ok([]),
+      'GET /public/marketing-adverts': ok([]),
       'GET /transactions/recent': ok([
         recentItem('wd-1', 'w-cad', 'WITHDRAWAL', 'PENDING'),
         recentItem('f-9', 'w-cad', 'FUNDING', 'SUCCESS'),
@@ -292,6 +296,7 @@ describe('WalletDetailScreen', () => {
       'GET /wallets/w-cad/transactions': ledgerPage([]),
       'GET /notifications/unread-count': ok({ count: 0 }),
       'GET /promotions/active': ok([]),
+      'GET /public/marketing-adverts': ok([]),
       'GET /transactions/recent': ok([]),
     });
     await renderWithProviders(
@@ -321,6 +326,7 @@ describe('WalletDetailScreen', () => {
       'GET /wallets/w-usd/transactions': ledgerPage([]),
       'GET /notifications/unread-count': ok({ count: 0 }),
       'GET /promotions/active': ok([]),
+      'GET /public/marketing-adverts': ok([]),
       'GET /transactions/recent': ok([]),
     });
     await renderWithProviders(<WalletDetailScreen />);

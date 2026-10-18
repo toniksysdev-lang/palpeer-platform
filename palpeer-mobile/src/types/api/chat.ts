@@ -1,12 +1,14 @@
 import type { IsoInstant, Uuid } from './common';
 
 /**
- * VERIFIED: `ChatRoomResponse`. One room per P2P order; A = requester, B = acceptor. The
- * `LastReadAt` fields are the `createdAt` of the latest message each participant has read.
+ * VERIFIED: `ChatRoomResponse`. Scoped to a P2P order or a negotiation.
+ * A = requester, B = counterparty/acceptor. The `LastReadAt` fields are the `createdAt`
+ * of the latest message each participant has read.
  */
 export type ChatRoomResponse = {
   id: Uuid;
-  p2pOrderId: Uuid;
+  p2pOrderId: Uuid | null;
+  negotiationId: Uuid | null;
   participantAId: Uuid;
   participantBId: Uuid;
   createdAt: IsoInstant;
@@ -38,3 +40,8 @@ export type MarkChatReadRequest = { messageId: Uuid };
  * a participant's read marker moves forward.
  */
 export type ChatReadReceipt = { roomId: Uuid; userId: Uuid; lastReadAt: IsoInstant };
+
+/** Open (or return) a room for exactly one of order / negotiation. */
+export type OpenChatRoomRequest =
+  | { p2pOrderId: Uuid; negotiationId?: never }
+  | { negotiationId: Uuid; p2pOrderId?: never };

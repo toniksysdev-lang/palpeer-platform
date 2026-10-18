@@ -66,4 +66,6 @@ export type P2POrderSummaryResponse = P2POrderResponse & {
   side: P2PSide | null;
   baseCurrencyCode: string | null;
   quoteCurrencyCode: string | null;
+  /** Originating request expiry, when set. */
+  expiresAt?: IsoInstant | null;
 };

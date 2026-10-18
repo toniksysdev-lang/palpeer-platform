@@ -18,6 +18,7 @@ export const KNOWN_PERMISSIONS = [
   'negotiations:read',
   'chat:read',
   'notifications:read',
+  'notifications:write',
   'reports:read',
   'fees:read',
   'fees:write',

@@ -24,6 +24,7 @@ import { useMoneyFormat } from '../useMoneyFormat';
 const METHOD_COPY = {
   APAYLO: 'Interac e-Transfer. You’ll get a payment request to accept.',
   KUDA: 'Bank transfer to your PALPEER virtual account. The account details are shown next.',
+  KORAPAY: 'Bank transfer to a one-time Korapay account. Account details are shown after you confirm.',
 } as const;
 
 /** Amount → review → `POST /funding`. The method follows the wallet currency (R-W-3). */
@@ -71,13 +72,21 @@ export function FundWalletScreen() {
     );
   }
 
-  const valid = isPositiveMoney(amount);
+  const decimals = precision(code) ?? 2;
+  const normalizedAmount =
+    amount && !amount.endsWith('.')
+      ? (() => {
+          const [i = '0', f = ''] = amount.split('.');
+          return decimals > 0 ? `${i}.${f.padEnd(decimals, '0').slice(0, decimals)}` : i;
+        })()
+      : amount;
+  const valid = isPositiveMoney(normalizedAmount || '0');
 
   const submit = async () => {
     setError(null);
     const result = await createFunding({
       walletId,
-      amount: toMoney(amount),
+      amount: toMoney(normalizedAmount),
       idempotencyKey: idempotency.current(),
     });
     if ('error' in result) {
@@ -120,7 +129,7 @@ export function FundWalletScreen() {
           <ReviewRow label="Wallet" value={`${code} wallet`} />
           <ReviewRow
             label="Amount"
-            value={format(toMoney(amount), code)}
+            value={format(toMoney(normalizedAmount), code)}
             testID="fund-review-amount"
           />
           <ReviewRow label="Method" value={METHOD_COPY[rail]} />
@@ -140,7 +149,10 @@ export function FundWalletScreen() {
       footer={
         <Button
           label="Continue"
-          onPress={() => setStep('review')}
+          onPress={() => {
+            if (normalizedAmount && normalizedAmount !== amount) setAmount(normalizedAmount);
+            setStep('review');
+          }}
           disabled={!valid}
           testID="fund-continue"
         />
@@ -151,8 +163,9 @@ export function FundWalletScreen() {
         label="Amount"
         value={amount}
         onChangeText={setAmount}
-        precision={precision(code) ?? 2}
+        precision={decimals}
         currencyCode={code}
+        placeholder={`0.${''.padEnd(decimals, '0')}`}
         autoFocus
         testID="fund-amount"
       />

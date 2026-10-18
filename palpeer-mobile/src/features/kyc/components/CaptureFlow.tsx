@@ -95,7 +95,12 @@ export function CaptureFlow({
         setPhase((current) => (current.name === 'camera' ? { name: 'intro' } : current));
         return;
       }
-      await process({ uri: asset.uri, width: asset.width, height: asset.height });
+      // Library assets can omit size on web; prepareImage measures the file before quality checks.
+      await process({
+        uri: asset.uri,
+        width: asset.width ?? 0,
+        height: asset.height ?? 0,
+      });
     } catch (error) {
       logger.warn('Image library failed', { error });
       setPhase({

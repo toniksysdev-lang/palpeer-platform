@@ -6,6 +6,7 @@ import { fail, installFetchMock, ok } from '@/tests/fetchMock';
 import { router } from '@/tests/mocks/expoRouter';
 import { renderWithProviders } from '@/tests/render';
 
+import { DocumentTypeScreen } from '../screens/DocumentTypeScreen';
 import { KycHubScreen } from '../screens/KycHubScreen';
 import { KycSubmitScreen } from '../screens/KycSubmitScreen';
 
@@ -32,9 +33,16 @@ const emptyProfile = {
 
 function kycRoutes(
   status: Status,
-  progress: Partial<{ hasDocument: boolean; hasSelfie: boolean }> = {},
+  progress: Partial<{
+    hasDocument: boolean;
+    hasSelfie: boolean;
+    documentTypes: string[];
+  }> = {},
   rejectionReason: string | null = null,
 ) {
+  const hasDocument = progress.hasDocument ?? false;
+  const documentTypes =
+    progress.documentTypes ?? (hasDocument ? ['PASSPORT'] : []);
   return {
     'GET /profiles/me': ok(emptyProfile),
     'GET /kyc/status': ok({
@@ -48,10 +56,11 @@ function kycRoutes(
     'GET /kyc/progress': ok({
       caseId: 'c-1',
       status,
-      hasDocument: false,
-      documentCount: progress.hasDocument ? 1 : 0,
+      hasDocument,
+      documentCount: hasDocument ? Math.max(1, documentTypes.length) : 0,
       hasSelfie: false,
       selfieCount: progress.hasSelfie ? 1 : 0,
+      documentTypes,
       ...progress,
     }),
   };
@@ -133,6 +142,34 @@ describe('KycHubScreen', () => {
     expect(await screen.findByTestId('kyc-profile-prompt')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('kyc-profile-prompt'));
     expect(router.push).toHaveBeenCalledWith('/profile/personal');
+  });
+});
+
+describe('DocumentTypeScreen', () => {
+  it('marks uploaded document types', async () => {
+    installFetchMock(
+      kycRoutes('IN_PROGRESS', {
+        hasDocument: true,
+        documentTypes: ['DRIVING_LICENSE', 'PASSPORT'],
+      }),
+    );
+    await renderWithProviders(<DocumentTypeScreen />);
+
+    expect(await screen.findByTestId('doc-type-uploaded-DRIVING_LICENSE')).toBeTruthy();
+    expect(screen.getByTestId('doc-type-uploaded-PASSPORT')).toBeTruthy();
+    expect(screen.queryByTestId('doc-type-uploaded-NATIONAL_ID')).toBeNull();
+    expect(screen.getByText('Front of the card')).toBeTruthy();
+  });
+
+  it('navigates to capture for a chosen type', async () => {
+    installFetchMock(kycRoutes('NOT_STARTED'));
+    await renderWithProviders(<DocumentTypeScreen />);
+
+    await fireEvent.press(await screen.findByTestId('doc-type-NATIONAL_ID'));
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: '/kyc/document',
+      params: { type: 'NATIONAL_ID' },
+    });
   });
 });
 

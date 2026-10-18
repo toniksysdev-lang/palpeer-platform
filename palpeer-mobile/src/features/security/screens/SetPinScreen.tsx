@@ -4,6 +4,7 @@ import { View } from 'react-native';
 
 import { Screen } from '@/components/layout/Screen';
 import { StackHeader } from '@/components/layout/StackHeader';
+import { AppText } from '@/components/ui/AppText';
 import { useSensitiveScreen } from '@/hooks/useSensitiveScreen';
 import { useToast } from '@/providers/ToastProvider';
 import { baseApi } from '@/services/api/baseApi';
@@ -59,27 +60,35 @@ export function SetPinScreen() {
     setStep({ name: 'enter', error: securityErrorMessage(result.error) });
   };
 
+  const title = step.name === 'enter' ? 'Set Your Pin' : 'Confirm Your Pin';
+
   return (
-    <Screen scroll>
-      {mustSet ? <View style={{ height: 44 }} /> : <StackHeader />}
+    <Screen edges={['top', 'bottom']}>
+      {mustSet ? (
+        <View style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+          <AppText variant="h3" accessibilityRole="header">
+            {title}
+          </AppText>
+        </View>
+      ) : (
+        <StackHeader title={title} />
+      )}
       {step.name === 'enter' ? (
         <PinEntry
           key="enter"
-          title="Set Your Pin"
           subtitle={PIN_COPY}
-          submitLabel="Proceed"
           error={step.error}
+          autoSubmit
           onSubmit={(pin) => setStep({ name: 'confirm', pin })}
           testID="set-pin-enter"
         />
       ) : (
         <PinEntry
           key="confirm"
-          title="Confirm Your Pin"
           subtitle={PIN_COPY}
-          submitLabel="Proceed"
           statusMessage={step.validating || saving ? 'Validating pin' : null}
           loading={saving}
+          autoSubmit
           onSubmit={(pin) => {
             if (pin !== step.pin) {
               setStep({ name: 'enter', error: "The PINs didn't match. Start again." });

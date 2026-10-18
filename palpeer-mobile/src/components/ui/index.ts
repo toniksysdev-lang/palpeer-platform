@@ -7,7 +7,7 @@ export { Button, type ButtonSize, type ButtonVariant } from './Button';
 export { Card } from './Card';
 export { Icon } from './Icon';
 export { IconButton } from './IconButton';
-export { Input, type InputProps } from './Input';
+export { Input, type InputProps, type NumberPadMode } from './Input';
 export { NumberPad, type NumberPadBottomLeft } from './NumberPad';
 export {
   NumberPadDock,
@@ -19,7 +19,6 @@ export {
 export { OtpInput } from './OtpInput';
 export { PasswordInput } from './PasswordInput';
 export { PIN_MAX_LENGTH, PIN_MIN_LENGTH, PinPad } from './PinPad';
-export type { NumberPadMode } from './Input';
 export { ProgressBar } from './ProgressBar';
 export { SegmentedControl } from './SegmentedControl';
 export { Skeleton, SkeletonRow } from './Skeleton';

@@ -4,10 +4,13 @@ import com.palpeer.common.audit.AuditRecord;
 import com.palpeer.common.audit.AuditRecorder;
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
+import com.palpeer.common.notify.UserNotifyEvent;
 import com.palpeer.ledger.domain.LedgerEntry;
 import com.palpeer.ledger.domain.LedgerEntryType;
 import com.palpeer.ledger.service.LedgerPostingRequest;
 import com.palpeer.ledger.service.LedgerService;
+import com.palpeer.profile.domain.Profile;
+import com.palpeer.profile.repository.ProfileRepository;
 import com.palpeer.user.domain.User;
 import com.palpeer.user.repository.UserRepository;
 import com.palpeer.wallet.domain.Wallet;
@@ -15,12 +18,15 @@ import com.palpeer.wallet.funding.dto.CreateFundingRequest;
 import com.palpeer.wallet.funding.dto.FundingTransactionResponse;
 import com.palpeer.wallet.provider.PaymentRailProvider;
 import com.palpeer.wallet.provider.PaymentRailRouter;
+import com.palpeer.wallet.provider.apaylo.ApayloPaymentRail;
+import com.palpeer.wallet.provider.apaylo.ApayloProperties;
 import com.palpeer.wallet.repository.WalletRepository;
 import java.math.BigDecimal;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -45,9 +51,12 @@ public class FundingService {
     private final FundingTransactionRepository fundingTransactionRepository;
     private final WalletRepository walletRepository;
     private final UserRepository userRepository;
+    private final ProfileRepository profileRepository;
     private final LedgerService ledgerService;
     private final AuditRecorder auditRecorder;
     private final PaymentRailRouter paymentRailRouter;
+    private final ApayloProperties apayloProperties;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public FundingTransactionResponse initiate(UUID userId, String idempotencyKey, CreateFundingRequest request) {
@@ -85,9 +94,18 @@ public class FundingService {
         return response;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public FundingTransactionResponse get(UUID userId, UUID fundingId) {
-        return toResponse(requireOwned(userId, fundingId));
+        FundingTransaction tx = requireOwned(userId, fundingId);
+        // Local Apaylo sandbox cannot receive Interac webhooks — settle pending CAD on read.
+        if (tx.getStatus() == MoneyMovementStatus.PENDING
+                && ApayloPaymentRail.NAME.equals(tx.getProviderName())
+                && apayloProperties.isSandbox()
+                && apayloProperties.isAutoSandboxSettle()) {
+            return processInternal(fundingTransactionRepository.findByIdForUpdate(tx.getId())
+                    .orElse(tx));
+        }
+        return toResponse(tx);
     }
 
     /** Manual operator completion. Callers must be authorised operators, never the funding owner. */
@@ -153,6 +171,11 @@ public class FundingService {
         tx.setFailureReason(null);
         fundingTransactionRepository.save(tx);
         auditStatus(tx, "FUNDING_PROCESS", "SUCCESS");
+        notifyFunding(
+                tx,
+                "Funding successful",
+                "Your funding of " + formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                        + " has been credited to your wallet.");
         return toResponse(tx);
     }
 
@@ -176,6 +199,12 @@ public class FundingService {
                 .oldValue("status=" + old)
                 .newValue("status=FAILED;reason=" + tx.getFailureReason())
                 .build());
+        String detail = tx.getFailureReason() == null ? "" : " Reason: " + tx.getFailureReason();
+        notifyFunding(
+                tx,
+                "Funding failed",
+                "Your funding of " + formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                        + " could not be completed." + detail);
         return toResponse(tx);
     }
 
@@ -220,6 +249,11 @@ public class FundingService {
         tx.setStatus(MoneyMovementStatus.REVERSED);
         fundingTransactionRepository.save(tx);
         auditStatus(tx, "FUNDING_REVERSE", "REVERSED");
+        notifyFunding(
+                tx,
+                "Funding reversed",
+                "Your funding of " + formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                        + " was reversed and debited from your wallet.");
         return toResponse(tx);
     }
 
@@ -243,6 +277,7 @@ public class FundingService {
 
             if (paymentRailRouter.hasEnabledRail(wallet.getCurrencyCode())) {
                 PaymentRailProvider rail = paymentRailRouter.requireForCurrency(wallet.getCurrencyCode());
+                Profile profile = profileRepository.findByUserId(userId).orElse(null);
                 PaymentRailProvider.FundingInitiation initiation = rail.initiateFunding(
                         new PaymentRailProvider.FundingInitiationRequest(
                                 userId,
@@ -253,16 +288,29 @@ public class FundingService {
                                 user.getEmail(),
                                 user.getPhone(),
                                 idempotencyKey,
-                                null,
-                                null
+                                profile == null ? null : profile.getFirstName(),
+                                profile == null ? null : profile.getLastName()
                         ));
                 tx.setProviderName(rail.providerName());
                 tx.setProviderReference(initiation.providerReference());
                 tx.setFundingInstructions(initiation.instructions());
                 if (initiation.pendingExternalSettlement()) {
                     tx.setStatus(MoneyMovementStatus.PENDING);
+                    fundingTransactionRepository.save(tx);
+                } else {
+                    // Rail already settled (e.g. Korapay sandbox credit) — CREDIT the wallet now.
+                    fundingTransactionRepository.save(tx);
+                    auditRecorder.record(AuditRecord.builder("FUNDING_INITIATE")
+                            .entity("FundingTransaction:" + tx.getId())
+                            .userRef(userId)
+                            .newValue("walletId=" + tx.getWalletId()
+                                    + ";amount=" + tx.getAmount()
+                                    + ";currency=" + tx.getCurrencyCode()
+                                    + ";status=SETTLING"
+                                    + ";provider=" + tx.getProviderName())
+                            .build());
+                    return processInternal(tx);
                 }
-                fundingTransactionRepository.save(tx);
             }
 
             auditRecorder.record(AuditRecord.builder("FUNDING_INITIATE")
@@ -274,6 +322,11 @@ public class FundingService {
                             + ";status=" + tx.getStatus()
                             + ";provider=" + tx.getProviderName())
                     .build());
+            notifyFunding(
+                    tx,
+                    "Funding initiated",
+                    "Your funding of " + formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                            + " is " + tx.getStatus().name().toLowerCase() + ". Complete any payment instructions to finish.");
             return toResponse(tx);
         } catch (DataIntegrityViolationException ex) {
             return fundingTransactionRepository.findByIdempotencyKey(idempotencyKey)
@@ -346,6 +399,23 @@ public class FundingService {
                 .userRef(tx.getUserId())
                 .newValue("status=" + newStatus + ";amount=" + tx.getAmount())
                 .build());
+    }
+
+    private void notifyFunding(FundingTransaction tx, String title, String body) {
+        eventPublisher.publishEvent(new UserNotifyEvent(
+                tx.getUserId(),
+                title,
+                body,
+                "TRANSACTION",
+                "FUNDING",
+                tx.getId(),
+                true,
+                true));
+    }
+
+    private static String formatMoney(BigDecimal amount, String currency) {
+        String value = amount == null ? "0" : amount.stripTrailingZeros().toPlainString();
+        return value + " " + (currency == null ? "" : currency);
     }
 
     private static String trimToNull(String value) {

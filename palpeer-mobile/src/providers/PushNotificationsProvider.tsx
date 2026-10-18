@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { baseApi } from '@/services/api/baseApi';
 import {
@@ -22,6 +22,9 @@ import { logger } from '@/utils/logger';
 
 import { useToast } from './ToastProvider';
 
+/** Money-movement pushes should refresh wallet balances without waiting for the status screen. */
+const WALLET_LIST_TAG = { type: 'Wallet' as const, id: 'LIST' };
+
 configureForegroundPresentation();
 
 /**
@@ -38,6 +41,7 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
   const authenticated = useAppSelector((state) => state.session.status === 'authenticated');
   const authenticatedRef = useRef(authenticated);
   const toastRef = useRef(toast);
+  const isWeb = Platform.OS === 'web';
 
   useEffect(() => {
     authenticatedRef.current = authenticated;
@@ -49,9 +53,20 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
   }, [dispatch]);
 
   useEffect(() => {
+    if (isWeb) return;
     const subscription = Notifications.addNotificationReceivedListener((notification) => {
       if (!authenticatedRef.current) return;
       refresh();
+      const data = notification.request.content.data as Record<string, unknown> | undefined;
+      const category = typeof data?.category === 'string' ? data.category.toUpperCase() : '';
+      if (
+        category === 'TRANSACTION' ||
+        category === 'FUNDING' ||
+        category === 'EXCHANGE' ||
+        category === 'WITHDRAWAL'
+      ) {
+        dispatch(baseApi.util.invalidateTags([WALLET_LIST_TAG]));
+      }
       const { title, body } = notification.request.content;
       toastRef.current.show({
         type: 'info',
@@ -60,9 +75,10 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
       });
     });
     return () => subscription.remove();
-  }, [refresh]);
+  }, [dispatch, isWeb, refresh]);
 
   useEffect(() => {
+    if (isWeb) return;
     const handled = new Set<string>();
     const open = (response: Notifications.NotificationResponse) => {
       const id = response.notification.request.identifier;
@@ -80,10 +96,10 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
       })
       .catch(() => undefined);
     return () => subscription.remove();
-  }, [refresh]);
+  }, [isWeb, refresh]);
 
   useEffect(() => {
-    if (!authenticated) return;
+    if (isWeb || !authenticated) return;
     const sync = async (token?: string) => {
       const rememberedId = await getRememberedPushRecordId();
       if (!rememberedId) return;
@@ -107,7 +123,7 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
       if (typeof token.data === 'string') void sync(token.data);
     });
     return () => subscription.remove();
-  }, [authenticated, dispatch]);
+  }, [authenticated, dispatch, isWeb]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {

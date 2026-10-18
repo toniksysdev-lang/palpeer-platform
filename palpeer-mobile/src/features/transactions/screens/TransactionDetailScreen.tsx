@@ -95,7 +95,13 @@ function detailsLink(item: TransactionItemResponse) {
           }),
       };
     case 'EXCHANGE':
+    case 'TRANSFER':
       return null;
+    case 'P2P':
+      return {
+        label: 'P2P order details',
+        go: () => router.push({ pathname: '/p2p/order/[id]', params: { id: item.id } }),
+      };
   }
 }
 
@@ -111,7 +117,7 @@ export function TransactionDetailScreen() {
     skipPollingIfUnfocused: true,
   });
   const data = transaction.data;
-  useFinalStatusRefresh(data?.walletId, data?.status);
+  useFinalStatusRefresh(data?.walletId ?? undefined, data?.status);
   useFinalStatusRefresh(data?.secondaryWalletId ?? undefined, data?.status);
 
   const header = <StackHeader title={arg ? typeLabel(arg.type) : 'Transaction'} />;
@@ -150,11 +156,11 @@ export function TransactionDetailScreen() {
   }
 
   const { title, message } = describeTransaction(data);
-  const exchange = data.type === 'EXCHANGE';
+  const paired = data.type === 'EXCHANGE' || data.type === 'P2P';
   const link = detailsLink(data);
   const headline =
-    exchange && data.secondaryAmount && data.secondaryCurrencyCode
-      ? format(data.secondaryAmount, data.secondaryCurrencyCode)
+    paired && data.secondaryAmount && data.secondaryCurrencyCode
+      ? `${format(data.amount, data.currencyCode)} → ${format(data.secondaryAmount, data.secondaryCurrencyCode)}`
       : format(data.amount, data.currencyCode);
 
   return (
@@ -177,12 +183,16 @@ export function TransactionDetailScreen() {
               testID="transaction-details-link"
             />
           ) : null}
-          <Button
-            label={`View ${data.currencyCode} wallet`}
-            variant={link ? 'ghost' : 'outline'}
-            onPress={() => router.push({ pathname: '/wallet/[id]', params: { id: data.walletId } })}
-            testID="transaction-wallet"
-          />
+          {data.walletId ? (
+            <Button
+              label={`View ${data.currencyCode} wallet`}
+              variant={link ? 'ghost' : 'outline'}
+              onPress={() =>
+                router.push({ pathname: '/wallet/[id]', params: { id: data.walletId! } })
+              }
+              testID="transaction-wallet"
+            />
+          ) : null}
         </View>
       }
     >
@@ -198,16 +208,16 @@ export function TransactionDetailScreen() {
       ) : null}
 
       <Card variant="outlined" padding="md" testID="transaction-summary">
-        {exchange ? (
+        {paired ? (
           <>
             <ReviewRow
-              label="You sent"
+              label={data.type === 'P2P' ? 'Base amount' : 'You sent'}
               value={format(data.amount, data.currencyCode)}
               testID="transaction-sent"
             />
             {data.secondaryAmount && data.secondaryCurrencyCode ? (
               <ReviewRow
-                label="You received"
+                label={data.type === 'P2P' ? 'Quote amount' : 'You received'}
                 value={format(data.secondaryAmount, data.secondaryCurrencyCode)}
                 testID="transaction-received"
               />

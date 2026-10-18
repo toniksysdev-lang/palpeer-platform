@@ -124,18 +124,43 @@ public class ComplyCubeKycProvider implements KycVerificationProvider {
     public Optional<ProviderCheckResult> getCheck(String providerCheckId) {
         try {
             JsonNode response = get("/checks/" + providerCheckId);
+            JsonNode resultNode = response.path("result");
+            String outcome = extractOutcome(resultNode);
+            String breakdown = null;
+            if (resultNode.isObject() && resultNode.has("breakdown")) {
+                breakdown = resultNode.path("breakdown").toString();
+            } else if (!response.path("resultBreakdown").isMissingNode()) {
+                breakdown = response.path("resultBreakdown").toString();
+            }
             return Optional.of(new ProviderCheckResult(
                     requiredText(response, "id"),
                     textOrNull(response, "type"),
                     textOrNull(response, "status"),
-                    textOrNull(response, "result"),
-                    response.path("resultBreakdown").isMissingNode()
-                            ? null
-                            : response.path("resultBreakdown").toString()
+                    outcome,
+                    breakdown
             ));
         } catch (BusinessException ex) {
+            log.warn("ComplyCube getCheck failed for {}: {}", providerCheckId, ex.getMessage());
             return Optional.empty();
         }
+    }
+
+    /**
+     * ComplyCube returns {@code result} as an object with {@code outcome}
+     * (clear / attention / rejected / …), not a plain string.
+     */
+    static String extractOutcome(JsonNode resultNode) {
+        if (resultNode == null || resultNode.isMissingNode() || resultNode.isNull()) {
+            return null;
+        }
+        if (resultNode.isTextual()) {
+            String text = resultNode.asText();
+            return text == null || text.isBlank() ? null : text;
+        }
+        if (resultNode.isObject()) {
+            return textOrNull(resultNode, "outcome");
+        }
+        return null;
     }
 
     private JsonNode post(String path, Object body) {

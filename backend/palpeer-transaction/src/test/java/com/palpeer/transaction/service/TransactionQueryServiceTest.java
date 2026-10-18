@@ -11,6 +11,12 @@ import com.palpeer.common.exception.ResourceNotFoundException;
 import com.palpeer.exchange.domain.ExchangeTransaction;
 import com.palpeer.exchange.domain.ExchangeTransactionStatus;
 import com.palpeer.exchange.repository.ExchangeTransactionRepository;
+import com.palpeer.p2p.domain.P2POrder;
+import com.palpeer.p2p.domain.P2PRequest;
+import com.palpeer.p2p.domain.P2PSide;
+import com.palpeer.p2p.domain.P2PStatus;
+import com.palpeer.p2p.repository.P2POrderRepository;
+import com.palpeer.p2p.repository.P2PRequestRepository;
 import com.palpeer.transaction.domain.TransactionActivityType;
 import com.palpeer.transaction.web.dto.TransactionItemResponse;
 import com.palpeer.transaction.web.dto.TransactionPageResponse;
@@ -19,7 +25,10 @@ import com.palpeer.wallet.domain.Wallet;
 import com.palpeer.wallet.funding.FundingTransaction;
 import com.palpeer.wallet.funding.FundingTransactionRepository;
 import com.palpeer.wallet.funding.MoneyMovementStatus;
+import com.palpeer.user.domain.User;
+import com.palpeer.user.repository.UserRepository;
 import com.palpeer.wallet.repository.WalletRepository;
+import com.palpeer.wallet.transfer.WalletTransferRepository;
 import com.palpeer.wallet.withdrawal.WithdrawalTransaction;
 import com.palpeer.wallet.withdrawal.WithdrawalTransactionRepository;
 import java.math.BigDecimal;
@@ -40,7 +49,11 @@ class TransactionQueryServiceTest {
     @Mock private FundingTransactionRepository fundingRepository;
     @Mock private WithdrawalTransactionRepository withdrawalRepository;
     @Mock private ExchangeTransactionRepository exchangeRepository;
+    @Mock private WalletTransferRepository transferRepository;
+    @Mock private P2POrderRepository p2pOrderRepository;
+    @Mock private P2PRequestRepository p2pRequestRepository;
     @Mock private WalletRepository walletRepository;
+    @Mock private UserRepository userRepository;
 
     @InjectMocks private TransactionQueryService service;
 
@@ -58,6 +71,11 @@ class TransactionQueryServiceTest {
         when(withdrawalRepository.findByUserIdOrderByCreatedAtDesc(eq(userId), any(Pageable.class)))
                 .thenReturn(List.of(withdrawal));
         when(exchangeRepository.findByUserIdOrderByCreatedAtDesc(eq(userId), any(Pageable.class)))
+                .thenReturn(List.of());
+        when(transferRepository.findByPartyUserIdOrderByCreatedAtDesc(eq(userId), any(Pageable.class)))
+                .thenReturn(List.of());
+        when(p2pOrderRepository.findByPartyUserIdAndStatusInOrderByCreatedAtDesc(
+                        eq(userId), any(), any(Pageable.class)))
                 .thenReturn(List.of());
 
         List<TransactionItemResponse> recent = service.recent(userId, 20);
@@ -112,6 +130,53 @@ class TransactionQueryServiceTest {
     }
 
     @Test
+    void recent_includesSettledP2POrders() {
+        UUID userId = UUID.randomUUID();
+        Instant t1 = Instant.parse("2026-01-03T10:00:00Z");
+        P2POrder order = p2pOrder(userId, UUID.randomUUID(), P2PStatus.COMPLETED, t1);
+        P2PRequest request = p2pRequest(order.getRequestId(), userId, "CAD", "NGN");
+
+        when(fundingRepository.findByUserIdOrderByCreatedAtDesc(eq(userId), any(Pageable.class)))
+                .thenReturn(List.of());
+        when(withdrawalRepository.findByUserIdOrderByCreatedAtDesc(eq(userId), any(Pageable.class)))
+                .thenReturn(List.of());
+        when(exchangeRepository.findByUserIdOrderByCreatedAtDesc(eq(userId), any(Pageable.class)))
+                .thenReturn(List.of());
+        when(transferRepository.findByPartyUserIdOrderByCreatedAtDesc(eq(userId), any(Pageable.class)))
+                .thenReturn(List.of());
+        when(p2pOrderRepository.findByPartyUserIdAndStatusInOrderByCreatedAtDesc(
+                        eq(userId), any(), any(Pageable.class)))
+                .thenReturn(List.of(order));
+        when(p2pRequestRepository.findAllById(any())).thenReturn(List.of(request));
+
+        List<TransactionItemResponse> recent = service.recent(userId, 20);
+
+        assertThat(recent).hasSize(1);
+        assertThat(recent.getFirst().type()).isEqualTo(TransactionActivityType.P2P);
+        assertThat(recent.getFirst().status()).isEqualTo("COMPLETED");
+        assertThat(recent.getFirst().currencyCode()).isEqualTo("CAD");
+        assertThat(recent.getFirst().secondaryCurrencyCode()).isEqualTo("NGN");
+        assertThat(recent.getFirst().secondaryAmount()).isEqualByComparingTo("150000.00");
+    }
+
+    @Test
+    void adminDetails_enrichesOwnerEmail() {
+        UUID userId = UUID.randomUUID();
+        FundingTransaction funding = funding(userId, "CAD", "25.00", MoneyMovementStatus.SUCCESS, Instant.now());
+        when(fundingRepository.findById(funding.getId())).thenReturn(Optional.of(funding));
+        User user = new User();
+        user.setId(userId);
+        user.setEmail("member@example.com");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        TransactionItemResponse item =
+                service.adminDetails(TransactionActivityType.FUNDING, funding.getId());
+
+        assertThat(item.userEmail()).isEqualTo("member@example.com");
+        assertThat(item.userId()).isEqualTo(userId);
+    }
+
+    @Test
     void summary_aggregatesSuccessfulAmounts() {
         UUID userId = UUID.randomUUID();
         Instant from = Instant.parse("2026-01-01T00:00:00Z");
@@ -125,6 +190,12 @@ class TransactionQueryServiceTest {
                 .thenReturn(List.of());
         when(exchangeRepository.findByUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanEqual(userId, from, to))
                 .thenReturn(List.of(exchange(userId, ExchangeTransactionStatus.SUCCESS, from)));
+        when(transferRepository.findByPartyUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanEqual(
+                        userId, from, to))
+                .thenReturn(List.of());
+        when(p2pOrderRepository.findByPartyUserIdAndStatusInAndCreatedAtBetween(
+                        eq(userId), any(), eq(from), eq(to)))
+                .thenReturn(List.of());
 
         Wallet source = new Wallet();
         source.setId(UUID.randomUUID());
@@ -135,6 +206,7 @@ class TransactionQueryServiceTest {
 
         assertThat(summary.totalCount()).isEqualTo(3);
         assertThat(summary.countByType().get("FUNDING")).isEqualTo(2);
+        assertThat(summary.countByType().get("TRANSFER")).isEqualTo(0);
         assertThat(summary.successfulFundingByCurrency()).hasSize(1);
         assertThat(summary.successfulFundingByCurrency().getFirst().totalAmount()).isEqualByComparingTo("10.00");
         assertThat(summary.successfulExchangeCount()).isEqualTo(1);
@@ -185,5 +257,32 @@ class TransactionQueryServiceTest {
         e.setCreatedAt(createdAt);
         e.setUpdatedAt(createdAt);
         return e;
+    }
+
+    private P2POrder p2pOrder(UUID requesterId, UUID acceptorId, P2PStatus status, Instant createdAt) {
+        P2POrder order = new P2POrder();
+        order.setId(UUID.randomUUID());
+        order.setRequestId(UUID.randomUUID());
+        order.setRequesterId(requesterId);
+        order.setAcceptorId(acceptorId);
+        order.setAmount(new BigDecimal("100.00"));
+        order.setRate(new BigDecimal("1500.00"));
+        order.setStatus(status);
+        order.setCreatedAt(createdAt);
+        order.setUpdatedAt(createdAt);
+        return order;
+    }
+
+    private P2PRequest p2pRequest(UUID requestId, UUID userId, String base, String quote) {
+        P2PRequest request = new P2PRequest();
+        request.setId(requestId);
+        request.setUserId(userId);
+        request.setSide(P2PSide.SELL);
+        request.setBaseCurrencyCode(base);
+        request.setQuoteCurrencyCode(quote);
+        request.setAmount(new BigDecimal("100.00"));
+        request.setRate(new BigDecimal("1500.00"));
+        request.setStatus(P2PStatus.COMPLETED);
+        return request;
     }
 }

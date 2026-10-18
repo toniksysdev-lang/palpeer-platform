@@ -1,8 +1,10 @@
 import {
   ArrowDownLeft,
   ArrowLeftRight,
+  ArrowRightLeft,
   ArrowUpRight,
   ChevronRight,
+  Users,
   type LucideIcon,
 } from 'lucide-react-native';
 import { View } from 'react-native';
@@ -22,14 +24,20 @@ const ICONS: Record<TransactionActivityType, LucideIcon> = {
   FUNDING: ArrowDownLeft,
   WITHDRAWAL: ArrowUpRight,
   EXCHANGE: ArrowLeftRight,
+  TRANSFER: ArrowRightLeft,
+  P2P: Users,
 };
 
-/** "100.00 CAD → 108,945.12 NGN" for exchanges; the single amount otherwise. */
+/** "100.00 CAD → 108,945.12 NGN" for exchanges/P2P; the single amount otherwise. */
 export function useTransactionAmount() {
   const { format } = useMoneyFormat();
   return (item: TransactionItemResponse) => {
     const source = format(item.amount, item.currencyCode);
-    if (item.type !== 'EXCHANGE' || !item.secondaryAmount || !item.secondaryCurrencyCode) {
+    if (
+      (item.type !== 'EXCHANGE' && item.type !== 'P2P') ||
+      !item.secondaryAmount ||
+      !item.secondaryCurrencyCode
+    ) {
       return source;
     }
     return `${source} → ${format(item.secondaryAmount, item.secondaryCurrencyCode)}`;
@@ -53,8 +61,8 @@ export function TransactionRow({
   const theme = useTheme();
   const amount = useTransactionAmount()(item);
   const label =
-    item.type === 'EXCHANGE' && item.secondaryCurrencyCode
-      ? `Exchange ${item.currencyCode} → ${item.secondaryCurrencyCode}`
+    (item.type === 'EXCHANGE' || item.type === 'P2P') && item.secondaryCurrencyCode
+      ? `${typeLabel(item.type)} ${item.currencyCode} → ${item.secondaryCurrencyCode}`
       : `${typeLabel(item.type)} · ${item.currencyCode}`;
   const when = timeOnly ? formatClockTime(item.createdAt) : formatDateTime(item.createdAt);
 

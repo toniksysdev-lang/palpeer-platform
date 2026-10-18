@@ -34,13 +34,15 @@ public final class EmailLayout {
                             <td style="height:4px;line-height:4px;font-size:0;background-color:%s;">&nbsp;</td>
                           </tr>
                           <tr>
-                            <td style="padding:28px 28px 16px 28px;border-bottom:1px solid %s;">
+                            <td style="padding:24px 28px 16px 28px;border-bottom:1px solid %s;">
                               <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0">
                                 <tr>
-                                  <td style="font-size:22px;font-weight:700;letter-spacing:0.02em;color:%s;line-height:1.2;">
-                                    PALPEER
+                                  <td valign="middle" style="line-height:0;">
+                                    <a href="%s" style="text-decoration:none;border:0;outline:none;">
+                                      <img src="%s" width="%d" alt="PALPEER" style="display:block;border:0;outline:none;text-decoration:none;height:auto;max-width:100%%;width:%dpx;"/>
+                                    </a>
                                   </td>
-                                  <td align="right" style="font-size:11px;color:%s;letter-spacing:0.08em;text-transform:uppercase;">
+                                  <td align="right" valign="middle" style="font-size:11px;color:%s;letter-spacing:0.08em;text-transform:uppercase;padding-left:12px;">
                                     %s
                                   </td>
                                 </tr>
@@ -81,7 +83,10 @@ public final class EmailLayout {
                         EmailBrand.BORDER,
                         EmailBrand.PRIMARY,
                         EmailBrand.BORDER,
-                        EmailBrand.TEXT,
+                        escapeAttr(EmailBrand.SITE_URL),
+                        escapeAttr(EmailBrand.LOGO_CID_SRC),
+                        EmailBrand.LOGO_WIDTH_PX,
+                        EmailBrand.LOGO_WIDTH_PX,
                         EmailBrand.TEXT_DIM,
                         EmailBrand.TAGLINE,
                         innerHtml,

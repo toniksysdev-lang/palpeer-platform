@@ -18,6 +18,8 @@ public record P2POrderSummaryResponse(
         BigDecimal amount,
         BigDecimal rate,
         P2PStatus status,
-        Instant createdAt
+        Instant createdAt,
+        /** From the originating request; useful for open-listing countdown before/around accept. */
+        Instant expiresAt
 ) {
 }

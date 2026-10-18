@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 import { sessionManager } from '@/services/auth/session';
 import { secureStorage } from '@/services/storage/secureStorage';
 import { created, installFakeXhr, partValue } from '@/tests/fakeXhr';
@@ -93,5 +95,34 @@ describe('uploadMultipart', () => {
 
     expect(result.ok).toBe(false);
     expect(instances[0]?.aborted).toBe(true);
+  });
+
+  it('on web resolves the file URI to a Blob before sending', async () => {
+    const platform = Platform as { OS: string };
+    const previous = platform.OS;
+    platform.OS = 'web';
+
+    const blob = new Blob(['jpeg-bytes'], { type: 'image/jpeg' });
+    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      blob: async () => blob,
+    } as Response);
+
+    const { requests } = installFakeXhr({ 'POST /kyc/documents': created({ id: 'd-web' }) });
+
+    try {
+      const result = await uploadMultipart('/kyc/documents', {
+        fields: { documentType: 'NATIONAL_ID' },
+        file: FILE,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(fetchMock).toHaveBeenCalledWith('file:///doc.jpg');
+      const filePart = partValue(requests[0], 'file');
+      expect(filePart).toBeInstanceOf(Blob);
+    } finally {
+      platform.OS = previous;
+      fetchMock.mockRestore();
+    }
   });
 });

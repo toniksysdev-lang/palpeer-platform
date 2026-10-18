@@ -1,13 +1,16 @@
 import { Delete } from 'lucide-react-native';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useState } from 'react';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { useTheme } from '@/providers/ThemeProvider';
 
 import { AppText } from './AppText';
 import { Icon } from './Icon';
+import { usePressScale } from './usePressScale';
 
 export type NumberPadBottomLeft = '' | '*' | '.';
-/** Flat Figma pad (full-width). Use for phone, PIN, OTP, and amount fields. */
+/** Full-width pad. Use for phone, PIN, OTP, and amount fields. */
 export type NumberPadVariant = 'compact' | 'phone';
 
 type Props = {
@@ -23,8 +26,80 @@ type Props = {
   testID?: string;
 };
 
+type Key = string;
+
+const KEY_HEIGHT = 64;
+const ROW_GAP = 12;
+const COL_GAP = 12;
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+type PadKeyProps = {
+  label: Key;
+  disabled?: boolean;
+  onPress: () => void;
+  testID?: string;
+};
+
+function NumberPadKey({ label, disabled, onPress, testID }: PadKeyProps) {
+  const theme = useTheme();
+  const press = usePressScale(0.94);
+  const [pressed, setPressed] = useState(false);
+  const inactive = !!disabled;
+  const decorative = label === '*';
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      onPressIn={() => {
+        if (inactive || decorative) return;
+        setPressed(true);
+        press.onPressIn();
+      }}
+      onPressOut={() => {
+        setPressed(false);
+        press.onPressOut();
+      }}
+      disabled={inactive || decorative}
+      accessibilityRole="button"
+      accessibilityLabel={
+        label === 'back' ? 'Delete last digit' : label === '.' ? 'Decimal point' : label
+      }
+      accessibilityState={{ disabled: inactive || decorative }}
+      testID={testID}
+      style={[
+        styles.key,
+        {
+          borderColor: pressed ? theme.colors.borderStrong : theme.colors.border,
+          borderRadius: theme.radius.md,
+          backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.surface,
+          opacity: inactive ? 0.5 : 1,
+        },
+        press.animatedStyle,
+      ]}
+    >
+      {label === 'back' ? (
+        <Icon icon={Delete} size={28} color={theme.colors.textPrimary} strokeWidth={1.75} />
+      ) : (
+        <AppText
+          align="center"
+          style={{
+            fontSize: 32,
+            fontWeight: '500',
+            color: theme.colors.textPrimary,
+            lineHeight: 32,
+            ...(Platform.OS === 'android' ? { includeFontPadding: false } : null),
+          }}
+        >
+          {label}
+        </AppText>
+      )}
+    </AnimatedPressable>
+  );
+}
+
 /**
- * Flat Figma numeric keypad (1–9, bottom-left, 0, delete). No letter legends or key borders.
+ * Numeric keypad (1–9, bottom-left, 0, delete) with rounded key chrome.
+ * Full-width 3×4 grid; digits and icons are centered in each key.
  */
 export function NumberPad({
   value,
@@ -32,18 +107,16 @@ export function NumberPad({
   maxLength = 15,
   disabled,
   bottomLeft = '*',
-  variant = 'phone',
   testID,
 }: Props) {
-  const theme = useTheme();
-  const { width } = useWindowDimensions();
-  const flat = variant === 'phone' || variant === 'compact';
-  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', bottomLeft, '0', 'back'] as const;
-  const gridWidth = flat ? width - theme.spacing.xl * 2 : 264;
-  const keyWidth = flat ? Math.floor(gridWidth / 3) : 80;
-  const keyHeight = 56;
+  const rows: Key[][] = [
+    ['1', '2', '3'],
+    ['4', '5', '6'],
+    ['7', '8', '9'],
+    [bottomLeft || '*', '0', 'back'],
+  ];
 
-  const press = (key: (typeof keys)[number]) => {
+  const handlePress = (key: Key) => {
     if (disabled) return;
     if (key === 'back') {
       onChange(value.slice(0, -1));
@@ -60,64 +133,50 @@ export function NumberPad({
 
   return (
     <View
-      style={[styles.grid, { width: gridWidth, rowGap: theme.spacing.sm }]}
+      style={[styles.grid, { rowGap: ROW_GAP }]}
       testID={testID ? `${testID}-grid` : undefined}
       accessibilityLabel="Number pad"
     >
-      {keys.map((key, index) =>
-        key === '' ? (
-          <View key={`blank-${index}`} style={{ width: keyWidth, height: keyHeight }} />
-        ) : (
-          <Pressable
-            key={`${key}-${index}`}
-            onPress={() => press(key)}
-            disabled={disabled || key === '*'}
-            accessibilityRole="button"
-            accessibilityLabel={
-              key === 'back' ? 'Delete last digit' : key === '.' ? 'Decimal point' : key
-            }
-            accessibilityState={{ disabled: disabled || key === '*' }}
-            testID={testID ? `${testID}-key-${key === 'back' ? 'back' : key}` : undefined}
-            style={({ pressed }) => [
-              {
-                width: keyWidth,
-                height: keyHeight,
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: 0,
-                backgroundColor: pressed && key !== '*' ? theme.colors.surfaceMuted : 'transparent',
-                opacity: disabled ? 0.5 : 1,
-              },
-            ]}
-          >
-            {key === 'back' ? (
-              <Icon icon={Delete} size="lg" color={theme.colors.textSecondary} />
+      {rows.map((row, rowIndex) => (
+        <View key={`row-${rowIndex}`} style={[styles.row, { columnGap: COL_GAP }]}>
+          {row.map((key) =>
+            key === '' ? (
+              <View key={`blank-${rowIndex}`} style={styles.keySlot} />
             ) : (
-              <AppText
-                variant="h1"
-                tone={key === '*' ? 'muted' : 'secondary'}
-                style={{
-                  fontSize: 28,
-                  fontWeight: '400',
-                  color: theme.colors.textSecondary,
-                  lineHeight: 34,
-                }}
-              >
-                {key}
-              </AppText>
-            )}
-          </Pressable>
-        ),
-      )}
+              <NumberPadKey
+                key={`${key}-${rowIndex}`}
+                label={key}
+                disabled={disabled}
+                onPress={() => handlePress(key)}
+                testID={testID ? `${testID}-key-${key === 'back' ? 'back' : key}` : undefined}
+              />
+            ),
+          )}
+        </View>
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   grid: {
+    width: '100%',
+    alignSelf: 'stretch',
+  },
+  row: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    alignSelf: 'center',
+    width: '100%',
+    alignItems: 'stretch',
+  },
+  keySlot: {
+    flex: 1,
+    height: KEY_HEIGHT,
+  },
+  key: {
+    flex: 1,
+    height: KEY_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
   },
 });

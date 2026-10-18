@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import { fail, installFetchMock, ok } from '@/tests/fetchMock';
 import { router, setSearchParams } from '@/tests/mocks/expoRouter';
-import { typeOnNumberPad } from '@/tests/numberPad';
+import { typeIntoNumberField, typeOnNumberPad } from '@/tests/numberPad';
 import { renderWithProviders } from '@/tests/render';
 
 import { EnterPhoneScreen } from '../screens/EnterPhoneScreen';
@@ -41,7 +41,9 @@ describe('EnterPhoneScreen', () => {
 
   it('continues to phone verification with an E.164 number', async () => {
     await renderWithProviders(<EnterPhoneScreen />);
-    await typeOnNumberPad('5062100661');
+    expect(screen.queryByTestId('number-pad-dock-grid')).toBeNull();
+    await typeIntoNumberField('enter-phone-number', '5062100661');
+    expect(screen.getByTestId('enter-phone-number')).toHaveTextContent('(506) 210-0661');
     await fireEvent.press(screen.getByTestId('enter-phone-continue'));
     expect(router.push).toHaveBeenCalledWith({
       pathname: '/verify-phone',
@@ -49,13 +51,18 @@ describe('EnterPhoneScreen', () => {
     });
   });
 
-  it('shows the app number pad when the phone field is selected', async () => {
+  it('shows the custom 3×4 pad only after tapping the phone field', async () => {
     await renderWithProviders(<EnterPhoneScreen />);
-    expect(screen.getByTestId('number-pad-dock-grid')).toBeTruthy();
-    await fireEvent.press(screen.getByTestId('number-pad-dock-done'));
     expect(screen.queryByTestId('number-pad-dock-grid')).toBeNull();
     await fireEvent.press(screen.getByTestId('enter-phone-number'));
     expect(screen.getByTestId('number-pad-dock-grid')).toBeTruthy();
+    for (const key of ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '*', 'back']) {
+      expect(screen.getByTestId(`number-pad-dock-key-${key}`)).toBeTruthy();
+    }
+    await typeOnNumberPad('12');
+    expect(screen.getByTestId('enter-phone-number')).toHaveTextContent('12');
+    await fireEvent.press(screen.getByTestId('number-pad-dock-key-back'));
+    expect(screen.getByTestId('enter-phone-number')).toHaveTextContent('1');
   });
 });
 
@@ -91,7 +98,7 @@ describe('RegisterScreen', () => {
     await waitFor(() =>
       expect(router.replace).toHaveBeenCalledWith({
         pathname: '/verify-email',
-        params: { email: 'ada@example.com', otp: '654321' },
+        params: { email: 'ada@example.com' },
       }),
     );
     expect(calls[0]?.body).toEqual({
@@ -124,12 +131,13 @@ describe('VerifyOtpScreen', () => {
     jest.clearAllMocks();
   });
 
-  it('autofills signup phone OTP and continues to create account without calling the API', async () => {
+  it('lets the user enter a signup phone OTP and continues to create account without calling the API', async () => {
     setSearchParams({ phone: '+15062100661', signup: '1' });
     const { calls } = installFetchMock({});
     await renderWithProviders(<VerifyOtpScreen purpose="PHONE_VERIFICATION" />);
 
-    expect(screen.getByTestId('verify-code').props.accessibilityValue).toEqual({ text: '123456' });
+    expect(screen.getByTestId('verify-code').props.accessibilityValue).toEqual({ text: '' });
+    await typeIntoNumberField('verify-code-cells', '123456');
     await fireEvent.press(screen.getByTestId('verify-submit'));
     await waitFor(() =>
       expect(router.push).toHaveBeenCalledWith({
@@ -150,13 +158,13 @@ describe('VerifyOtpScreen', () => {
     });
   });
 
-  it('autofills the email OTP from params and verifies it', async () => {
-    setSearchParams({ email: 'ada@example.com', otp: '654321' });
+  it('verifies the email OTP the user enters', async () => {
+    setSearchParams({ email: 'ada@example.com' });
     const { calls } = installFetchMock({ 'POST /auth/otp/verify': ok(undefined, 'OTP verified') });
     await renderWithProviders(<VerifyOtpScreen purpose="EMAIL_VERIFICATION" />);
 
-    expect(screen.getByTestId('verify-code').props.accessibilityValue).toEqual({ text: '654321' });
-    await fireEvent.press(screen.getByTestId('verify-submit'));
+    expect(screen.getByTestId('verify-code').props.accessibilityValue).toEqual({ text: '' });
+    await typeIntoNumberField('verify-code-cells', '654321');
     await waitFor(() =>
       expect(router.replace).toHaveBeenCalledWith({
         pathname: '/login',
@@ -176,7 +184,7 @@ describe('VerifyOtpScreen', () => {
     installFetchMock({ 'POST /auth/otp/verify': fail(400, 'OTP_INVALID') });
     await renderWithProviders(<VerifyOtpScreen purpose="EMAIL_VERIFICATION" />);
 
-    await typeOnNumberPad('000000');
+    await typeIntoNumberField('verify-code-cells', '000000');
     expect(await screen.findByText('That code is incorrect. Check it and try again.')).toBeTruthy();
     expect(screen.getByTestId('verify-code').props.accessibilityValue).toEqual({ text: '' });
     expect(router.replace).not.toHaveBeenCalled();

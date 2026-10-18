@@ -123,6 +123,40 @@ public class AdminReportsService {
                 .setParameter("to", to)
                 .getResultList(), countsByType, countsByTypeAndStatus, successVolume);
 
+        // Transfers have no status column; every recorded transfer is SUCCESS.
+        List<Object[]> transferRows = em.createQuery("""
+                        select t.currencyCode, count(t), sum(t.amount)
+                        from WalletTransfer t
+                        where t.createdAt >= :from and t.createdAt <= :to
+                        group by t.currencyCode
+                        """, Object[].class)
+                .setParameter("from", from)
+                .setParameter("to", to)
+                .getResultList();
+        for (Object[] row : transferRows) {
+            String currency = (String) row[0];
+            long count = ((Number) row[1]).longValue();
+            countsByType.merge(TransactionActivityType.TRANSFER.name(), count, Long::sum);
+            countsByTypeAndStatus.merge(
+                    TransactionActivityType.TRANSFER.name() + ":SUCCESS", count, Long::sum);
+            successVolume.add(new SuccessVolume(
+                    TransactionActivityType.TRANSFER.name(), currency, count, decimal(row[2])));
+        }
+
+        // Settled P2P orders (accepted / completed) — volume in base currency.
+        accumulate(TransactionActivityType.P2P, P2PStatus.COMPLETED.name(), em.createQuery("""
+                        select o.status, r.baseCurrencyCode, count(o), sum(o.amount)
+                        from P2POrder o, P2PRequest r
+                        where o.requestId = r.id
+                          and o.status in (com.palpeer.p2p.domain.P2PStatus.ACCEPTED,
+                                           com.palpeer.p2p.domain.P2PStatus.COMPLETED)
+                          and o.createdAt >= :from and o.createdAt <= :to
+                        group by o.status, r.baseCurrencyCode
+                        """, Object[].class)
+                .setParameter("from", from)
+                .setParameter("to", to)
+                .getResultList(), countsByType, countsByTypeAndStatus, successVolume);
+
         successVolume.sort(Comparator.comparing(SuccessVolume::type)
                 .thenComparing(SuccessVolume::currencyCode, Comparator.nullsLast(Comparator.naturalOrder())));
         return new Transactions(countsByType, countsByTypeAndStatus, successVolume);

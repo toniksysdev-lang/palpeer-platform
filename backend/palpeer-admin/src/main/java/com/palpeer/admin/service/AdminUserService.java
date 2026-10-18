@@ -222,6 +222,12 @@ public class AdminUserService {
         exec("DELETE FROM exchange_quotes WHERE user_id = :userId", userId);
         exec("DELETE FROM funding_transactions WHERE user_id = :userId", userId);
         exec("DELETE FROM withdrawal_transactions WHERE user_id = :userId", userId);
+        exec(
+                """
+                DELETE FROM wallet_transfers
+                WHERE sender_user_id = :userId OR recipient_user_id = :userId
+                """,
+                userId);
         exec("DELETE FROM payment_virtual_accounts WHERE user_id = :userId", userId);
 
         // Ledger + wallets

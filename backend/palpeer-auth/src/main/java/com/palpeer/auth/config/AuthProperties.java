@@ -19,6 +19,13 @@ public class AuthProperties {
     private final Jwt jwt = new Jwt();
     private final Otp otp = new Otp();
     private final Google google = new Google();
+    /**
+     * Public API origin used in emailed links (e.g. {@code https://api.example.com} or
+     * {@code http://localhost:8085}). No trailing slash.
+     */
+    private String publicBaseUrl = "http://localhost:8085";
+    /** How long a new-device suspend link remains usable. */
+    private Duration suspendTokenTtl = Duration.ofHours(24);
 
     @Getter
     @Setter

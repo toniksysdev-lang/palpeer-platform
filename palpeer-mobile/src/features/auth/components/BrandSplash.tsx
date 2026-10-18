@@ -7,7 +7,6 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
-  withDelay,
   withRepeat,
   withSequence,
   withTiming,
@@ -19,51 +18,45 @@ import { palette } from '@/theme';
 
 const LOGO = require('../../../../assets/brand-logo.png');
 
+/** Indeterminate progress cycle length while bootstrap runs. */
+const PROGRESS_CYCLE_MS = 1600;
+const PROGRESS_TRACK_WIDTH = 148;
+
 /**
- * Animated light splash while preferences and session restore. Hands off to Welcome
- * (View best rate / Get started / Login) once bootstrap finishes.
+ * Branded splash shown on every cold app open while preferences and session restore.
+ * Logo centered with an animated loading bar directly underneath.
  */
 export function BrandSplash() {
   const theme = useTheme();
   const reducedMotion = useReducedMotion();
-  const scale = useSharedValue(0.86);
-  const glow = useSharedValue(0.35);
-  const orbit = useSharedValue(0);
+  const scale = useSharedValue(0.92);
+  const progress = useSharedValue(0.08);
 
   useEffect(() => {
     if (reducedMotion) {
       scale.set(1);
-      glow.set(0.55);
+      progress.set(0.55);
       return;
     }
-    scale.set(
-      withSequence(
-        withTiming(1.06, { duration: 720, easing: Easing.out(Easing.cubic) }),
-        withTiming(1, { duration: 480, easing: Easing.inOut(Easing.quad) }),
-      ),
-    );
-    glow.set(
+    scale.set(withTiming(1, { duration: 560, easing: Easing.out(Easing.cubic) }));
+    progress.set(
       withRepeat(
-        withSequence(withTiming(0.75, { duration: 900 }), withTiming(0.4, { duration: 900 })),
+        withSequence(
+          withTiming(0.92, { duration: PROGRESS_CYCLE_MS, easing: Easing.inOut(Easing.quad) }),
+          withTiming(0.12, { duration: PROGRESS_CYCLE_MS * 0.55, easing: Easing.inOut(Easing.quad) }),
+        ),
         -1,
-        true,
+        false,
       ),
     );
-    orbit.set(
-      withDelay(
-        200,
-        withRepeat(withTiming(1, { duration: 2400, easing: Easing.linear }), -1, false),
-      ),
-    );
-  }, [glow, orbit, reducedMotion, scale]);
+  }, [progress, reducedMotion, scale]);
 
   const logoMotion = useAnimatedStyle(() => ({
     transform: [{ scale: scale.get() }],
   }));
 
-  const ringMotion = useAnimatedStyle(() => ({
-    opacity: glow.get(),
-    transform: [{ rotate: `${orbit.get() * 360}deg` }, { scale: 0.92 + glow.get() * 0.12 }],
+  const barMotion = useAnimatedStyle(() => ({
+    width: Math.max(12, Math.min(PROGRESS_TRACK_WIDTH, progress.get() * PROGRESS_TRACK_WIDTH)),
   }));
 
   return (
@@ -73,28 +66,26 @@ export function BrandSplash() {
       accessibilityRole="progressbar"
       testID="brand-splash"
     >
-      <View style={styles.stage}>
-        <Animated.View
-          style={[
-            styles.ring,
-            {
-              borderColor: theme.colors.primarySoft,
-              backgroundColor: theme.colors.primarySoft,
-            },
-            ringMotion,
-          ]}
+      <Animated.View entering={FadeIn.duration(theme.motion.slow)} style={logoMotion}>
+        <Image
+          source={LOGO}
+          style={styles.logo}
+          resizeMode="contain"
+          accessibilityIgnoresInvertColors
         />
-        <Animated.View entering={FadeIn.duration(theme.motion.slow)} style={logoMotion}>
-          <Image
-            source={LOGO}
-            style={styles.logo}
-            resizeMode="contain"
-            accessibilityIgnoresInvertColors
-          />
-        </Animated.View>
-      </View>
+      </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(280).duration(theme.motion.slow)} style={styles.copy}>
+      <Animated.View
+        entering={FadeIn.delay(180)}
+        style={[styles.progressTrack, { backgroundColor: theme.colors.surfaceMuted }]}
+        testID="brand-splash-progress"
+      >
+        <Animated.View
+          style={[styles.progressFill, { backgroundColor: theme.colors.primary }, barMotion]}
+        />
+      </Animated.View>
+
+      <Animated.View entering={FadeInUp.delay(240).duration(theme.motion.base)} style={styles.copy}>
         <AppText variant="h2" align="center" style={{ letterSpacing: 2 }}>
           PALPEER
         </AppText>
@@ -102,13 +93,6 @@ export function BrandSplash() {
           Your rate, your way
         </AppText>
       </Animated.View>
-
-      <View style={[styles.progressTrack, { backgroundColor: theme.colors.surfaceMuted }]}>
-        <Animated.View
-          entering={FadeIn.delay(400)}
-          style={[styles.progressFill, { backgroundColor: theme.colors.primary }]}
-        />
-      </View>
     </View>
   );
 }
@@ -119,33 +103,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
-    gap: 28,
+    gap: 24,
   },
-  stage: {
-    width: 180,
-    height: 180,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ring: {
-    position: 'absolute',
-    width: 168,
-    height: 168,
-    borderRadius: 84,
-    borderWidth: 2,
-    opacity: 0.5,
-  },
-  logo: { width: 120, height: 120 },
+  logo: { width: 168, height: 150 },
   copy: { gap: 6, alignItems: 'center' },
   progressTrack: {
-    width: 120,
+    width: PROGRESS_TRACK_WIDTH,
     height: 4,
     borderRadius: 999,
     overflow: 'hidden',
-    marginTop: 8,
+    marginTop: 4,
   },
   progressFill: {
-    width: '55%',
     height: '100%',
     borderRadius: 999,
   },

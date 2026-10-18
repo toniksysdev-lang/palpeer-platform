@@ -1,7 +1,29 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 import { withAndroidManifest, type ConfigPlugin } from 'expo/config-plugins';
 
 const APP_ENV = process.env.EXPO_PUBLIC_ENV ?? 'development';
+
+/** Prefer env override, then a local file checked into the machine (gitignored). */
+function resolveGoogleServicesFile(...candidates: Array<string | undefined>): string | undefined {
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const resolved = path.isAbsolute(candidate) ? candidate : path.resolve(__dirname, candidate);
+    if (fs.existsSync(resolved)) return resolved;
+  }
+  return undefined;
+}
+
+const androidGoogleServices = resolveGoogleServicesFile(
+  process.env.GOOGLE_SERVICES_JSON,
+  './google-services.json',
+);
+const iosGoogleServices = resolveGoogleServicesFile(
+  process.env.GOOGLE_SERVICES_PLIST,
+  './GoogleService-Info.plist',
+);
 
 if (APP_ENV !== 'development') {
   const apiUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim() ?? '';
@@ -39,6 +61,7 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: APP_ENV === 'production' ? 'PALPEER' : `PALPEER (${APP_ENV})`,
   slug: 'palpeer',
+  owner: 'toniksyslab',
   version: '0.1.0',
   scheme: 'palpeer',
   orientation: 'portrait',
@@ -47,24 +70,36 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     bundleIdentifier: APP_ID,
     supportsTablet: false,
+    ...(iosGoogleServices ? { googleServicesFile: iosGoogleServices } : {}),
     infoPlist: {
       NSCameraUsageDescription:
         'PALPEER uses the camera to capture your identity document and selfie for verification.',
       NSPhotoLibraryUsageDescription:
         'PALPEER lets you choose a photo of your identity document from your library.',
       NSFaceIDUsageDescription: 'PALPEER uses Face ID to unlock the app quickly and securely.',
+      NSLocationWhenInUseUsageDescription:
+        'PALPEER uses your location to fill in your residential address on the personal information form.',
+      ITSAppUsesNonExemptEncryption: false,
+      UIBackgroundModes: ['remote-notification'],
     },
   },
   android: {
     package: APP_ID,
     allowBackup: false,
+    ...(androidGoogleServices ? { googleServicesFile: androidGoogleServices } : {}),
     adaptiveIcon: {
       backgroundColor: '#FFFFFF',
       foregroundImage: './assets/android-icon-foreground.png',
       backgroundImage: './assets/android-icon-background.png',
       monochromeImage: './assets/android-icon-monochrome.png',
     },
-    permissions: ['android.permission.CAMERA', 'android.permission.USE_BIOMETRIC'],
+    permissions: [
+      'android.permission.CAMERA',
+      'android.permission.USE_BIOMETRIC',
+      'android.permission.ACCESS_COARSE_LOCATION',
+      'android.permission.ACCESS_FINE_LOCATION',
+      'android.permission.POST_NOTIFICATIONS',
+    ],
     blockedPermissions: [
       'android.permission.RECORD_AUDIO',
       'android.permission.READ_EXTERNAL_STORAGE',
@@ -86,7 +121,7 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
       'expo-splash-screen',
       {
         image: './assets/splash-icon.png',
-        imageWidth: 180,
+        imageWidth: 200,
         resizeMode: 'contain',
         backgroundColor: '#FFFFFF',
       },
@@ -114,7 +149,23 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
       'expo-local-authentication',
       { faceIDPermission: 'PALPEER uses Face ID to unlock the app quickly and securely.' },
     ],
-    ['expo-notifications', { color: '#0E9F6E' }],
+    [
+      'expo-location',
+      {
+        locationWhenInUsePermission:
+          'PALPEER uses your location to fill in your residential address on the personal information form.',
+      },
+    ],
+    '@react-native-community/datetimepicker',
+    [
+      'expo-notifications',
+      {
+        color: '#0E9F6E',
+        defaultChannel: 'palpeer_default',
+        // Enables FCM token on iOS when GoogleService-Info.plist is present.
+        enableBackgroundRemoteNotifications: true,
+      },
+    ],
   ],
   experiments: {
     typedRoutes: true,
@@ -122,7 +173,7 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
   extra: {
     appEnv: APP_ENV,
     eas: {
-      projectId: 'adc52ccf-513c-4198-afb0-b5d4315cfca9',
+      projectId: '17c6c982-5228-447d-b4f2-11aafef55874',
     },
   },
 });

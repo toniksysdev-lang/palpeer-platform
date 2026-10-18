@@ -3,12 +3,14 @@ package com.palpeer.wallet.withdrawal;
 import com.palpeer.auth.security.UserPrincipal;
 import com.palpeer.common.api.ApiResponse;
 import com.palpeer.wallet.funding.dto.FailMovementRequest;
+import com.palpeer.wallet.withdrawal.dto.BankOptionResponse;
 import com.palpeer.wallet.withdrawal.dto.CreateWithdrawalRequest;
 import com.palpeer.wallet.withdrawal.dto.WithdrawalTransactionResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -33,6 +36,7 @@ public class WithdrawalController {
     private static final String OPERATOR = "hasAuthority('ROLE_ADMIN') and hasAuthority('payments:operate')";
 
     private final WithdrawalService withdrawalService;
+    private final BankDirectoryService bankDirectoryService;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -44,6 +48,13 @@ public class WithdrawalController {
         return ApiResponse.ok(
                 "Withdrawal initiated",
                 withdrawalService.initiate(principal.getId(), idempotencyKey, request));
+    }
+
+    @GetMapping("/banks")
+    @Operation(summary = "List banks available for NGN withdrawals")
+    public ApiResponse<List<BankOptionResponse>> listBanks(
+            @RequestParam(defaultValue = "NG") String country) {
+        return ApiResponse.ok(bankDirectoryService.listBanks(country));
     }
 
     @GetMapping("/{withdrawalId}")

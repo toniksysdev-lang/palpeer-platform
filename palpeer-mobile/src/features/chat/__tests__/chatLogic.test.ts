@@ -6,9 +6,16 @@ import {
   buildChatItems,
   chatErrorMessage,
   connectionNotice,
+  negotiationAmountMessage,
   seenMessageId,
   unreadIncoming,
 } from '../logic';
+
+describe('negotiationAmountMessage', () => {
+  it('prefixes a formatted amount', () => {
+    expect(negotiationAmountMessage('100.00 CAD')).toBe('Proposed amount: 100.00 CAD');
+  });
+});
 
 const msg = (id: string, overrides: Partial<ChatMessageResponse> = {}): ChatMessageResponse => ({
   id,
@@ -87,6 +94,7 @@ describe('read receipts', () => {
   const room = (a: string | null, b: string | null): ChatRoomResponse => ({
     id: 'room-1',
     p2pOrderId: 'o-1',
+    negotiationId: null,
     participantAId: 'u-1',
     participantBId: 'u-2',
     createdAt: '2026-09-29T09:00:00Z',

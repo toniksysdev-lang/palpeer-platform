@@ -12,7 +12,7 @@ export type UpdateUserAdminInput = {
   enabled?: boolean | null;
 };
 
-export const TRANSACTION_ACTIVITY_TYPES = ['FUNDING', 'WITHDRAWAL', 'EXCHANGE'] as const;
+export const TRANSACTION_ACTIVITY_TYPES = ['FUNDING', 'WITHDRAWAL', 'EXCHANGE', 'TRANSFER'] as const;
 export type TransactionActivityType = (typeof TRANSACTION_ACTIVITY_TYPES)[number];
 
 export const TRANSACTION_STATUSES = [
@@ -28,6 +28,7 @@ export type TransactionItem = {
   type: TransactionActivityType | string;
   id: string;
   userId?: string | null;
+  userEmail?: string | null;
   status: string;
   walletId?: string | null;
   secondaryWalletId?: string | null;

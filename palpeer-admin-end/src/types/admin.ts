@@ -71,6 +71,7 @@ export type AuditLogEntry = {
 export type AdminOperator = {
   id: string;
   userId: string;
+  email?: string | null;
   enabled: boolean;
   roleCodes: string[];
 };

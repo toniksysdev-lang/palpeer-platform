@@ -15,12 +15,18 @@ const MESSAGES: Record<string, string> = {
   WITHDRAWAL_IDEMPOTENCY_CONFLICT:
     'This request was already sent with different details. Start again.',
   PAYMENT_RAIL_UNAVAILABLE: "This payment method isn't available right now. Try again later.",
+  INTERNAL_PAYMENT_ERROR: 'Internal Payment Error, please contact support',
+  IDENTITY_VERIFICATION_REQUIRED:
+    'Identity verification is required to withdraw this amount. Complete KYC and try again.',
   APAYLO_DESTINATION_INVALID: 'Check the bank details: institution, transit and account number.',
   KUDA_DESTINATION_REQUIRED: 'Enter the bank code and account number.',
   KUDA_DESTINATION_INVALID: 'Check the bank code and account number.',
   KUDA_NAME_ENQUIRY_FAILED:
     "We couldn't confirm that bank account. Check the details and try again.",
   APAYLO_ERROR: "The payment provider couldn't process this. Try again later.",
+  KORAPAY_ERROR: "The payment provider couldn't process this. Try again later.",
+  KORAPAY_AMOUNT_TOO_LOW: 'Enter at least ₦100 to fund with bank transfer.',
+  KORAPAY_WITHDRAWAL_UNSUPPORTED: 'NGN withdrawals aren’t available with this payment method yet.',
   KUDA_ERROR: "The payment provider couldn't process this. Try again later.",
   KUDA_AUTH_FAILED: "The payment provider couldn't process this. Try again later.",
 };

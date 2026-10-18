@@ -12,6 +12,8 @@ import com.palpeer.chat.web.dto.MarkChatReadRequest;
 import com.palpeer.chat.web.dto.SendChatMessageRequest;
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
+import com.palpeer.negotiation.domain.Negotiation;
+import com.palpeer.negotiation.repository.NegotiationRepository;
 import com.palpeer.p2p.domain.P2POrder;
 import com.palpeer.p2p.repository.P2POrderRepository;
 import java.time.Instant;
@@ -33,14 +35,33 @@ public class ChatService {
     private final ChatRoomRepository chatRoomRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final P2POrderRepository p2POrderRepository;
+    private final NegotiationRepository negotiationRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
     public ChatRoomResponse createRoom(UUID userId, CreateChatRoomRequest request) {
-        P2POrder order = p2POrderRepository.findById(request.p2pOrderId())
+        UUID orderId = request.p2pOrderId();
+        UUID negotiationId = request.negotiationId();
+        // Mirror exchange quote XOR checks: bean @AssertTrue on records is fragile (and exposed
+        // "exactlyOneScope" in OpenAPI), so enforce the scope here with a clear 400.
+        if ((orderId == null) == (negotiationId == null)) {
+            throw new BusinessException(
+                    "CHAT_SCOPE_REQUIRED",
+                    "Provide exactly one of p2pOrderId or negotiationId",
+                    HttpStatus.BAD_REQUEST);
+        }
+        if (negotiationId != null) {
+            return createNegotiationRoom(userId, negotiationId);
+        }
+        return createOrderRoom(userId, orderId);
+    }
+
+    private ChatRoomResponse createOrderRoom(UUID userId, UUID p2pOrderId) {
+        P2POrder order = p2POrderRepository.findById(p2pOrderId)
                 .orElseThrow(() -> new ResourceNotFoundException("P2P order not found"));
         if (!order.getRequesterId().equals(userId) && !order.getAcceptorId().equals(userId)) {
-            throw new BusinessException("CHAT_NOT_PARTICIPANT", "Not a participant of this order", HttpStatus.FORBIDDEN);
+            throw new BusinessException(
+                    "CHAT_NOT_PARTICIPANT", "Not a participant of this order", HttpStatus.FORBIDDEN);
         }
 
         return chatRoomRepository.findByP2pOrderId(order.getId())
@@ -50,6 +71,30 @@ public class ChatService {
                     room.setP2pOrderId(order.getId());
                     room.setParticipantAId(order.getRequesterId());
                     room.setParticipantBId(order.getAcceptorId());
+                    chatRoomRepository.save(room);
+                    return toRoomResponse(room);
+                });
+    }
+
+    private ChatRoomResponse createNegotiationRoom(UUID userId, UUID negotiationId) {
+        Negotiation negotiation = negotiationRepository
+                .findById(negotiationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Negotiation not found"));
+        if (!negotiation.getRequesterId().equals(userId)
+                && !negotiation.getCounterpartyId().equals(userId)) {
+            throw new BusinessException(
+                    "CHAT_NOT_PARTICIPANT",
+                    "Not a participant of this negotiation",
+                    HttpStatus.FORBIDDEN);
+        }
+
+        return chatRoomRepository.findByNegotiationId(negotiation.getId())
+                .map(this::toRoomResponse)
+                .orElseGet(() -> {
+                    ChatRoom room = new ChatRoom();
+                    room.setNegotiationId(negotiation.getId());
+                    room.setParticipantAId(negotiation.getRequesterId());
+                    room.setParticipantBId(negotiation.getCounterpartyId());
                     chatRoomRepository.save(room);
                     return toRoomResponse(room);
                 });
@@ -165,6 +210,7 @@ public class ChatService {
         return new ChatRoomResponse(
                 room.getId(),
                 room.getP2pOrderId(),
+                room.getNegotiationId(),
                 room.getParticipantAId(),
                 room.getParticipantBId(),
                 room.getCreatedAt(),

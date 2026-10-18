@@ -105,6 +105,7 @@ function EditForm({ request }: { request: P2PRequestResponse }) {
         onChangeText={setRate}
         precision={RATE_INPUT_DECIMALS}
         currencyCode={quote}
+        padOnBlur={false}
         error={rateError ?? fieldErrors.rate}
         testID="p2p-edit-rate"
       />

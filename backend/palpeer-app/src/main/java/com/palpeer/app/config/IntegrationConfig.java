@@ -1,7 +1,9 @@
 package com.palpeer.app.config;
 
 import com.palpeer.kyc.config.ComplyCubeProperties;
+import com.palpeer.notification.push.FcmProperties;
 import com.palpeer.wallet.provider.apaylo.ApayloProperties;
+import com.palpeer.wallet.provider.korapay.KorapayProperties;
 import com.palpeer.wallet.provider.kuda.KudaProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -12,7 +14,9 @@ import org.springframework.web.client.RestClient;
 @EnableConfigurationProperties({
         ComplyCubeProperties.class,
         ApayloProperties.class,
-        KudaProperties.class
+        KorapayProperties.class,
+        KudaProperties.class,
+        FcmProperties.class
 })
 public class IntegrationConfig {
 

@@ -54,14 +54,22 @@ describe('ReferralsScreen', () => {
     ...extra,
   });
 
-  it('shows my code, shares it and lists only used codes', async () => {
+  it('shows my code, shares/copies it and lists only used codes', async () => {
     const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' });
+    const { setStringAsync } = jest.requireMock('expo-clipboard') as {
+      setStringAsync: jest.Mock;
+    };
+    setStringAsync.mockClear();
     installFetchMock(routes());
     await renderWithProviders(<ReferralsScreen />);
 
     expect(await screen.findByTestId('referral-code')).toHaveTextContent('REF0A1B2C3D4E');
+    expect(await screen.findByTestId('referral-stats')).toHaveTextContent(/1 friend joined/);
     expect(await screen.findByTestId('referral-r-0')).toHaveTextContent(/Used/);
     expect(screen.queryByTestId('referral-r-1')).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('referral-copy'));
+    expect(setStringAsync).toHaveBeenCalledWith('REF0A1B2C3D4E');
 
     await fireEvent.press(screen.getByTestId('referral-share'));
     expect(share).toHaveBeenCalledWith({
@@ -183,6 +191,7 @@ describe('Home entry points', () => {
           createdAt: '2026-09-01T00:00:00Z',
         },
       ]),
+      'GET /public/marketing-adverts': ok([]),
     });
     await renderWithProviders(<HomeScreen />);
 

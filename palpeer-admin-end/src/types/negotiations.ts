@@ -19,7 +19,8 @@ export type NegotiationSummary = {
 
 export type ChatRoomSummary = {
   id: string;
-  p2pOrderId: string;
+  p2pOrderId?: string | null;
+  negotiationId?: string | null;
   participantAId: string;
   participantBId: string;
   createdAt: string;

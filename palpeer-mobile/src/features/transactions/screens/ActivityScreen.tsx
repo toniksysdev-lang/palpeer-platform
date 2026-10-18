@@ -187,10 +187,7 @@ export function ActivityScreen() {
       {body}
 
       <View style={{ alignItems: 'center', gap: theme.spacing.xxs }}>
-        <AppText variant="caption" tone="muted" align="center">
-          P2P orders aren&apos;t part of this list.
-        </AppText>
-        <TextLink label="Open P2P history" onPress={() => router.push('/p2p/history')} />
+        <TextLink label="Open P2P marketplace history" onPress={() => router.push('/p2p/history')} />
       </View>
 
       <PickerSheet

@@ -47,7 +47,7 @@ public class ComplyCubeWebhookController {
                 payload = event.path("data");
             }
             String checkId = firstText(payload, "id", "checkId");
-            String result = firstText(payload, "result", "outcome");
+            String result = extractOutcome(payload);
             String status = firstText(payload, "status");
             if (checkId != null && type != null && type.toLowerCase().contains("check")) {
                 kycService.applyProviderCheckResult(checkId, result, status);
@@ -66,16 +66,40 @@ public class ComplyCubeWebhookController {
 
     private static String text(JsonNode node, String field) {
         JsonNode child = node.path(field);
-        return child.isMissingNode() || child.isNull() ? null : child.asText();
+        if (child.isMissingNode() || child.isNull() || !child.isValueNode()) {
+            return null;
+        }
+        String value = child.asText();
+        return value == null || value.isBlank() ? null : value;
     }
 
     private static String firstText(JsonNode node, String... fields) {
         for (String field : fields) {
             String value = text(node, field);
-            if (value != null && !value.isBlank()) {
+            if (value != null) {
                 return value;
             }
         }
         return null;
+    }
+
+    /**
+     * Prefer {@code result.outcome} (ComplyCube object shape); fall back to string {@code result}/{@code outcome}.
+     */
+    private static String extractOutcome(JsonNode payload) {
+        JsonNode result = payload.path("result");
+        if (result.isObject()) {
+            String outcome = text(result, "outcome");
+            if (outcome != null) {
+                return outcome;
+            }
+        }
+        if (result.isTextual()) {
+            String value = result.asText();
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return firstText(payload, "outcome");
     }
 }

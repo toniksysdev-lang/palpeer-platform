@@ -8,8 +8,10 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { View } from 'react-native';
+import { View, type StyleProp, type ViewStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useInsideTabs } from '@/components/layout/tabScreen';
 import { useTheme } from '@/providers/ThemeProvider';
 
 import { NumberPad, type NumberPadBottomLeft, type NumberPadVariant } from './NumberPad';
@@ -75,7 +77,9 @@ type BindOptions = {
   maxLength?: number;
   bottomLeft?: NumberPadBottomLeft;
   variant?: NumberPadVariant;
-  /** Open the pad as soon as the field mounts. */
+  /**
+   * When true, opens the pad on mount. Prefer false so the pad only appears after a tap.
+   */
   autoFocus?: boolean;
   disabled?: boolean;
 };
@@ -110,7 +114,7 @@ export function useNumberPadField({
     return () => {
       pad?.close(id);
     };
-    // Claim on mount when autoFocus; release on unmount.
+    // Claim on mount when autoFocus; always release on unmount.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount lifecycle only
   }, [id]);
 
@@ -122,24 +126,38 @@ export function useNumberPadField({
   return { select, active, padAvailable: !!pad };
 }
 
-/** Renders the active field's keypad above the screen footer. */
-export function NumberPadDock({ testID = 'number-pad-dock' }: { testID?: string }) {
+/** Renders the active field's keypad above the system navigation bar. Hidden until a field is tapped. */
+export function NumberPadDock({
+  testID = 'number-pad-dock',
+  contentStyle,
+}: {
+  testID?: string;
+  /** Applied only while the pad is visible so inactive screens don't reserve empty space. */
+  contentStyle?: StyleProp<ViewStyle>;
+}) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const insideTabs = useInsideTabs();
   const pad = useOptionalNumberPad();
   if (!pad?.active) return null;
 
   const { active } = pad;
+  // Tab bar already clears the system nav; stack screens must pad the dock themselves.
+  const bottomSafe = insideTabs ? 0 : insets.bottom;
 
-  // Flat Figma pad: no chrome/Done. Forms dismiss via their primary action.
   return (
     <View
       testID={testID}
-      style={{
-        gap: 0,
-        paddingTop: theme.spacing.sm,
-        borderTopWidth: 0,
-        backgroundColor: theme.colors.background,
-      }}
+      style={[
+        contentStyle,
+        {
+          gap: 0,
+          paddingTop: theme.spacing.md,
+          paddingBottom: theme.spacing.lg + bottomSafe,
+          borderTopWidth: 0,
+          backgroundColor: theme.colors.background,
+        },
+      ]}
     >
       <NumberPad
         value={active.value}

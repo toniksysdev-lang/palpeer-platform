@@ -11,24 +11,25 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Chat room between participants.
- * CONTRACT_PENDING (P10-01): room scope (P2P order vs free-form DM).
- * Provisional: optional p2pOrderId link; two participants.
+ * Chat room between two participants, scoped to either a P2P order or a negotiation.
  */
 @Getter
 @Setter
 @Entity
 @Table(
         name = "chat_rooms",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_chat_rooms_p2p_order",
-                columnNames = "p2p_order_id"
-        )
+        uniqueConstraints = {
+            @UniqueConstraint(name = "uk_chat_rooms_p2p_order", columnNames = "p2p_order_id"),
+            @UniqueConstraint(name = "uk_chat_rooms_negotiation", columnNames = "negotiation_id")
+        }
 )
 public class ChatRoom extends BaseEntity {
 
     @Column(name = "p2p_order_id")
     private UUID p2pOrderId;
+
+    @Column(name = "negotiation_id")
+    private UUID negotiationId;
 
     @Column(name = "participant_a_id", nullable = false)
     private UUID participantAId;
