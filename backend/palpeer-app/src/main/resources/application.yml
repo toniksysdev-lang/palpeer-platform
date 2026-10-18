@@ -92,16 +92,25 @@ palpeer:
   api:
     version: v1
   fcm:
-    # Firebase Cloud Messaging via Admin SDK. When false, pushes are logged only.
+    # Firebase Cloud Messaging via Admin SDK. When false (or credentials missing), pushes are logged only.
     enabled: ${PALPEER_FCM_ENABLED:false}
     # Path to Firebase service-account JSON (local/dev). Ignored if credentials-json is set.
     credentials-file: ${PALPEER_FCM_CREDENTIALS_FILE:}
     # Inline service-account JSON (preferred on PaaS). Takes precedence over credentials-file.
     credentials-json: ${PALPEER_FCM_CREDENTIALS_JSON:}
   mail:
+    # auto | sendpulse | smtp — auto uses SendPulse REST when client-id/secret are set.
+    provider: ${PALPEER_MAIL_PROVIDER:auto}
     from: ${PALPEER_MAIL_FROM:noreply@palpeer.com.ng}
     from-name: ${PALPEER_MAIL_FROM_NAME:PALPEER SUPPORT}
     header-from: ${PALPEER_MAIL_HEADER_FROM:noreply@palpeer.com.ng}
+    sendpulse:
+      # Force-on even with provider=auto; still needs client-id + client-secret.
+      enabled: ${PALPEER_SENDPULSE_ENABLED:false}
+      # Prefer dedicated API credentials; fall back to SMTP username/password (SendPulse account login).
+      client-id: ${PALPEER_SENDPULSE_CLIENT_ID:${PALPEER_SMTP_USERNAME:}}
+      client-secret: ${PALPEER_SENDPULSE_CLIENT_SECRET:${PALPEER_SMTP_PASSWORD:}}
+      base-url: ${PALPEER_SENDPULSE_BASE_URL:https://api.sendpulse.com}
   storage:
     local:
       root: ${PALPEER_STORAGE_ROOT:./data/private-storage}

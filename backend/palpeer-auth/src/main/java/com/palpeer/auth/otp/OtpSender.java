@@ -5,7 +5,7 @@ import com.palpeer.auth.domain.OtpPurpose;
 
 /**
  * Abstraction for OTP delivery.
- * EMAIL is sent over SMTP ({@code PALPEER_SMTP_*}); SMS provider is still pending.
+ * EMAIL is sent via {@code EmailSender} (SendPulse REST when configured, else SMTP); SMS is still pending.
  */
 public interface OtpSender {
 

@@ -44,8 +44,15 @@ PALPEER_FCM_CREDENTIALS_FILE=/secure/firebase-service-account.json
 PALPEER_FCM_CREDENTIALS_JSON={"type":"service_account",...}
 ```
 
-When `PALPEER_FCM_ENABLED=false` (default), the API logs push attempts only
-(`LoggingPushNotifier`).
+When `PALPEER_FCM_ENABLED=false` (default), or when credentials are missing, the API
+logs push attempts only (`LoggingPushNotifier`) so the service still boots.
+
+On Render, set both:
+
+```bash
+PALPEER_FCM_ENABLED=true
+PALPEER_FCM_CREDENTIALS_JSON={"type":"service_account",...}
+```
 
 ## 4. Payload contract
 

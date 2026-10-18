@@ -43,6 +43,11 @@ server:
   error:
     include-stacktrace: never
 
+# Prefer SendPulse HTTPS on PaaS (outbound SMTP is often blocked). Override with PALPEER_MAIL_PROVIDER=smtp.
+palpeer:
+  mail:
+    provider: ${PALPEER_MAIL_PROVIDER:auto}
+
 logging:
   level:
     root: WARN

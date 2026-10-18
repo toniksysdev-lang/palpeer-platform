@@ -227,7 +227,7 @@ Status becomes `ACTIVE` only after **both** `EMAIL_VERIFICATION` and `PHONE_VERI
 
 - 6 numeric digits (`OTP_LENGTH`), `SecureRandom`, SHA-256 hashed at rest, TTL **10 minutes** (`OTP_TTL`), max **5** wrong attempts per challenge (`OTP_MAX_ATTEMPTS`).
 - Registration issues two challenges: `EMAIL_VERIFICATION` via `EMAIL` and `PHONE_VERIFICATION` via `SMS`.
-- `EMAIL` channel: sent by SMTP (`SmtpEmailSender`), subject `"PALPEER verification code"`.
+- `EMAIL` channel: sent by `EmailSender` (SendPulse REST when configured, else SMTP).
 - `SMS` channel: **placeholder only** — logs `OTP SMS placeholder [...]` without the code; no SMS provider exists.
 - Dev: `palpeer.security.otp.log-code=true` in `application-dev.yml` and `OTP_LOG_CODE=true` in `.env` → server logs `DEV OTP [channel=…, destination=…, purpose=…, code=123456]` at WARN. **No fixed/master code exists.** Note the log line is written after the e-mail send, so if SMTP fails the request 500s and the code is never logged.
 - Verify/resend pick the **latest unconsumed challenge for the purpose**; the request `channel` must equal that challenge's channel (`OTP_CHANNEL_MISMATCH`).

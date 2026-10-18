@@ -3,15 +3,15 @@ package com.palpeer.notification.push;
 import com.palpeer.notification.domain.DeviceToken;
 import com.palpeer.notification.domain.Notification;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.stereotype.Component;
 
 /**
- * Dev/stub push delivery when FCM is disabled ({@code palpeer.fcm.enabled=false}).
+ * Dev/stub push delivery when FCM is disabled or credentials are missing.
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "palpeer.fcm", name = "enabled", havingValue = "false", matchIfMissing = true)
+@ConditionalOnMissingBean(PushNotifier.class)
 public class LoggingPushNotifier implements PushNotifier {
 
     @Override

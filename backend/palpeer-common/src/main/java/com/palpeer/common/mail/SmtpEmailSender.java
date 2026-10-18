@@ -7,6 +7,7 @@ import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.mail.MailProperties;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.MailException;
@@ -17,6 +18,7 @@ import org.springframework.util.StringUtils;
 
 @Slf4j
 @Component
+@ConditionalOnMissingBean(EmailSender.class)
 @RequiredArgsConstructor
 public class SmtpEmailSender implements EmailSender {
 

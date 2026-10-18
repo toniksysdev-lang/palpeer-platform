@@ -263,7 +263,7 @@
 
 | ID | Topic | Question | Current provisional behavior |
 |----|-------|----------|------------------------------|
-| P14-MAIL | SMTP provider | Confirmed smtp-pulse settings | `EmailSender` / `SmtpEmailSender`; OTP EMAIL + notification EMAIL use SMTP |
+| P14-MAIL | Mail provider | **SendPulse REST** (+ SMTP fallback) | `SendPulseEmailSender` when `PALPEER_SENDPULSE_*` set; else `SmtpEmailSender` |
 
 ### Phase 14 validation + tests
 
