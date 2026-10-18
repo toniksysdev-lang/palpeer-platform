@@ -74,6 +74,9 @@ management:
     # Redis not used by domain code yet — do not fail health when Redis is down
     redis:
       enabled: false
+    # SMTP often blocked/slow on Render free — keep /actuator/health green without blocking probes
+    mail:
+      enabled: false
   endpoint:
     health:
       show-details: when_authorized
