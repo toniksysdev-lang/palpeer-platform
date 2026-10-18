@@ -24,9 +24,17 @@ export function formatAmount(
   currencies: readonly CurrencyResponse[] | undefined,
   options: Options = {},
 ): string {
-  const precision =
-    precisionFor(currencies, currencyCode) ?? Math.max(2, new Decimal(amount).decimalPlaces());
-  return formatMoney(amount, { ...options, currencyCode, precision });
+  const raw = typeof amount === 'string' ? amount.trim() : String(amount ?? '');
+  if (!raw) {
+    return options.showCurrency === false ? '—' : `— ${currencyCode}`.trim();
+  }
+  try {
+    const precision =
+      precisionFor(currencies, currencyCode) ?? Math.max(2, new Decimal(raw).decimalPlaces());
+    return formatMoney(raw, { ...options, currencyCode, precision });
+  } catch {
+    return options.showCurrency === false ? raw : `${raw} ${currencyCode}`.trim();
+  }
 }
 
 export function useMoneyFormat() {

@@ -89,8 +89,12 @@ export function MarketingCarousel({ adverts }: Props) {
                 ]}
               >
                 <ImageBackground
-                  source={{ uri: advert.imageUrl }}
-                  style={{ flex: 1 }}
+                  source={
+                    advert.imageUrl?.startsWith('https://') || advert.imageUrl?.startsWith('http://')
+                      ? { uri: advert.imageUrl }
+                      : undefined
+                  }
+                  style={{ flex: 1, backgroundColor: theme.colors.heroStart }}
                   resizeMode="cover"
                 >
                   <LinearGradient

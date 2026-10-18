@@ -22,7 +22,8 @@ export class PushUnavailableError extends Error {
   }
 }
 
-export const ANDROID_CHANNEL_ID = 'default';
+/** Must match `defaultChannel` in app.config.ts expo-notifications plugin. */
+export const ANDROID_CHANNEL_ID = 'palpeer_default';
 
 /**
  * While the app is open a push is not shown as a system banner; the app shows its own toast and
@@ -31,14 +32,18 @@ export const ANDROID_CHANNEL_ID = 'default';
 export function configureForegroundPresentation() {
   // expo-notifications has limited/no web support; skip so web preview doesn't throw at import.
   if (Platform.OS === 'web') return;
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: false,
-      shouldShowList: true,
-      shouldPlaySound: false,
-      shouldSetBadge: false,
-    }),
-  });
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: false,
+        shouldShowList: true,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      }),
+    });
+  } catch {
+    // Builds without push credentials must still launch.
+  }
 }
 
 function toState(response: Notifications.NotificationPermissionsStatus): PushPermissionState {

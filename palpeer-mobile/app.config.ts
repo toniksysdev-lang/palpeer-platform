@@ -62,7 +62,7 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
   name: APP_ENV === 'production' ? 'PALPEER' : `PALPEER (${APP_ENV})`,
   slug: 'palpeer',
   owner: 'toniksyslab',
-  version: '0.1.0',
+  version: '0.1.1',
   scheme: 'palpeer',
   orientation: 'portrait',
   icon: './assets/icon.png',
@@ -80,7 +80,8 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
       NSLocationWhenInUseUsageDescription:
         'PALPEER uses your location to fill in your residential address on the personal information form.',
       ITSAppUsesNonExemptEncryption: false,
-      UIBackgroundModes: ['remote-notification'],
+      // Only when Firebase/APNs credentials ship with the build — otherwise cold start can crash.
+      ...(iosGoogleServices ? { UIBackgroundModes: ['remote-notification'] } : {}),
     },
   },
   android: {
@@ -162,8 +163,9 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
       {
         color: '#0E9F6E',
         defaultChannel: 'palpeer_default',
-        // Enables FCM token on iOS when GoogleService-Info.plist is present.
-        enableBackgroundRemoteNotifications: true,
+        // Requires google-services / GoogleService-Info in the binary. Without them, enabling
+        // background remote notifications can native-crash the Android/iOS process on launch.
+        enableBackgroundRemoteNotifications: Boolean(androidGoogleServices || iosGoogleServices),
       },
     ],
   ],

@@ -54,48 +54,58 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
 
   useEffect(() => {
     if (isWeb) return;
-    const subscription = Notifications.addNotificationReceivedListener((notification) => {
-      if (!authenticatedRef.current) return;
-      refresh();
-      const data = notification.request.content.data as Record<string, unknown> | undefined;
-      const category = typeof data?.category === 'string' ? data.category.toUpperCase() : '';
-      if (
-        category === 'TRANSACTION' ||
-        category === 'FUNDING' ||
-        category === 'EXCHANGE' ||
-        category === 'WITHDRAWAL'
-      ) {
-        dispatch(baseApi.util.invalidateTags([WALLET_LIST_TAG]));
-      }
-      const { title, body } = notification.request.content;
-      toastRef.current.show({
-        type: 'info',
-        title: title || 'New notification',
-        message: body || undefined,
+    try {
+      const subscription = Notifications.addNotificationReceivedListener((notification) => {
+        if (!authenticatedRef.current) return;
+        refresh();
+        const data = notification.request.content.data as Record<string, unknown> | undefined;
+        const category = typeof data?.category === 'string' ? data.category.toUpperCase() : '';
+        if (
+          category === 'TRANSACTION' ||
+          category === 'FUNDING' ||
+          category === 'EXCHANGE' ||
+          category === 'WITHDRAWAL'
+        ) {
+          dispatch(baseApi.util.invalidateTags([WALLET_LIST_TAG]));
+        }
+        const { title, body } = notification.request.content;
+        toastRef.current.show({
+          type: 'info',
+          title: title || 'New notification',
+          message: body || undefined,
+        });
       });
-    });
-    return () => subscription.remove();
+      return () => subscription.remove();
+    } catch (error) {
+      logger.warn('Push receive listener unavailable', { error });
+      return undefined;
+    }
   }, [dispatch, isWeb, refresh]);
 
   useEffect(() => {
     if (isWeb) return;
-    const handled = new Set<string>();
-    const open = (response: Notifications.NotificationResponse) => {
-      const id = response.notification.request.identifier;
-      if (handled.has(id)) return;
-      handled.add(id);
-      if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
-      pendingNavigation.set(pushTarget(response.notification.request.content.data));
-      if (authenticatedRef.current) refresh();
-      void Notifications.clearLastNotificationResponseAsync().catch(() => undefined);
-    };
-    const subscription = Notifications.addNotificationResponseReceivedListener(open);
-    Notifications.getLastNotificationResponseAsync()
-      .then((response) => {
-        if (response) open(response);
-      })
-      .catch(() => undefined);
-    return () => subscription.remove();
+    try {
+      const handled = new Set<string>();
+      const open = (response: Notifications.NotificationResponse) => {
+        const id = response.notification.request.identifier;
+        if (handled.has(id)) return;
+        handled.add(id);
+        if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
+        pendingNavigation.set(pushTarget(response.notification.request.content.data));
+        if (authenticatedRef.current) refresh();
+        void Notifications.clearLastNotificationResponseAsync().catch(() => undefined);
+      };
+      const subscription = Notifications.addNotificationResponseReceivedListener(open);
+      Notifications.getLastNotificationResponseAsync()
+        .then((response) => {
+          if (response) open(response);
+        })
+        .catch(() => undefined);
+      return () => subscription.remove();
+    } catch (error) {
+      logger.warn('Push response listener unavailable', { error });
+      return undefined;
+    }
   }, [isWeb, refresh]);
 
   useEffect(() => {
@@ -119,10 +129,15 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
       }
     };
     void sync();
-    const subscription = Notifications.addPushTokenListener((token) => {
-      if (typeof token.data === 'string') void sync(token.data);
-    });
-    return () => subscription.remove();
+    try {
+      const subscription = Notifications.addPushTokenListener((token) => {
+        if (typeof token.data === 'string') void sync(token.data);
+      });
+      return () => subscription.remove();
+    } catch (error) {
+      logger.warn('Push token listener unavailable', { error });
+      return undefined;
+    }
   }, [authenticated, dispatch, isWeb]);
 
   useEffect(() => {

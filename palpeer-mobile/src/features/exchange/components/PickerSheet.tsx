@@ -184,7 +184,7 @@ export function PickerSheet({
               borderWidth: 1,
               borderColor: theme.colors.border,
               backgroundColor: theme.colors.surface,
-              color: theme.colors.text,
+              color: theme.colors.textPrimary,
             },
           ]}
         />
