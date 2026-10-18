@@ -388,14 +388,17 @@ function ChatTab({ userId }: { userId: string }) {
       {
         id: 'order',
         header: 'P2P order',
-        cell: (row) => (
-          <Link
-            to={`/admin/p2p/${row.p2pOrderId}?kind=order`}
-            className="font-mono text-[11px] text-primary hover:underline"
-          >
-            {shortId(row.p2pOrderId)}
-          </Link>
-        ),
+        cell: (row) =>
+          row.p2pOrderId ? (
+            <Link
+              to={`/admin/p2p/${row.p2pOrderId}?kind=order`}
+              className="font-mono text-[11px] text-primary hover:underline"
+            >
+              {shortId(row.p2pOrderId)}
+            </Link>
+          ) : (
+            <span className="text-text-muted">—</span>
+          ),
       },
       { id: 'createdAt', header: 'Created', cell: (row) => formatDateTime(row.createdAt) },
       {
