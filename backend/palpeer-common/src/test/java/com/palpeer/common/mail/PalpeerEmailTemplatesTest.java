@@ -78,13 +78,15 @@ class PalpeerEmailTemplatesTest {
                 "user@example.com",
                 "Pixel 8 · android",
                 "2026-10-18 10:00 UTC",
-                "https://api.example.com/api/v1/auth/account-suspend?token=abc",
+                "https://api.example.com/secure/account-lock/abc123",
                 "support@palpeer.com");
 
         assertTrue(email.subject().toLowerCase().contains("new device"));
         assertTrue(email.html().contains("If this was you"));
         assertTrue(email.html().contains("Suspend my account"));
-        assertTrue(email.html().contains("account-suspend?token=abc"));
+        assertTrue(email.html().contains("/secure/account-lock/abc123"));
+        assertFalse(email.html().contains("/api/v1/"));
+        assertFalse(email.html().contains("?token="));
         assertTrue(email.html().contains("support@palpeer.com"));
         assertFalse(email.html().toLowerCase().contains("password="));
         assertFalse(email.text().toLowerCase().contains("pin="));
@@ -97,7 +99,7 @@ class PalpeerEmailTemplatesTest {
         assertTrue(PalpeerEmailTemplates.welcome("a@b.co").html().contains(EmailBrand.LOGO_CID_SRC));
         assertTrue(PalpeerEmailTemplates.notification("Hi", "Body").html().contains(EmailBrand.LOGO_CID_SRC));
         assertTrue(PalpeerEmailTemplates.newDeviceLogin(
-                        "a@b.co", "phone", "now", "https://x/y?token=z", EmailBrand.SUPPORT_EMAIL)
+                        "a@b.co", "phone", "now", "https://x/secure/account-lock/z", EmailBrand.SUPPORT_EMAIL)
                 .html()
                 .contains(EmailBrand.LOGO_CID_SRC));
     }

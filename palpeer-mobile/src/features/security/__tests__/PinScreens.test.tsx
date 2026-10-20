@@ -70,7 +70,10 @@ describe('PIN screens', () => {
       await enterPin('set-pin-confirm', '4829');
 
       await waitFor(() =>
-        expect(router.back.mock.calls.length + router.replace.mock.calls.length).toBeGreaterThan(0),
+        expect(router.replace).toHaveBeenCalledWith({
+          pathname: '/security/questions',
+          params: { required: '1' },
+        }),
       );
       expect(calls[0]).toMatchObject({ method: 'POST', body: { pin: '4829' } });
       expect(JSON.stringify(store.getState())).not.toContain('4829');
@@ -115,28 +118,52 @@ describe('PIN screens', () => {
   });
 
   describe('ForgotPinScreen', () => {
-    it('tells the user to contact support when no questions are set', async () => {
+    it('sends the user to set up security questions when none are configured', async () => {
       installFetchMock({
         'GET /security/pin': ok(PIN_STATUS(true)),
         'GET /security/questions': ok([]),
       });
       await renderWithProviders(<ForgotPinScreen />);
       expect(await screen.findByTestId('forgot-no-questions')).toBeTruthy();
+      await fireEvent.press(screen.getByTestId('forgot-setup-questions'));
+      expect(router.replace).toHaveBeenCalledWith('/security/questions');
     });
 
-    async function answerAndChoose(pin: string) {
+    async function fillAnswers() {
       await fireEvent.changeText(await screen.findByTestId('forgot-answer-0'), '  Rex ');
       await fireEvent.changeText(screen.getByTestId('forgot-answer-1'), 'Lagos');
       await fireEvent.press(screen.getByTestId('forgot-answers-continue'));
+    }
+
+    async function answerAndChoose(pin: string) {
+      await fillAnswers();
       await enterPin('forgot-new', pin);
       await enterPin('forgot-confirm', pin);
     }
 
-    it('goes back to the answers when an answer is wrong', async () => {
+    it('stays on answers when verification rejects a wrong answer', async () => {
+      const { calls } = installFetchMock({
+        'GET /security/pin': ok(PIN_STATUS(true)),
+        'GET /security/questions': ok(QUESTIONS),
+        'POST /security/questions/verify': fail(422, 'SECURITY_ANSWER_INVALID'),
+      });
+      await renderWithProviders(<ForgotPinScreen />);
+
+      await fillAnswers();
+
+      expect(await screen.findByTestId('forgot-answers-error')).toBeTruthy();
+      expect(screen.getByText(/don't match what you saved/i)).toBeTruthy();
+      expect(screen.getByTestId('forgot-answer-0')).toBeTruthy();
+      expect(screen.queryByTestId('forgot-new')).toBeNull();
+      expect(calls.some((call) => call.path === '/security/pin/reset')).toBe(false);
+    });
+
+    it('goes back to the answers when reset rejects a wrong answer', async () => {
       installFetchMock({
         'GET /security/pin': ok(PIN_STATUS(true)),
         'GET /security/questions': ok(QUESTIONS),
-        'POST /security/pin/reset': fail(401, 'SECURITY_ANSWER_INVALID'),
+        'POST /security/questions/verify': ok(),
+        'POST /security/pin/reset': fail(422, 'SECURITY_ANSWER_INVALID'),
       });
       await renderWithProviders(<ForgotPinScreen />);
 
@@ -150,6 +177,7 @@ describe('PIN screens', () => {
       const { calls } = installFetchMock({
         'GET /security/pin': ok(PIN_STATUS(true)),
         'GET /security/questions': ok(QUESTIONS),
+        'POST /security/questions/verify': ok(),
         'POST /security/pin/reset': ok(),
       });
       const { store } = await renderWithProviders(<ForgotPinScreen />);
@@ -157,6 +185,13 @@ describe('PIN screens', () => {
       await answerAndChoose('9876');
 
       await waitFor(() => expect(router.back).toHaveBeenCalled());
+      const verify = calls.find((call) => call.path === '/security/questions/verify');
+      expect(verify?.body).toEqual({
+        answers: [
+          { questionKey: 'FIRST_PET', answer: 'Rex' },
+          { questionKey: 'BIRTH_TOWN', answer: 'Lagos' },
+        ],
+      });
       const reset = calls.find((call) => call.path === '/security/pin/reset');
       expect(reset?.body).toEqual({
         answers: [

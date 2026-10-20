@@ -92,8 +92,14 @@ public class SecurityQuestionService {
                             "Missing answer for question " + question.getQuestionKey(),
                             HttpStatus.BAD_REQUEST));
 
-            if (!passwordEncoder.matches(normalizeAnswer(match.answer()), question.getAnswerHash())) {
-                throw new BusinessException("SECURITY_ANSWER_INVALID", "Invalid security answer", HttpStatus.UNAUTHORIZED);
+            String normalized = normalizeAnswer(match.answer());
+            if (normalized.isEmpty()
+                    || !passwordEncoder.matches(normalized, question.getAnswerHash())) {
+                // 422 (not 401): the session is valid; the answer secret is wrong.
+                throw new BusinessException(
+                        "SECURITY_ANSWER_INVALID",
+                        "Invalid security answer",
+                        HttpStatus.UNPROCESSABLE_ENTITY);
             }
         }
 

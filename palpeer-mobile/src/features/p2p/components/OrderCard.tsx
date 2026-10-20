@@ -11,7 +11,8 @@ import type { P2POrderSummaryResponse } from '@/types/api/p2p';
 import { formatDateTime } from '@/utils/datetime';
 
 import { ExpiryCountdown } from './ExpiryCountdown';
-import { orderRole, p2pRateLine } from '../logic';
+import { FlippableRateLine } from './FlippableRateLine';
+import { orderRole } from '../logic';
 
 export function OrderCard({
   order,
@@ -50,7 +51,12 @@ export function OrderCard({
           </AppText>
           <AppText variant="h3">{amount}</AppText>
           {base && quote ? (
-            <AppText tone="secondary">{p2pRateLine(order.rate, base, quote)}</AppText>
+            <FlippableRateLine
+              rate={order.rate}
+              base={base}
+              quote={quote}
+              testID={`p2p-order-rate-${order.id}`}
+            />
           ) : null}
           {showCountdown ? (
             <ExpiryCountdown

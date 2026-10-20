@@ -55,9 +55,9 @@ describe('buildConfig', () => {
     });
   });
 
-  it('drops missing or malformed support details instead of guessing', () => {
+  it('defaults support email and drops malformed optional support details', () => {
     expect(buildConfig({}).support).toEqual({
-      email: null,
+      email: 'support@palpeer.com',
       phone: null,
       privacyPolicyUrl: null,
       termsUrl: null,
@@ -67,6 +67,11 @@ describe('buildConfig', () => {
       androidClientId: null,
       iosClientId: null,
     });
+    expect(buildConfig({}).share).toEqual({
+      baseUrl: null,
+      androidStoreUrl: 'https://play.google.com/store/apps/details?id=com.palpeer.app',
+      iosStoreUrl: null,
+    });
     const config = buildConfig({
       EXPO_PUBLIC_SUPPORT_EMAIL: 'not-an-email',
       EXPO_PUBLIC_SUPPORT_PHONE: 'call us',
@@ -74,7 +79,7 @@ describe('buildConfig', () => {
       EXPO_PUBLIC_TERMS_URL: 'javascript:alert(1)',
     });
     expect(config.support).toEqual({
-      email: null,
+      email: 'support@palpeer.com',
       phone: null,
       privacyPolicyUrl: null,
       termsUrl: null,

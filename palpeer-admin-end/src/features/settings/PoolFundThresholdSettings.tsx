@@ -110,8 +110,8 @@ export function PoolFundThresholdSettings() {
         </div>
         <p className="mt-1 text-sm text-text-secondary">
           Set a balance floor per pool. When the live (or booked) balance falls to or below the
-          threshold after a withdrawal, selected admins are emailed and listed phone numbers get an
-          SMS alert (SMS delivery is logged until a provider is wired).
+          threshold after a withdrawal, selected admins are emailed (SMTP/SendPulse) and listed phone
+          numbers receive an SMS via the configured SMS provider (Telnyx, Twilio, or BulkSMS).
         </p>
       </div>
 

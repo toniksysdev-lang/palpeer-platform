@@ -1,12 +1,22 @@
 import type { PickerOption } from '@/features/exchange/components/PickerSheet';
 
-import { SIGNUP_COUNTRIES } from '@/features/auth/signupCountries';
+import { SIGNUP_COUNTRIES, WORLD_COUNTRIES, findWorldCountry } from '@/features/auth/signupCountries';
 
 export const PROFILE_COUNTRIES: PickerOption[] = SIGNUP_COUNTRIES.map((c) => ({
   key: c.iso2,
   title: c.name,
   subtitle: c.iso2,
 }));
+
+/** Ensure a signup ISO2 appears in the country picker even if outside the default corridor list. */
+export function profileCountriesWith(iso2: string | null | undefined): PickerOption[] {
+  const code = iso2?.trim().toUpperCase() ?? '';
+  if (code.length !== 2) return PROFILE_COUNTRIES;
+  if (PROFILE_COUNTRIES.some((c) => c.key === code)) return PROFILE_COUNTRIES;
+  const world = findWorldCountry(code) ?? WORLD_COUNTRIES.find((c) => c.iso2 === code);
+  if (!world) return PROFILE_COUNTRIES;
+  return [{ key: world.iso2, title: world.name, subtitle: world.iso2 }, ...PROFILE_COUNTRIES];
+}
 
 /** Subdivisions keyed by ISO2 country code. */
 export const STATES_BY_COUNTRY: Record<string, PickerOption[]> = {

@@ -25,8 +25,6 @@ import { useToast } from './ToastProvider';
 /** Money-movement pushes should refresh wallet balances without waiting for the status screen. */
 const WALLET_LIST_TAG = { type: 'Wallet' as const, id: 'LIST' };
 
-configureForegroundPresentation();
-
 /**
  * Push behaviour for the whole app (R-NT-3):
  * - received while open: in-app toast + notification center refresh, no system banner;
@@ -34,6 +32,9 @@ configureForegroundPresentation();
  *   signed-in navigator is ready (after sign-in if needed), and the screen refetches;
  * - this install's registration is refreshed after sign-in and when the OS rotates the token,
  *   but only if the user turned push on here.
+ *
+ * Foreground presentation is configured in an effect (not at module load) so devices without
+ * Google Play Services can still open the app before any FCM/native call runs.
  */
 export function PushNotificationsProvider({ children }: { children: ReactNode }) {
   const dispatch = useAppDispatch();
@@ -47,6 +48,10 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
     authenticatedRef.current = authenticated;
     toastRef.current = toast;
   }, [authenticated, toast]);
+
+  useEffect(() => {
+    configureForegroundPresentation();
+  }, []);
 
   const refresh = useCallback(() => {
     dispatch(baseApi.util.invalidateTags([NOTIFICATION_LIST, NOTIFICATION_UNREAD]));

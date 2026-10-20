@@ -7,6 +7,7 @@ import { Screen } from '@/components/layout/Screen';
 import { StackHeader } from '@/components/layout/StackHeader';
 import { ErrorState } from '@/components/feedback/StateViews';
 import { FormAlert } from '@/components/feedback/FormAlert';
+import { ConfirmDialog } from '@/components/ui/AppModal';
 import { AppText } from '@/components/ui/AppText';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -17,13 +18,19 @@ import { useMoneyFormat } from '@/features/wallets/useMoneyFormat';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useOpenChatRoomMutation } from '@/services/api/chatApi';
 import { toAppError } from '@/services/api/errors';
-import { useGetOrderQuery, useGetRequestQuery } from '@/services/api/p2pApi';
+import {
+  useDeleteOrderMutation,
+  useGetOrderQuery,
+  useGetRequestQuery,
+} from '@/services/api/p2pApi';
 import type { P2PStatus } from '@/types/api/p2p';
 import { useAppSelector } from '@/store';
 import { formatDateTime } from '@/utils/datetime';
 
+import { FlippableRateLine } from '../components/FlippableRateLine';
 import { NoSettlementNotice } from '../components/NoSettlementNotice';
-import { orderRole, p2pRateLine } from '../logic';
+import { requestActionErrorMessage } from '../errors';
+import { canDeleteOrder, canMessageOrder, orderRole } from '../logic';
 
 function statusMessage(status: P2PStatus | string): string {
   switch (status) {
@@ -47,7 +54,10 @@ export function OrderDetailScreen() {
   // The order has no currency codes; they come from its request.
   const request = useGetRequestQuery(order.data?.requestId ?? skipToken);
   const [openRoom, chatState] = useOpenChatRoomMutation();
+  const [remove, removeState] = useDeleteOrderMutation();
   const [chatError, setChatError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const header = (
     <StackHeader
@@ -87,8 +97,11 @@ export function OrderDetailScreen() {
   const quote = request.data.quoteCurrencyCode;
   const role = orderRole(data, userId);
   const message = statusMessage(data.status);
+  const deletable = canDeleteOrder(data, userId);
+  const messagingEnabled = canMessageOrder(data, userId);
 
   const openChat = async () => {
+    if (!messagingEnabled) return;
     setChatError(null);
     const result = await openRoom({ p2pOrderId: data.id });
     if ('error' in result) {
@@ -96,6 +109,17 @@ export function OrderDetailScreen() {
       return;
     }
     router.push({ pathname: '/chat/[roomId]', params: { roomId: result.data.id } });
+  };
+
+  const runDelete = async () => {
+    setActionError(null);
+    const result = await remove(data.id);
+    setConfirmDelete(false);
+    if ('error' in result) {
+      setActionError(requestActionErrorMessage(toAppError(result.error)));
+      return;
+    }
+    router.replace({ pathname: '/p2p/history', params: { tab: 'orders' } });
   };
 
   return (
@@ -117,8 +141,14 @@ export function OrderDetailScreen() {
             label="Message"
             onPress={() => void openChat()}
             loading={chatState.isLoading}
+            disabled={!messagingEnabled}
             testID="p2p-order-chat"
           />
+          {!messagingEnabled ? (
+            <AppText variant="caption" tone="secondary" testID="p2p-order-chat-closed">
+              Messaging is closed for completed orders.
+            </AppText>
+          ) : null}
           <Button
             label="View request"
             variant="outline"
@@ -127,11 +157,21 @@ export function OrderDetailScreen() {
             }
             testID="p2p-order-request"
           />
+          {deletable ? (
+            <Button
+              label="Delete from history"
+              variant="danger"
+              onPress={() => setConfirmDelete(true)}
+              loading={removeState.isLoading}
+              testID="p2p-delete-order"
+            />
+          ) : null}
         </View>
       }
     >
       {header}
       <FormAlert message={chatError} testID="p2p-order-chat-error" />
+      <FormAlert message={actionError} testID="p2p-order-action-error" />
       <View style={{ gap: theme.spacing.xs }}>
         <StatusBadge status={data.status} testID="p2p-order-status" />
         <AppText variant="h2">
@@ -147,14 +187,43 @@ export function OrderDetailScreen() {
       ) : null}
       <Card variant="outlined" padding="md">
         <ReviewRow label="Amount" value={format(data.amount, base)} testID="p2p-order-amount" />
-        <ReviewRow
-          label="Rate"
-          value={p2pRateLine(data.rate, base, quote)}
-          testID="p2p-order-rate"
-        />
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: theme.spacing.md,
+            paddingVertical: theme.spacing.sm,
+          }}
+        >
+          <AppText tone="secondary" style={{ flex: 1 }}>
+            Rate
+          </AppText>
+          <View style={{ flex: 2, alignItems: 'flex-end' }}>
+            <FlippableRateLine
+              rate={data.rate}
+              base={base}
+              quote={quote}
+              variant="bodyStrong"
+              tone="primary"
+              align="right"
+              testID="p2p-order-rate"
+            />
+          </View>
+        </View>
         <ReviewRow label="Created" value={formatDateTime(data.createdAt) ?? '—'} />
       </Card>
       <NoSettlementNotice />
+      <ConfirmDialog
+        visible={confirmDelete}
+        title="Delete from history?"
+        message="This cancelled order will be removed from your P2P history. The other party can still see it until they delete it too."
+        confirmLabel="Delete"
+        cancelLabel="Keep"
+        destructive
+        loading={removeState.isLoading}
+        onConfirm={() => void runDelete()}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </Screen>
   );
 }

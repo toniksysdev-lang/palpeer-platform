@@ -65,14 +65,14 @@ public class ChatService {
         }
 
         return chatRoomRepository.findByP2pOrderId(order.getId())
-                .map(this::toRoomResponse)
+                .map(room -> toRoomResponse(room, userId))
                 .orElseGet(() -> {
                     ChatRoom room = new ChatRoom();
                     room.setP2pOrderId(order.getId());
                     room.setParticipantAId(order.getRequesterId());
                     room.setParticipantBId(order.getAcceptorId());
                     chatRoomRepository.save(room);
-                    return toRoomResponse(room);
+                    return toRoomResponse(room, userId);
                 });
     }
 
@@ -89,27 +89,33 @@ public class ChatService {
         }
 
         return chatRoomRepository.findByNegotiationId(negotiation.getId())
-                .map(this::toRoomResponse)
+                .map(room -> toRoomResponse(room, userId))
                 .orElseGet(() -> {
                     ChatRoom room = new ChatRoom();
                     room.setNegotiationId(negotiation.getId());
                     room.setParticipantAId(negotiation.getRequesterId());
                     room.setParticipantBId(negotiation.getCounterpartyId());
                     chatRoomRepository.save(room);
-                    return toRoomResponse(room);
+                    return toRoomResponse(room, userId);
                 });
     }
 
     @Transactional(readOnly = true)
     public List<ChatRoomResponse> listRooms(UUID userId) {
         return chatRoomRepository.findByParticipant(userId).stream()
-                .map(this::toRoomResponse)
+                .map(room -> toRoomResponse(room, userId))
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public ChatRoomResponse getRoom(UUID userId, UUID roomId) {
-        return toRoomResponse(requireParticipant(userId, roomId));
+        return toRoomResponse(requireParticipant(userId, roomId), userId);
+    }
+
+    /** Total unread chat messages across all of the caller's rooms. */
+    @Transactional(readOnly = true)
+    public long unreadCount(UUID userId) {
+        return chatMessageRepository.countUnreadForUser(userId);
     }
 
     @Transactional(readOnly = true)
@@ -153,7 +159,7 @@ public class ChatService {
      */
     @Transactional
     public ChatMessageResponse send(UUID senderId, UUID roomId, SendChatMessageRequest request) {
-        requireParticipant(senderId, roomId);
+        ChatRoom room = requireParticipant(senderId, roomId);
 
         if (request.clientMessageId() != null && !request.clientMessageId().isBlank()) {
             var existing = chatMessageRepository.findByRoomIdAndClientMessageId(roomId, request.clientMessageId());
@@ -174,6 +180,10 @@ public class ChatService {
 
         ChatMessageResponse response = toMessageResponse(message);
         messagingTemplate.convertAndSend("/topic/rooms." + roomId, response);
+        UUID recipientId = room.getParticipantAId().equals(senderId)
+                ? room.getParticipantBId()
+                : room.getParticipantAId();
+        messagingTemplate.convertAndSendToUser(recipientId.toString(), "/queue/chat", response);
         return response;
     }
 
@@ -198,7 +208,7 @@ public class ChatService {
                     "/topic/rooms." + roomId + ".reads",
                     new ChatReadReceiptResponse(roomId, userId, readAt));
         }
-        return toRoomResponse(updated);
+        return toRoomResponse(updated, userId);
     }
 
     private ChatRoom requireParticipant(UUID userId, UUID roomId) {
@@ -206,7 +216,19 @@ public class ChatService {
                 .orElseThrow(() -> new ResourceNotFoundException("Chat room not found"));
     }
 
+    /** Admin / inventory view — unread is always 0 (no caller context). */
     private ChatRoomResponse toRoomResponse(ChatRoom room) {
+        return toRoomResponse(room, null);
+    }
+
+    private ChatRoomResponse toRoomResponse(ChatRoom room, UUID viewerId) {
+        long unread = 0L;
+        if (viewerId != null) {
+            Instant lastRead = room.getParticipantAId().equals(viewerId)
+                    ? room.getParticipantALastReadAt()
+                    : room.getParticipantBLastReadAt();
+            unread = chatMessageRepository.countUnreadInRoom(room.getId(), viewerId, lastRead);
+        }
         return new ChatRoomResponse(
                 room.getId(),
                 room.getP2pOrderId(),
@@ -215,7 +237,8 @@ public class ChatService {
                 room.getParticipantBId(),
                 room.getCreatedAt(),
                 room.getParticipantALastReadAt(),
-                room.getParticipantBLastReadAt());
+                room.getParticipantBLastReadAt(),
+                unread);
     }
 
     private ChatMessageResponse toMessageResponse(ChatMessage message) {

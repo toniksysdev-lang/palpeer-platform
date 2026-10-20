@@ -65,7 +65,8 @@ export const funding = (overrides: Record<string, unknown> = {}) => ({
   failureReason: null,
   providerName: 'APAYLO',
   providerReference: 'APY-1',
-  fundingInstructions: 'Pay via Interac e-Transfer Request Money. Reference=APY-1',
+  fundingInstructions:
+    'Interac, Instant deposit via Interac. Reference=APY-1; amount=CAD 250.00; accept the Interac request in your email or banking app to complete the deposit.',
   createdAt: '2026-09-28T10:00:00Z',
   ...overrides,
 });

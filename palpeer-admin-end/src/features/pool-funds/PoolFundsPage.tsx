@@ -15,7 +15,8 @@ function balanceState(
 ): 'loading' | 'ready' | 'error' | 'unavailable' {
   if (isLoading) return 'loading';
   if (isError) return 'error';
-  if (!balance?.available || balance.liveBalance == null) return 'unavailable';
+  // Show booked totals whenever the API returned a card; only hide when completely missing.
+  if (!balance?.available) return 'unavailable';
   return 'ready';
 }
 
@@ -34,25 +35,26 @@ function BalanceCard({
 }) {
   const state = balanceState(balance, isLoading, isError);
   const currency = balance?.currencyCode ?? '—';
-  const hint =
-    state === 'unavailable'
-      ? balance?.configured
-        ? 'Live provider balance unavailable'
-        : 'Provider not configured'
-      : balance?.pendingBalance != null && Number(balance.pendingBalance) > 0
+  const hasLive = balance?.liveBalance != null;
+  const displayAmount = hasLive ? balance?.liveBalance : balance?.balance;
+  const hint = !balance?.configured
+    ? 'Provider not configured'
+    : hasLive
+      ? balance?.pendingBalance != null && Number(balance.pendingBalance) > 0
         ? `Pending ${formatDecimal(balance.pendingBalance, 2)} ${currency}`
-        : 'Live provider balance';
+        : 'Live provider balance'
+      : 'Booked pool (live settlement unavailable)';
 
   return (
     <KpiCard
       label={title}
       icon={Icon}
-      state={state}
+      state={state === 'ready' && !balance?.configured ? 'unavailable' : state}
       display={
-        state === 'ready' ? (
+        state === 'ready' && balance?.configured ? (
           <div className="space-y-2">
             <p className="font-mono text-2xl font-semibold tracking-tight text-text-primary">
-              {formatDecimal(balance?.liveBalance, 2)}{' '}
+              {formatDecimal(displayAmount, 2)}{' '}
               <span className="text-base font-medium text-text-secondary">{currency}</span>
             </p>
             <p className="text-xs text-text-secondary">

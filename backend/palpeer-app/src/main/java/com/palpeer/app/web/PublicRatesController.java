@@ -6,11 +6,14 @@ import com.palpeer.currency.service.ExchangeRateService;
 import com.palpeer.currency.web.dto.ExchangeRateResponse;
 import com.palpeer.p2p.service.P2PService;
 import com.palpeer.p2p.web.dto.PublicP2PRateResponse;
+import com.palpeer.p2p.web.dto.PublicP2PRequestResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -37,5 +40,11 @@ public class PublicRatesController {
     @Operation(summary = "Open P2P request rates (public, no owner details)")
     public ApiResponse<List<PublicP2PRateResponse>> p2pRates() {
         return ApiResponse.ok(p2PService.listOpenPublicRates());
+    }
+
+    @GetMapping("/p2p-requests/{id}")
+    @Operation(summary = "Open P2P request for share links (public, no owner id or notes)")
+    public ApiResponse<PublicP2PRequestResponse> p2pRequest(@PathVariable UUID id) {
+        return ApiResponse.ok(p2PService.getOpenPublicRequest(id));
     }
 }

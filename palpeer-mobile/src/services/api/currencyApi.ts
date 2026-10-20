@@ -1,4 +1,9 @@
-import type { ExchangeRateResponse, PublicInstantRateResponse, PublicP2PRateResponse } from '@/types/api/exchange';
+import type {
+  ExchangeRateResponse,
+  PublicInstantRateResponse,
+  PublicP2PRateResponse,
+  PublicP2PRequestResponse,
+} from '@/types/api/exchange';
 import type { CurrencyResponse } from '@/types/api/wallet';
 
 import { baseApi } from './baseApi';
@@ -30,6 +35,12 @@ export const currencyApi = baseApi.injectEndpoints({
       providesTags: [{ type: 'P2PRequest', id: 'PUBLIC_RATES' }],
       keepUnusedDataFor: 15,
     }),
+    /** Shared open P2P request for guest Accept (no auth). */
+    getPublicP2PRequest: build.query<PublicP2PRequestResponse, string>({
+      query: (id) => ({ path: `/public/p2p-requests/${encodeURIComponent(id)}`, public: true }),
+      providesTags: (_result, _error, id) => [{ type: 'P2PRequest', id: `PUBLIC_${id}` }],
+      keepUnusedDataFor: 15,
+    }),
   }),
 });
 
@@ -38,4 +49,5 @@ export const {
   useGetLatestRateQuery,
   useGetPublicInstantRatesQuery,
   useGetPublicP2PRatesQuery,
+  useGetPublicP2PRequestQuery,
 } = currencyApi;

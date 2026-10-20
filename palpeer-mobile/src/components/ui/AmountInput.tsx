@@ -112,20 +112,24 @@ export function AmountInput({
         ? 'transparent'
         : theme.colors.borderStrong;
 
+  const a11yLabel = label.trim() || (currencyCode ? `Amount in ${currencyCode}` : 'Amount');
+
   return (
     <View style={{ gap: theme.spacing.xs }}>
-      <AppText
-        variant={elevated ? 'body' : 'caption'}
-        tone={elevated ? 'primary' : 'secondary'}
-        style={styles.label}
-      >
-        {label}
-      </AppText>
+      {label.trim() ? (
+        <AppText
+          variant={elevated ? 'body' : 'caption'}
+          tone={elevated ? 'primary' : 'secondary'}
+          style={styles.label}
+        >
+          {label}
+        </AppText>
+      ) : null}
       <Pressable
         onPress={select}
         disabled={!editable || !padAvailable}
         accessibilityRole="button"
-        accessibilityLabel={label}
+        accessibilityLabel={a11yLabel}
         accessibilityHint={error ?? hint ?? 'Opens number pad'}
         accessibilityState={{ disabled: !editable, selected: active }}
         testID={testID}

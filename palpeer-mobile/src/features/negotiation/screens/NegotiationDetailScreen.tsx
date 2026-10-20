@@ -13,6 +13,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { FlippableRateLine } from '@/features/p2p/components/FlippableRateLine';
 import { effectiveStatus, p2pRateLine } from '@/features/p2p/logic';
 import { useMoneyFormat } from '@/features/wallets/useMoneyFormat';
 import { useNow } from '@/hooks/useNow';
@@ -192,6 +193,10 @@ function NegotiationView({
     setNotice('Counter-offer sent.');
   };
 
+  const amountError =
+    submitted && !isPositiveMoney(amount) ? 'Enter an amount above zero.' : null;
+  const rateError = submitted && !isPositiveMoney(rate) ? 'Enter a rate above zero.' : null;
+
   const openChat = async () => {
     setError(null);
     // Prefer the loaded entity id; fall back to the route param (same value) so we never POST {}.
@@ -245,7 +250,7 @@ function NegotiationView({
 
   const messageButton = (
     <Button
-      label="Message"
+      label="Open negotiation chat"
       variant="outline"
       onPress={() => void openChat()}
       loading={chatState.isLoading}
@@ -285,6 +290,7 @@ function NegotiationView({
   } else if (myTurn) {
     footer = (
       <View style={{ gap: theme.spacing.sm }}>
+        {messageButton}
         {requestOpen ? (
           <Button
             label="Accept offer"
@@ -299,7 +305,6 @@ function NegotiationView({
           onPress={startCounter}
           testID="negotiation-counter"
         />
-        {messageButton}
         <Button
           label="Decline offer"
           variant="ghost"
@@ -391,7 +396,12 @@ function NegotiationView({
             {offerAuthor(offer, userId)}
           </AppText>
           <AppText variant="h3">{format(offer.amount, base)}</AppText>
-          <AppText tone="secondary">{p2pRateLine(offer.rate, base, quote)}</AppText>
+          <FlippableRateLine
+            rate={offer.rate}
+            base={base}
+            quote={quote}
+            testID="negotiation-current-rate"
+          />
         </Card>
       ) : null}
 
@@ -402,7 +412,9 @@ function NegotiationView({
           amount={amount}
           rate={rate}
           onAmountChange={setAmount}
-          amountError={submitted && !isPositiveMoney(amount) ? 'Enter an amount above zero.' : null}
+          onRateChange={setRate}
+          amountError={amountError}
+          rateError={rateError}
           testID="counter"
         />
       ) : null}

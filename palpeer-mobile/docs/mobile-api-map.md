@@ -938,7 +938,7 @@ Source: `PaymentRailProvider`, `PaymentRailRouter`, `ApayloPaymentRail`, `KudaPa
 
 | Currency | Provider (`providerName`) | Funding method | Withdrawal method | Enable flags |
 |---|---|---|---|---|
-| `CAD` | `APAYLO` | Interac e-Transfer "Request Money" (`CreateSearchableEtransfer`) | Interac e-Transfer send (e-mail/phone) or EFT (`institution:transit:account`) | `APAYLO_ENABLED` + `APAYLO_API_KEY` + `APAYLO_SHARED_KEY` |
+| `CAD` | `APAYLO` | Instant Interac deposit only — Request Money (`RequestInteracEtransferEmail`) | Interac e-Transfer send (e-mail/phone) or EFT (`institution:transit:account`) | `APAYLO_ENABLED` + `APAYLO_API_KEY` + `APAYLO_SHARED_KEY` |
 | `NGN` | `KUDA` | Transfer to a per-wallet Kuda virtual account (created on first funding) | `SINGLE_FUND_TRANSFER` after `NAME_ENQUIRY` (`bankCode:accountNumber`) | `KUDA_ENABLED` + `KUDA_EMAIL` + `KUDA_API_KEY` |
 | other | none | — | — | — |
 
@@ -947,7 +947,7 @@ Source: `PaymentRailProvider`, `PaymentRailRouter`, `ApayloPaymentRail`, `KudaPa
 `POST /api/v1/funding` accepts only `{ walletId, amount, providerReference? }` — the client cannot choose a method; the rail is chosen by the wallet currency.
 
 - Rail enabled → `status: "PENDING"`, `providerName`, `providerReference`, and `fundingInstructions` (single plain-text string, no structured fields):
-  - Apaylo: `"Pay via Interac e-Transfer Request Money. Reference=<ref>; amount=CAD <amount>; follow Apaylo/Interac instructions in your email if sent."`
+  - Apaylo: `"Interac, Instant deposit via Interac. Reference=<ref>; amount=CAD <amount>; accept the Interac request in your email or banking app to complete the deposit."`
   - Kuda: `"Transfer NGN <amount> to Kuda virtual account <accountNumber> (<accountName>); bank=<bankName>; tracking=<trackingReference>; ref=<fundingId>"`
 - No rail → `status: "INITIATED"`, no provider fields, no instructions; nothing completes it except `POST /funding/{id}/process` or the webhook.
 - Completion: provider webhook (`/api/v1/webhooks/apaylo|kuda`) → `SUCCESS` (ledger `CREDIT`) or `FAILED`. Poll `GET /funding/{id}` or `GET /transactions/FUNDING/{id}`.

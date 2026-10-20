@@ -11,7 +11,11 @@ import { TextLink } from '@/components/ui/TextLink';
 import { useSensitiveScreen } from '@/hooks/useSensitiveScreen';
 import { useToast } from '@/providers/ToastProvider';
 import { useSecretCommand } from '@/hooks/useSecretCommand';
-import { useResendOtpMutation } from '@/services/api/authApi';
+import {
+  useRequestPhoneOtpMutation,
+  useResendOtpMutation,
+  useVerifyPhoneOtpMutation,
+} from '@/services/api/authApi';
 import { toAppError } from '@/services/api/errors';
 import { accountCommands } from '@/services/auth/accountCommands';
 
@@ -34,8 +38,8 @@ const CODE_ERRORS = new Set([
 ]);
 
 /**
- * Signup order: phone entry → phone OTP (client gate; SMS provider pending) → create account →
- * email OTP (real). The code field is never autofilled — users enter the code from SMS/email.
+ * Signup order: phone entry → SMS OTP → create account → email OTP.
+ * The code field is never autofilled — users enter the code from SMS/email.
  */
 export function VerifyOtpScreen({ purpose }: Props) {
   useSensitiveScreen();
@@ -45,9 +49,11 @@ export function VerifyOtpScreen({ purpose }: Props) {
     email?: string;
     phone?: string;
     signup?: string;
+    countryIso2?: string;
   }>();
   const email = typeof params.email === 'string' ? params.email : '';
   const phone = typeof params.phone === 'string' ? params.phone : '';
+  const countryIso2 = typeof params.countryIso2 === 'string' ? params.countryIso2 : '';
   const isPhone = purpose === 'PHONE_VERIFICATION';
   const preRegisterPhone = isPhone && params.signup === '1' && phone.length > 0;
   const channel = isPhone ? 'SMS' : 'EMAIL';
@@ -58,6 +64,8 @@ export function VerifyOtpScreen({ purpose }: Props) {
   const [busy, setBusy] = useState(false);
   const [verifyOtp] = useSecretCommand(accountCommands.verifyOtp);
   const [resendOtp, { isLoading: resending }] = useResendOtpMutation();
+  const [requestPhoneOtp, requestPhoneState] = useRequestPhoneOtpMutation();
+  const [verifyPhoneOtp] = useVerifyPhoneOtpMutation();
   const cooldown = useResendCooldown(60);
 
   const goToLogin = () =>
@@ -65,7 +73,10 @@ export function VerifyOtpScreen({ purpose }: Props) {
 
   const goToRegister = () => {
     numberPad?.close();
-    router.push({ pathname: '/register', params: { phone } });
+    router.push({
+      pathname: '/register',
+      params: { phone, ...(countryIso2 ? { countryIso2 } : null) },
+    });
   };
 
   const submit = async (value: string) => {
@@ -73,15 +84,17 @@ export function VerifyOtpScreen({ purpose }: Props) {
     setCodeError(null);
     setFormError(null);
 
-    if (preRegisterPhone) {
-      goToRegister();
-      return;
-    }
-
-    if (!email) return;
-
     setBusy(true);
     try {
+      if (preRegisterPhone) {
+        await verifyPhoneOtp({ phone, code: value }).unwrap();
+        toast.show({ type: 'success', title: 'Phone verified' });
+        goToRegister();
+        return;
+      }
+
+      if (!email) return;
+
       await verifyOtp({ email, purpose, channel, code: value });
       if (isPhone) {
         goToLogin();
@@ -106,13 +119,14 @@ export function VerifyOtpScreen({ purpose }: Props) {
     setFormError(null);
 
     if (preRegisterPhone) {
-      setCode('');
-      cooldown.restart();
-      toast.show({
-        type: 'info',
-        title: 'SMS delivery isn’t available yet',
-        message: 'Enter any 6-digit code to continue, or skip and verify later.',
-      });
+      try {
+        await requestPhoneOtp({ phone }).unwrap();
+        setCode('');
+        cooldown.restart();
+        toast.show({ type: 'success', title: 'New code sent' });
+      } catch (raw) {
+        setFormError(authErrorMessage(toAppError(raw)));
+      }
       return;
     }
 
@@ -128,15 +142,11 @@ export function VerifyOtpScreen({ purpose }: Props) {
 
   if (preRegisterPhone) {
     return (
-      <AuthLayout title="Verify phone" subtitle="Please verify your phone number" centered>
+      <AuthLayout title="Verify phone" subtitle="Enter the SMS code we sent you" centered>
         <AppText tone="secondary" align="center">
-          We have sent a {OTP_LENGTH}-digit verification code to {maskPhone(phone)}. Enter this
-          code below.
+          We sent a {OTP_LENGTH}-digit SMS verification code to {maskPhone(phone)}. Enter it below
+          to continue creating your account.
         </AppText>
-        <FormAlert
-          tone="info"
-          message="Text message delivery isn’t available yet. Enter any 6-digit code to continue, or skip and verify later."
-        />
         <FormAlert message={formError} testID="verify-error" />
 
         <OtpInput
@@ -160,7 +170,7 @@ export function VerifyOtpScreen({ purpose }: Props) {
               }
               tone="info"
               onPress={resend}
-              disabled={!cooldown.canResend || resending}
+              disabled={!cooldown.canResend || resending || requestPhoneState.isLoading}
               testID="verify-resend"
             />
           </View>
@@ -169,7 +179,9 @@ export function VerifyOtpScreen({ purpose }: Props) {
         <Button
           label="Submit"
           shape="pill"
-          onPress={() => submit(code)}
+          onPress={() => void submit(code)}
+          loading={busy}
+          loadingLabel="Verifying…"
           disabled={code.length !== OTP_LENGTH}
           testID="verify-submit"
         />
@@ -205,12 +217,6 @@ export function VerifyOtpScreen({ purpose }: Props) {
           ? `We have sent a ${OTP_LENGTH}-digit verification code to the phone number on your account. Enter this code below.`
           : `We have sent a ${OTP_LENGTH}-digit verification code to ${maskEmail(email)}. Enter this code below.`}
       </AppText>
-      {isPhone ? (
-        <FormAlert
-          tone="info"
-          message="Text message delivery isn’t available yet, so you may not receive this code. You can skip this step and verify your phone later."
-        />
-      ) : null}
       <FormAlert message={formError} testID="verify-error" />
 
       <OtpInput

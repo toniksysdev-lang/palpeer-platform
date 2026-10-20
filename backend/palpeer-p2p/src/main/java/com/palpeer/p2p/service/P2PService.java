@@ -22,7 +22,12 @@ import com.palpeer.p2p.web.dto.P2POrderResponse;
 import com.palpeer.p2p.web.dto.P2POrderSummaryResponse;
 import com.palpeer.p2p.web.dto.P2PRequestResponse;
 import com.palpeer.p2p.web.dto.PublicP2PRateResponse;
+import com.palpeer.p2p.web.dto.PublicP2PRequestResponse;
 import com.palpeer.p2p.web.dto.UpdateP2PRequestDto;
+import com.palpeer.profile.domain.Profile;
+import com.palpeer.profile.repository.ProfileRepository;
+import com.palpeer.user.domain.User;
+import com.palpeer.user.repository.UserRepository;
 import com.palpeer.wallet.domain.Wallet;
 import com.palpeer.wallet.repository.WalletRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -30,6 +35,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -55,7 +62,10 @@ public class P2PService {
     private final P2POrderRepository p2POrderRepository;
     private final CurrencyService currencyService;
     private final P2PRateBoundsService p2PRateBoundsService;
+    private final P2PFeeTierService p2PFeeTierService;
     private final WalletRepository walletRepository;
+    private final ProfileRepository profileRepository;
+    private final UserRepository userRepository;
     private final LedgerService ledgerService;
     private final AuditRecorder auditRecorder;
     private final ApplicationEventPublisher eventPublisher;
@@ -84,8 +94,9 @@ public class P2PService {
         entity.setStatus(P2PStatus.OPEN);
         entity.setExpiresAt(request.expiresAt());
         entity.setNotes(trimToNull(request.notes()));
-        p2PRequestRepository.save(entity);
-        // SELL listings temporarily move the base amount available → pending until settle/cancel/expire.
+        // Flush so the request id exists before the ledger idempotency key is built.
+        p2PRequestRepository.saveAndFlush(entity);
+        // SELL listings temporarily move the base (sold) amount available → pending until settle/cancel/expire.
         placeSellHold(entity);
         p2PRequestRepository.save(entity);
         broadcastP2PPosted(entity);
@@ -125,16 +136,65 @@ public class P2PService {
     }
 
     /**
-     * Soft-delete / cancel: OPEN → CANCELLED (owner only).
-     * CONTRACT_PENDING (P8-04): hard delete vs cancel semantics.
+     * Owner DELETE on a request:
+     * <ul>
+     *   <li>OPEN → cancel (CANCELLED) and release any sell hold</li>
+     *   <li>CANCELLED or EXPIRED → archive (remove from the owner's history)</li>
+     * </ul>
      */
     @Transactional
     public void delete(UUID userId, UUID requestId) {
-        P2PRequest entity = requireOwnedOpen(userId, requestId);
-        releaseSellHold(entity);
-        entity.setStatus(P2PStatus.CANCELLED);
-        p2PRequestRepository.save(entity);
-        publishClosed(entity);
+        P2PRequest entity = p2PRequestRepository.findByIdAndUserId(requestId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("P2P request not found"));
+        if (entity.getArchivedAt() != null) {
+            throw new ResourceNotFoundException("P2P request not found");
+        }
+        refreshExpiry(entity);
+        if (entity.getStatus() == P2PStatus.OPEN) {
+            releaseSellHold(entity);
+            entity.setStatus(P2PStatus.CANCELLED);
+            p2PRequestRepository.save(entity);
+            publishClosed(entity);
+            return;
+        }
+        if (entity.getStatus() == P2PStatus.CANCELLED || entity.getStatus() == P2PStatus.EXPIRED) {
+            entity.setArchivedAt(Instant.now());
+            p2PRequestRepository.save(entity);
+            return;
+        }
+        throw new BusinessException(
+                "P2P_NOT_DELETABLE",
+                "Only open, cancelled, or expired requests can be removed: " + entity.getStatus(),
+                HttpStatus.CONFLICT);
+    }
+
+    /**
+     * Participant DELETE on a cancelled order: archives it for that user only (other party still sees it).
+     */
+    @Transactional
+    public void deleteOrder(UUID userId, UUID orderId) {
+        P2POrder order = p2POrderRepository.findByIdAndPartyUserId(orderId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("P2P order not found"));
+        if (order.getStatus() != P2PStatus.CANCELLED) {
+            throw new BusinessException(
+                    "P2P_ORDER_NOT_DELETABLE",
+                    "Only cancelled orders can be removed from history",
+                    HttpStatus.CONFLICT);
+        }
+        Instant now = Instant.now();
+        if (order.getRequesterId().equals(userId)) {
+            if (order.getRequesterArchivedAt() != null) {
+                throw new ResourceNotFoundException("P2P order not found");
+            }
+            order.setRequesterArchivedAt(now);
+        }
+        if (order.getAcceptorId().equals(userId)) {
+            if (order.getAcceptorArchivedAt() != null) {
+                throw new ResourceNotFoundException("P2P order not found");
+            }
+            order.setAcceptorArchivedAt(now);
+        }
+        p2POrderRepository.save(order);
     }
 
     @Transactional
@@ -272,6 +332,13 @@ public class P2PService {
                 orderRef,
                 "P2P settle — seller quote credit"));
 
+        BigDecimal fee = p2PFeeTierService.resolveFee(base, quote, baseAmount);
+        if (fee != null && fee.signum() > 0) {
+            int basePrecision = currencyService.getByCode(base).precision();
+            order.setFeeAmount(fee.setScale(basePrecision, RoundingMode.HALF_EVEN));
+            order.setFeeCurrencyCode(base);
+        }
+
         auditRecorder.record(AuditRecord.builder("P2P_ORDER_SETTLED")
                 .entity("P2POrder:" + order.getId())
                 .userRef(order.getRequesterId())
@@ -286,7 +353,10 @@ public class P2PService {
                         + ";quote="
                         + formatAmount(quoteAmount)
                         + " "
-                        + quote)
+                        + quote
+                        + (order.getFeeAmount() != null
+                                ? ";fee=" + formatAmount(order.getFeeAmount()) + " " + order.getFeeCurrencyCode()
+                                : ""))
                 .build());
     }
 
@@ -313,11 +383,11 @@ public class P2PService {
 
     @Transactional(readOnly = true)
     public List<P2PRequestResponse> listOpen() {
-        return p2PRequestRepository.findByStatusOrderByCreatedAtDesc(P2PStatus.OPEN).stream()
+        List<P2PRequest> open = p2PRequestRepository.findByStatusOrderByCreatedAtDesc(P2PStatus.OPEN).stream()
                 .map(this::maybeExpire)
                 .filter(r -> r.getStatus() == P2PStatus.OPEN)
-                .map(this::toRequestResponse)
                 .toList();
+        return toRequestResponses(open);
     }
 
     /** Open requests for the public rates board (no owner id or notes). */
@@ -336,17 +406,41 @@ public class P2PService {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
-    public List<P2PRequestResponse> listMine(UUID userId) {
-        return p2PRequestRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(this::toRequestResponse)
-                .toList();
+    /**
+     * Single open request for share / guest Accept — no owner id or notes.
+     * Expired or non-open requests are treated as not found.
+     */
+    @Transactional
+    public PublicP2PRequestResponse getOpenPublicRequest(UUID requestId) {
+        P2PRequest entity = p2PRequestRepository.findById(requestId)
+                .orElseThrow(() -> new ResourceNotFoundException("P2P request not found"));
+        refreshExpiry(entity);
+        if (entity.getStatus() != P2PStatus.OPEN) {
+            throw new ResourceNotFoundException("P2P request not found");
+        }
+        return new PublicP2PRequestResponse(
+                entity.getId(),
+                entity.getSide(),
+                entity.getStatus(),
+                entity.getBaseCurrencyCode(),
+                entity.getQuoteCurrencyCode(),
+                entity.getAmount(),
+                entity.getRate(),
+                resolvePosterDisplayName(entity.getUserId()),
+                entity.getExpiresAt(),
+                entity.getCreatedAt());
     }
 
-    /** Orders where the user is requester or acceptor, newest first. */
+    @Transactional(readOnly = true)
+    public List<P2PRequestResponse> listMine(UUID userId) {
+        return toRequestResponses(
+                p2PRequestRepository.findByUserIdAndArchivedAtIsNullOrderByCreatedAtDesc(userId));
+    }
+
+    /** Orders where the user is requester or acceptor (and has not archived), newest first. */
     @Transactional(readOnly = true)
     public List<P2POrderSummaryResponse> listMyOrders(UUID userId) {
-        List<P2POrder> orders = p2POrderRepository.findByRequesterIdOrAcceptorIdOrderByCreatedAtDesc(userId, userId);
+        List<P2POrder> orders = p2POrderRepository.findVisibleForUserOrderByCreatedAtDesc(userId);
         if (orders.isEmpty()) {
             return List.of();
         }
@@ -363,6 +457,12 @@ public class P2PService {
         P2POrder order = p2POrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("P2P order not found"));
         if (!order.getRequesterId().equals(userId) && !order.getAcceptorId().equals(userId)) {
+            throw new ResourceNotFoundException("P2P order not found");
+        }
+        if (order.getRequesterId().equals(userId) && order.getRequesterArchivedAt() != null) {
+            throw new ResourceNotFoundException("P2P order not found");
+        }
+        if (order.getAcceptorId().equals(userId) && order.getAcceptorArchivedAt() != null) {
             throw new ResourceNotFoundException("P2P order not found");
         }
         return toOrderResponse(order);
@@ -485,19 +585,27 @@ public class P2PService {
     }
 
     /**
-     * SELL listings: hold base currency from the seller's wallet (available → pending).
-     * Released on cancel/expire; captured (RELEASE + DEBIT) when the order completes.
+     * SELL listings: hold the sold currency (API base) from the seller's wallet (available → pending).
+     * Works for every base currency (CAD, NGN, USD, …). Released on cancel/expire; captured on settle.
      */
     private void placeSellHold(P2PRequest entity) {
         if (entity.getSide() != P2PSide.SELL || entity.getHoldLedgerEntryId() != null) {
             return;
         }
+        if (entity.getId() == null) {
+            throw new IllegalStateException("P2P request id required before placing sell hold");
+        }
+        String soldCurrency = normalize(entity.getBaseCurrencyCode());
         Wallet wallet = walletRepository
-                .findByUserIdAndCurrencyCodeIgnoreCase(entity.getUserId(), entity.getBaseCurrencyCode())
+                .findByUserIdAndCurrencyCodeIgnoreCase(entity.getUserId(), soldCurrency)
                 .orElseThrow(() -> new BusinessException(
                         "P2P_WALLET_REQUIRED",
-                        "Create a " + entity.getBaseCurrencyCode() + " wallet before posting a sell request",
+                        "Create a " + soldCurrency + " wallet before posting a sell request",
                         HttpStatus.BAD_REQUEST));
+        if (!soldCurrency.equalsIgnoreCase(wallet.getCurrencyCode())) {
+            throw new IllegalStateException(
+                    "Sell hold wallet currency mismatch: expected " + soldCurrency + " got " + wallet.getCurrencyCode());
+        }
         LedgerEntry hold = ledgerService.post(new LedgerPostingRequest(
                 wallet.getId(),
                 LedgerEntryType.HOLD,
@@ -505,7 +613,7 @@ public class P2PService {
                 "p2p-request:" + entity.getId() + ":hold",
                 "P2P_REQUEST",
                 entity.getId().toString(),
-                "P2P sell hold"));
+                "P2P sell hold " + soldCurrency));
         entity.setHoldWalletId(wallet.getId());
         entity.setHoldLedgerEntryId(hold.getId());
     }
@@ -576,10 +684,32 @@ public class P2PService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    private List<P2PRequestResponse> toRequestResponses(Collection<P2PRequest> entities) {
+        if (entities.isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> userIds = entities.stream().map(P2PRequest::getUserId).collect(Collectors.toSet());
+        Map<UUID, Profile> profiles = profileRepository.findByUserIdIn(userIds).stream()
+                .collect(Collectors.toMap(Profile::getUserId, Function.identity(), (a, b) -> a));
+        Map<UUID, User> users = new HashMap<>();
+        for (User user : userRepository.findAllById(userIds)) {
+            users.put(user.getId(), user);
+        }
+        return entities.stream()
+                .map(entity -> toRequestResponse(
+                        entity, resolvePosterDisplayName(entity.getUserId(), profiles, users)))
+                .toList();
+    }
+
     private P2PRequestResponse toRequestResponse(P2PRequest entity) {
+        return toRequestResponse(entity, resolvePosterDisplayName(entity.getUserId()));
+    }
+
+    private P2PRequestResponse toRequestResponse(P2PRequest entity, String posterDisplayName) {
         return new P2PRequestResponse(
                 entity.getId(),
                 entity.getUserId(),
+                posterDisplayName,
                 entity.getSide(),
                 entity.getBaseCurrencyCode(),
                 entity.getQuoteCurrencyCode(),
@@ -590,6 +720,40 @@ public class P2PService {
                 entity.getNotes(),
                 entity.getCreatedAt()
         );
+    }
+
+    private String resolvePosterDisplayName(UUID userId) {
+        Map<UUID, Profile> profiles = profileRepository
+                .findByUserId(userId)
+                .map(profile -> Map.of(userId, profile))
+                .orElseGet(Map::of);
+        Map<UUID, User> users = userRepository
+                .findById(userId)
+                .map(user -> Map.of(userId, user))
+                .orElseGet(Map::of);
+        return resolvePosterDisplayName(userId, profiles, users);
+    }
+
+    private static String resolvePosterDisplayName(
+            UUID userId, Map<UUID, Profile> profiles, Map<UUID, User> users) {
+        Profile profile = profiles.get(userId);
+        if (profile != null) {
+            String name = profileFullName(profile);
+            if (!name.isBlank()) {
+                return name;
+            }
+        }
+        User user = users.get(userId);
+        if (user != null && user.getEmail() != null && user.getEmail().contains("@")) {
+            return user.getEmail().substring(0, user.getEmail().indexOf('@'));
+        }
+        return "Palpeer user";
+    }
+
+    private static String profileFullName(Profile profile) {
+        String first = profile.getFirstName() == null ? "" : profile.getFirstName().trim();
+        String last = profile.getLastName() == null ? "" : profile.getLastName().trim();
+        return (first + " " + last).trim();
     }
 
     private P2POrderResponse toOrderResponse(P2POrder order) {
@@ -635,9 +799,7 @@ public class P2PService {
             }
             return cb.and(predicates.toArray(Predicate[]::new));
         };
-        return p2PRequestRepository.findAll(spec, NEWEST_FIRST).stream()
-                .map(this::toRequestResponse)
-                .toList();
+        return toRequestResponses(p2PRequestRepository.findAll(spec, NEWEST_FIRST));
     }
 
     /** Admin: list orders (all users); userId matches requester or acceptor. */

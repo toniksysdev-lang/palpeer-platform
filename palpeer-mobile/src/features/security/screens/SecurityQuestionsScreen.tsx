@@ -1,3 +1,4 @@
+import { router, useLocalSearchParams } from 'expo-router';
 import { Check, ChevronDown, HelpCircle } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
@@ -40,10 +41,12 @@ export function SecurityQuestionsScreen() {
   const theme = useTheme();
   const toast = useToast();
   const dispatch = useAppDispatch();
+  const { required, returnTo } = useLocalSearchParams<{ required?: string; returnTo?: string }>();
+  const mustSet = required === '1';
   const { requestPin } = usePinPrompt();
   const questions = useGetSecurityQuestionsQuery();
   const pinStatus = useGetPinStatusQuery();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(mustSet);
   const [slots, setSlots] = useState<Slot[]>(emptySlots);
   const [picking, setPicking] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +74,22 @@ export function SecurityQuestionsScreen() {
   }
 
   const configured = questions.data;
+  const replacing = configured.length > 0;
+
+  const finishAfterSave = () => {
+    toast.show({ type: 'success', title: 'Security questions saved' });
+    if (returnTo && typeof returnTo === 'string') {
+      router.replace(returnTo as '/wallet/create');
+      return;
+    }
+    if (mustSet) {
+      router.replace('/');
+      return;
+    }
+    if (router.canGoBack()) {
+      router.back();
+    }
+  };
 
   if (!editing && configured.length > 0) {
     return (
@@ -114,7 +133,9 @@ export function SecurityQuestionsScreen() {
       void pinStatus.refetch();
       return;
     }
-    if (pinStatus.data.pinSet) {
+    // PIN only when replacing existing questions (R-SEC-8). First-time setup must work even if
+    // the PIN was forgotten, so the user can recover via Forgot PIN afterwards.
+    if (replacing && pinStatus.data.pinSet) {
       const confirmed = await requestPin({
         title: 'Confirm with your PIN',
         message: 'Changing your security questions changes how your PIN can be reset.',
@@ -139,6 +160,10 @@ export function SecurityQuestionsScreen() {
       setSlots(emptySlots());
       setEditing(false);
       dispatch(baseApi.util.invalidateTags([{ type: 'Security', id: 'QUESTIONS' }]));
+      if (mustSet || returnTo) {
+        finishAfterSave();
+        return;
+      }
       toast.show({ type: 'success', title: 'Security questions saved' });
       return;
     }
@@ -158,7 +183,7 @@ export function SecurityQuestionsScreen() {
             disabled={!complete}
             testID="questions-save"
           />
-          {configured.length > 0 ? (
+          {replacing && !mustSet ? (
             <Button
               label="Cancel"
               variant="ghost"
@@ -178,7 +203,14 @@ export function SecurityQuestionsScreen() {
         Choose {SECURITY_QUESTION_COUNT} questions only you can answer. You&apos;ll need these
         answers to reset your transaction PIN. Answers aren&apos;t case-sensitive.
       </AppText>
-      {configured.length > 0 ? (
+      {mustSet ? (
+        <FormAlert
+          tone="info"
+          message="Set these up now so you can reset your PIN if you forget it."
+          testID="questions-required-note"
+        />
+      ) : null}
+      {replacing ? (
         <FormAlert
           tone="info"
           message="Saving replaces your current questions and answers."

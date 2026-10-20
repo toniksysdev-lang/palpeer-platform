@@ -1,5 +1,6 @@
 package com.palpeer.admin.web;
 
+import com.palpeer.admin.service.AdminKycQueryService;
 import com.palpeer.admin.service.AdminRbacService;
 import com.palpeer.admin.service.AdminUserService;
 import com.palpeer.admin.service.UserNoteService;
@@ -31,6 +32,7 @@ import com.palpeer.currency.web.dto.ExchangeRateResponse;
 import com.palpeer.kyc.domain.KycStatus;
 import com.palpeer.kyc.service.KycService;
 import com.palpeer.kyc.web.dto.AdminKycCaseDetailResponse;
+import com.palpeer.kyc.web.dto.AdminKycCaseSummaryResponse;
 import com.palpeer.kyc.web.dto.KycFileContent;
 import com.palpeer.kyc.web.dto.KycStatusResponse;
 import com.palpeer.p2p.domain.P2PStatus;
@@ -92,6 +94,7 @@ public class AdminController {
     private final AdminUserService adminUserService;
     private final UserNoteService userNoteService;
     private final AdminRbacService adminRbacService;
+    private final AdminKycQueryService adminKycQueryService;
     private final KycService kycService;
     private final CurrencyService currencyService;
     private final ExchangeRateService exchangeRateService;
@@ -108,8 +111,10 @@ public class AdminController {
     public ApiResponse<Page<AdminUserSummaryResponse>> listUsers(
             @RequestParam(required = false) String email,
             @RequestParam(required = false) UserStatus status,
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to,
             @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.ok(adminUserService.listUsers(email, status, pageable));
+        return ApiResponse.ok(adminUserService.listUsers(email, status, from, to, pageable));
     }
 
     @GetMapping("/users/{userId}")
@@ -161,11 +166,11 @@ public class AdminController {
     @GetMapping("/kyc/cases")
     @PreAuthorize("hasAuthority('kyc:read')")
     @Operation(summary = "List KYC cases")
-    public ApiResponse<Page<KycStatusResponse>> listKyc(
+    public ApiResponse<Page<AdminKycCaseSummaryResponse>> listKyc(
             @RequestParam(required = false) KycStatus status,
             @RequestParam(required = false) UUID userId,
             @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.ok(kycService.listCases(status, userId, pageable));
+        return ApiResponse.ok(adminKycQueryService.listCases(status, userId, pageable));
     }
 
     @GetMapping("/kyc/cases/{caseId}")

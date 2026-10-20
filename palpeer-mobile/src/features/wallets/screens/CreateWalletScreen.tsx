@@ -3,6 +3,7 @@ import { Check } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { CountryFlag } from '@/components/brand/CountryFlag';
 import { FormAlert } from '@/components/feedback/FormAlert';
 import { EmptyState, ErrorState } from '@/components/feedback/StateViews';
 import { Screen } from '@/components/layout/Screen';
@@ -15,30 +16,36 @@ import { TextLink } from '@/components/ui/TextLink';
 import { usePinPrompt } from '@/features/security/PinPromptProvider';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
+import { useGetRegistrationCountriesQuery } from '@/services/api/authApi';
 import { useGetCurrenciesQuery } from '@/services/api/currencyApi';
 import { toAppError } from '@/services/api/errors';
 import { useGetPinStatusQuery } from '@/services/api/securityApi';
 import { useCreateWalletMutation, useGetWalletsQuery } from '@/services/api/walletApi';
 
 import { walletErrorMessage } from '../errors';
+import { remainingRegistrationWalletOptions } from '../registrationCurrencies';
 
-/** Currencies come from `GET /currencies`; ones the user already holds are hidden (R-W-1). */
+/**
+ * Currencies from `GET /currencies`, limited to those for admin-enabled registration countries,
+ * then hiding ones the user already holds (R-W-1).
+ */
 export function CreateWalletScreen() {
   const theme = useTheme();
   const toast = useToast();
   const currencies = useGetCurrenciesQuery();
   const wallets = useGetWalletsQuery();
+  const registrationCountries = useGetRegistrationCountriesQuery();
   const pinStatus = useGetPinStatusQuery();
   const { requestPin } = usePinPrompt();
   const [createWallet, createState] = useCreateWalletMutation();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
 
   const header = <StackHeader title="New wallet" />;
-  const loadError = currencies.error ?? wallets.error;
+  const loadError = currencies.error ?? wallets.error ?? registrationCountries.error;
 
-  if (loadError && !(currencies.data && wallets.data)) {
+  if (loadError && !(currencies.data && wallets.data && registrationCountries.data)) {
     return (
       <Screen>
         {header}
@@ -47,13 +54,14 @@ export function CreateWalletScreen() {
           onRetry={() => {
             void currencies.refetch();
             void wallets.refetch();
+            void registrationCountries.refetch();
           }}
         />
       </Screen>
     );
   }
 
-  if (!currencies.data || !wallets.data) {
+  if (!currencies.data || !wallets.data || !registrationCountries.data) {
     return (
       <Screen>
         {header}
@@ -63,13 +71,20 @@ export function CreateWalletScreen() {
     );
   }
 
-  const held = new Set(wallets.data.map((wallet) => wallet.currencyCode));
-  const available = currencies.data.filter((currency) => !held.has(currency.code));
+  const available = remainingRegistrationWalletOptions({
+    registrationIso2: registrationCountries.data,
+    platformCurrencyCodes: currencies.data.map((currency) => currency.code),
+    heldCurrencyCodes: wallets.data.map((wallet) => wallet.currencyCode),
+  });
+  const selectedOption = available.find((option) => option.countryIso2 === selectedCountry) ?? null;
+  const symbolFor = (code: string) =>
+    currencies.data.find((currency) => currency.code.toUpperCase() === code.toUpperCase())
+      ?.symbol ?? code;
   const pinReady = Boolean(pinStatus.data?.pinSet);
   const pinLoading = pinStatus.isLoading || pinStatus.isFetching;
 
   const submit = async () => {
-    if (!selected || confirming) return;
+    if (!selectedOption || confirming || !selectedOption.creatable) return;
     setError(null);
 
     if (pinLoading) {
@@ -95,13 +110,13 @@ export function CreateWalletScreen() {
 
     const confirmed = await requestPin({
       title: 'Confirm wallet creation',
-      message: `Enter your 4-digit PIN to create a ${selected} wallet.`,
+      message: `Enter your 4-digit PIN to create a ${selectedOption.currencyCode} wallet for ${selectedOption.countryName}.`,
     });
     if (!confirmed) return;
 
     setConfirming(true);
     try {
-      const result = await createWallet({ currencyCode: selected });
+      const result = await createWallet({ currencyCode: selectedOption.currencyCode });
       if ('error' in result) {
         const appError = toAppError(result.error);
         if (appError.code === 'WALLET_EXISTS') void wallets.refetch();
@@ -116,25 +131,42 @@ export function CreateWalletScreen() {
   };
 
   if (available.length === 0) {
+    const anyCorridor = remainingRegistrationWalletOptions({
+      registrationIso2: registrationCountries.data,
+      platformCurrencyCodes: currencies.data.map((currency) => currency.code),
+      heldCurrencyCodes: [],
+    }).length;
     return (
       <Screen>
         {header}
         <EmptyState
-          title="You have every wallet"
-          message="There's already a wallet for each available currency."
+          title={anyCorridor ? 'You have every wallet' : 'No countries available'}
+          message={
+            anyCorridor
+              ? "There's already a wallet for each enabled registration country."
+              : 'No countries are currently enabled for registration.'
+          }
         />
       </Screen>
     );
   }
+
+  const selectedCreatable = Boolean(selectedOption?.creatable);
 
   return (
     <Screen
       scroll
       footer={
         <Button
-          label={selected ? `Create ${selected} wallet` : 'Choose a currency'}
+          label={
+            selectedOption
+              ? selectedCreatable
+                ? `Create ${selectedOption.currencyCode} wallet`
+                : `${selectedOption.currencyCode} not available yet`
+              : 'Choose a country'
+          }
           onPress={() => void submit()}
-          disabled={!selected || confirming || pinLoading}
+          disabled={!selectedOption || !selectedCreatable || confirming || pinLoading}
           loading={confirming || createState.isLoading}
           loadingLabel="Creating…"
           testID="create-wallet-submit"
@@ -142,7 +174,6 @@ export function CreateWalletScreen() {
       }
     >
       {header}
-      <AppText tone="secondary">Choose the currency for your new wallet.</AppText>
       <FormAlert message={error} testID="create-wallet-error" />
       {!pinReady && !pinLoading ? (
         <View style={{ gap: theme.spacing.xs }}>
@@ -162,17 +193,27 @@ export function CreateWalletScreen() {
           />
         </View>
       ) : null}
-      <View style={{ gap: theme.spacing.sm }} accessibilityRole="radiogroup">
-        {available.map((currency) => {
-          const active = currency.code === selected;
+      <View style={{ gap: theme.spacing.sm }} accessibilityRole="radiogroup" testID="create-wallet-countries">
+        {available.map((option) => {
+          const active = option.countryIso2 === selectedCountry;
+          const symbol = symbolFor(option.currencyCode);
+          const disabled = !option.creatable;
           return (
             <Pressable
-              key={currency.code}
-              onPress={() => setSelected(currency.code)}
+              key={option.countryIso2}
+              onPress={() => {
+                if (disabled) return;
+                setSelectedCountry(option.countryIso2);
+              }}
+              disabled={disabled}
               accessibilityRole="radio"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={`${currency.code} (${currency.symbol})`}
-              testID={`create-wallet-option-${currency.code}`}
+              accessibilityState={{ selected: active, disabled }}
+              accessibilityLabel={
+                disabled
+                  ? `${option.countryName}, ${option.currencyCode} not available yet`
+                  : `${option.countryName}, ${option.currencyCode} (${symbol})`
+              }
+              testID={`create-wallet-option-${option.countryIso2}`}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -182,14 +223,18 @@ export function CreateWalletScreen() {
                 borderWidth: active ? 2 : 1,
                 borderColor: active ? theme.colors.primary : theme.colors.border,
                 backgroundColor: active ? theme.colors.primarySoft : theme.colors.surface,
+                opacity: disabled ? 0.55 : 1,
               }}
             >
-              <AppText variant="h3" style={{ width: 56 }}>
-                {currency.code}
-              </AppText>
-              <AppText tone="secondary" style={{ flex: 1 }}>
-                {currency.symbol}
-              </AppText>
+              <CountryFlag iso2={option.countryIso2} emoji={option.flagEmoji} size={32} />
+              <View style={{ flex: 1, gap: theme.spacing.xxs }}>
+                <AppText variant="bodyStrong">{option.countryName}</AppText>
+                <AppText variant="caption" tone="secondary">
+                  {disabled
+                    ? `${option.currencyCode} · not available yet`
+                    : `${option.currencyCode} · ${symbol}`}
+                </AppText>
+              </View>
               {active ? <Icon icon={Check} color={theme.colors.primary} /> : null}
             </Pressable>
           );

@@ -32,19 +32,14 @@ export function SetPinScreen() {
 
   const finish = () => {
     toast.show({ type: 'success', title: 'Transaction PIN set' });
-    if (returnTo && typeof returnTo === 'string') {
-      router.replace(returnTo as '/wallet/create');
-      return;
-    }
-    if (mustSet) {
-      router.replace('/');
-      return;
-    }
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-    router.replace('/');
+    // PIN reset depends on security questions — collect them before returning to the app.
+    router.replace({
+      pathname: '/security/questions',
+      params: {
+        required: '1',
+        ...(returnTo && typeof returnTo === 'string' ? { returnTo } : {}),
+      },
+    });
   };
 
   const save = async (pin: string) => {

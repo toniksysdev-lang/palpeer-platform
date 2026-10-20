@@ -69,6 +69,11 @@ class ChatServiceTest {
         assertThat(response.content()).isEqualTo("hello");
         assertThat(response.clientMessageId()).isEqualTo("c-1");
         verify(messagingTemplate).convertAndSend(eq("/topic/rooms." + roomId), any(ChatMessageResponse.class));
+        verify(messagingTemplate)
+                .convertAndSendToUser(
+                        eq(room.getParticipantBId().toString()),
+                        eq("/queue/chat"),
+                        any(ChatMessageResponse.class));
     }
 
     @Test
@@ -161,6 +166,13 @@ class ChatServiceTest {
 
         assertThatThrownBy(() -> chatService.markRead(userId, roomId, new MarkChatReadRequest(UUID.randomUUID())))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void unreadCount_delegatesToRepository() {
+        UUID userId = UUID.randomUUID();
+        when(chatMessageRepository.countUnreadForUser(userId)).thenReturn(4L);
+        assertThat(chatService.unreadCount(userId)).isEqualTo(4L);
     }
 
     @Test

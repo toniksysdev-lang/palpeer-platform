@@ -11,6 +11,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { formatRateValue } from '@/features/exchange/format';
 import { ExpiryCountdown } from '@/features/p2p/components/ExpiryCountdown';
+import { FlippableRateLine } from '@/features/p2p/components/FlippableRateLine';
 import { useTheme } from '@/providers/ThemeProvider';
 import {
   useGetPublicInstantRatesQuery,
@@ -162,9 +163,12 @@ function PublicP2PRateCard({ row }: { row: PublicP2PRateResponse }) {
           <Badge label={row.side === 'BUY' ? 'Buy' : 'Sell'} tone="info" />
         </View>
         <AppText variant="h3">{amount}</AppText>
-        <AppText tone="secondary">
-          1 {row.baseCurrencyCode} = {formatRateValue(row.rate)} {row.quoteCurrencyCode}
-        </AppText>
+        <FlippableRateLine
+          rate={row.rate}
+          base={row.baseCurrencyCode}
+          quote={row.quoteCurrencyCode}
+          testID={`view-rates-p2p-rate-${row.id}`}
+        />
         {row.expiresAt ? (
           <ExpiryCountdown
             expiresAt={row.expiresAt}

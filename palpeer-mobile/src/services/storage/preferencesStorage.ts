@@ -8,6 +8,8 @@ const KEYS = {
   appearance: 'palpeer.pref.appearance',
   onboardingSeen: 'palpeer.pref.onboardingSeen',
   biometricUnlockPrompted: 'palpeer.pref.biometricUnlockPrompted',
+  /** ISO2 chosen on phone signup — seeds Complete profile Country. */
+  signupCountryIso2: 'palpeer.pref.signupCountryIso2',
 } as const;
 
 const APPEARANCES: readonly AppearancePreference[] = ['system', 'light', 'dark'];
@@ -44,5 +46,26 @@ export const preferencesStorage = {
 
   async setBiometricUnlockPrompted(): Promise<void> {
     await AsyncStorage.setItem(KEYS.biometricUnlockPrompted, 'true');
+  },
+
+  async setSignupCountryIso2(iso2: string): Promise<void> {
+    const code = iso2.trim().toUpperCase();
+    if (code.length !== 2) return;
+    await AsyncStorage.setItem(KEYS.signupCountryIso2, code);
+  },
+
+  async getSignupCountryIso2(): Promise<string | null> {
+    try {
+      const value = await AsyncStorage.getItem(KEYS.signupCountryIso2);
+      const code = value?.trim().toUpperCase() ?? '';
+      return code.length === 2 ? code : null;
+    } catch (error) {
+      logger.warn('Signup country load failed', { error });
+      return null;
+    }
+  },
+
+  async clearSignupCountryIso2(): Promise<void> {
+    await AsyncStorage.removeItem(KEYS.signupCountryIso2);
   },
 };

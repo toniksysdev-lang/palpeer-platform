@@ -115,7 +115,9 @@ describe('FundingStatusScreen', () => {
 
     expect(await screen.findByTestId('funding-instructions')).toBeTruthy();
     expect(
-      screen.getByText('Deposit request initiated. Check your email to accept the e-Transfer.'),
+      screen.getByText(
+        /Interac, Instant deposit via Interac — check your email or banking app to accept the deposit request/,
+      ),
     ).toBeTruthy();
     expect(screen.getByTestId('movement-amount')).toHaveTextContent('250.00 CAD');
     expect(screen.queryByText('Funds added')).toBeNull();

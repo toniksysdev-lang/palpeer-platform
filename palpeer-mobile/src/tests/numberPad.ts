@@ -4,7 +4,9 @@ import { fireEvent, screen } from '@testing-library/react-native';
 export async function typeOnNumberPad(digits: string, testID = 'number-pad-dock') {
   for (const char of digits) {
     if (!/\d|\./.test(char)) continue;
-    await fireEvent.press(await screen.findByTestId(`${testID}-key-${char}`));
+    // Decimal key uses `key-dot` — a trailing "." in testIDs breaks some RTL queries.
+    const keyId = char === '.' ? `${testID}-key-dot` : `${testID}-key-${char}`;
+    await fireEvent.press(await screen.findByTestId(keyId));
   }
 }
 

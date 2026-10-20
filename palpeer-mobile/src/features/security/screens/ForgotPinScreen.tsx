@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { baseApi } from '@/services/api/baseApi';
-import { toAppError } from '@/services/api/errors';
+import { toAppError, type AppError } from '@/services/api/errors';
 import { useGetPinStatusQuery, useGetSecurityQuestionsQuery } from '@/services/api/securityApi';
 import { securityCommands } from '@/services/security/securityCommands';
 import { useAppDispatch } from '@/store';
@@ -86,25 +86,72 @@ export function ForgotPinScreen() {
 
   if (questions.data.length === 0) {
     return (
-      <Screen footer={<Button label="Back" variant="outline" onPress={() => router.back()} />}>
+      <Screen
+        footer={
+          <View style={{ gap: theme.spacing.sm }}>
+            <Button
+              label="Set up security questions"
+              onPress={() => router.replace('/security/questions')}
+              testID="forgot-setup-questions"
+            />
+            <Button label="Back" variant="outline" onPress={() => router.back()} />
+          </View>
+        }
+      >
         {header}
         <FormAlert
           tone="warning"
-          message="Resetting your PIN needs security questions, and you haven't set any up. Please contact support to reset your PIN."
+          message="Resetting your PIN needs security questions, and you haven't set any up yet. Set them now, then return here to choose a new PIN."
           testID="forgot-no-questions"
         />
       </Screen>
     );
   }
 
-  if (step.name === 'locked' || status.data.lockedUntil) {
+  const answersLockedUntil = status.data.securityAnswersLockedUntil ?? null;
+  if (step.name === 'locked' || answersLockedUntil) {
     return (
       <Screen footer={<Button label="Back" variant="outline" onPress={() => router.back()} />}>
         {header}
-        <FormAlert message={pinLockedMessage(status.data.lockedUntil)} testID="forgot-locked" />
+        <FormAlert message={pinLockedMessage(answersLockedUntil)} testID="forgot-locked" />
       </Screen>
     );
   }
+
+  const configured = questions.data;
+  const complete = configured.every((question) => (answers[question.questionKey] ?? '').trim());
+
+  const handleAnswerFailure = (error: AppError) => {
+    dispatch(baseApi.util.invalidateTags([{ type: 'Security', id: 'PIN' }]));
+    if (isPinLocked(error)) {
+      setAnswers({});
+      setStep({ name: 'locked' });
+      return;
+    }
+    const code = error.code;
+    if (code === 'SECURITY_ANSWER_MISSING' || code === 'SECURITY_ANSWER_UNKNOWN') {
+      setAnswers({});
+      void questions.refetch();
+    }
+    setStep({ name: 'answers', error: securityErrorMessage(error) });
+  };
+
+  const continueWithAnswers = async () => {
+    const collected: SecurityAnswer[] = configured.map((question) => ({
+      questionKey: question.questionKey,
+      answer: (answers[question.questionKey] ?? '').trim(),
+    }));
+    if (collected.some((item) => !item.answer)) return;
+
+    setSaving(true);
+    const result = await securityCommands.verifyAnswers({ answers: collected });
+    setSaving(false);
+    if (!result.ok) {
+      handleAnswerFailure(result.error);
+      return;
+    }
+    setStep({ name: 'new', answers: collected });
+  };
 
   const reset = async (collected: SecurityAnswer[], newPin: string) => {
     setSaving(true);
@@ -117,17 +164,7 @@ export function ForgotPinScreen() {
       router.back();
       return;
     }
-    if (isPinLocked(result.error)) {
-      setAnswers({});
-      setStep({ name: 'locked' });
-      return;
-    }
-    const code = result.error.code;
-    if (code === 'SECURITY_ANSWER_MISSING' || code === 'SECURITY_ANSWER_UNKNOWN') {
-      setAnswers({});
-      void questions.refetch();
-    }
-    setStep({ name: 'answers', error: securityErrorMessage(result.error) });
+    handleAnswerFailure(result.error);
   };
 
   if (step.name === 'new' || step.name === 'confirm') {
@@ -163,9 +200,6 @@ export function ForgotPinScreen() {
     );
   }
 
-  const configured = questions.data;
-  const complete = configured.every((question) => (answers[question.questionKey] ?? '').trim());
-
   return (
     <Screen
       scroll
@@ -173,16 +207,10 @@ export function ForgotPinScreen() {
       footer={
         <Button
           label="Continue"
-          disabled={!complete}
-          onPress={() =>
-            setStep({
-              name: 'new',
-              answers: configured.map((question) => ({
-                questionKey: question.questionKey,
-                answer: (answers[question.questionKey] ?? '').trim(),
-              })),
-            })
-          }
+          disabled={!complete || saving}
+          loading={saving}
+          loadingLabel="Checking…"
+          onPress={() => void continueWithAnswers()}
           testID="forgot-answers-continue"
         />
       }

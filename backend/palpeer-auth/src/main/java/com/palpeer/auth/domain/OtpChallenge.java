@@ -17,7 +17,8 @@ import lombok.Setter;
 @Table(name = "otp_challenges")
 public class OtpChallenge extends BaseEntity {
 
-    @Column(name = "user_id", nullable = false)
+    /** Null for pre-registration phone OTP challenges. */
+    @Column(name = "user_id")
     private UUID userId;
 
     @Enumerated(EnumType.STRING)

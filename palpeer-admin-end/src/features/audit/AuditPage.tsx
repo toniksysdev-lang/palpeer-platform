@@ -115,7 +115,12 @@ export function AuditPage() {
         id: 'userRef',
         header: 'Actor',
         cell: (row) => (
-          <span className="font-mono text-[11px] text-text-secondary">{row.userRef || '—'}</span>
+          <div className="min-w-0">
+            <p className="truncate text-xs text-text-primary">{row.actorEmail || '—'}</p>
+            {row.userRef && row.actorEmail !== row.userRef ? (
+              <p className="truncate font-mono text-[10px] text-text-muted">{row.userRef}</p>
+            ) : null}
+          </div>
         ),
       },
       {
@@ -312,9 +317,10 @@ export function AuditPage() {
             </div>
             <div>
               <dt className="text-xs font-medium uppercase tracking-wide text-text-muted">Actor</dt>
-              <dd className="mt-1 font-mono text-xs text-text-primary">
-                {selected.userRef || '—'}
-              </dd>
+              <dd className="mt-1 text-sm text-text-primary">{selected.actorEmail || '—'}</dd>
+              {selected.userRef ? (
+                <dd className="mt-1 font-mono text-xs text-text-muted">{selected.userRef}</dd>
+              ) : null}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>

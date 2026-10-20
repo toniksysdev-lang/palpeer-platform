@@ -292,13 +292,15 @@
 
       async function ping() {
         try {
-          const response = await fetch(APP_URL, { mode: 'no-cors', cache: 'no-store' });
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 4000);
+          await fetch(APP_URL, { mode: 'no-cors', cache: 'no-store', signal: controller.signal });
+          clearTimeout(timer);
           statusEl.textContent = 'Expo web is reachable at ' + APP_URL;
           statusEl.className = 'status ok';
-          void response;
         } catch (error) {
           statusEl.textContent =
-            'Cannot reach Expo web at ' + APP_URL + '. Start it with npm run web.';
+            'Cannot reach Expo web at ' + APP_URL + ' (timed out or down). Run npm run web in palpeer-mobile.';
           statusEl.className = 'status bad';
         }
       }

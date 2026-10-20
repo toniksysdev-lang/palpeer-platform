@@ -31,10 +31,11 @@ describe('OnboardingScreen (welcome)', () => {
   it('shows the welcome copy and actions', async () => {
     await renderWelcome();
 
-    expect(screen.getByLabelText('PALPEER. Your Rate Your Way')).toBeTruthy();
+    expect(screen.getByLabelText('PALPEER')).toBeTruthy();
     expect(
       screen.getByText('Exchange currencies with ease and confidence, anytime, anywhere.'),
     ).toBeTruthy();
+
     expect(screen.getByText('View Best Rate Now')).toBeTruthy();
     expect(screen.getByText('Get started')).toBeTruthy();
     expect(screen.getByText('Already have an account?', { exact: false })).toBeTruthy();

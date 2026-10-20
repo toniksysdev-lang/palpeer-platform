@@ -32,13 +32,17 @@ function groupThousands(integerPart: string): string {
 /** Display-only formatting. Rounds half-even to `precision` without floating-point math. */
 export function formatMoney(amount: Money | string, options: FormatMoneyOptions = {}): string {
   const { currencyCode, precision = 2, showCurrency = true, signDisplay = 'auto' } = options;
-  const value = new Decimal(amount);
+  const raw = typeof amount === 'string' ? amount.trim() : String(amount ?? '');
+  const suffix = showCurrency && currencyCode ? ` ${currencyCode}` : '';
+  if (!raw || !isMoneyString(raw)) {
+    return showCurrency && currencyCode ? `—${suffix}` : '—';
+  }
+  const value = new Decimal(raw);
   const fixed = value.abs().toFixed(precision, Decimal.ROUND_HALF_EVEN);
   const [intPart = '0', fracPart] = fixed.split('.');
   const body = fracPart ? `${groupThousands(intPart)}.${fracPart}` : groupThousands(intPart);
   const negative = value.isNegative() && !value.isZero();
   const sign = negative ? '-' : signDisplay === 'always' && !value.isZero() ? '+' : '';
-  const suffix = showCurrency && currencyCode ? ` ${currencyCode}` : '';
   return `${sign}${body}${suffix}`;
 }
 

@@ -6,7 +6,9 @@ import {
   buildChatItems,
   chatErrorMessage,
   connectionNotice,
+  negotiationAcceptFieldMessage,
   negotiationAmountMessage,
+  negotiationTermsMessage,
   seenMessageId,
   unreadIncoming,
 } from '../logic';
@@ -14,6 +16,21 @@ import {
 describe('negotiationAmountMessage', () => {
   it('prefixes a formatted amount', () => {
     expect(negotiationAmountMessage('100.00 CAD')).toBe('Proposed amount: 100.00 CAD');
+  });
+});
+
+describe('negotiationTermsMessage', () => {
+  it('includes amount and rate line', () => {
+    expect(negotiationTermsMessage('90.50 USD', '1 USD = 1,480 NGN')).toBe(
+      'My offer: 90.50 USD at 1 USD = 1,480 NGN',
+    );
+  });
+});
+
+describe('negotiationAcceptFieldMessage', () => {
+  it('describes accepting amount or rate', () => {
+    expect(negotiationAcceptFieldMessage('amount', '90.50 USD')).toContain('accept the amount');
+    expect(negotiationAcceptFieldMessage('rate', '1 USD = 1,480 NGN')).toContain('accept the rate');
   });
 });
 
@@ -39,15 +56,15 @@ const queued = (
 });
 
 describe('buildChatItems', () => {
-  it('lists unconfirmed messages newest first above the history', () => {
+  it('lists history oldest-first with unconfirmed messages at the bottom', () => {
     const items = buildChatItems(
       [{ content: [msg('m-2'), msg('m-1', { senderId: 'u-1' })] }],
       [queued('c-1'), queued('c-2', 'failed')],
       'u-1',
     );
-    expect(items.map((item) => item.key)).toEqual(['outbox-c-2', 'outbox-c-1', 'm-2', 'm-1']);
-    expect(items[2]).toMatchObject({ kind: 'message', mine: false });
-    expect(items[3]).toMatchObject({ kind: 'message', mine: true });
+    expect(items.map((item) => item.key)).toEqual(['m-1', 'm-2', 'outbox-c-1', 'outbox-c-2']);
+    expect(items[0]).toMatchObject({ kind: 'message', mine: true });
+    expect(items[1]).toMatchObject({ kind: 'message', mine: false });
   });
 
   it('hides an outbox entry once its message is in the history', () => {
@@ -65,7 +82,7 @@ describe('buildChatItems', () => {
       [],
       'u-1',
     );
-    expect(items.map((item) => item.key)).toEqual(['m-2', 'm-1', 'm-0']);
+    expect(items.map((item) => item.key)).toEqual(['m-0', 'm-1', 'm-2']);
   });
 });
 
@@ -100,6 +117,7 @@ describe('read receipts', () => {
     createdAt: '2026-09-29T09:00:00Z',
     participantALastReadAt: a,
     participantBLastReadAt: b,
+    unreadCount: 0,
   });
   const pages = [
     {

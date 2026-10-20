@@ -56,6 +56,22 @@ describe('security questions and PIN prompt', () => {
     expect(JSON.stringify(store.getState())).not.toContain('Lagos');
   });
 
+  it('allows first-time setup without a PIN even when a PIN is already set', async () => {
+    const { calls } = installFetchMock({
+      'GET /security/questions': [ok([]), ok(QUESTIONS)],
+      'GET /security/pin': ok(PIN_STATUS(true)),
+      'PUT /security/questions': ok(QUESTIONS),
+    });
+    await renderWithProviders(<SecurityQuestionsScreen />);
+
+    await fillQuestions();
+    await fireEvent.press(screen.getByTestId('questions-save'));
+
+    expect(await screen.findByTestId('questions-configured')).toBeTruthy();
+    expect(calls.some((call) => call.path === '/security/pin/verify')).toBe(false);
+    expect(calls.some((call) => call.method === 'PUT')).toBe(true);
+  });
+
   it('asks for the PIN before replacing questions when a PIN is set', async () => {
     const { calls } = installFetchMock({
       'GET /security/questions': ok(QUESTIONS),

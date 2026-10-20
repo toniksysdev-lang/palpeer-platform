@@ -55,12 +55,16 @@ export const mockKycPage: SpringPage<KycCaseSummary> = pageOf(
     {
       caseId: 'kyc-1',
       userId: 'u-2',
+      email: 'member@palpeer.local',
+      fullName: 'Ada Member',
       status: 'UNDER_REVIEW',
       rejectionReason: null,
     },
     {
       caseId: 'kyc-2',
       userId: 'u-3',
+      email: 'verified@palpeer.local',
+      fullName: 'Chidi Verified',
       status: 'APPROVED',
       rejectionReason: null,
     },

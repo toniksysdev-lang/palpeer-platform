@@ -2,6 +2,7 @@ import type {
   ChatMessageResponse,
   ChatReadReceipt,
   ChatRoomResponse,
+  ChatUnreadCountResponse,
   OpenChatRoomRequest,
   SendChatMessageRequest,
 } from '@/types/api/chat';
@@ -11,13 +12,19 @@ import { baseApi } from './baseApi';
 
 export const CHAT_PAGE_SIZE = 50;
 
-const ROOMS = { type: 'ChatRoom', id: 'LIST' } as const;
+export const CHAT_ROOMS = { type: 'ChatRoom' as const, id: 'LIST' };
+export const CHAT_UNREAD = { type: 'ChatRoom' as const, id: 'UNREAD' };
 
 export const chatApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     getChatRooms: build.query<ChatRoomResponse[], void>({
       query: () => ({ path: '/chat/rooms' }),
-      providesTags: [ROOMS],
+      providesTags: [CHAT_ROOMS],
+    }),
+    getChatUnreadCount: build.query<number, void>({
+      query: () => ({ path: '/chat/unread-count' }),
+      transformResponse: (response: ChatUnreadCountResponse) => Number(response.count) || 0,
+      providesTags: [CHAT_UNREAD],
     }),
     getChatRoom: build.query<ChatRoomResponse, string>({
       query: (roomId) => ({ path: `/chat/rooms/${encodeURIComponent(roomId)}` }),
@@ -34,7 +41,7 @@ export const chatApi = baseApi.injectEndpoints({
             ? { negotiationId: request.negotiationId }
             : { p2pOrderId: request.p2pOrderId },
       }),
-      invalidatesTags: (_result, error) => (error ? [] : [ROOMS]),
+      invalidatesTags: (_result, error) => (error ? [] : [CHAT_ROOMS]),
     }),
     /** History pages, newest first. Page 0 is re-read after a reconnect to backfill. */
     getChatMessages: build.infiniteQuery<SpringPage<ChatMessageResponse>, string, number>({
@@ -77,6 +84,7 @@ export const chatApi = baseApi.injectEndpoints({
         method: 'POST',
         body: { messageId },
       }),
+      invalidatesTags: (_result, error) => (error ? [] : [CHAT_UNREAD, CHAT_ROOMS]),
       async onQueryStarted({ roomId }, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled;
@@ -99,6 +107,7 @@ function mergeReadMarkers(roomId: string, room: ChatRoomResponse) {
   return chatApi.util.updateQueryData('getChatRoom', roomId, (draft) => {
     draft.participantALastReadAt = later(draft.participantALastReadAt, room.participantALastReadAt);
     draft.participantBLastReadAt = later(draft.participantBLastReadAt, room.participantBLastReadAt);
+    draft.unreadCount = room.unreadCount;
   });
 }
 
@@ -131,6 +140,7 @@ export function insertChatMessage(roomId: string, message: ChatMessageResponse) 
 
 export const {
   useGetChatRoomsQuery,
+  useGetChatUnreadCountQuery,
   useGetChatRoomQuery,
   useOpenChatRoomMutation,
   useGetChatMessagesInfiniteQuery,

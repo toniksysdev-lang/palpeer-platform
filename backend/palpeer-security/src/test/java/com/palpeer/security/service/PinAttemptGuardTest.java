@@ -11,6 +11,7 @@ import com.palpeer.common.audit.AuditRecorder;
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.security.domain.PinCredential;
 import com.palpeer.security.repository.PinCredentialRepository;
+import com.palpeer.security.service.PinAttemptGuard.Kind;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -56,19 +57,19 @@ class PinAttemptGuardTest {
     }
 
     @Test
-    void locksAfterMaxConsecutiveFailures() {
+    void locksPinAfterMaxConsecutiveFailures() {
         for (int i = 1; i <= 2; i++) {
-            guard.reserve(userId);
-            assertThat(guard.recordFailure(userId)).isFalse();
+            guard.ensureNotLocked(userId, Kind.PIN);
+            assertThat(guard.recordFailure(userId, Kind.PIN)).isFalse();
             assertThat(credential.getFailedAttempts()).isEqualTo(i);
         }
 
-        guard.reserve(userId);
-        assertThat(guard.recordFailure(userId)).isTrue();
+        guard.ensureNotLocked(userId, Kind.PIN);
+        assertThat(guard.recordFailure(userId, Kind.PIN)).isTrue();
 
         assertThat(credential.getLockedUntil()).isEqualTo(NOW.plus(Duration.ofMinutes(15)));
         verify(auditRecorder).record(any(AuditRecord.class));
-        assertThatThrownBy(() -> guard.reserve(userId))
+        assertThatThrownBy(() -> guard.ensureNotLocked(userId, Kind.PIN))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(ex -> {
                     BusinessException be = (BusinessException) ex;
@@ -78,24 +79,25 @@ class PinAttemptGuardTest {
     }
 
     @Test
-    void reservationsAreBoundedEvenBeforeFailuresAreRecorded() {
-        guard.reserve(userId);
-        guard.reserve(userId);
-        guard.reserve(userId);
+    void securityAnswerFailuresDoNotBurnPinAttempts() {
+        guard.ensureNotLocked(userId, Kind.SECURITY_ANSWER);
+        assertThat(guard.recordFailure(userId, Kind.SECURITY_ANSWER)).isFalse();
 
-        assertThatThrownBy(() -> guard.reserve(userId))
-                .isInstanceOf(BusinessException.class)
-                .extracting("code")
-                .isEqualTo("PIN_LOCKED");
+        assertThat(credential.getSecurityAnswerFailedAttempts()).isEqualTo(1);
+        assertThat(credential.getFailedAttempts()).isZero();
+
+        guard.ensureNotLocked(userId, Kind.PIN);
+        assertThat(credential.getFailedAttempts()).isZero();
+        assertThat(credential.getLockedUntil()).isNull();
     }
 
     @Test
     void successResetsCounter() {
-        guard.reserve(userId);
-        guard.recordFailure(userId);
-        guard.reserve(userId);
+        guard.ensureNotLocked(userId, Kind.PIN);
+        guard.recordFailure(userId, Kind.PIN);
+        guard.ensureNotLocked(userId, Kind.PIN);
 
-        guard.recordSuccess(userId);
+        guard.recordSuccess(userId, Kind.PIN);
 
         assertThat(credential.getFailedAttempts()).isZero();
         assertThat(credential.getLockedUntil()).isNull();
@@ -104,11 +106,11 @@ class PinAttemptGuardTest {
     @Test
     void expiredLockAllowsANewWindow() {
         credential.setLockedUntil(NOW.minusSeconds(1));
-        credential.setFailedAttempts(0);
+        credential.setFailedAttempts(2);
 
-        guard.reserve(userId);
+        guard.ensureNotLocked(userId, Kind.PIN);
 
         assertThat(credential.getLockedUntil()).isNull();
-        assertThat(credential.getFailedAttempts()).isEqualTo(1);
+        assertThat(credential.getFailedAttempts()).isZero();
     }
 }

@@ -21,7 +21,7 @@ public interface P2PRequestRepository extends JpaRepository<P2PRequest, UUID>, J
 
     List<P2PRequest> findByStatusOrderByCreatedAtDesc(P2PStatus status);
 
-    List<P2PRequest> findByUserIdOrderByCreatedAtDesc(UUID userId);
+    List<P2PRequest> findByUserIdAndArchivedAtIsNullOrderByCreatedAtDesc(UUID userId);
 
     @Query("""
             select r.id from P2PRequest r

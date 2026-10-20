@@ -5,6 +5,7 @@ import com.palpeer.common.audit.AuditRecorder;
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.mail.EmailSender;
 import com.palpeer.common.mail.PalpeerEmailTemplates;
+import com.palpeer.common.sms.SmsSender;
 import com.palpeer.user.domain.User;
 import com.palpeer.user.repository.UserRepository;
 import com.palpeer.wallet.domain.PoolFundThreshold;
@@ -43,6 +44,7 @@ public class PoolFundThresholdService {
     private final PaymentRailRouter paymentRailRouter;
     private final UserRepository userRepository;
     private final EmailSender emailSender;
+    private final SmsSender smsSender;
     private final AuditRecorder auditRecorder;
 
     @Transactional(readOnly = true)
@@ -156,14 +158,16 @@ public class PoolFundThresholdService {
             });
         }
         for (String phone : threshold.getNotifyPhones()) {
-            // SMS provider pending — log so ops can wire a rail without blocking withdraw settlement.
-            log.warn(
-                    "POOL THRESHOLD SMS placeholder [phone={}, provider={}, currency={}, balance={}, threshold={}]",
-                    phone,
-                    provider,
-                    currencyCode,
-                    current,
-                    threshold.getThresholdAmount());
+            try {
+                smsSender.send(phone, body);
+                log.info(
+                        "Pool threshold SMS sent [phone={}, provider={}, currency={}]",
+                        phone,
+                        provider,
+                        currencyCode);
+            } catch (RuntimeException ex) {
+                log.warn("Pool threshold SMS failed to={}: {}", phone, ex.getMessage());
+            }
         }
     }
 

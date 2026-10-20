@@ -11,6 +11,8 @@ public record ChatRoomResponse(
         UUID participantBId,
         Instant createdAt,
         Instant participantALastReadAt,
-        Instant participantBLastReadAt
+        Instant participantBLastReadAt,
+        /** Messages from the other participant after the caller's last-read marker; 0 for admin views. */
+        long unreadCount
 ) {
 }

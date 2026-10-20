@@ -35,4 +35,10 @@ public class PinCredential extends BaseEntity {
 
     @Column(name = "locked_until")
     private Instant lockedUntil;
+
+    @Column(name = "security_answer_failed_attempts", nullable = false)
+    private int securityAnswerFailedAttempts;
+
+    @Column(name = "security_answer_locked_until")
+    private Instant securityAnswerLockedUntil;
 }

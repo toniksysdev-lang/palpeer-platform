@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Bell, Loader2, Menu, Monitor, Moon, Search, Sun } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useShell } from '@/app/providers/ShellProvider';
 import { useTheme } from '@/app/providers/ThemeProvider';
 import { useToast } from '@/app/providers/ToastProvider';
@@ -35,7 +35,7 @@ type SearchOption = {
 export function Header() {
   const location = useLocation();
   const navigate = useNavigate();
-  const navItem = findNavItem(location.pathname);
+  const navItem = findNavItem(location.pathname, location.hash);
   const crumb = navItem?.label ?? 'Admin';
   const { toggleMobileNav } = useShell();
   const { mode, cycleMode } = useTheme();
@@ -317,13 +317,17 @@ export function Header() {
             <Bell className="h-4 w-4" />
           </Button>
 
-          <div className="ml-1 hidden items-center gap-2 sm:flex">
+          <Link
+            to="/admin/profile"
+            className="ml-1 hidden items-center gap-2 rounded-[0.6rem] px-1.5 py-1 hover:bg-surface-secondary sm:flex"
+            title="Admin user profile"
+          >
             <Avatar name={displayName} />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-text-primary">{displayName}</p>
               <p className="truncate text-xs text-text-muted">Administrator</p>
             </div>
-          </div>
+          </Link>
         </div>
       </div>
     </header>

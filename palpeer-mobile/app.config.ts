@@ -62,7 +62,7 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
   name: APP_ENV === 'production' ? 'PALPEER' : `PALPEER (${APP_ENV})`,
   slug: 'palpeer',
   owner: 'toniksyslab',
-  version: '0.1.1',
+  version: '0.1.4',
   scheme: 'palpeer',
   orientation: 'portrait',
   icon: './assets/icon.png',
@@ -71,6 +71,7 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
     bundleIdentifier: APP_ID,
     supportsTablet: false,
     ...(iosGoogleServices ? { googleServicesFile: iosGoogleServices } : {}),
+    associatedDomains: ['applinks:app.palpeer.com'],
     infoPlist: {
       NSCameraUsageDescription:
         'PALPEER uses the camera to capture your identity document and selfie for verification.',
@@ -108,6 +109,21 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
       'android.permission.SYSTEM_ALERT_WINDOW',
     ],
     predictiveBackGestureEnabled: false,
+    // HTTPS share links open the app when installed; otherwise the browser shows store CTAs.
+    intentFilters: [
+      {
+        action: 'VIEW',
+        autoVerify: true,
+        category: ['BROWSABLE', 'DEFAULT'],
+        data: [
+          {
+            scheme: 'https',
+            host: 'app.palpeer.com',
+            pathPrefix: '/p2p/share',
+          },
+        ],
+      },
+    ],
   },
   web: {
     bundler: 'metro',
@@ -118,6 +134,19 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
     'expo-font',
     'expo-secure-store',
     'expo-web-browser',
+    [
+      'expo-build-properties',
+      {
+        android: {
+          // Extract .so files at install time — fixes SoLoader crashes on some OEM devices.
+          useLegacyPackaging: true,
+          // Keep both 32-bit and 64-bit ARM (plus emulator ABIs via EAS defaults).
+          buildArchs: ['armeabi-v7a', 'arm64-v8a'],
+          minSdkVersion: 24,
+        },
+      },
+    ],
+    './plugins/withFirebaseLaunchHardening',
     [
       'expo-splash-screen',
       {

@@ -5,9 +5,11 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { SensitiveScreenGuard } from '@/hooks/useSensitiveScreen';
 import { useTheme } from '@/providers/ThemeProvider';
+import { authorizedRequest } from '@/services/api/authorized';
 import { baseApi } from '@/services/api/baseApi';
 import { securityCommands } from '@/services/security/securityCommands';
 import { useAppDispatch } from '@/store';
+import type { PinStatusResponse } from '@/types/api/security';
 
 import { PinEntry } from './components/PinEntry';
 import { isPinLocked, pinLockedMessage, securityErrorMessage } from './errors';
@@ -63,7 +65,8 @@ export function PinPromptProvider({ children }: { children: ReactNode }) {
     if (isPinLocked(result.error)) {
       dispatch(baseApi.util.invalidateTags([{ type: 'Security', id: 'PIN' }]));
       setBlocked(true);
-      setError(pinLockedMessage());
+      const status = await authorizedRequest<PinStatusResponse>('/security/pin');
+      setError(pinLockedMessage(status.ok ? status.data.lockedUntil : null));
     } else if (result.error.code === 'RESOURCE_NOT_FOUND') {
       setBlocked(true);
       setError(securityErrorMessage(result.error));

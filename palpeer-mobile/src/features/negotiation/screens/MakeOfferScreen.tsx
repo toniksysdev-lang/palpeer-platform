@@ -11,10 +11,14 @@ import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { negotiationTermsMessage } from '@/features/chat/logic';
+import { FlippableRateLine } from '@/features/p2p/components/FlippableRateLine';
 import { p2pRateLine, sideLabel } from '@/features/p2p/logic';
 import { ReviewRow } from '@/features/wallets/components/ReviewRow';
 import { useMoneyFormat } from '@/features/wallets/useMoneyFormat';
 import { useTheme } from '@/providers/ThemeProvider';
+import { newIdempotencyKey } from '@/services/api/client';
+import { useOpenChatRoomMutation, useSendChatMessageMutation } from '@/services/api/chatApi';
 import { toAppError } from '@/services/api/errors';
 import { useCreateOfferMutation, useGetMyNegotiationsQuery } from '@/services/api/negotiationApi';
 import { useGetRequestQuery } from '@/services/api/p2pApi';
@@ -54,9 +58,10 @@ function OfferForm({ request, header }: { request: P2PRequestResponse; header: R
   const userId = useAppSelector((state) => state.session.userId);
   const { format } = useMoneyFormat();
   const [create, createState] = useCreateOfferMutation();
-  // Amount is editable; rate stays locked to the listing.
+  const [openRoom, openRoomState] = useOpenChatRoomMutation();
+  const [sendMessage, sendState] = useSendChatMessageMutation();
   const [amount, setAmount] = useState<string>(() => toMoney(request.amount));
-  const rate = toMoney(request.rate);
+  const [rate, setRate] = useState<string>(() => toMoney(request.rate));
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -67,16 +72,39 @@ function OfferForm({ request, header }: { request: P2PRequestResponse; header: R
   const base = request.baseCurrencyCode;
   const quote = request.quoteCurrencyCode;
   const amountError = submitted && !isPositiveMoney(amount) ? 'Enter an amount above zero.' : null;
+  const rateError = submitted && !isPositiveMoney(rate) ? 'Enter a rate above zero.' : null;
+  const busy = createState.isLoading || openRoomState.isLoading || sendState.isLoading;
+
+  const goToNegotiationChat = async (negotiationId: string, prefills?: { amount: string; rate: string }) => {
+    const roomResult = await openRoom({ negotiationId });
+    if ('error' in roomResult) {
+      router.replace({ pathname: '/negotiation/[id]', params: { id: negotiationId } });
+      return;
+    }
+    if (prefills) {
+      const content = negotiationTermsMessage(
+        format(prefills.amount, base),
+        p2pRateLine(prefills.rate, base, quote),
+      );
+      await sendMessage({
+        roomId: roomResult.data.id,
+        message: { content, clientMessageId: newIdempotencyKey() },
+      });
+    }
+    router.replace({ pathname: '/chat/[roomId]', params: { roomId: roomResult.data.id } });
+  };
 
   const submit = async () => {
     setSubmitted(true);
     setError(null);
     setFieldErrors({});
     if (!isPositiveMoney(amount) || !isPositiveMoney(rate)) return;
+    const offerAmount = toMoney(amount);
+    const offerRate = toMoney(rate);
     const result = await create({
       p2pRequestId: request.id,
-      amount: toMoney(amount),
-      rate: toMoney(rate),
+      amount: offerAmount,
+      rate: offerRate,
     });
     if ('error' in result) {
       const appError = toAppError(result.error);
@@ -85,7 +113,7 @@ function OfferForm({ request, header }: { request: P2PRequestResponse; header: R
       if (appError.code === 'NEGOTIATION_EXISTS') setExisting(true);
       return;
     }
-    router.replace({ pathname: '/negotiation/[id]', params: { id: result.data.id } });
+    await goToNegotiationChat(result.data.id, { amount: offerAmount, rate: offerRate });
   };
 
   return (
@@ -95,20 +123,16 @@ function OfferForm({ request, header }: { request: P2PRequestResponse; header: R
       footer={
         existingNegotiation ? (
           <Button
-            label="View your offer"
-            onPress={() =>
-              router.replace({
-                pathname: '/negotiation/[id]',
-                params: { id: existingNegotiation.id },
-              })
-            }
+            label="Open negotiation chat"
+            onPress={() => void goToNegotiationChat(existingNegotiation.id)}
+            loading={openRoomState.isLoading}
             testID="offer-view-existing"
           />
         ) : (
           <Button
             label="Send offer"
             onPress={() => void submit()}
-            loading={createState.isLoading}
+            loading={busy}
             loadingLabel="Sending…"
             testID="offer-submit"
           />
@@ -119,8 +143,8 @@ function OfferForm({ request, header }: { request: P2PRequestResponse; header: R
       <View style={{ gap: theme.spacing.xs }}>
         <AppText variant="h2">What is your best offer?</AppText>
         <AppText tone="secondary">
-          {sideLabel(request.side, base, quote, 'other')}. Suggest the amount you want at their
-          listed rate; they can accept or reply with a counter-offer.
+          {sideLabel(request.side, base, quote, 'other')}. Suggest the amount and rate you want;
+          you&apos;ll continue in chat where either of you can accept amount, rate, or the full offer.
         </AppText>
       </View>
       <Card variant="outlined" padding="md">
@@ -129,11 +153,29 @@ function OfferForm({ request, header }: { request: P2PRequestResponse; header: R
           value={format(request.amount, base)}
           testID="offer-request-amount"
         />
-        <ReviewRow
-          label="Their rate"
-          value={p2pRateLine(request.rate, base, quote)}
-          testID="offer-request-rate"
-        />
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: theme.spacing.md,
+            paddingVertical: theme.spacing.sm,
+          }}
+        >
+          <AppText tone="secondary" style={{ flex: 1 }}>
+            Their rate
+          </AppText>
+          <View style={{ flex: 2, alignItems: 'flex-end' }}>
+            <FlippableRateLine
+              rate={request.rate}
+              base={base}
+              quote={quote}
+              variant="bodyStrong"
+              tone="primary"
+              align="right"
+              testID="offer-request-rate"
+            />
+          </View>
+        </View>
       </Card>
       <OfferTermsForm
         base={base}
@@ -141,13 +183,15 @@ function OfferForm({ request, header }: { request: P2PRequestResponse; header: R
         amount={amount}
         rate={rate}
         onAmountChange={setAmount}
+        onRateChange={setRate}
         amountError={amountError ?? fieldErrors.amount}
+        rateError={rateError ?? fieldErrors.rate}
         testID="offer"
       />
       <FormAlert message={error} testID="offer-error" />
       <AppText variant="caption" tone="secondary">
-        If they accept, an order is created with these terms. Palpeer doesn&apos;t move any money
-        for it.
+        Sending opens a negotiation chat with your offer prefilled. If they accept, an order is
+        created with those terms. Palpeer doesn&apos;t move any money for it.
       </AppText>
     </Screen>
   );

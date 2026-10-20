@@ -12,6 +12,8 @@ export async function listAdminUsers(params?: {
   sort?: string;
   email?: string;
   status?: string;
+  from?: string;
+  to?: string;
 }): Promise<SpringPage<AdminUserSummary>> {
   const page = params?.page ?? 0;
   const size = params?.size ?? 20;
@@ -27,6 +29,12 @@ export async function listAdminUsers(params?: {
   }
   if (params?.status) {
     search.set('status', params.status);
+  }
+  if (params?.from) {
+    search.set('from', params.from);
+  }
+  if (params?.to) {
+    search.set('to', params.to);
   }
   return apiRequest<SpringPage<AdminUserSummary>>(`/admin/users?${search.toString()}`);
 }

@@ -40,3 +40,15 @@ export type UpsertWithdrawalUnverifiedLimitInput = {
   currencyCode: string;
   maxAmount: number;
 };
+
+export type FundingUnverifiedLimit = {
+  id: string | null;
+  currencyCode: string;
+  maxAmount: string | number | null;
+  updatedAt: string | null;
+};
+
+export type UpsertFundingUnverifiedLimitInput = {
+  currencyCode: string;
+  maxAmount: number;
+};

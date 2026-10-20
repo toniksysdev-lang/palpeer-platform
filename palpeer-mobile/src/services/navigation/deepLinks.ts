@@ -12,6 +12,7 @@ const ROUTES: readonly RegExp[] = [
   new RegExp(`^/wallet/${UUID}$`),
   new RegExp(`^/p2p/request/${UUID}$`),
   new RegExp(`^/p2p/order/${UUID}$`),
+  new RegExp(`^/p2p/share/${UUID}$`),
   new RegExp(`^/negotiation/${UUID}$`),
   new RegExp(`^/chat/${UUID}$`),
   new RegExp(`^/cards/${UUID}$`),
@@ -39,21 +40,36 @@ function split(input: string): { path: string; query: URLSearchParams } | null {
   return { path, query: new URLSearchParams(rawQuery.split('#')[0] ?? '') };
 }
 
+/** `https://app.palpeer.com/p2p/share/<id>` arrives as `/app.palpeer.com/p2p/share/<id>` after scheme strip. */
+function stripShareHost(path: string): string {
+  const match = path.match(new RegExp(`^/app\\.palpeer\\.com(/p2p/share/${UUID})$`, 'i'));
+  return match?.[1] ?? path;
+}
+
 /**
  * Turns an incoming URL (`palpeer://wallet/<id>`) or path into an allowed in-app path, or null.
  * Only `/referrals` keeps a query parameter: a well-formed `code`, which only pre-fills the form.
+ * Share links map to the public guest route `/p2p-share/<id>`.
  */
 export function resolveDeepLink(input: string | null | undefined): string | null {
   if (!input || input.length > MAX_LINK_LENGTH) return null;
   const parts = split(input);
   if (!parts) return null;
-  const { path, query } = parts;
+  const { query } = parts;
+  const path = stripShareHost(parts.path);
   if (!ROUTES.some((route) => route.test(path))) return null;
   if (path === '/referrals') {
     const code = query.get('code')?.trim().toUpperCase();
     return code && REFERRAL_CODE.test(code) ? `/referrals?code=${code}` : path;
   }
+  const shareMatch = path.match(new RegExp(`^/p2p/share/(${UUID})$`));
+  if (shareMatch?.[1]) return `/p2p-share/${shareMatch[1]}`;
   return path;
+}
+
+/** Guest share destinations open immediately while signed out (not queued for after login). */
+export function isGuestDeepLink(path: string | null | undefined): boolean {
+  return !!path && path.startsWith('/p2p-share/');
 }
 
 const UUID_ONLY = new RegExp(`^${UUID}$`);

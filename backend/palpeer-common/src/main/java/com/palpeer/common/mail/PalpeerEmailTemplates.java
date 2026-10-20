@@ -134,7 +134,8 @@ public final class PalpeerEmailTemplates {
 
     /**
      * New-device sign-in alert. Warns that if this was them they can ignore it; otherwise contact
-     * support or use the suspend link (token only — never password/PIN in the URL).
+     * support or use the account-lock link (opaque path key only — never password/PIN or API
+     * query params in the URL).
      */
     public static RenderedEmail newDeviceLogin(
             String email,

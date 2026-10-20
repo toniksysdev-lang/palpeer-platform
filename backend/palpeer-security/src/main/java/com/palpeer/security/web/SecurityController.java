@@ -14,6 +14,7 @@ import com.palpeer.security.web.dto.SecurityQuestionResponse;
 import com.palpeer.security.web.dto.SetPinRequest;
 import com.palpeer.security.web.dto.SetSecurityQuestionsRequest;
 import com.palpeer.security.web.dto.VerifyPinRequest;
+import com.palpeer.security.web.dto.VerifySecurityAnswersRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -104,6 +105,15 @@ public class SecurityController {
     public ApiResponse<List<SecurityQuestionResponse>> listQuestions(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ApiResponse.ok(securityQuestionService.listQuestions(principal.getId()));
+    }
+
+    @PostMapping("/questions/verify")
+    @Operation(summary = "Verify security-question answers (PIN reset gate)")
+    public ApiResponse<Void> verifyQuestions(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody VerifySecurityAnswersRequest request) {
+        pinService.verifySecurityAnswers(principal.getId(), request.answers());
+        return ApiResponse.ok("Security answers verified", null);
     }
 
     // ---- Biometric devices ----

@@ -148,7 +148,11 @@ export function NumberPad({
                 label={key}
                 disabled={disabled}
                 onPress={() => handlePress(key)}
-                testID={testID ? `${testID}-key-${key === 'back' ? 'back' : key}` : undefined}
+                testID={
+                  testID
+                    ? `${testID}-key-${key === 'back' ? 'back' : key === '.' ? 'dot' : key}`
+                    : undefined
+                }
               />
             ),
           )}

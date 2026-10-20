@@ -10,7 +10,7 @@ describe('rates module integration', () => {
     persistSession(mockLogin({ email: 'ops@palpeer.local', password: 'admin' }), false);
   });
 
-  it('loads currency catalog and rate workspace', async () => {
+  it('loads the rates workspace', async () => {
     renderWithProviders(<AppRouter />, { route: '/admin/rates' });
 
     const main = await screen.findByRole('main');

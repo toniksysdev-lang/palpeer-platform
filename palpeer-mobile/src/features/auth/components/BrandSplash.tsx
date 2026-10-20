@@ -1,22 +1,9 @@
-import { useEffect } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
-import Animated, {
-  Easing,
-  FadeIn,
-  FadeInUp,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Image, StyleSheet, View } from 'react-native';
 
-import { AppText } from '@/components/ui/AppText';
+import { PALPEER_LOGO_URI } from '@/components/brand/logo';
 import { useTheme } from '@/providers/ThemeProvider';
 import { palette } from '@/theme';
-
-const LOGO = require('../../../../assets/brand-logo.png');
 
 /** Indeterminate progress cycle length while bootstrap runs. */
 const PROGRESS_CYCLE_MS = 1600;
@@ -24,40 +11,48 @@ const PROGRESS_TRACK_WIDTH = 148;
 
 /**
  * Branded splash shown on every cold app open while preferences and session restore.
- * Logo centered with an animated loading bar directly underneath.
+ * Uses RN Animated (not Reanimated) so cold start cannot die on worklets/OEM quirks.
  */
 export function BrandSplash() {
   const theme = useTheme();
-  const reducedMotion = useReducedMotion();
-  const scale = useSharedValue(0.92);
-  const progress = useSharedValue(0.08);
+  const scale = useRef(new Animated.Value(0.92)).current;
+  const progress = useRef(new Animated.Value(0.08)).current;
+  const [barWidth, setBarWidth] = useState(12);
 
   useEffect(() => {
-    if (reducedMotion) {
-      scale.set(1);
-      progress.set(0.55);
-      return;
-    }
-    scale.set(withTiming(1, { duration: 560, easing: Easing.out(Easing.cubic) }));
-    progress.set(
-      withRepeat(
-        withSequence(
-          withTiming(0.92, { duration: PROGRESS_CYCLE_MS, easing: Easing.inOut(Easing.quad) }),
-          withTiming(0.12, { duration: PROGRESS_CYCLE_MS * 0.55, easing: Easing.inOut(Easing.quad) }),
-        ),
-        -1,
-        false,
-      ),
+    const scaleAnim = Animated.timing(scale, {
+      toValue: 1,
+      duration: 560,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    const progressAnim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(progress, {
+          toValue: 0.92,
+          duration: PROGRESS_CYCLE_MS,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: false,
+        }),
+        Animated.timing(progress, {
+          toValue: 0.12,
+          duration: PROGRESS_CYCLE_MS * 0.55,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: false,
+        }),
+      ]),
     );
-  }, [progress, reducedMotion, scale]);
-
-  const logoMotion = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.get() }],
-  }));
-
-  const barMotion = useAnimatedStyle(() => ({
-    width: Math.max(12, Math.min(PROGRESS_TRACK_WIDTH, progress.get() * PROGRESS_TRACK_WIDTH)),
-  }));
+    scaleAnim.start();
+    progressAnim.start();
+    const id = progress.addListener(({ value }) => {
+      setBarWidth(Math.max(12, Math.min(PROGRESS_TRACK_WIDTH, value * PROGRESS_TRACK_WIDTH)));
+    });
+    return () => {
+      scaleAnim.stop();
+      progressAnim.stop();
+      progress.removeListener(id);
+    };
+  }, [progress, scale]);
 
   return (
     <View
@@ -66,33 +61,21 @@ export function BrandSplash() {
       accessibilityRole="progressbar"
       testID="brand-splash"
     >
-      <Animated.View entering={FadeIn.duration(theme.motion.slow)} style={logoMotion}>
+      <Animated.View style={{ transform: [{ scale }] }}>
         <Image
-          source={LOGO}
+          source={{ uri: PALPEER_LOGO_URI }}
           style={styles.logo}
           resizeMode="contain"
           accessibilityIgnoresInvertColors
         />
       </Animated.View>
 
-      <Animated.View
-        entering={FadeIn.delay(180)}
+      <View
         style={[styles.progressTrack, { backgroundColor: theme.colors.surfaceMuted }]}
         testID="brand-splash-progress"
       >
-        <Animated.View
-          style={[styles.progressFill, { backgroundColor: theme.colors.primary }, barMotion]}
-        />
-      </Animated.View>
-
-      <Animated.View entering={FadeInUp.delay(240).duration(theme.motion.base)} style={styles.copy}>
-        <AppText variant="h2" align="center" style={{ letterSpacing: 2 }}>
-          PALPEER
-        </AppText>
-        <AppText tone="secondary" align="center">
-          Your rate, your way
-        </AppText>
-      </Animated.View>
+        <View style={[styles.progressFill, { backgroundColor: theme.colors.primary, width: barWidth }]} />
+      </View>
     </View>
   );
 }
@@ -105,8 +88,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     gap: 24,
   },
-  logo: { width: 168, height: 150 },
-  copy: { gap: 6, alignItems: 'center' },
+  logo: { width: 200, height: 84 },
   progressTrack: {
     width: PROGRESS_TRACK_WIDTH,
     height: 4,

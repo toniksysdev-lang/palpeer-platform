@@ -22,12 +22,14 @@ import { useUpdateMyProfileMutation } from '@/services/api/profileApi';
 import { AddressAutocomplete } from '../AddressAutocomplete';
 import type { StructuredAddress } from '../addressLookup';
 import { DateOfBirthField } from '../DateOfBirthField';
+import { preferencesStorage } from '@/services/storage/preferencesStorage';
+
 import {
   MONTHLY_TX_OPTIONS,
-  PROFILE_COUNTRIES,
   SOURCE_OF_INCOME_OPTIONS,
   STATES_BY_COUNTRY,
   optionTitle,
+  profileCountriesWith,
 } from '../profileOptions';
 import {
   defaultDateOfBirth,
@@ -59,15 +61,30 @@ export function PersonalInformationScreen() {
     resolver: zodResolver(personalInfoSchema),
     defaultValues: profileToFormDefaults(null),
   });
+  const [signupCountryIso2, setSignupCountryIso2] = useState<string | null>(null);
 
   useEffect(() => {
-    if (profile) reset(profileToFormDefaults(profile));
-  }, [profile, reset]);
+    void preferencesStorage.getSignupCountryIso2().then(setSignupCountryIso2);
+  }, []);
+
+  useEffect(() => {
+    if (!profile) return;
+    const defaults = profileToFormDefaults(profile);
+    // Phone-verification country seeds Country when the profile has none yet.
+    if (!defaults.countryOfResidence && signupCountryIso2) {
+      defaults.countryOfResidence = signupCountryIso2;
+    }
+    reset(defaults);
+  }, [profile, reset, signupCountryIso2]);
 
   const country = useWatch({ control, name: 'countryOfResidence' });
   const stateTerritory = useWatch({ control, name: 'stateTerritory' });
   const sourceOfIncome = useWatch({ control, name: 'sourceOfIncome' });
   const monthlyEstimate = useWatch({ control, name: 'monthlyTransactionEstimate' });
+  const countryOptions = useMemo(
+    () => profileCountriesWith(country || signupCountryIso2),
+    [country, signupCountryIso2],
+  );
   const stateOptions = useMemo(
     () => STATES_BY_COUNTRY[country] ?? [{ key: 'N/A', title: 'Not applicable' }],
     [country],
@@ -98,6 +115,7 @@ export function PersonalInformationScreen() {
     setFormError(null);
     const result = await update(toUpdateProfileRequest(values));
     if ('data' in result && result.data) {
+      await preferencesStorage.clearSignupCountryIso2();
       toast.show({ type: 'success', title: 'Profile saved' });
       if (router.canGoBack()) router.back();
       else router.replace('/profile');
@@ -217,7 +235,7 @@ export function PersonalInformationScreen() {
           <PickerField
             appearance="elevated"
             label="Country of residence"
-            value={optionTitle(PROFILE_COUNTRIES, field.value)}
+            value={optionTitle(countryOptions, field.value)}
             placeholder="Select"
             error={fieldState.error?.message}
             onPress={() => setSheet('country')}
@@ -349,7 +367,7 @@ export function PersonalInformationScreen() {
       <PickerSheet
         visible={sheet === 'country'}
         title="Country of residence"
-        options={PROFILE_COUNTRIES}
+        options={countryOptions}
         selectedKey={country || null}
         onSelect={(key) => {
           setValue('countryOfResidence', key, { shouldValidate: true });

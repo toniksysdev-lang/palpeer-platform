@@ -106,6 +106,94 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_IDS
         sync: false
+      # Payment rails — required for admin Pool Funds live balances + funding/withdrawals
+      - key: APAYLO_ENABLED
+        sync: false
+      - key: APAYLO_SANDBOX
+        sync: false
+      - key: APAYLO_AUTO_SANDBOX_SETTLE
+        sync: false
+      - key: APAYLO_OFFLINE_SANDBOX_SETTLE
+        sync: false
+      - key: APAYLO_API_KEY
+        sync: false
+      - key: APAYLO_SHARED_KEY
+        sync: false
+      - key: APAYLO_ACCOUNT_ID
+        sync: false
+      - key: APAYLO_BASE_URL
+        sync: false
+      - key: APAYLO_SANDBOX_BASE_URL
+        sync: false
+      - key: APAYLO_ACCOUNT_BALANCE_PATH
+        sync: false
+      - key: APAYLO_WEBHOOK_SECRET
+        sync: false
+      - key: KORAPAY_ENABLED
+        sync: false
+      - key: KORAPAY_SANDBOX
+        sync: false
+      - key: KORAPAY_AUTO_SANDBOX_CREDIT
+        sync: false
+      - key: KORAPAY_AUTO_SANDBOX_SETTLE
+        sync: false
+      - key: KORAPAY_OFFLINE_SANDBOX_SETTLE
+        sync: false
+      - key: KORAPAY_PUBLIC_KEY
+        sync: false
+      - key: KORAPAY_SECRET_KEY
+        sync: false
+      - key: KORAPAY_BASE_URL
+        sync: false
+      - key: KORAPAY_WEBHOOK_SECRET
+        sync: false
+      - key: KUDA_ENABLED
+        sync: false
+      - key: KUDA_SANDBOX
+        sync: false
+      - key: KUDA_EMAIL
+        sync: false
+      - key: KUDA_API_KEY
+        sync: false
+      - key: KUDA_BASE_URL
+        sync: false
+      - key: KUDA_WEBHOOK_SECRET
+        sync: false
+      # SMS — enable exactly one of Telnyx / Twilio / BulkSMS for phone OTP + pool alerts
+      - key: TELNYX_ENABLED
+        sync: false
+      - key: TELNYX_API_KEY
+        sync: false
+      - key: TELNYX_API_URL
+        sync: false
+      - key: TELNYX_MESSAGING_PROFILE_ID
+        sync: false
+      - key: TELNYX_FROM_NUMBER
+        sync: false
+      - key: TWILIO_ENABLED
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_API_KEY_SID
+        sync: false
+      - key: TWILIO_API_KEY_SECRET
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
+      - key: TWILIO_MESSAGING_SERVICE_SID
+        sync: false
+      - key: BULKSMS_ENABLED
+        sync: false
+      - key: BULKSMS_TOKEN_ID
+        sync: false
+      - key: BULKSMS_TOKEN_SECRET
+        sync: false
+      - key: BULKSMS_SENDER
+        sync: false
+      - key: PUBLIC_API_BASE_URL
+        sync: false
 
   - type: web
     name: palpeer-admin

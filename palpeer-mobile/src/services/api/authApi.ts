@@ -21,6 +21,25 @@ export const authApi = baseApi.injectEndpoints({
     resendOtp: build.mutation<OtpResendResponse, OtpResendRequest>({
       query: (body) => ({ path: '/auth/otp/resend', method: 'POST', body, public: true }),
     }),
+    requestPhoneOtp: build.mutation<OtpResendResponse, { phone: string }>({
+      query: (body) => ({
+        path: '/auth/otp/phone/request',
+        method: 'POST',
+        body,
+        public: true,
+      }),
+    }),
+    verifyPhoneOtp: build.mutation<void, { phone: string; code: string }>({
+      query: (body) => ({
+        path: '/auth/otp/phone/verify',
+        method: 'POST',
+        body,
+        public: true,
+      }),
+    }),
+    getRegistrationCountries: build.query<string[], void>({
+      query: () => ({ path: '/public/registration-countries', method: 'GET', public: true }),
+    }),
     requestPasswordReset: build.mutation<void, PasswordResetRequest>({
       query: (body) => ({
         path: '/auth/password-reset/request',
@@ -56,6 +75,9 @@ export const authApi = baseApi.injectEndpoints({
 
 export const {
   useResendOtpMutation,
+  useRequestPhoneOtpMutation,
+  useVerifyPhoneOtpMutation,
+  useGetRegistrationCountriesQuery,
   useRequestPasswordResetMutation,
   useGetSessionsQuery,
   useRevokeSessionMutation,

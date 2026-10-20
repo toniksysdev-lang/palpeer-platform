@@ -1,9 +1,12 @@
 import type { IsoInstant, Uuid } from './common';
 
-/** VERIFIED: GET /security/pin. `lockedUntil` is set only while the PIN is locked (V25). */
+/** VERIFIED: GET /security/pin. Lock timestamps use admin Settings → PIN lockout policy. */
 export type PinStatusResponse = {
   pinSet: boolean;
+  /** Wrong PIN attempts exhausted. */
   lockedUntil: IsoInstant | null;
+  /** Wrong security-answer attempts exhausted (Forgot PIN). */
+  securityAnswersLockedUntil?: IsoInstant | null;
 };
 
 /** VERIFIED: `SetPinRequest` — `pin` matches `\d{4,8}` (provisional P3-01). */
@@ -20,6 +23,9 @@ export type SecurityAnswer = { questionKey: string; answer: string };
 
 /** VERIFIED: `ResetPinRequest` — every configured question must be answered. */
 export type ResetPinRequest = { answers: SecurityAnswer[]; newPin: string };
+
+/** VERIFIED: `VerifySecurityAnswersRequest` — same answers shape as PIN reset. */
+export type VerifySecurityAnswersRequest = { answers: SecurityAnswer[] };
 
 /** VERIFIED: `SecurityQuestionInput` (key ≤120, text ≤500, answer 1–200). */
 export type SecurityQuestionInput = { questionKey: string; questionText: string; answer: string };

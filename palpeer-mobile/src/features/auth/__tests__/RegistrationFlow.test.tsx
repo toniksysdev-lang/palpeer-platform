@@ -47,7 +47,7 @@ describe('EnterPhoneScreen', () => {
     await fireEvent.press(screen.getByTestId('enter-phone-continue'));
     expect(router.push).toHaveBeenCalledWith({
       pathname: '/verify-phone',
-      params: { phone: '+15062100661', signup: '1' },
+      params: { phone: '+15062100661', signup: '1', countryIso2: 'CA' },
     });
   });
 

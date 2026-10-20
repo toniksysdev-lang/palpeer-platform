@@ -74,15 +74,22 @@ export function mockListUsers(params?: {
   sort?: string;
   email?: string;
   status?: string;
+  from?: string;
+  to?: string;
 }): SpringPage<AdminUserSummary> {
   const page = params?.page ?? 0;
   const size = params?.size ?? 20;
   const email = params?.email?.toLowerCase();
-  const filtered = mockUsersCatalog.filter(
-    (user) =>
-      (!email || user.email.toLowerCase().includes(email)) &&
-      (!params?.status || user.status === params.status),
-  );
+  const fromMs = params?.from ? Date.parse(params.from) : Number.NaN;
+  const toMs = params?.to ? Date.parse(params.to) : Number.NaN;
+  const filtered = mockUsersCatalog.filter((user) => {
+    if (email && !user.email.toLowerCase().includes(email)) return false;
+    if (params?.status && user.status !== params.status) return false;
+    const created = Date.parse(user.createdAt);
+    if (!Number.isNaN(fromMs) && created < fromMs) return false;
+    if (!Number.isNaN(toMs) && created > toMs) return false;
+    return true;
+  });
   const sorted = sortUsers(filtered, params?.sort);
   const start = page * size;
   const content = sorted.slice(start, start + size);

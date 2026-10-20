@@ -1,21 +1,20 @@
-export type SignupCountry = {
-  iso2: string;
-  name: string;
-  dialCode: string;
-  flag: string;
-};
+import { WORLD_COUNTRIES, type WorldCountry } from './worldCountries';
 
-/** Corridor countries shown on the globe / welcome illustration. */
+export type SignupCountry = WorldCountry;
+
+/** Default corridor countries (also used when the public API is unreachable). */
 export const SIGNUP_COUNTRIES: SignupCountry[] = [
-  { iso2: 'CA', name: 'Canada', dialCode: '+1', flag: '🇨🇦' },
-  { iso2: 'US', name: 'United States', dialCode: '+1', flag: '🇺🇸' },
-  { iso2: 'GB', name: 'United Kingdom', dialCode: '+44', flag: '🇬🇧' },
-  { iso2: 'NG', name: 'Nigeria', dialCode: '+234', flag: '🇳🇬' },
-  { iso2: 'GH', name: 'Ghana', dialCode: '+233', flag: '🇬🇭' },
-  { iso2: 'KE', name: 'Kenya', dialCode: '+254', flag: '🇰🇪' },
-];
+  'CA',
+  'US',
+  'GB',
+  'NG',
+  'GH',
+  'KE',
+].map((iso2) => WORLD_COUNTRIES.find((c) => c.iso2 === iso2)!);
 
 export const DEFAULT_SIGNUP_COUNTRY = SIGNUP_COUNTRIES[0]!;
+
+export { WORLD_COUNTRIES, findWorldCountry } from './worldCountries';
 
 /** Digits only from a national number field. */
 export function digitsOnly(value: string): string {
@@ -36,7 +35,7 @@ export function formatNationalPhone(national: string, iso2 = 'CA'): string {
     if (d.length <= 6) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
     return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
   }
-  // Progressive space grouping (3-3-rest) for NG / GB / GH / KE and similar.
+  // Progressive space grouping (3-3-rest) for other countries.
   const parts: string[] = [];
   if (digits.length <= 3) return digits;
   parts.push(digits.slice(0, 3));

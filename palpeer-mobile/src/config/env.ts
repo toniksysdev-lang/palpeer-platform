@@ -10,6 +10,13 @@ export type SupportConfig = {
   termsUrl: string | null;
 };
 
+/** HTTPS base for shareable deep links (App Links / Universal Links). Null → use palpeer://. */
+export type ShareConfig = {
+  baseUrl: string | null;
+  androidStoreUrl: string;
+  iosStoreUrl: string | null;
+};
+
 export type AppConfig = {
   env: AppEnvironment;
   apiBaseUrl: string;
@@ -18,6 +25,7 @@ export type AppConfig = {
   sessionRestoreTimeoutMs: number;
   support: SupportConfig;
   google: GoogleAuthConfig;
+  share: ShareConfig;
 };
 
 /** OAuth client IDs for Google Sign-In. Web client ID is required to obtain an ID token. */
@@ -82,7 +90,13 @@ type RawEnv = {
   EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?: string;
   EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID?: string;
   EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?: string;
+  EXPO_PUBLIC_SHARE_BASE_URL?: string;
+  EXPO_PUBLIC_ANDROID_STORE_URL?: string;
+  EXPO_PUBLIC_IOS_STORE_URL?: string;
 };
+
+const DEFAULT_ANDROID_STORE =
+  'https://play.google.com/store/apps/details?id=com.palpeer.app';
 
 function parseOptionalId(value: string | undefined): string | null {
   const trimmed = value?.trim() ?? '';
@@ -99,7 +113,7 @@ export function buildConfig(raw: RawEnv): AppConfig {
     requestTimeoutMs: env === 'development' ? 15_000 : 60_000,
     sessionRestoreTimeoutMs: 8_000,
     support: {
-      email: parseEmail(raw.EXPO_PUBLIC_SUPPORT_EMAIL),
+      email: parseEmail(raw.EXPO_PUBLIC_SUPPORT_EMAIL) ?? 'support@palpeer.com',
       phone: parsePhone(raw.EXPO_PUBLIC_SUPPORT_PHONE),
       privacyPolicyUrl: parseHttpsUrl(raw.EXPO_PUBLIC_PRIVACY_POLICY_URL),
       termsUrl: parseHttpsUrl(raw.EXPO_PUBLIC_TERMS_URL),
@@ -108,6 +122,11 @@ export function buildConfig(raw: RawEnv): AppConfig {
       webClientId: parseOptionalId(raw.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID),
       androidClientId: parseOptionalId(raw.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID),
       iosClientId: parseOptionalId(raw.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID),
+    },
+    share: {
+      baseUrl: parseHttpsUrl(raw.EXPO_PUBLIC_SHARE_BASE_URL),
+      androidStoreUrl: parseHttpsUrl(raw.EXPO_PUBLIC_ANDROID_STORE_URL) ?? DEFAULT_ANDROID_STORE,
+      iosStoreUrl: parseHttpsUrl(raw.EXPO_PUBLIC_IOS_STORE_URL),
     },
   };
 }
@@ -133,6 +152,9 @@ const rawConfig = buildConfig({
   EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
   EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
   EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+  EXPO_PUBLIC_SHARE_BASE_URL: process.env.EXPO_PUBLIC_SHARE_BASE_URL,
+  EXPO_PUBLIC_ANDROID_STORE_URL: process.env.EXPO_PUBLIC_ANDROID_STORE_URL,
+  EXPO_PUBLIC_IOS_STORE_URL: process.env.EXPO_PUBLIC_IOS_STORE_URL,
 });
 
 export const appConfig: AppConfig = {

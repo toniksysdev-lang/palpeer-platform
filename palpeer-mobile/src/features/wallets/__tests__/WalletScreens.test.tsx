@@ -160,10 +160,13 @@ describe('HomeScreen', () => {
   });
 });
 
+const REGISTRATION_COUNTRIES = ok(['CA', 'US', 'NG']);
+
 describe('CreateWalletScreen', () => {
-  it('offers only currencies the user does not hold, asks for PIN, then opens the new wallet', async () => {
+  it('offers only registration-country currencies the user does not hold, asks for PIN, then opens the new wallet', async () => {
     const { calls } = installFetchMock({
       'GET /currencies': CURRENCIES,
+      'GET /public/registration-countries': REGISTRATION_COUNTRIES,
       'GET /wallets': ok([wallet('w-cad', 'CAD')]),
       'GET /security/pin': ok({ pinSet: true, lockedUntil: null }),
       'POST /security/pin/verify': { status: 200, body: undefined },
@@ -174,10 +177,11 @@ describe('CreateWalletScreen', () => {
     });
     await renderWithProviders(<CreateWalletScreen />);
 
-    expect(await screen.findByTestId('create-wallet-option-NGN')).toBeTruthy();
-    expect(screen.queryByTestId('create-wallet-option-CAD')).toBeNull();
+    expect(await screen.findByTestId('create-wallet-option-NG')).toBeTruthy();
+    expect(screen.getByTestId('create-wallet-option-US')).toBeTruthy();
+    expect(screen.queryByTestId('create-wallet-option-CA')).toBeNull();
 
-    await fireEvent.press(screen.getByTestId('create-wallet-option-NGN'));
+    await fireEvent.press(screen.getByTestId('create-wallet-option-NG'));
     await fireEvent.press(screen.getByTestId('create-wallet-submit'));
 
     for (const digit of '1234') {
@@ -198,9 +202,27 @@ describe('CreateWalletScreen', () => {
     });
   });
 
+  it('lists only the enabled registration countries from admin settings', async () => {
+    installFetchMock({
+      'GET /currencies': CURRENCIES,
+      'GET /public/registration-countries': ok(['CA', 'GH', 'KE']),
+      'GET /wallets': ok([]),
+      'GET /security/pin': ok({ pinSet: true, lockedUntil: null }),
+    });
+    await renderWithProviders(<CreateWalletScreen />);
+
+    expect(await screen.findByTestId('create-wallet-option-CA')).toBeTruthy();
+    expect(screen.getByTestId('create-wallet-option-GH')).toBeTruthy();
+    expect(screen.getByTestId('create-wallet-option-KE')).toBeTruthy();
+    expect(screen.queryByTestId('create-wallet-option-NG')).toBeNull();
+    expect(screen.queryByTestId('create-wallet-option-US')).toBeNull();
+    expect(screen.getByText(/GHS · not available yet/)).toBeTruthy();
+  });
+
   it('explains a duplicate wallet after PIN confirmation', async () => {
     installFetchMock({
       'GET /currencies': CURRENCIES,
+      'GET /public/registration-countries': REGISTRATION_COUNTRIES,
       'GET /wallets': ok([]),
       'GET /security/pin': ok({ pinSet: true, lockedUntil: null }),
       'POST /security/pin/verify': { status: 200, body: undefined },
@@ -208,7 +230,7 @@ describe('CreateWalletScreen', () => {
     });
     await renderWithProviders(<CreateWalletScreen />);
 
-    await fireEvent.press(await screen.findByTestId('create-wallet-option-USD'));
+    await fireEvent.press(await screen.findByTestId('create-wallet-option-US'));
     await fireEvent.press(screen.getByTestId('create-wallet-submit'));
     for (const digit of '1234') {
       await fireEvent.press(await screen.findByTestId(`pin-prompt-entry-pad-key-${digit}`));

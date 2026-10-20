@@ -22,6 +22,7 @@ import com.palpeer.wallet.funding.dto.FundingTransactionResponse;
 import com.palpeer.wallet.provider.PaymentRailRouter;
 import com.palpeer.wallet.provider.apaylo.ApayloProperties;
 import com.palpeer.wallet.repository.WalletRepository;
+import com.palpeer.wallet.service.FundingUnverifiedLimitService;
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
@@ -45,6 +46,7 @@ class FundingServiceTest {
     @Mock private PaymentRailRouter paymentRailRouter;
     @Mock private ApayloProperties apayloProperties;
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
+    @Mock private FundingUnverifiedLimitService fundingUnverifiedLimitService;
 
     @InjectMocks private FundingService fundingService;
 

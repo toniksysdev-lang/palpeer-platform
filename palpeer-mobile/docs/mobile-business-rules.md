@@ -76,12 +76,12 @@ Anything not here is not a rule. Unverified items live in `mobile-contract-pendi
 |---|---|---|
 | R-W-1 | One wallet per currency per user (409 `WALLET_EXISTS`). Currency must exist. | VERIFIED |
 | R-W-2 | Balances: `availableBalance` and `pendingBalance`, changed only by ledger postings. | VERIFIED |
-| R-W-3 | Funding method is determined by wallet currency on the backend: CAD uses Interac e-Transfer (Apaylo), NGN uses a Kuda virtual account. Other currencies have no rail. The app shows `fundingInstructions` verbatim and doesn't offer a method picker. | VERIFIED |
+| R-W-3 | Funding method is determined by wallet currency on the backend: CAD uses Apaylo Instant Interac deposit only (`Interac, Instant deposit via Interac`), NGN uses a Kuda/Korapay virtual account. Other currencies have no rail. The app shows `fundingInstructions` verbatim and doesn't offer a CAD method picker. | VERIFIED |
 | R-W-4 | Funding amount > 0. No min/max or fee exists on the backend. | VERIFIED |
 | R-W-5 | Funding completes only via the provider (webhook). The app polls `GET /funding/{id}` and never calls `process`/`fail`/`reverse`. | VERIFIED |
 | R-W-6 | Withdrawal amount > 0 and ≤ available balance (422 `INSUFFICIENT_AVAILABLE_BALANCE`). A HOLD moves the amount to pending immediately. | VERIFIED |
 | R-W-7 | Withdrawal destination: CAD Interac email/phone or EFT `institution:transit:account`; NGN `bankCode:accountNumber`. | VERIFIED |
-| R-W-8 | Copy "Deposit request initiated. Check your email to accept the e-Transfer." is used only for CAD funding in `PENDING` with provider `APAYLO`. | EVIDENCE + VERIFIED |
+| R-W-8 | CAD `PENDING` + `APAYLO` status copy references Instant Interac deposit (accept via email/banking app). | EVIDENCE + VERIFIED |
 | R-W-9 | Amount inputs accept at most the currency's `precision` decimals (from `GET /currencies`). The backend accepts more (W-7). Amounts are sent as exact JSON numbers built from the typed string, never through a JS float. | CLIENT |
 | R-W-10 | Fund and Withdraw are disabled for currencies with no backend rail (anything but CAD and NGN), because such a funding can never complete and such a withdrawal would hold funds until an operator acts (W-8). | CLIENT (mirrors VERIFIED rail wiring) |
 | R-W-11 | The withdrawal form blocks amounts above the displayed available balance before calling the API. The backend's 422 remains the authority and its message is shown if balances changed. | CLIENT |

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { ArrowLeftRight } from 'lucide-react';
 import { z } from 'zod';
 import { useToast } from '@/app/providers/ToastProvider';
@@ -97,7 +97,7 @@ export function RatesPage() {
   const [currencyErrors, setCurrencyErrors] = useState<Record<string, string>>({});
   const [removingPair, setRemovingPair] = useState<ExchangeRate | null>(null);
   const [scrollToPublish, setScrollToPublish] = useState(false);
-  const publishSectionRef = useRef<HTMLElement | null>(null);
+  const publishSectionRef = useRef<HTMLElement | HTMLDivElement | null>(null);
 
   function nowLocalInputValue() {
     const now = new Date();
@@ -503,8 +503,8 @@ export function RatesPage() {
               <h1 className="text-xl font-semibold text-text-primary">Rates & currencies</h1>
             </div>
             <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-              Manage InstantEX (swap) and P2P published rates, plus P2P post bounds, with activation
-              and approval controls.
+              Manage InstantEX (swap) published rates and P2P post bounds. On P2P, configure min/max
+              rates users may post for each currency pair.
             </p>
           </div>
         </div>
@@ -531,43 +531,6 @@ export function RatesPage() {
           ))}
         </div>
       </section>
-
-      <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="text-base font-semibold text-text-primary">Currency catalog</h3>
-          <Link to="/admin/dashboard" className="text-xs text-primary hover:underline">
-            Dashboard
-          </Link>
-        </div>
-        {currenciesQuery.isLoading ? <Skeleton className="h-16 w-full" /> : null}
-        {currenciesQuery.isError ? (
-          <ErrorState
-            description={
-              currenciesQuery.error instanceof ApiClientError
-                ? currenciesQuery.error.message
-                : 'Failed to load currencies.'
-            }
-            onRetry={() => void currenciesQuery.refetch()}
-          />
-        ) : null}
-        {currenciesQuery.isSuccess && currencyOptions.length === 0 ? (
-          <EmptyState
-            title="No currencies"
-            description="Create a currency below to get started."
-          />
-        ) : null}
-        {currencyOptions.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {currencyOptions.map((currency) => (
-              <Badge key={currency.id} tone="primary">
-                {currency.code} · {currency.symbol} · p{currency.precision}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
-      </section>
-
-      {channel === 'P2P' ? <P2PRateBoundsPanel /> : null}
 
       <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
         <h3 className="text-base font-semibold text-text-primary">
@@ -597,43 +560,49 @@ export function RatesPage() {
         />
       </section>
 
-      <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
-        <h3 className="text-base font-semibold text-text-primary">Pair lookup</h3>
-        <p className="mt-1 text-sm text-text-secondary">
-          Pick a currency pair to see its latest rate and history.
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Select
-            label="Base"
-            value={base}
-            onChange={(event) => setPair(event.target.value, quote)}
-          >
-            <option value="">Select base</option>
-            {currencyOptions.map((currency) => (
-              <option key={currency.id} value={currency.code}>
-                {currency.code}
-              </option>
-            ))}
-          </Select>
-          <Select
-            label="Quote"
-            value={quote}
-            onChange={(event) => setPair(base, event.target.value)}
-          >
-            <option value="">Select quote</option>
-            {currencyOptions.map((currency) => (
-              <option key={currency.id} value={currency.code}>
-                {currency.code}
-              </option>
-            ))}
-          </Select>
-        </div>
-        {!pairSelected ? (
-          <p className="mt-3 text-xs text-text-muted">Choose two different currencies to load rates.</p>
-        ) : null}
-      </section>
+      {channel !== 'P2P' ? (
+        <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
+          <h3 className="text-base font-semibold text-text-primary">Pair lookup</h3>
+          <p className="mt-1 text-sm text-text-secondary">
+            Pick a currency pair to see its latest rate and history.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Select
+              label="Base"
+              value={base}
+              onChange={(event) => setPair(event.target.value, quote)}
+            >
+              <option value="">Select base</option>
+              {currencyOptions.map((currency) => (
+                <option key={currency.id} value={currency.code}>
+                  {currency.code}
+                </option>
+              ))}
+            </Select>
+            <Select
+              label="Quote"
+              value={quote}
+              onChange={(event) => setPair(base, event.target.value)}
+            >
+              <option value="">Select quote</option>
+              {currencyOptions.map((currency) => (
+                <option key={currency.id} value={currency.code}>
+                  {currency.code}
+                </option>
+              ))}
+            </Select>
+          </div>
+          {!pairSelected ? (
+            <p className="mt-3 text-xs text-text-muted">
+              Choose two different currencies to load rates.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
-      {pairSelected ? (
+      {channel === 'P2P' ? <P2PRateBoundsPanel /> : null}
+
+      {channel !== 'P2P' && pairSelected ? (
         <>
           <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
             <h3 className="text-base font-semibold text-text-primary">
@@ -709,10 +678,10 @@ export function RatesPage() {
             className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card"
           >
             <h3 className="text-base font-semibold text-text-primary">
-              {latestForPair ? `Edit / publish ${base}/${quote}` : `Publish ${channel === 'P2P' ? 'P2P' : 'swap'} rate`}
+              {latestForPair ? `Edit / publish ${base}/{quote}` : 'Publish swap rate'}
             </h3>
             <p className="mt-1 text-sm text-text-secondary">
-              Set a new buy and sell rate for this pair on the {channel} channel. Both rates must be
+              Set a new buy and sell rate for this pair on the InstantEX channel. Both rates must be
               greater than 0. Publishing creates a new effective rate (history is preserved).
             </p>
             {!canPublishRate ? (

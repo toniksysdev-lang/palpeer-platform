@@ -55,7 +55,7 @@ describe('NumberPad', () => {
     await renderWithProviders(<Harness />);
     await typeOnNumberPad('12.5', 'pad');
     expect(screen.getByTestId('mirror').props.value).toBe('12.5');
-    await fireEvent.press(screen.getByTestId('pad-key-.'));
+    await fireEvent.press(screen.getByTestId('pad-key-dot'));
     expect(screen.getByTestId('mirror').props.value).toBe('12.5');
   });
 
@@ -105,6 +105,6 @@ describe('NumberPad', () => {
     await renderWithProviders(<Harness />);
     await typeIntoNumberField('amount', '99.5');
     expect(screen.getByTestId('amount')).toHaveTextContent(/99\.5/);
-    expect(screen.getByTestId('number-pad-dock-key-.')).toBeTruthy();
+    expect(screen.getByTestId('number-pad-dock-key-dot')).toBeTruthy();
   });
 });

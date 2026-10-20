@@ -22,6 +22,11 @@ Blueprint file: [`render.yaml`](../render.yaml) (API + admin + Postgres + Redis)
 | `PALPEER_FCM_CREDENTIALS_JSON` | Firebase service-account JSON (single line) |
 | `ADMIN_BOOTSTRAP_EMAIL` | First admin user email (optional) |
 | `GOOGLE_CLIENT_IDS` | Comma-separated OAuth client IDs, or leave empty |
+| `APAYLO_ENABLED` / `APAYLO_API_KEY` / `APAYLO_SHARED_KEY` | CAD Interac rail — required for Pool Funds (Apaylo) and CAD funding |
+| `APAYLO_SANDBOX` | `true` for sandbox keys |
+| `KORAPAY_ENABLED` / `KORAPAY_SECRET_KEY` / `KORAPAY_PUBLIC_KEY` | NGN rail — required for Pool Funds (Korapay) and NGN funding |
+| `KORAPAY_SANDBOX` | `true` for `sk_test_` / `pk_test_` keys |
+| `KUDA_*` | Optional second NGN rail; leave `KUDA_ENABLED=false` if unused |
 
 `PALPEER_MAIL_PROVIDER` defaults to `auto` (SendPulse REST when client ID/secret are set). Raw SMTP (`PALPEER_SMTP_*`) is optional fallback — outbound SMTP is often blocked on Render free.
 

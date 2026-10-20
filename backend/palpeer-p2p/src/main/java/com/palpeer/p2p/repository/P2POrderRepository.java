@@ -26,6 +26,15 @@ public interface P2POrderRepository extends JpaRepository<P2POrder, UUID>, JpaSp
     @Query(
             """
             SELECT o FROM P2POrder o
+            WHERE (o.requesterId = :userId AND o.requesterArchivedAt IS NULL)
+               OR (o.acceptorId = :userId AND o.acceptorArchivedAt IS NULL)
+            ORDER BY o.createdAt DESC
+            """)
+    List<P2POrder> findVisibleForUserOrderByCreatedAtDesc(@Param("userId") UUID userId);
+
+    @Query(
+            """
+            SELECT o FROM P2POrder o
             WHERE (o.requesterId = :userId OR o.acceptorId = :userId)
               AND o.status IN :statuses
             ORDER BY o.createdAt DESC

@@ -20,6 +20,12 @@ export type BonusAmountByStatusAndCurrency = {
   amount: string | number;
 };
 
+export type FeeCurrencyAmount = {
+  currencyCode: string;
+  count: number;
+  amount: string | number;
+};
+
 export type AdminReportsSummary = {
   generatedAt: string;
   from: string;
@@ -36,6 +42,7 @@ export type AdminReportsSummary = {
   cards: { byStatus: CountsByKey };
   referrals: { byStatus: CountsByKey };
   bonuses: { byStatus: CountsByKey; amountByStatusAndCurrency: BonusAmountByStatusAndCurrency[] };
+  fees: { orderCount: number; byCurrency: FeeCurrencyAmount[] };
 };
 
 export const REPORT_DATASETS = [

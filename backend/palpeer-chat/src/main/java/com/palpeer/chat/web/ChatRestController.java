@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -50,6 +51,12 @@ public class ChatRestController {
     @Operation(summary = "List my chat rooms")
     public ApiResponse<List<ChatRoomResponse>> listRooms(@AuthenticationPrincipal UserPrincipal principal) {
         return ApiResponse.ok(chatService.listRooms(principal.getId()));
+    }
+
+    @GetMapping("/unread-count")
+    @Operation(summary = "Count unread chat messages across my rooms")
+    public ApiResponse<Map<String, Long>> unreadCount(@AuthenticationPrincipal UserPrincipal principal) {
+        return ApiResponse.ok(Map.of("count", chatService.unreadCount(principal.getId())));
     }
 
     @GetMapping("/rooms/{roomId}")

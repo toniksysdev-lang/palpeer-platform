@@ -13,6 +13,8 @@ const catalog: KycCaseSummary[] = [
   {
     caseId: 'kyc-1',
     userId: 'u-2',
+    email: 'member@palpeer.local',
+    fullName: 'Ada Member',
     status: 'UNDER_REVIEW',
     rejectionReason: null,
     createdAt: daysAgo(2),
@@ -21,6 +23,8 @@ const catalog: KycCaseSummary[] = [
   {
     caseId: 'kyc-2',
     userId: 'u-3',
+    email: 'verified@palpeer.local',
+    fullName: 'Chidi Verified',
     status: 'APPROVED',
     rejectionReason: null,
     createdAt: daysAgo(18),
@@ -29,6 +33,8 @@ const catalog: KycCaseSummary[] = [
   {
     caseId: 'kyc-3',
     userId: 'u-4',
+    email: 'pending@palpeer.local',
+    fullName: 'Bola Pending',
     status: 'SUBMITTED',
     rejectionReason: null,
     createdAt: daysAgo(5),
@@ -37,6 +43,8 @@ const catalog: KycCaseSummary[] = [
   {
     caseId: 'kyc-4',
     userId: 'u-5',
+    email: 'rejected@palpeer.local',
+    fullName: 'Emeka Rejected',
     status: 'REJECTED',
     rejectionReason: 'Document image was unreadable.',
     createdAt: daysAgo(30),
@@ -45,6 +53,8 @@ const catalog: KycCaseSummary[] = [
   {
     caseId: 'kyc-5',
     userId: 'u-1',
+    email: 'operator@palpeer.local',
+    fullName: 'Ops Operator',
     status: 'IN_PROGRESS',
     rejectionReason: null,
     createdAt: daysAgo(1),

@@ -25,6 +25,7 @@ import { exportReportDataset, getReportsSummary } from '@/services/api/reports';
 import { ApiClientError } from '@/types/api';
 import type {
   BonusAmountByStatusAndCurrency,
+  FeeCurrencyAmount,
   ReportDataset,
   ReportWindow,
   WalletCurrencyBalance,
@@ -205,6 +206,23 @@ export function ReportsPage() {
     [],
   );
 
+  const feeColumns = useMemo<DataColumn<FeeCurrencyAmount>[]>(
+    () => [
+      {
+        id: 'currency',
+        header: 'Currency',
+        cell: (row) => <Badge tone="neutral">{row.currencyCode}</Badge>,
+      },
+      { id: 'orders', header: 'Orders', cell: (row) => formatInteger(row.count) },
+      {
+        id: 'amount',
+        header: 'Fee total',
+        cell: (row) => <span className="font-mono text-xs">{formatDecimal(row.amount)}</span>,
+      },
+    ],
+    [],
+  );
+
   if (!allowed) {
     return (
       <ErrorState
@@ -229,8 +247,7 @@ export function ReportsPage() {
             </div>
             <p className="mt-2 max-w-3xl text-sm text-text-secondary">
               Read-only platform totals. User, KYC, wallet, card, referral, and bonus figures are all-time totals; transaction
-              figures use the selected window (default: last 30 days). The platform has no fee model,
-              so no revenue is reported.
+              and P2P fee figures use the selected window (default: last 30 days).
             </p>
           </div>
         </div>
@@ -399,6 +416,28 @@ export function ReportsPage() {
                   <StatusBars counts={summary.p2p.ordersByStatus} />
                 </div>
               </div>
+            </ReportSection>
+
+            <ReportSection
+              title="Platform fees / revenue"
+              description="Assessed P2P fees in the selected window (persisted at settlement, or estimated from active fee tiers)."
+            >
+              <Stat
+                label="Fee-bearing orders"
+                value={formatInteger(summary.fees?.orderCount ?? 0)}
+              />
+              <div className="mt-4">
+                <DataTable
+                  columns={feeColumns}
+                  rows={summary.fees?.byCurrency ?? []}
+                  rowKey={(row) => row.currencyCode}
+                  emptyTitle="No fee revenue"
+                  emptyDescription="No assessed P2P fees in this window. Configure fee tiers under Fee Management."
+                />
+              </div>
+              <Link to="/admin/fees/p2p" className="mt-3 inline-flex text-xs text-primary hover:underline">
+                Manage P2P fee tiers →
+              </Link>
             </ReportSection>
 
             <ReportSection title="Cards" description="All-time card counts by status.">

@@ -108,6 +108,13 @@ export function mockReportsSummary(window: ReportWindow = {}): AdminReportsSumma
         amount: sumDecimal(entry.amounts),
       })),
     },
+    fees: {
+      orderCount: mockListP2POrders().filter((row) => row.status === 'COMPLETED').length,
+      byCurrency: [
+        { currencyCode: 'NGN', count: 2, amount: '1500.00' },
+        { currencyCode: 'CAD', count: 1, amount: '12.50' },
+      ],
+    },
   };
 }
 

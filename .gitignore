@@ -29,3 +29,6 @@ data/
 *.p12
 *.mobileprovision
 
+
+# Local secrets (Firebase SA, etc.)
+secrets/

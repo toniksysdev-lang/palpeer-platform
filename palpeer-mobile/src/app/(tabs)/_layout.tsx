@@ -9,12 +9,19 @@ import {
 } from 'lucide-react-native';
 
 import { TabScreenLayout } from '@/components/layout/tabScreen';
+import { useChatUnreadRealtime } from '@/features/chat/useChatUnreadRealtime';
+import { badgeLabel } from '@/features/notifications/logic';
 import { usePendingNavigation } from '@/features/notifications/usePendingNavigation';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useGetChatUnreadCountQuery } from '@/services/api/chatApi';
+import { palette } from '@/theme/colors';
 
 export default function TabsLayout() {
   const theme = useTheme();
   usePendingNavigation();
+  useChatUnreadRealtime();
+  const chatUnread = useGetChatUnreadCountQuery();
+  const messagesBadge = badgeLabel(chatUnread.data);
 
   return (
     <Tabs
@@ -81,6 +88,13 @@ export default function TabsLayout() {
         options={{
           title: 'Messages',
           tabBarButtonTestID: 'tab-messages',
+          tabBarBadge: messagesBadge ?? undefined,
+          tabBarBadgeStyle: messagesBadge
+            ? { backgroundColor: theme.colors.danger, color: palette.neutral0 }
+            : undefined,
+          tabBarAccessibilityLabel: messagesBadge
+            ? `Messages, ${chatUnread.data} unread`
+            : 'Messages',
           tabBarIcon: ({ color, size }) => <MessageSquareText color={color} size={size - 2} />,
         }}
       />

@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
 import { ChevronDown } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { CountryFlag } from '@/components/brand/CountryFlag';
 import { FormAlert } from '@/components/feedback/FormAlert';
 import { AppText } from '@/components/ui/AppText';
 import { BottomSheet } from '@/components/ui/BottomSheet';
@@ -10,12 +11,20 @@ import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { useNumberPadField, useOptionalNumberPad } from '@/components/ui/NumberPadContext';
 import { useTheme } from '@/providers/ThemeProvider';
+import {
+  useGetRegistrationCountriesQuery,
+  useRequestPhoneOtpMutation,
+} from '@/services/api/authApi';
+import { toAppError } from '@/services/api/errors';
+import { preferencesStorage } from '@/services/storage/preferencesStorage';
 
 import { AuthLayout } from '../components/AuthLayout';
 import { LegalAgreement } from '../components/LegalAgreement';
+import { authErrorMessage } from '../errors';
 import {
   DEFAULT_SIGNUP_COUNTRY,
   SIGNUP_COUNTRIES,
+  WORLD_COUNTRIES,
   digitsOnly,
   formatNationalPhone,
   toE164,
@@ -24,13 +33,29 @@ import {
 
 const PHONE_MAX_DIGITS = 10;
 
-/** Phone signup step — custom dialer pad opens only when the phone field is tapped. */
+/** Phone signup step — sends SMS OTP via the configured SMS provider, then opens verify. */
 export function EnterPhoneScreen() {
   const theme = useTheme();
+  const countriesQuery = useGetRegistrationCountriesQuery();
+  const [requestPhoneOtp, requestState] = useRequestPhoneOtpMutation();
   const [country, setCountry] = useState<SignupCountry>(DEFAULT_SIGNUP_COUNTRY);
   const [national, setNational] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  const allowedCountries = useMemo(() => {
+    const enabled = new Set((countriesQuery.data ?? []).map((c) => c.toUpperCase()));
+    if (enabled.size === 0) {
+      return SIGNUP_COUNTRIES;
+    }
+    const filtered = WORLD_COUNTRIES.filter((c) => enabled.has(c.iso2));
+    return filtered.length > 0 ? filtered : SIGNUP_COUNTRIES;
+  }, [countriesQuery.data]);
+
+  const activeCountry = useMemo(() => {
+    const match = allowedCountries.find((c) => c.iso2 === country.iso2);
+    return match ?? allowedCountries[0] ?? DEFAULT_SIGNUP_COUNTRY;
+  }, [allowedCountries, country.iso2]);
 
   const setDigits = useCallback((next: string) => {
     setNational(digitsOnly(next).slice(0, PHONE_MAX_DIGITS));
@@ -43,12 +68,11 @@ export function EnterPhoneScreen() {
     maxLength: PHONE_MAX_DIGITS,
     bottomLeft: '*',
     variant: 'phone',
-    // Pad stays hidden until the user taps the phone field.
     autoFocus: false,
   });
   const pad = useOptionalNumberPad();
 
-  const continueSignup = () => {
+  const continueSignup = async () => {
     const local = digitsOnly(national);
     if (local.length < 7) {
       setError('Enter a valid phone number');
@@ -56,8 +80,18 @@ export function EnterPhoneScreen() {
     }
     setError(null);
     pad?.close();
-    const phone = toE164(country.dialCode, local);
-    router.push({ pathname: '/verify-phone', params: { phone, signup: '1' } });
+    const phone = toE164(activeCountry.dialCode, local);
+    try {
+      await requestPhoneOtp({ phone }).unwrap();
+      // Seed Complete profile Country with the corridor chosen for SMS verification.
+      await preferencesStorage.setSignupCountryIso2(activeCountry.iso2);
+      router.push({
+        pathname: '/verify-phone',
+        params: { phone, signup: '1', countryIso2: activeCountry.iso2 },
+      });
+    } catch (raw) {
+      setError(authErrorMessage(toAppError(raw)));
+    }
   };
 
   const fieldBorder = error
@@ -83,7 +117,7 @@ export function EnterPhoneScreen() {
             setPickerOpen(true);
           }}
           accessibilityRole="button"
-          accessibilityLabel={`Country code ${country.dialCode}`}
+          accessibilityLabel={`Country ${activeCountry.name} ${activeCountry.dialCode}`}
           testID="enter-phone-country"
           style={[
             styles.country,
@@ -93,14 +127,19 @@ export function EnterPhoneScreen() {
               backgroundColor: theme.colors.surface,
               paddingHorizontal: theme.spacing.md,
               minHeight: 56,
-              gap: theme.spacing.xs,
+              gap: theme.spacing.sm,
               borderWidth: StyleSheet.hairlineWidth * 2,
               borderColor: 'transparent',
             },
           ]}
         >
-          <AppText variant="h3">{country.flag}</AppText>
-          <AppText variant="bodyStrong">{country.dialCode}</AppText>
+          <CountryFlag
+            iso2={activeCountry.iso2}
+            emoji={activeCountry.flag}
+            size={32}
+            style={{ backgroundColor: theme.colors.surfaceMuted }}
+          />
+          <AppText variant="bodyStrong">{activeCountry.dialCode}</AppText>
           <Icon icon={ChevronDown} size="sm" color={theme.colors.textMuted} />
         </Pressable>
 
@@ -128,7 +167,7 @@ export function EnterPhoneScreen() {
             tone={national ? 'primary' : 'muted'}
             style={{ fontSize: theme.typography.body.fontSize }}
           >
-            {national ? formatNationalPhone(national, country.iso2) : 'Phone number'}
+            {national ? formatNationalPhone(national, activeCountry.iso2) : 'Phone number'}
           </AppText>
         </Pressable>
       </View>
@@ -136,7 +175,9 @@ export function EnterPhoneScreen() {
       <Button
         label="Continue"
         shape="pill"
-        onPress={continueSignup}
+        onPress={() => void continueSignup()}
+        loading={requestState.isLoading}
+        loadingLabel="Sending code…"
         testID="enter-phone-continue"
       />
 
@@ -147,7 +188,7 @@ export function EnterPhoneScreen() {
         testID="enter-phone-country-sheet"
       >
         <View style={{ gap: theme.spacing.xs, paddingBottom: theme.spacing.lg }}>
-          {SIGNUP_COUNTRIES.map((item) => (
+          {allowedCountries.map((item) => (
             <Pressable
               key={item.iso2}
               onPress={() => {
@@ -164,12 +205,20 @@ export function EnterPhoneScreen() {
                 paddingHorizontal: theme.spacing.sm,
                 borderRadius: theme.radius.md,
                 backgroundColor:
-                  item.iso2 === country.iso2 ? theme.colors.primarySoft : 'transparent',
+                  item.iso2 === activeCountry.iso2 ? theme.colors.primarySoft : 'transparent',
               }}
             >
-              <AppText variant="h3">{item.flag}</AppText>
+              <CountryFlag
+                iso2={item.iso2}
+                emoji={item.flag}
+                size={40}
+                style={{ backgroundColor: theme.colors.surfaceMuted }}
+              />
               <View style={{ flex: 1 }}>
                 <AppText variant="bodyStrong">{item.name}</AppText>
+                <AppText variant="caption" tone="muted">
+                  {item.iso2}
+                </AppText>
               </View>
               <AppText tone="secondary">{item.dialCode}</AppText>
             </Pressable>

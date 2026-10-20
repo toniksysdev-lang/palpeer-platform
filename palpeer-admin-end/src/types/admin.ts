@@ -24,6 +24,8 @@ export type AdminUserSummary = {
 export type KycCaseSummary = {
   caseId: string;
   userId: string;
+  email?: string | null;
+  fullName?: string | null;
   status: string;
   rejectionReason?: string | null;
   createdAt?: string | null;
@@ -59,6 +61,7 @@ export type AuditLogEntry = {
   id: string;
   createdAt: string;
   userRef?: string | null;
+  actorEmail?: string | null;
   action: string;
   entity?: string | null;
   oldValue?: string | null;

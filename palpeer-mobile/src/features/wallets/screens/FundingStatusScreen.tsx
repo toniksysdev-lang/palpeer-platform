@@ -35,8 +35,9 @@ function describe(funding: FundingTransactionResponse): { title: string; message
     case 'PENDING':
       return funding.providerName === 'APAYLO' && funding.currencyCode === 'CAD'
         ? {
-            title: 'Waiting for your payment',
-            message: 'Deposit request initiated. Check your email to accept the e-Transfer.',
+            title: 'Waiting for Instant Interac',
+            message:
+              'Interac, Instant deposit via Interac — check your email or banking app to accept the deposit request.',
           }
         : {
             title: 'Waiting for your payment',

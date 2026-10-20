@@ -36,6 +36,7 @@ export function OnboardingScreen() {
         <View style={[styles.block, { gap: theme.spacing.lg }]}>
           <View style={styles.center}>
             <PalpeerLogo width={logoWidth} />
+
           </View>
 
           <Animated.View entering={FadeIn.duration(theme.motion.slow)} style={styles.center}>

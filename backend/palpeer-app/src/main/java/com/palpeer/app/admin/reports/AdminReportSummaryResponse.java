@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Read-only aggregates for the admin dashboard/reports. No fee or revenue figures.
- * Users/KYC/cards/wallets (and p2p/referrals/bonuses) are all-time; transactions use [from, to].
+ * Read-only aggregates for the admin dashboard/reports.
+ * Users/KYC/cards/wallets (and p2p/referrals/bonuses) are all-time; transactions and fees use [from, to].
  */
 public record AdminReportSummaryResponse(
         Instant generatedAt,
@@ -20,7 +20,8 @@ public record AdminReportSummaryResponse(
         P2P p2p,
         ByStatus cards,
         ByStatus referrals,
-        Bonuses bonuses
+        Bonuses bonuses,
+        Fees fees
 ) {
 
     public record StatusCounts(long total, Map<String, Long> byStatus) {
@@ -52,5 +53,12 @@ public record AdminReportSummaryResponse(
     }
 
     public record StatusCurrencyAmount(String status, String currencyCode, BigDecimal amount) {
+    }
+
+    /** Assessed P2P platform fees in the report window (by fee currency). */
+    public record Fees(long orderCount, List<CurrencyAmount> byCurrency) {
+    }
+
+    public record CurrencyAmount(String currencyCode, long count, BigDecimal amount) {
     }
 }

@@ -24,8 +24,10 @@ docs/
 .env
 .env.*
 !.env.example
+# google-services.json is uploaded for preview/prod builds that need FCM (gitignored).
+GoogleService-Info.plist
 
-# Logs / junk
+# Logs / junk / local artifacts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
@@ -36,4 +38,4 @@ yarn-error.*
 jest-*-out*.txt
 target-state*.png
 *.apk
-palpeer-preview.apk
+palpeer-preview*.apk

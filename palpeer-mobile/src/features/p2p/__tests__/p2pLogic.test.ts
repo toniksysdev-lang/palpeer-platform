@@ -4,10 +4,23 @@ import type { Money } from '@/utils/money';
 
 import { p2pErrorMessage, requestActionErrorMessage } from '../errors';
 import {
+  acceptConfirmMessage,
   activeFilterCount,
+  apiAmountFromSell,
+  apiRateFromAnchor,
+  apiRateFromUnit,
+  applyRateDisplayEdit,
+  displayRateForUnit,
+  displayRateBoundsForUnit,
+  isApiRateWithinBounds,
+  rateBoundsMessage,
   canAccept,
+  canDeleteOrder,
+  canDeleteRequest,
   canManage,
+  canMessageOrder,
   changesFor,
+  createPayloadCurrencies,
   currenciesIn,
   DEFAULT_FILTERS,
   effectiveStatus,
@@ -15,12 +28,50 @@ import {
   filterRequests,
   orderRole,
   p2pRateLine,
+  quoteTotal,
+  receiveAmountForSell,
   sideLabel,
 } from '../logic';
 import { ME, OTHER, typedRequest } from './fixtures';
 
 const NOW = Date.parse('2026-09-28T12:00:00Z');
 const STATUSES: P2PStatus[] = ['OPEN', 'ACCEPTED', 'COMPLETED', 'EXPIRED', 'CANCELLED'];
+
+describe('acceptConfirmMessage', () => {
+  it('describes buying base and debiting the quote wallet on a SELL listing', () => {
+    expect(
+      acceptConfirmMessage({
+        side: 'SELL',
+        formattedBaseAmount: '103.09 CAD',
+        rateLine: '1 CAD = 970 NGN',
+        posterName: 'Ada Lovelace',
+        formattedDebitAmount: '99,997.30 NGN',
+        debitCurrencyCode: 'NGN',
+      }),
+    ).toBe(
+      'You agree to buy 103.09 CAD at rate of 1 CAD = 970 NGN. ' +
+        'This creates an order between you and the Ada Lovelace who posted it. ' +
+        '99,997.30 NGN will be deducted from your NGN wallet.',
+    );
+  });
+
+  it('describes selling base and debiting the base wallet on a BUY listing', () => {
+    expect(
+      acceptConfirmMessage({
+        side: 'BUY',
+        formattedBaseAmount: '100.00 USD',
+        rateLine: '1 USD = 1,500 NGN',
+        posterName: 'Ada',
+        formattedDebitAmount: '100.00 USD',
+        debitCurrencyCode: 'USD',
+      }),
+    ).toContain('You agree to sell 100.00 USD');
+  });
+
+  it('computes quote totals with half-even rounding', () => {
+    expect(quoteTotal('103.09', '970', 2)).toBe('99997.30');
+  });
+});
 
 describe('labels', () => {
   it('uses neutral buy/sell wording for base and quote', () => {
@@ -31,6 +82,99 @@ describe('labels', () => {
   it('shows the backend rate exactly, without trailing zeros', () => {
     expect(p2pRateLine('1500.000000000000', 'USD', 'NGN')).toBe('1 USD = 1,500 NGN');
     expect(p2pRateLine('0.000712345678', 'NGN', 'USD')).toBe('1 NGN = 0.000712 USD');
+  });
+
+  it('prefers CAD as the fixed side when CAD is in the pair', () => {
+    expect(p2pRateLine('0.001', 'NGN', 'CAD')).toBe('1 CAD = 1,000 NGN');
+    expect(p2pRateLine('1000', 'CAD', 'NGN')).toBe('1 CAD = 1,000 NGN');
+    expect(p2pRateLine('0.001', 'NGN', 'CAD', 'NGN')).toBe('1 NGN = 0.001 CAD');
+  });
+});
+
+describe('CAD-anchored either-direction rates', () => {
+  it('keeps CAD fixed at 1 when converting to API quote-per-base', () => {
+    expect(apiRateFromAnchor('CAD', 'NGN', '1000')).toBe('1000');
+    expect(Number(apiRateFromAnchor('NGN', 'CAD', '1000'))).toBeCloseTo(0.001);
+  });
+
+  it('converts either unit-anchored display rate to API quote-per-base', () => {
+    expect(apiRateFromUnit('NGN', 'CAD', 'CAD', '1000')).toBe('0.001');
+    expect(apiRateFromUnit('NGN', 'CAD', 'NGN', '0.001')).toBe('0.001');
+    expect(apiRateFromUnit('CAD', 'NGN', 'NGN', '0.001')).toBe('1000');
+  });
+
+  it('flips configured rate bounds with the selected rate unit', () => {
+    // Stored as CAD per 1 NGN (quote per base) — reciprocals of 980 / 950
+    const min = '0.001020408163';
+    const max = '0.001052631579';
+    expect(rateBoundsMessage(min, max, 'NGN', 'CAD', 'NGN')).toBe(
+      'Rate must be between 0.001020408163 and 0.001052631579 for NGN/CAD',
+    );
+    // Rate unit = CAD → same snap as admin Rate Switch (clean integers, not 980.0000002548)
+    expect(displayRateBoundsForUnit(min, max, 'NGN', 'CAD')).toEqual({
+      minRate: '950',
+      maxRate: '980',
+    });
+    expect(rateBoundsMessage(min, max, 'NGN', 'CAD', 'CAD')).toBe(
+      'Rate must be between 950 and 980 for NGN/CAD',
+    );
+    expect(isApiRateWithinBounds('0.00103', min, max)).toBe(true);
+    expect(isApiRateWithinBounds('0.001', min, max)).toBe(false);
+  });
+
+  it('round-trips rate unit flips without corrupting the typed value', () => {
+    const anchor = { unitCode: 'CAD', value: '980' };
+    // 1/980 shown on the NGN side (12 dp) — correct reciprocal, not 0.001
+    expect(displayRateForUnit(anchor, 'NGN')).toBe('0.001020408163');
+    // Flipping back restores the exact typed CAD rate
+    expect(displayRateForUnit(anchor, 'CAD')).toBe('980');
+    // Adopting the truncated reciprocal as a new typed value loses precision —
+    // the UI must not do this on flip alone (see applyRateDisplayEdit).
+    const truncatedFlip = { unitCode: 'NGN', value: displayRateForUnit(anchor, 'NGN') };
+    // Rate Switch snaps near-whole reciprocals to clean integers (no float noise).
+    expect(displayRateForUnit(truncatedFlip, 'CAD')).toBe('980');
+    // Pad/sync writing the reciprocal back keeps the original CAD anchor
+    expect(applyRateDisplayEdit(anchor, 'NGN', '0.001020408163')).toEqual(anchor);
+    expect(applyRateDisplayEdit(anchor, 'CAD', '0.001020408163')).toEqual(anchor);
+    expect(displayRateForUnit(applyRateDisplayEdit(anchor, 'NGN', '0.001020408163'), 'CAD')).toBe(
+      '980',
+    );
+    // A real edit on the NGN side becomes the new anchor
+    expect(applyRateDisplayEdit(anchor, 'NGN', '0.001')).toEqual({
+      unitCode: 'NGN',
+      value: '0.001',
+    });
+  });
+
+  it('computes receive amounts for both directions', () => {
+    // Default unit = sell: 1 NGN = 0.001 CAD → receive = amount × rate
+    expect(receiveAmountForSell('100000', 'NGN', 'CAD', '0.001')).toBe('100.00');
+    // 1 CAD = 1050 NGN (unit = sell CAD)
+    expect(receiveAmountForSell('100', 'CAD', 'NGN', '1050')).toBe('105000.00');
+    // CAD-anchored while selling NGN: 1 CAD = 1000 NGN → receive = amount ÷ rate
+    expect(receiveAmountForSell('100000', 'NGN', 'CAD', '1000', 'CAD')).toBe('100.00');
+    expect(receiveAmountForSell('97000', 'NGN', 'CAD', '970', 'CAD', 2)).toBe('100.00');
+    expect(receiveAmountForSell('100', 'CAD', 'NGN', '970', 'CAD', 2)).toBe('97000.00');
+  });
+
+  it('stores the sell→receive pair as posted (does not force CAD as base)', () => {
+    expect(createPayloadCurrencies('SELL', 'CAD', 'NGN')).toEqual({
+      baseCurrencyCode: 'CAD',
+      quoteCurrencyCode: 'NGN',
+    });
+    expect(createPayloadCurrencies('SELL', 'NGN', 'CAD')).toEqual({
+      baseCurrencyCode: 'NGN',
+      quoteCurrencyCode: 'CAD',
+    });
+    expect(createPayloadCurrencies('BUY', 'NGN', 'CAD')).toEqual({
+      baseCurrencyCode: 'CAD',
+      quoteCurrencyCode: 'NGN',
+    });
+    expect(apiAmountFromSell('SELL', '100', 'CAD', 'NGN', '1050')).toBe('100');
+    // Selling NGN with CAD-anchored rate 1000 NGN per CAD
+    expect(apiAmountFromSell('SELL', '100000', 'NGN', 'CAD', '1000', 'CAD')).toBe('100000');
+    // BUY: acquire CAD, pay with NGN — amount converted via receive preview
+    expect(apiAmountFromSell('BUY', '100000', 'NGN', 'CAD', '1000', 'CAD')).toBe('100.00');
   });
 });
 
@@ -68,6 +212,56 @@ describe('state rules', () => {
 
   it('cannot accept without a signed-in user', () => {
     expect(canAccept(typedRequest(), null, NOW)).toBe(false);
+  });
+
+  it('lets the owner delete cancelled or expired requests from history', () => {
+    expect(canDeleteRequest(typedRequest({ userId: ME, status: 'CANCELLED' }), ME, NOW)).toBe(true);
+    expect(
+      canDeleteRequest(
+        typedRequest({ userId: ME, status: 'OPEN', expiresAt: '2026-09-28T11:00:00Z' }),
+        ME,
+        NOW,
+      ),
+    ).toBe(true);
+    expect(canDeleteRequest(typedRequest({ userId: ME, status: 'OPEN' }), ME, NOW)).toBe(false);
+    expect(canDeleteRequest(typedRequest({ userId: ME, status: 'CANCELLED' }), OTHER, NOW)).toBe(
+      false,
+    );
+  });
+
+  it('lets either party delete a cancelled order from their history', () => {
+    const cancelled = {
+      id: 'o',
+      requestId: 'r',
+      requesterId: OTHER,
+      acceptorId: ME,
+      amount: '1' as Money,
+      rate: '1' as Money,
+      status: 'CANCELLED' as const,
+      createdAt: '',
+    };
+    expect(canDeleteOrder(cancelled, ME)).toBe(true);
+    expect(canDeleteOrder(cancelled, OTHER)).toBe(true);
+    expect(canDeleteOrder({ ...cancelled, status: 'COMPLETED' }, ME)).toBe(false);
+    expect(canDeleteOrder(cancelled, 'u-3')).toBe(false);
+  });
+
+  it('allows messaging until the order is completed', () => {
+    const order = {
+      id: 'o',
+      requestId: 'r',
+      requesterId: OTHER,
+      acceptorId: ME,
+      amount: '1' as Money,
+      rate: '1' as Money,
+      status: 'ACCEPTED' as const,
+      createdAt: '',
+    };
+    expect(canMessageOrder(order, ME)).toBe(true);
+    expect(canMessageOrder(order, OTHER)).toBe(true);
+    expect(canMessageOrder({ ...order, status: 'COMPLETED' }, ME)).toBe(false);
+    expect(canMessageOrder({ ...order, status: 'CANCELLED' }, ME)).toBe(true);
+    expect(canMessageOrder(order, 'u-3')).toBe(false);
   });
 
   it('works out the caller role on an order', () => {
@@ -141,6 +335,7 @@ describe('create and edit payloads', () => {
   it('turns an expiry preset into a future instant, or none', () => {
     expect(expiresAtFor('NONE', NOW)).toBeUndefined();
     expect(expiresAtFor('1H', NOW)).toBe('2026-09-28T13:00:00.000Z');
+    expect(expiresAtFor('3H', NOW)).toBe('2026-09-28T15:00:00.000Z');
     expect(expiresAtFor('7D', NOW)).toBe('2026-10-05T12:00:00.000Z');
   });
 

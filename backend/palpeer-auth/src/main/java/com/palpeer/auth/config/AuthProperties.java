@@ -20,11 +20,12 @@ public class AuthProperties {
     private final Otp otp = new Otp();
     private final Google google = new Google();
     /**
-     * Public API origin used in emailed links (e.g. {@code https://api.example.com} or
-     * {@code http://localhost:8085}). No trailing slash.
+     * Public origin used in emailed security links (e.g. {@code https://api.example.com} or
+     * {@code http://localhost:8085}). Links use {@code /secure/...}, not {@code /api/v1/...}.
+     * No trailing slash.
      */
     private String publicBaseUrl = "http://localhost:8085";
-    /** How long a new-device suspend link remains usable. */
+    /** How long a new-device account-lock link remains usable. */
     private Duration suspendTokenTtl = Duration.ofHours(24);
 
     @Getter

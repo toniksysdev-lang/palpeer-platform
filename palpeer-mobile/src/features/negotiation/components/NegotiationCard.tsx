@@ -5,7 +5,7 @@ import { AppText } from '@/components/ui/AppText';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
-import { p2pRateLine } from '@/features/p2p/logic';
+import { FlippableRateLine } from '@/features/p2p/components/FlippableRateLine';
 import { useMoneyFormat } from '@/features/wallets/useMoneyFormat';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useGetRequestQuery } from '@/services/api/p2pApi';
@@ -48,10 +48,17 @@ export function NegotiationCard({
             {role} · {summary}
           </AppText>
           {offer && base && quote ? (
-            <AppText tone="secondary">
-              {offerAuthor(offer, userId)} {format(offer.amount, base)} at{' '}
-              {p2pRateLine(offer.rate, base, quote)}
-            </AppText>
+            <View style={{ gap: theme.spacing.xxs }}>
+              <AppText tone="secondary">
+                {offerAuthor(offer, userId)} {format(offer.amount, base)}
+              </AppText>
+              <FlippableRateLine
+                rate={offer.rate}
+                base={base}
+                quote={quote}
+                testID={`negotiation-rate-${negotiation.id}`}
+              />
+            </View>
           ) : null}
         </View>
         <StatusBadge status={negotiation.status} />

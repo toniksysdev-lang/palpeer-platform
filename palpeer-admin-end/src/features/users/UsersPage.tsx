@@ -19,6 +19,18 @@ import type { AdminUserSummary } from '@/types/admin';
 import { ApiClientError } from '@/types/api';
 import { USER_STATUSES } from '@/types/users';
 
+function localInputToIso(value: string, endOfDay = false): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  if (endOfDay) {
+    date.setHours(23, 59, 59, 999);
+  } else {
+    date.setHours(0, 0, 0, 0);
+  }
+  return date.toISOString();
+}
+
 export function UsersPage() {
   const { can } = useAuth();
   const navigate = useNavigate();
@@ -28,19 +40,25 @@ export function UsersPage() {
   const sort = searchParams.get('sort') ?? 'createdAt,desc';
   const email = searchParams.get('email') ?? '';
   const status = searchParams.get('status') ?? '';
+  const from = searchParams.get('from') ?? '';
+  const to = searchParams.get('to') ?? '';
 
   const [emailDraft, setEmailDraft] = useState(email);
   const [statusDraft, setStatusDraft] = useState(status);
+  const [fromDraft, setFromDraft] = useState(from);
+  const [toDraft, setToDraft] = useState(to);
 
   useEffect(() => {
     setEmailDraft(email);
     setStatusDraft(status);
-  }, [email, status]);
+    setFromDraft(from);
+    setToDraft(to);
+  }, [email, status, from, to]);
 
   const allowed = can('users:read');
 
   const query = useQuery({
-    queryKey: ['admin-users', page, size, sort, email, status, appConfig.useMockApi],
+    queryKey: ['admin-users', page, size, sort, email, status, from, to, appConfig.useMockApi],
     enabled: allowed,
     queryFn: async () => {
       const params = {
@@ -49,6 +67,8 @@ export function UsersPage() {
         sort,
         email: email || undefined,
         status: status || undefined,
+        from: localInputToIso(from),
+        to: localInputToIso(to, true),
       };
       if (appConfig.useMockApi) {
         await new Promise((r) => setTimeout(r, 250));
@@ -65,6 +85,10 @@ export function UsersPage() {
     else next.delete('email');
     if (statusDraft) next.set('status', statusDraft);
     else next.delete('status');
+    if (fromDraft) next.set('from', fromDraft);
+    else next.delete('from');
+    if (toDraft) next.set('to', toDraft);
+    else next.delete('to');
     next.set('page', '0');
     setSearchParams(next);
   }
@@ -73,6 +97,8 @@ export function UsersPage() {
     const next = new URLSearchParams(searchParams);
     next.delete('email');
     next.delete('status');
+    next.delete('from');
+    next.delete('to');
     next.set('page', '0');
     setSearchParams(next);
   }
@@ -83,10 +109,7 @@ export function UsersPage() {
         id: 'email',
         header: 'Email',
         cell: (row) => (
-          <div className="min-w-[12rem]">
-            <p className="font-medium text-text-primary">{row.email}</p>
-            <p className="font-mono text-[11px] text-text-muted">{row.id}</p>
-          </div>
+          <span className="font-medium text-text-primary">{row.email || '—'}</span>
         ),
       },
       {
@@ -157,6 +180,8 @@ export function UsersPage() {
         ? 'Failed to load users.'
         : null;
 
+  const hasFilters = Boolean(email || status || from || to);
+
   return (
     <div className="space-y-5">
       <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
@@ -173,10 +198,7 @@ export function UsersPage() {
           </div>
         </div>
 
-        <form
-          className="mt-4 grid items-end gap-3 md:grid-cols-[1fr_12rem_auto]"
-          onSubmit={applyFilters}
-        >
+        <form className="mt-4 grid items-end gap-3 md:grid-cols-2 xl:grid-cols-3" onSubmit={applyFilters}>
           <Input
             label="Email contains"
             value={emailDraft}
@@ -195,20 +217,18 @@ export function UsersPage() {
               </option>
             ))}
           </Select>
-          <div className="flex gap-2">
-            <Button type="submit">
-              <Search className="h-3.5 w-3.5" aria-hidden />
-              Apply
-            </Button>
-            {email || status ? (
-              <Button type="button" variant="secondary" onClick={clearFilters}>
-                Clear
-              </Button>
-            ) : null}
-          </div>
-        </form>
-
-        <div className="mt-3 grid gap-3 md:grid-cols-[12rem_12rem]">
+          <Input
+            label="Date registered from"
+            type="date"
+            value={fromDraft}
+            onChange={(event) => setFromDraft(event.target.value)}
+          />
+          <Input
+            label="Date registered to"
+            type="date"
+            value={toDraft}
+            onChange={(event) => setToDraft(event.target.value)}
+          />
           <Select
             label="Sort"
             value={sort}
@@ -238,7 +258,18 @@ export function UsersPage() {
             <option value="20">20</option>
             <option value="50">50</option>
           </Select>
-        </div>
+          <div className="flex gap-2 md:col-span-2 xl:col-span-3">
+            <Button type="submit">
+              <Search className="h-3.5 w-3.5" aria-hidden />
+              Apply
+            </Button>
+            {hasFilters ? (
+              <Button type="button" variant="secondary" onClick={clearFilters}>
+                Clear
+              </Button>
+            ) : null}
+          </div>
+        </form>
       </section>
 
       <DataTable

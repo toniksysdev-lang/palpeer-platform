@@ -14,11 +14,12 @@ import {
   MessageSquare,
   Percent,
   Scale,
-  Settings,
   Shield,
   ShieldCheck,
+  Settings,
   Sparkles,
   UserCog,
+  UserRound,
   Users,
   Wallet,
   type LucideIcon,
@@ -170,18 +171,50 @@ export const primaryNav: NavItem[] = [
     icon: KeyRound,
     permission: 'admin:manage',
   },
-  { id: 'settings', label: 'Settings', path: '/admin/settings', icon: Settings },
+  {
+    id: 'settings',
+    label: 'Settings',
+    path: '/admin/settings',
+    icon: Settings,
+  },
+  {
+    id: 'admin-profile',
+    label: 'Admin user profile',
+    path: '/admin/profile',
+    icon: UserRound,
+  },
+  {
+    id: 'security',
+    label: 'Security',
+    path: '/admin/profile#security',
+    icon: Shield,
+  },
 ];
+
+/** Path without hash fragment (for matching). */
+function navPath(path: string): string {
+  const hashAt = path.indexOf('#');
+  return hashAt >= 0 ? path.slice(0, hashAt) : path;
+}
 
 /** Flatten primary nav including nested children for path matching. */
 export function flattenNav(items: NavItem[] = primaryNav): NavItem[] {
   return items.flatMap((item) => [item, ...(item.children ? flattenNav(item.children) : [])]);
 }
 
-export function findNavItem(pathname: string): NavItem | undefined {
+export function findNavItem(pathname: string, hash = ''): NavItem | undefined {
+  const hashId = hash.replace(/^#/, '');
+  if (pathname === '/admin/profile' || pathname.startsWith('/admin/profile/')) {
+    if (hashId === 'security') {
+      return flattenNav().find((item) => item.id === 'security');
+    }
+    return flattenNav().find((item) => item.id === 'admin-profile');
+  }
+
   // Prefer the longest matching path so nested routes win over parents.
-  const matches = flattenNav().filter(
-    (item) => pathname === item.path || pathname.startsWith(`${item.path}/`),
-  );
-  return matches.sort((a, b) => b.path.length - a.path.length)[0];
+  const matches = flattenNav().filter((item) => {
+    const base = navPath(item.path);
+    return pathname === base || pathname.startsWith(`${base}/`);
+  });
+  return matches.sort((a, b) => navPath(b.path).length - navPath(a.path).length)[0];
 }

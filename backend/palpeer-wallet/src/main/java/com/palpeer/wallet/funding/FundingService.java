@@ -21,6 +21,7 @@ import com.palpeer.wallet.provider.PaymentRailRouter;
 import com.palpeer.wallet.provider.apaylo.ApayloPaymentRail;
 import com.palpeer.wallet.provider.apaylo.ApayloProperties;
 import com.palpeer.wallet.repository.WalletRepository;
+import com.palpeer.wallet.service.FundingUnverifiedLimitService;
 import java.math.BigDecimal;
 import java.util.EnumSet;
 import java.util.Set;
@@ -57,6 +58,7 @@ public class FundingService {
     private final PaymentRailRouter paymentRailRouter;
     private final ApayloProperties apayloProperties;
     private final ApplicationEventPublisher eventPublisher;
+    private final FundingUnverifiedLimitService fundingUnverifiedLimitService;
 
     @Transactional
     public FundingTransactionResponse initiate(UUID userId, String idempotencyKey, CreateFundingRequest request) {
@@ -262,6 +264,9 @@ public class FundingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        fundingUnverifiedLimitService.assertWithinUnverifiedLimit(
+                userId, wallet.getCurrencyCode(), request.amount());
 
         FundingTransaction tx = new FundingTransaction();
         tx.setUserId(userId);

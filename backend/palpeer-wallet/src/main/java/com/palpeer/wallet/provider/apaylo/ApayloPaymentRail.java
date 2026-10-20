@@ -12,7 +12,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 /**
- * Apaylo CAD rails — Interac e-Transfer for funding/payout and EFT for bank withdrawals.
+ * Apaylo CAD rails — Instant Interac deposit for funding; Interac send / EFT for withdrawals.
+ * Funding uses Request Money ({@code RequestInteracEtransferEmail}) only — no other CAD fund methods.
  * Docs: https://docs.apaylo.com/
  */
 @Slf4j
@@ -68,11 +69,11 @@ public class ApayloPaymentRail implements PaymentRailProvider {
                     + " will be credited to your wallet. Reference="
                     + reference;
         } else {
-            instructions = "Pay via Interac e-Transfer Request Money. Reference="
+            instructions = "Interac, Instant deposit via Interac. Reference="
                     + reference
                     + "; amount=CAD "
                     + request.amount()
-                    + "; follow Apaylo/Interac instructions in your email if sent.";
+                    + "; accept the Interac request in your email or banking app to complete the deposit.";
         }
         // false → FundingService CREDITS the CAD wallet immediately (sandbox demo settle).
         return new FundingInitiation(reference, instructions, !settleNow);

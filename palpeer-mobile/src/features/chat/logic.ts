@@ -12,9 +12,9 @@ export type ChatItem =
   | { kind: 'outbox'; key: string; item: OutboxMessage };
 
 /**
- * Newest first, for an inverted list: unconfirmed messages on top, then history. An outbox entry
- * whose `clientMessageId` already reached the history (e.g. via STOMP before the REST reply) is
- * hidden so it never shows twice.
+ * Oldest first for a normal (non-inverted) list: history chronologically, then unconfirmed
+ * outbox messages at the bottom. An outbox entry whose `clientMessageId` already reached the
+ * history (e.g. via STOMP before the REST reply) is hidden so it never shows twice.
  */
 export function buildChatItems(
   pages: readonly { content: readonly ChatMessageResponse[] }[] | undefined,
@@ -31,11 +31,12 @@ export function buildChatItems(
     if (message.clientMessageId) seenClientIds.add(message.clientMessageId);
     messages.push({ kind: 'message', key: message.id, message, mine: message.senderId === userId });
   }
+  // API pages are newest-first; reverse so the thread reads top → bottom.
+  messages.reverse();
   const pending: ChatItem[] = outbox
     .filter((item) => !seenClientIds.has(item.clientMessageId))
-    .map((item) => ({ kind: 'outbox' as const, key: `outbox-${item.clientMessageId}`, item }))
-    .reverse();
-  return [...pending, ...messages];
+    .map((item) => ({ kind: 'outbox' as const, key: `outbox-${item.clientMessageId}`, item }));
+  return [...messages, ...pending];
 }
 
 type Pages = readonly { content: readonly ChatMessageResponse[] }[] | undefined;
@@ -119,17 +120,32 @@ export function negotiationPairLabel(base?: string | null, quote?: string | null
   return `${base}/${quote} negotiation`;
 }
 
-/** Prefill chips for negotiation chat (sent as-is; amount composer is separate). */
+/** Prefill chips for negotiation chat (sent as-is; amount/rate composer is separate). */
 export const NEGOTIATION_PREFILLS: readonly string[] = [
-  "Can you meet at this amount?",
+  'Can you meet at this amount and rate?',
   "I'm ready to accept when you are.",
-  'Please send a counter on amount only.',
+  'Please send a counter on amount or rate.',
   'Thanks — looking forward to closing this.',
 ];
 
 /** Message body when the user sends a currency amount in a negotiation chat. */
 export function negotiationAmountMessage(formattedAmount: string): string {
   return `Proposed amount: ${formattedAmount}`;
+}
+
+/** Message body when the user proposes both amount and rate. */
+export function negotiationTermsMessage(formattedAmount: string, rateLine: string): string {
+  return `My offer: ${formattedAmount} at ${rateLine}`;
+}
+
+/** Message when accepting only one side of the current offer. */
+export function negotiationAcceptFieldMessage(
+  field: 'amount' | 'rate',
+  formattedValue: string,
+): string {
+  return field === 'amount'
+    ? `I accept the amount (${formattedValue}). Sending a counter with my rate.`
+    : `I accept the rate (${formattedValue}). Sending a counter with my amount.`;
 }
 
 /** VERIFIED codes from `ChatService`. */

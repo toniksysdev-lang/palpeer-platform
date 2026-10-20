@@ -66,8 +66,9 @@ export function PinPolicySettings() {
           <h3 className="text-base font-semibold text-text-primary">PIN entry lockout</h3>
         </div>
         <p className="mt-1 text-sm text-text-secondary">
-          After this many wrong PIN entries, PIN entry is disabled for the number of hours below.
-          Correct PIN entry resets the counter.
+          After this many wrong transaction-PIN entries, PIN entry is disabled for the hours below.
+          Forgot-PIN security answers use the same limits on a separate counter, so a wrong answer
+          does not burn a PIN attempt. A correct PIN or a successful PIN reset clears that channel.
         </p>
       </div>
 

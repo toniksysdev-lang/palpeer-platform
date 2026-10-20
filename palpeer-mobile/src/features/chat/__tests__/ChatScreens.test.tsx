@@ -43,6 +43,7 @@ const ROOM: ChatRoomResponse = {
   createdAt: '2026-09-29T09:00:00Z',
   participantALastReadAt: null,
   participantBLastReadAt: null,
+  unreadCount: 0,
 };
 
 const msg = (id: string, overrides: Partial<ChatMessageResponse> = {}): ChatMessageResponse => ({
@@ -111,7 +112,7 @@ describe('ChatRoomScreen', () => {
     expect(screen.getByTestId('chat-message-m-2')).toHaveTextContent(/Sounds good/);
     expect(screen.getByText('USD/NGN order')).toBeTruthy();
     const order = screen.getAllByTestId(/^chat-message-m-\d+$/).map((node) => node.props.testID);
-    expect(order).toEqual(['chat-message-m-2', 'chat-message-m-1']);
+    expect(order).toEqual(['chat-message-m-1', 'chat-message-m-2']);
     expect(realtime.rooms.has('room-1')).toBe(true);
     expect(screen.queryByTestId('chat-connection')).toBeNull();
   });
@@ -158,6 +159,26 @@ describe('ChatRoomScreen', () => {
     await realtime.receive(sent as unknown as ChatMessageResponse);
     expect(screen.getAllByTestId('chat-message-m-mine')).toHaveLength(1);
     expect(screen.queryAllByTestId(/^chat-outbox-/)).toHaveLength(0);
+  });
+
+  it('disables the composer when the linked P2P order is completed', async () => {
+    const { calls } = installFetchMock({
+      ...baseRoutes,
+      'GET /p2p/me/orders': ok([orderSummary({ status: 'COMPLETED' })]),
+      'GET /chat/rooms/room-1/messages': page([msg('m-1')]),
+      'POST /chat/rooms/room-1/messages': created(
+        msg('m-mine', { senderId: ME, content: 'should not send' }),
+      ),
+    });
+    await renderRoom();
+    await screen.findByTestId('chat-message-m-1');
+
+    expect(screen.getByTestId('chat-messaging-closed')).toHaveTextContent(
+      'Messaging is closed for this completed order.',
+    );
+    expect(screen.queryByTestId('chat-input')).toBeNull();
+    expect(screen.queryByTestId('chat-send')).toBeNull();
+    expect(callsTo(calls, 'POST', '/chat/rooms/room-1/messages')).toHaveLength(0);
   });
 
   it('keeps a failed message with its text and retries it with the same client id', async () => {
@@ -231,7 +252,7 @@ describe('ChatRoomScreen', () => {
     });
     await renderRoom();
     await screen.findByTestId('chat-message-m-2');
-    await fireEvent(screen.getByTestId('chat-messages'), 'onEndReached');
+    await fireEvent.press(await screen.findByTestId('chat-load-older'));
     expect(await screen.findByTestId('chat-message-m-1')).toBeTruthy();
     expect(callsTo(calls, 'GET', '/chat/rooms/room-1/messages').map((call) => call.query)).toEqual([
       '?page=0&size=50',
@@ -409,6 +430,7 @@ describe('ChatRoomsScreen', () => {
     installFetchMock({
       'GET /currencies': CURRENCIES,
       'GET /chat/rooms': ok([ROOM]),
+      'GET /chat/unread-count': ok({ count: 0 }),
       'GET /p2p/me/orders': ok([orderSummary()]),
     });
     await renderWithProviders(<ChatRoomsScreen />, signedIn);
@@ -421,10 +443,22 @@ describe('ChatRoomsScreen', () => {
     });
   });
 
+  it('shows an unread badge on rooms with new messages', async () => {
+    installFetchMock({
+      'GET /currencies': CURRENCIES,
+      'GET /chat/rooms': ok([{ ...ROOM, unreadCount: 3 }]),
+      'GET /chat/unread-count': ok({ count: 3 }),
+      'GET /p2p/me/orders': ok([orderSummary()]),
+    });
+    await renderWithProviders(<ChatRoomsScreen />, signedIn);
+    expect(await screen.findByTestId('chat-room-unread-room-1')).toHaveTextContent('3');
+  });
+
   it('explains how to start a conversation', async () => {
     installFetchMock({
       'GET /currencies': CURRENCIES,
       'GET /chat/rooms': ok([]),
+      'GET /chat/unread-count': ok({ count: 0 }),
       'GET /p2p/me/orders': ok([]),
     });
     await renderWithProviders(<ChatRoomsScreen />, signedIn);

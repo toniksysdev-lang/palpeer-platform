@@ -52,4 +52,16 @@ public interface FundingTransactionRepository
             group by f.providerName, f.currencyCode
             """)
     List<Object[]> sumAmountByProviderAndCurrency(@Param("status") MoneyMovementStatus status);
+
+    @Query("""
+            select coalesce(sum(f.amount), 0)
+            from FundingTransaction f
+            where f.userId = :userId
+              and upper(f.currencyCode) = upper(:currencyCode)
+              and f.status = :status
+            """)
+    java.math.BigDecimal sumAmountByUserCurrencyAndStatus(
+            @Param("userId") UUID userId,
+            @Param("currencyCode") String currencyCode,
+            @Param("status") MoneyMovementStatus status);
 }

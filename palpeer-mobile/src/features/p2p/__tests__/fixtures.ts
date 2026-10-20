@@ -11,9 +11,35 @@ export const CURRENCIES = ok([
   { id: 'c-usd', code: 'USD', symbol: '$', precision: 2 },
 ]);
 
+/** Wallets used by Post Exchange Request currency dropdowns. */
+export const WALLETS = ok([
+  {
+    id: 'w-cad',
+    userId: ME,
+    currencyCode: 'CAD',
+    availableBalance: '1000.00',
+    pendingBalance: '0.00',
+  },
+  {
+    id: 'w-ngn',
+    userId: ME,
+    currencyCode: 'NGN',
+    availableBalance: '500000.00',
+    pendingBalance: '0.00',
+  },
+  {
+    id: 'w-usd',
+    userId: ME,
+    currencyCode: 'USD',
+    availableBalance: '250.00',
+    pendingBalance: '0.00',
+  },
+]);
+
 export const p2pRequest = (overrides: Partial<Record<keyof P2PRequestResponse, unknown>> = {}) => ({
   id: 'r-1',
   userId: OTHER,
+  posterDisplayName: 'Ada Lovelace',
   side: 'SELL',
   baseCurrencyCode: 'USD',
   quoteCurrencyCode: 'NGN',

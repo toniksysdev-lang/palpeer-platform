@@ -48,19 +48,38 @@ beforeEach(async () => {
 });
 
 describe('MakeOfferScreen', () => {
-  it('asks for the best offer, starting from the posted terms, and posts exact decimals', async () => {
+  it('asks for amount and rate, then opens negotiation chat with a prefilled offer', async () => {
     setSearchParams({ requestId: 'r-1' });
     const { calls } = installFetchMock({
       'GET /currencies': CURRENCIES,
       'GET /p2p/requests/r-1': ok(p2pRequest()),
       'POST /negotiations/offers': created(negotiation({ id: 'n-new' })),
+      'POST /chat/rooms': created({
+        id: 'room-neg-1',
+        p2pOrderId: null,
+        negotiationId: 'n-new',
+        participantAId: ME,
+        participantBId: OTHER,
+        createdAt: '2026-09-29T10:00:00Z',
+        participantALastReadAt: null,
+        participantBLastReadAt: null,
+        unreadCount: 0,
+      }),
+      'POST /chat/rooms/room-neg-1/messages': created({
+        id: 'm-offer',
+        roomId: 'room-neg-1',
+        senderId: ME,
+        content: 'My offer',
+        clientMessageId: 'c-1',
+        createdAt: '2026-09-29T10:00:01Z',
+      }),
     });
     await renderWithProviders(<MakeOfferScreen />, signedIn);
 
     expect(await screen.findByText('What is your best offer?')).toBeTruthy();
-    expect(screen.getByTestId('offer-request-rate')).toHaveTextContent('1 USD = 1,500 NGN');
+    expect(screen.getByTestId('offer-request-rate')).toHaveTextContent(/1 USD = 1,500 NGN/);
     expect(screen.getByTestId('offer-amount')).toHaveTextContent(/100/);
-    expect(screen.getByTestId('offer-rate')).toHaveTextContent(/1,500/);
+    expect(screen.getByTestId('offer-rate')).toHaveTextContent(/1,?500/);
 
     await fireEvent.press(screen.getByTestId('offer-amount'));
     for (let i = 0; i < 10; i += 1) {
@@ -71,13 +90,15 @@ describe('MakeOfferScreen', () => {
 
     await waitFor(() =>
       expect(router.replace).toHaveBeenCalledWith({
-        pathname: '/negotiation/[id]',
-        params: { id: 'n-new' },
+        pathname: '/chat/[roomId]',
+        params: { roomId: 'room-neg-1' },
       }),
     );
     expect(callsTo(calls, 'POST', '/negotiations/offers')[0]?.rawBody).toBe(
       '{"p2pRequestId":"r-1","amount":90.5,"rate":1500}',
     );
+    expect(callsTo(calls, 'POST', '/chat/rooms')).toHaveLength(1);
+    expect(callsTo(calls, 'POST', '/chat/rooms/room-neg-1/messages')).toHaveLength(1);
   });
 
   it('validates amounts above zero before sending', async () => {
@@ -97,13 +118,24 @@ describe('MakeOfferScreen', () => {
     expect(callsTo(calls, 'POST', '/negotiations/offers')).toHaveLength(0);
   });
 
-  it('409 NEGOTIATION_EXISTS links to the offer already open', async () => {
+  it('409 NEGOTIATION_EXISTS links to the negotiation chat already open', async () => {
     setSearchParams({ requestId: 'r-1' });
     const { calls } = installFetchMock({
       'GET /currencies': CURRENCIES,
       'GET /p2p/requests/r-1': ok(p2pRequest()),
       'POST /negotiations/offers': fail(409, 'NEGOTIATION_EXISTS'),
       'GET /negotiations/me': ok([negotiation({ id: 'n-open' })]),
+      'POST /chat/rooms': created({
+        id: 'room-open',
+        p2pOrderId: null,
+        negotiationId: 'n-open',
+        participantAId: ME,
+        participantBId: OTHER,
+        createdAt: '2026-09-29T10:00:00Z',
+        participantALastReadAt: null,
+        participantBLastReadAt: null,
+        unreadCount: 0,
+      }),
     });
     await renderWithProviders(<MakeOfferScreen />, signedIn);
     await fireEvent.press(await screen.findByTestId('offer-submit'));
@@ -112,10 +144,12 @@ describe('MakeOfferScreen', () => {
       'You already have an open offer on this request.',
     );
     await fireEvent.press(await screen.findByTestId('offer-view-existing'));
-    expect(router.replace).toHaveBeenCalledWith({
-      pathname: '/negotiation/[id]',
-      params: { id: 'n-open' },
-    });
+    await waitFor(() =>
+      expect(router.replace).toHaveBeenCalledWith({
+        pathname: '/chat/[roomId]',
+        params: { roomId: 'room-open' },
+      }),
+    );
     expect(callsTo(calls, 'GET', '/negotiations/me')[0]?.query).toBe('?p2pRequestId=r-1');
   });
 

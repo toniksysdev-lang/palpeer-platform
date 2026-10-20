@@ -33,7 +33,7 @@ describe('LoginScreen', () => {
     installFetchMock({});
     await renderWithProviders(<LoginScreen />);
 
-    expect(screen.getByLabelText('PALPEER. Your Rate Your Way')).toBeTruthy();
+    expect(screen.getByLabelText('PALPEER')).toBeTruthy();
     expect(screen.getByText('Login to your account')).toBeTruthy();
     expect(screen.getByText('Forgot Password?')).toBeTruthy();
     expect(screen.getByText('Login')).toBeTruthy();

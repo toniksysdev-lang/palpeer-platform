@@ -26,6 +26,7 @@ import { ReferralDetailPage } from '@/features/referrals/ReferralDetailPage';
 import { ReferralsPage } from '@/features/referrals/ReferralsPage';
 import { ReportsPage } from '@/features/reports/ReportsPage';
 import { RolesPage } from '@/features/roles/RolesPage';
+import { AdminProfilePage } from '@/features/settings/AdminProfilePage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { TransactionDetailPage } from '@/features/transactions/TransactionDetailPage';
 import { TransactionsPage } from '@/features/transactions/TransactionsPage';
@@ -291,6 +292,7 @@ export function AppRouter() {
           }
         />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="profile" element={<AdminProfilePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
     </Routes>

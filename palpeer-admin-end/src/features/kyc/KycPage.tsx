@@ -84,16 +84,26 @@ export function KycPage() {
         ),
       },
       {
+        id: 'fullName',
+        header: 'Full name',
+        cell: (row) => (
+          <span className="text-sm text-text-primary">{row.fullName?.trim() || '—'}</span>
+        ),
+      },
+      {
         id: 'userId',
         header: 'User',
         cell: (row) => (
-          <Link
-            to={`/admin/users/${row.userId}`}
-            className="font-mono text-xs text-primary hover:underline"
-            onClick={(event) => event.stopPropagation()}
-          >
-            {row.userId}
-          </Link>
+          <div className="min-w-[12rem]">
+            <Link
+              to={`/admin/users/${row.userId}`}
+              className="text-sm text-primary hover:underline"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {row.email || '—'}
+            </Link>
+            <p className="font-mono text-[11px] text-text-muted">{row.userId}</p>
+          </div>
         ),
       },
       {

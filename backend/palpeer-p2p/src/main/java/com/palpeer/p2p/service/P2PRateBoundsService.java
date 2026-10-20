@@ -30,6 +30,16 @@ public class P2PRateBoundsService {
                 .toList();
     }
 
+    /** Configured bounds for a pair, or null when none are set. */
+    @Transactional(readOnly = true)
+    public P2PRateBoundsResponse findByPair(String baseCurrencyCode, String quoteCurrencyCode) {
+        return p2PRateBoundsRepository
+                .findByBaseCurrencyCodeIgnoreCaseAndQuoteCurrencyCodeIgnoreCase(
+                        normalize(baseCurrencyCode), normalize(quoteCurrencyCode))
+                .map(this::toResponse)
+                .orElse(null);
+    }
+
     @Transactional
     public P2PRateBoundsResponse upsert(UpsertP2PRateBoundsRequest request) {
         String base = normalize(request.baseCurrencyCode());

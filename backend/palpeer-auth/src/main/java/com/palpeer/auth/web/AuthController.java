@@ -12,13 +12,13 @@ import com.palpeer.auth.web.dto.OtpResendResponse;
 import com.palpeer.auth.web.dto.OtpVerifyRequest;
 import com.palpeer.auth.web.dto.PasswordResetConfirmRequest;
 import com.palpeer.auth.web.dto.PasswordResetRequestDto;
+import com.palpeer.auth.web.dto.PhoneOtpRequest;
+import com.palpeer.auth.web.dto.PhoneOtpVerifyRequest;
 import com.palpeer.auth.web.dto.RefreshTokenRequest;
 import com.palpeer.auth.web.dto.RegisterRequest;
 import com.palpeer.auth.web.dto.RegisterResponse;
 import com.palpeer.auth.web.dto.SessionResponse;
-import com.palpeer.auth.web.dto.SuspendAccountRequest;
 import com.palpeer.common.api.ApiResponse;
-import com.palpeer.common.exception.BusinessException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,7 +38,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.util.HtmlUtils;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -68,63 +66,18 @@ public class AuthController {
         return ApiResponse.ok(authService.loginWithGoogle(request.idToken(), request.device()));
     }
 
-    @GetMapping(value = "/account-suspend", produces = MediaType.TEXT_HTML_VALUE)
-    @Operation(summary = "HTML form for emergency account suspend (token from new-device email)")
-    public ResponseEntity<String> suspendAccountForm(@RequestParam("token") String token) {
-        return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_HTML)
-                .body(authService.suspendAccountFormHtml(token));
-    }
-
-    @PostMapping(value = "/account-suspend", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "Suspend account with email token + email/password/PIN")
-    public ApiResponse<Void> suspendAccountJson(@Valid @RequestBody SuspendAccountRequest request) {
-        authService.suspendAccount(request);
-        return ApiResponse.ok("Account suspended", null);
-    }
-
-    @PostMapping(
-            value = "/account-suspend",
-            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
-            produces = MediaType.TEXT_HTML_VALUE)
-    @Operation(summary = "Suspend account from the emailed HTML form")
-    public ResponseEntity<String> suspendAccountFormSubmit(
-            @RequestParam("token") String token,
-            @RequestParam("email") String email,
-            @RequestParam("password") String password,
-            @RequestParam("pin") String pin) {
-        try {
-            authService.suspendAccount(new SuspendAccountRequest(token, email, password, pin));
-            return ResponseEntity.ok()
-                    .contentType(MediaType.TEXT_HTML)
-                    .body(suspendResultHtml(
-                            true,
-                            "Account suspended",
-                            "Your PALPEER account is suspended and all sessions were ended."
-                                    + " Contact support if you need it reactivated."));
-        } catch (BusinessException ex) {
-            return ResponseEntity.status(ex.getStatus())
-                    .contentType(MediaType.TEXT_HTML)
-                    .body(suspendResultHtml(false, "Could not suspend", ex.getMessage()));
-        }
-    }
-
-    private static String suspendResultHtml(boolean ok, String title, String message) {
-        String color = ok ? "#3DD68C" : "#F5A623";
-        return """
-                <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/>
-                <meta name="viewport" content="width=device-width, initial-scale=1"/>
-                <title>%s</title>
-                <style>body{font-family:sans-serif;background:#0F1A14;color:#F4F6F4;padding:24px}
-                .card{max-width:420px;margin:40px auto;background:#14201A;border:1px solid #24352C;
-                border-radius:12px;padding:24px}h1{color:%s;font-size:1.2rem}</style></head>
-                <body><div class="card"><h1>%s</h1><p>%s</p></div></body></html>
-                """
-                .formatted(
-                        HtmlUtils.htmlEscape(title),
-                        color,
-                        HtmlUtils.htmlEscape(title),
-                        HtmlUtils.htmlEscape(message));
+    /**
+     * Legacy query-string link from older emails. Redirects to the non-API lock page so the
+     * secret is not kept on an {@code /api/v1} surface.
+     */
+    @GetMapping("/account-suspend")
+    @Operation(summary = "Redirect legacy suspend link to /secure/account-lock/{key}")
+    public ResponseEntity<Void> suspendAccountFormLegacy(@RequestParam("token") String token) {
+        String key = token == null ? "" : token.trim();
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .header("Location", "/secure/account-lock/" + key)
+                .header("Referrer-Policy", "no-referrer")
+                .build();
     }
 
     @PostMapping("/logout")
@@ -151,6 +104,19 @@ public class AuthController {
     @Operation(summary = "Resend OTP")
     public ApiResponse<OtpResendResponse> resendOtp(@Valid @RequestBody OtpResendRequest request) {
         return ApiResponse.ok("OTP resent", authService.resendOtp(request));
+    }
+
+    @PostMapping("/otp/phone/request")
+    @Operation(summary = "Send SMS OTP to a phone before registration")
+    public ApiResponse<OtpResendResponse> requestPhoneOtp(@Valid @RequestBody PhoneOtpRequest request) {
+        return ApiResponse.ok("OTP sent", authService.requestPhoneOtp(request));
+    }
+
+    @PostMapping("/otp/phone/verify")
+    @Operation(summary = "Verify pre-registration SMS OTP")
+    public ApiResponse<Void> verifyPhoneOtp(@Valid @RequestBody PhoneOtpVerifyRequest request) {
+        authService.verifyPhoneOtp(request);
+        return ApiResponse.ok("Phone verified", null);
     }
 
     @PostMapping("/password-reset/request")

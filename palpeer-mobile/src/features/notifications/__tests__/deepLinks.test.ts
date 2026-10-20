@@ -13,6 +13,8 @@ describe('resolveDeepLink', () => {
     [`/transaction/EXCHANGE/${ID}`, `/transaction/EXCHANGE/${ID}`],
     [`palpeer://p2p/request/${ID}`, `/p2p/request/${ID}`],
     [`palpeer://p2p/order/${ID}`, `/p2p/order/${ID}`],
+    [`palpeer://p2p/share/${ID}`, `/p2p-share/${ID}`],
+    [`https://app.palpeer.com/p2p/share/${ID}`, `/p2p-share/${ID}`],
     [`palpeer://negotiation/${ID}`, `/negotiation/${ID}`],
     [`palpeer://chat/${ID}`, `/chat/${ID}`],
     [`palpeer://cards/${ID}`, `/cards/${ID}`],
@@ -88,6 +90,13 @@ describe('redirectSystemPath', () => {
   it('queues an allowed link and always lands on home', () => {
     expect(redirectSystemPath({ path: `palpeer://wallet/${ID}`, initial: true })).toBe('/');
     expect(pendingNavigation.take()).toBe(`/wallet/${ID}`);
+  });
+
+  it('opens guest share links immediately without queuing', () => {
+    expect(redirectSystemPath({ path: `palpeer://p2p/share/${ID}`, initial: true })).toBe(
+      `/p2p-share/${ID}`,
+    );
+    expect(pendingNavigation.peek()).toBeNull();
   });
 
   it('ignores unknown links', () => {

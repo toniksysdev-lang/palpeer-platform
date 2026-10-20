@@ -5,6 +5,7 @@ import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -42,7 +43,21 @@ export function NumberPadProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const sync = useCallback((field: NumberPadField) => {
-    setActive((current) => (current?.id === field.id ? field : current));
+    setActive((current) => {
+      if (!current || current.id !== field.id) return current;
+      // Bail out when nothing meaningful changed — replacing with a new object every
+      // render (e.g. fresh onChange closure) would loop: sync → setState → re-render → sync.
+      if (
+        current.value === field.value &&
+        current.onChange === field.onChange &&
+        current.maxLength === field.maxLength &&
+        current.bottomLeft === field.bottomLeft &&
+        current.variant === field.variant
+      ) {
+        return current;
+      }
+      return field;
+    });
   }, []);
 
   const close = useCallback((id?: string) => {
@@ -100,14 +115,22 @@ export function useNumberPadField({
   const id = useId();
   const active = pad?.active?.id === id;
 
+  // Keep a stable onChange identity so parent re-renders don't churn `field` / sync loops.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const stableOnChange = useCallback((next: string) => {
+    onChangeRef.current(next);
+  }, []);
+
   const field = useMemo<NumberPadField>(
-    () => ({ id, value, onChange, maxLength, bottomLeft, variant }),
-    [id, value, onChange, maxLength, bottomLeft, variant],
+    () => ({ id, value, onChange: stableOnChange, maxLength, bottomLeft, variant }),
+    [id, value, stableOnChange, maxLength, bottomLeft, variant],
   );
 
+  const sync = pad?.sync;
   useEffect(() => {
-    if (active) pad?.sync(field);
-  }, [active, field, pad]);
+    if (active) sync?.(field);
+  }, [active, field, sync]);
 
   useEffect(() => {
     if (autoFocus && !disabled) pad?.open(field);

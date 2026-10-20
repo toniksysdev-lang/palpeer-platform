@@ -77,15 +77,20 @@ public class SecurityConfig {
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/otp/verify",
                                 "/api/v1/auth/otp/resend",
+                                "/api/v1/auth/otp/phone/request",
+                                "/api/v1/auth/otp/phone/verify",
                                 "/api/v1/auth/password-reset/request",
                                 "/api/v1/auth/password-reset/confirm",
-                                "/api/v1/auth/account-suspend"
+                                "/secure/account-lock/**"
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/auth/account-suspend",
+                                "/secure/account-lock/**",
                                 "/api/v1/public/instant-rates",
                                 "/api/v1/public/p2p-rates",
-                                "/api/v1/public/marketing-adverts"
+                                "/api/v1/public/p2p-requests/*",
+                                "/api/v1/public/marketing-adverts",
+                                "/api/v1/public/registration-countries"
                         ).permitAll()
                         .requestMatchers("/api/v1/admin/**").hasAuthority("ROLE_ADMIN")
                         .anyRequest().authenticated()

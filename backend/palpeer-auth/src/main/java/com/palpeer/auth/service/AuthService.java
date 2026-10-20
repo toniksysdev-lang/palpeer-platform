@@ -5,10 +5,12 @@ import com.palpeer.auth.domain.AccountSuspendToken;
 import com.palpeer.auth.domain.OtpChallenge;
 import com.palpeer.auth.domain.OtpChannel;
 import com.palpeer.auth.domain.OtpPurpose;
+import com.palpeer.auth.domain.PhonePreVerification;
 import com.palpeer.auth.domain.RefreshToken;
 import com.palpeer.auth.otp.OtpSender;
 import com.palpeer.auth.repository.AccountSuspendTokenRepository;
 import com.palpeer.auth.repository.OtpChallengeRepository;
+import com.palpeer.auth.repository.PhonePreVerificationRepository;
 import com.palpeer.auth.repository.RefreshTokenRepository;
 import com.palpeer.auth.spi.TransactionPinMatcher;
 import com.palpeer.auth.util.TokenHashing;
@@ -21,6 +23,8 @@ import com.palpeer.auth.web.dto.OtpResendResponse;
 import com.palpeer.auth.web.dto.OtpVerifyRequest;
 import com.palpeer.auth.web.dto.PasswordResetConfirmRequest;
 import com.palpeer.auth.web.dto.PasswordResetRequestDto;
+import com.palpeer.auth.web.dto.PhoneOtpRequest;
+import com.palpeer.auth.web.dto.PhoneOtpVerifyRequest;
 import com.palpeer.auth.web.dto.RegisterRequest;
 import com.palpeer.auth.web.dto.RegisterResponse;
 import com.palpeer.auth.web.dto.SessionResponse;
@@ -62,6 +66,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final OtpChallengeRepository otpChallengeRepository;
+    private final PhonePreVerificationRepository phonePreVerificationRepository;
     private final AccountSuspendTokenRepository accountSuspendTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -89,11 +94,14 @@ public class AuthService {
         user.setStatus(UserStatus.PENDING_VERIFICATION);
         user.setEnabled(true);
         user.setEmailVerified(false);
-        user.setPhoneVerified(false);
+        boolean phoneAlreadyVerified = consumeFreshPhonePreVerification(user.getPhone());
+        user.setPhoneVerified(phoneAlreadyVerified);
         userRepository.save(user);
 
         String emailOtp = issueOtp(user, OtpPurpose.EMAIL_VERIFICATION, OtpChannel.EMAIL);
-        issueOtp(user, OtpPurpose.PHONE_VERIFICATION, OtpChannel.SMS);
+        if (!phoneAlreadyVerified) {
+            issueOtp(user, OtpPurpose.PHONE_VERIFICATION, OtpChannel.SMS);
+        }
         // Welcome email is sent after EMAIL_VERIFICATION succeeds (see verifyOtp).
 
         // Only expose the code when log-code is on (dev logs / troubleshooting). Clients never autofill.
@@ -105,6 +113,52 @@ public class AuthService {
                 "Registration successful. OTP verification required.",
                 authProperties.getOtp().isLogCode() ? emailOtp : null
         );
+    }
+
+    /**
+     * Sends a pre-registration SMS OTP for the given phone (no user account yet).
+     */
+    @Transactional
+    public OtpResendResponse requestPhoneOtp(PhoneOtpRequest request) {
+        String phone = normalizePhone(request.phone());
+        if (userRepository.existsByPhone(phone)) {
+            throw new BusinessException(
+                    "PHONE_ALREADY_REGISTERED", "Phone already registered", HttpStatus.CONFLICT);
+        }
+        String code = issuePhonePreRegisterOtp(phone);
+        return new OtpResendResponse(authProperties.getOtp().isLogCode() ? code : null);
+    }
+
+    /**
+     * Verifies a pre-registration SMS OTP and records a short-lived phone verification window used
+     * at {@link #register(RegisterRequest)}.
+     */
+    @Transactional
+    public void verifyPhoneOtp(PhoneOtpVerifyRequest request) {
+        String phone = normalizePhone(request.phone());
+        OtpChallenge challenge = otpChallengeRepository
+                .findFirstByDestinationAndPurposeAndChannelAndConsumedFalseAndUserIdIsNullOrderByCreatedAtDesc(
+                        phone, OtpPurpose.PHONE_VERIFICATION, OtpChannel.SMS)
+                .orElseThrow(() -> new BusinessException(
+                        "OTP_NOT_FOUND", "OTP not found", HttpStatus.BAD_REQUEST));
+
+        assertChallengeUsable(challenge, OtpChannel.SMS);
+        challenge.setAttemptCount(challenge.getAttemptCount() + 1);
+        if (!TokenHashing.sha256(request.code().trim()).equals(challenge.getCodeHash())) {
+            otpChallengeRepository.save(challenge);
+            throw new BusinessException("OTP_INVALID", "Invalid OTP", HttpStatus.BAD_REQUEST);
+        }
+        challenge.setConsumed(true);
+        challenge.setConsumedAt(Instant.now());
+        otpChallengeRepository.save(challenge);
+
+        PhonePreVerification row = phonePreVerificationRepository
+                .findByPhone(phone)
+                .orElseGet(PhonePreVerification::new);
+        row.setPhone(phone);
+        row.setVerifiedAt(Instant.now());
+        row.setExpiresAt(Instant.now().plus(authProperties.getOtp().getTtl().multipliedBy(3)));
+        phonePreVerificationRepository.save(row);
     }
 
     @Transactional
@@ -448,7 +502,8 @@ public class AuthService {
     }
 
     private void sendNewDeviceLoginAlert(User user, DeviceLoginInfo device) {
-        String rawToken = TokenHashing.opaqueToken(32);
+        // 48-byte lock key (~96 hex chars): path-only, never query-string, never under /api.
+        String rawToken = TokenHashing.opaqueToken(48);
         AccountSuspendToken row = new AccountSuspendToken();
         row.setUserId(user.getId());
         row.setTokenHash(TokenHashing.sha256(rawToken));
@@ -460,7 +515,7 @@ public class AuthService {
         accountSuspendTokenRepository.save(row);
 
         String base = trimTrailingSlash(authProperties.getPublicBaseUrl());
-        String suspendUrl = base + "/api/v1/auth/account-suspend?token=" + rawToken;
+        String suspendUrl = base + "/secure/account-lock/" + rawToken;
         String deviceLabel = describeDevice(device);
         try {
             var rendered = PalpeerEmailTemplates.newDeviceLogin(
@@ -484,18 +539,21 @@ public class AuthService {
     }
 
     /**
-     * HTML form for the emailed suspend link. Credentials are entered here — never carried in the
-     * URL. Invalid/expired tokens still show a form that will fail on submit (no account leak).
+     * HTML form for the emailed lock link. Credentials are entered here — never carried in the
+     * URL. Invalid/expired keys still show a form that will fail on submit (no account leak).
      */
     @Transactional(readOnly = true)
-    public String suspendAccountFormHtml(String rawToken) {
-        String safeToken = rawToken == null ? "" : HtmlUtils.htmlEscape(rawToken.trim());
+    public String suspendAccountFormHtml(String lockKey) {
+        String key = lockKey == null ? "" : lockKey.trim();
+        String safeAction = HtmlUtils.htmlEscape("/secure/account-lock/" + key);
         return """
                 <!DOCTYPE html>
                 <html lang="en">
                 <head>
                   <meta charset="utf-8"/>
                   <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                  <meta name="referrer" content="no-referrer"/>
+                  <meta name="robots" content="noindex,nofollow"/>
                   <title>Suspend PALPEER account</title>
                   <style>
                     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
@@ -518,8 +576,7 @@ public class AuthService {
                     <p>If you did not authorize the recent sign-in, confirm your identity below.
                       This permanently disables login until support reactivates the account.</p>
                     <p class="warn">Never share your password or PIN. They are not in the email link.</p>
-                    <form method="post" action="/api/v1/auth/account-suspend">
-                      <input type="hidden" name="token" value="%s"/>
+                    <form method="post" action="%s" autocomplete="off">
                       <label for="email">Email</label>
                       <input id="email" name="email" type="email" required autocomplete="username"/>
                       <label for="password">Password</label>
@@ -529,21 +586,27 @@ public class AuthService {
                         autocomplete="one-time-code"/>
                       <button type="submit">Suspend account</button>
                     </form>
-                    <p>Or contact <a href="mailto:%s" style="color:#3DD68C">%s</a>.</p>
+                    <p>Or contact <a href="mailto:%s" style="color:#3DD68C" rel="noreferrer">%s</a>.</p>
                   </div>
                 </body>
                 </html>
                 """
-                .formatted(safeToken, EmailBrand.SUPPORT_EMAIL, EmailBrand.SUPPORT_EMAIL);
+                .formatted(safeAction, EmailBrand.SUPPORT_EMAIL, EmailBrand.SUPPORT_EMAIL);
     }
 
     /**
-     * Suspends the account when the one-time email token is valid and email/password/PIN match
-     * the user in the database. Revokes all sessions.
+     * Suspends the account when the one-time email lock key is valid and email/password/PIN match
+     * the user in the database. Revokes all sessions. The lock key alone never authenticates.
      */
     @Transactional
     public void suspendAccount(SuspendAccountRequest request) {
-        String rawToken = request.token().trim();
+        String rawToken = request.token() == null ? "" : request.token().trim();
+        if (!isValidAccountLockKey(rawToken)) {
+            throw new BusinessException(
+                    "SUSPEND_TOKEN_INVALID",
+                    "Suspend link is invalid or already used",
+                    HttpStatus.BAD_REQUEST);
+        }
         AccountSuspendToken challenge = accountSuspendTokenRepository
                 .findByTokenHashAndConsumedFalse(TokenHashing.sha256(rawToken))
                 .orElseThrow(() -> new BusinessException(
@@ -629,6 +692,27 @@ public class AuthService {
         return label.toString();
     }
 
+    /**
+     * Lock keys are hex-only path segments (64–128 chars). Rejects junk before any DB lookup so
+     * probing cannot use this as a generic backend oracle.
+     */
+    static boolean isValidAccountLockKey(String lockKey) {
+        if (lockKey == null) {
+            return false;
+        }
+        int len = lockKey.length();
+        if (len < 64 || len > 128) {
+            return false;
+        }
+        for (int i = 0; i < len; i++) {
+            char c = lockKey.charAt(i);
+            if ((c < '0' || c > '9') && (c < 'a' || c > 'f')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static String trimTrailingSlash(String url) {
         if (url == null || url.isBlank()) {
             return "http://localhost:8085";
@@ -642,10 +726,19 @@ public class AuthService {
 
     private String issueOtp(User user, OtpPurpose purpose, OtpChannel channel) {
         String destination = channel == OtpChannel.EMAIL ? user.getEmail() : user.getPhone();
+        return persistAndSendOtp(user.getId(), destination, purpose, channel);
+    }
+
+    private String issuePhonePreRegisterOtp(String phone) {
+        return persistAndSendOtp(null, phone, OtpPurpose.PHONE_VERIFICATION, OtpChannel.SMS);
+    }
+
+    private String persistAndSendOtp(
+            UUID userId, String destination, OtpPurpose purpose, OtpChannel channel) {
         String code = TokenHashing.numericCode(authProperties.getOtp().getLength());
 
         OtpChallenge challenge = new OtpChallenge();
-        challenge.setUserId(user.getId());
+        challenge.setUserId(userId);
         challenge.setPurpose(purpose);
         challenge.setChannel(channel);
         challenge.setDestination(destination);
@@ -657,6 +750,24 @@ public class AuthService {
 
         otpSender.send(channel, destination, purpose, code);
         return code;
+    }
+
+    private boolean consumeFreshPhonePreVerification(String phone) {
+        Optional<PhonePreVerification> opt = phonePreVerificationRepository.findByPhone(phone);
+        if (opt.isEmpty()) {
+            return false;
+        }
+        PhonePreVerification row = opt.get();
+        boolean fresh = row.getExpiresAt().isAfter(Instant.now());
+        phonePreVerificationRepository.delete(row);
+        return fresh;
+    }
+
+    private static String normalizePhone(String phone) {
+        if (phone == null || phone.isBlank()) {
+            throw new BusinessException("PHONE_REQUIRED", "Phone is required", HttpStatus.BAD_REQUEST);
+        }
+        return phone.trim().replaceAll("[\\s()-]", "");
     }
 
     private void assertChallengeUsable(OtpChallenge challenge, OtpChannel expectedChannel) {

@@ -12,10 +12,12 @@ export type P2PSide = 'BUY' | 'SELL';
  */
 export type P2PStatus = 'OPEN' | 'ACCEPTED' | 'COMPLETED' | 'EXPIRED' | 'CANCELLED';
 
-/** VERIFIED: `P2PRequestResponse`. Only the owner's `userId` is exposed (no display name). */
+/** VERIFIED: `P2PRequestResponse`. `posterDisplayName` is profile name or a safe fallback. */
 export type P2PRequestResponse = {
   id: Uuid;
   userId: Uuid;
+  /** Present from API; older payloads may omit it. */
+  posterDisplayName?: string | null;
   side: P2PSide;
   baseCurrencyCode: string;
   quoteCurrencyCode: string;
@@ -25,6 +27,15 @@ export type P2PRequestResponse = {
   expiresAt: IsoInstant | null;
   notes: string | null;
   createdAt: IsoInstant;
+};
+
+/** VERIFIED: `P2PRateBoundsResponse` from `GET /p2p/rate-bounds` (null when none configured). */
+export type P2PRateBoundsResponse = {
+  id: Uuid;
+  baseCurrencyCode: string;
+  quoteCurrencyCode: string;
+  minRate: Money;
+  maxRate: Money;
 };
 
 /** VERIFIED: `CreateP2PRequestDto`. Base ≠ quote; amount and rate > 0; `expiresAt` in the future. */

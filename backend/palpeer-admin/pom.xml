@@ -29,6 +29,10 @@
         </dependency>
         <dependency>
             <groupId>com.palpeer</groupId>
+            <artifactId>palpeer-profile</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.palpeer</groupId>
             <artifactId>palpeer-kyc</artifactId>
         </dependency>
         <dependency>

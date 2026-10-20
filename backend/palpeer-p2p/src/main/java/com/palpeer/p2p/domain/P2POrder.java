@@ -7,6 +7,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
@@ -39,4 +40,19 @@ public class P2POrder extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private P2PStatus status;
+
+    /** Assessed platform fee at settlement (base currency); null when no tier matched. */
+    @Column(name = "fee_amount", precision = 28, scale = 12)
+    private BigDecimal feeAmount;
+
+    @Column(name = "fee_currency_code", length = 10)
+    private String feeCurrencyCode;
+
+    /** Requester removed this cancelled order from their history. */
+    @Column(name = "requester_archived_at")
+    private Instant requesterArchivedAt;
+
+    /** Acceptor removed this cancelled order from their history. */
+    @Column(name = "acceptor_archived_at")
+    private Instant acceptorArchivedAt;
 }

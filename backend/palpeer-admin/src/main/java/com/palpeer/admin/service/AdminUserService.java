@@ -16,6 +16,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -41,8 +42,11 @@ public class AdminUserService {
     private final EntityManager entityManager;
 
     @Transactional(readOnly = true)
-    public Page<AdminUserSummaryResponse> listUsers(String email, UserStatus status, Pageable pageable) {
-        return userRepository.findAll(filter(email, status), pageable).map(this::toSummary);
+    public Page<AdminUserSummaryResponse> listUsers(
+            String email, UserStatus status, Instant registeredFrom, Instant registeredTo, Pageable pageable) {
+        return userRepository
+                .findAll(filter(email, status, registeredFrom, registeredTo), pageable)
+                .map(this::toSummary);
     }
 
     /** Excludes accounts linked to {@code admin_users}; operator accounts are managed under /admin/admins. */
@@ -60,7 +64,8 @@ public class AdminUserService {
         return userRepository.existsById(userId) && !adminUserRepository.existsByUserId(userId);
     }
 
-    private static Specification<User> filter(String email, UserStatus status) {
+    private static Specification<User> filter(
+            String email, UserStatus status, Instant registeredFrom, Instant registeredTo) {
         return appUsersOnly().and((root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (email != null && !email.isBlank()) {
@@ -71,6 +76,12 @@ public class AdminUserService {
             }
             if (status != null) {
                 predicates.add(cb.equal(root.get("status"), status));
+            }
+            if (registeredFrom != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), registeredFrom));
+            }
+            if (registeredTo != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), registeredTo));
             }
             return cb.and(predicates.toArray(Predicate[]::new));
         });

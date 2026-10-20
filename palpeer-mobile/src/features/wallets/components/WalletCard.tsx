@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react-native';
 import { View } from 'react-native';
 
+import { CountryFlag } from '@/components/brand/CountryFlag';
 import { AppText } from '@/components/ui/AppText';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
@@ -8,6 +9,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import type { WalletResponse } from '@/types/api/wallet';
 import { compareMoney } from '@/utils/money';
 
+import { countryIso2ForCurrency } from '../registrationCurrencies';
 import { useMoneyFormat } from '../useMoneyFormat';
 
 type Props = {
@@ -21,6 +23,7 @@ export function WalletCard({ wallet, onPress }: Props) {
   const { format } = useMoneyFormat();
   const available = format(wallet.availableBalance, wallet.currencyCode);
   const hasPending = compareMoney(wallet.pendingBalance, '0') !== 0;
+  const flagIso2 = countryIso2ForCurrency(wallet.currencyCode);
 
   return (
     <Card
@@ -40,14 +43,19 @@ export function WalletCard({ wallet, onPress }: Props) {
             alignItems: 'center',
             justifyContent: 'center',
           }}
+          testID={`wallet-flag-${wallet.currencyCode}`}
         >
-          <AppText variant="bodyStrong" tone="brand">
-            {wallet.currencyCode}
-          </AppText>
+          {flagIso2 ? (
+            <CountryFlag iso2={flagIso2} size={28} />
+          ) : (
+            <AppText variant="bodyStrong" tone="brand">
+              {wallet.currencyCode}
+            </AppText>
+          )}
         </View>
         <View style={{ flex: 1, gap: theme.spacing.xxs }}>
           <AppText variant="caption" tone="secondary">
-            Available
+            {wallet.currencyCode} · Available
           </AppText>
           <AppText variant="h2" testID={`wallet-available-${wallet.currencyCode}`}>
             {available}

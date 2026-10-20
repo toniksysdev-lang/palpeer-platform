@@ -60,4 +60,8 @@ public class P2PRequest extends BaseEntity {
     /** Ledger HOLD entry for an open SELL listing; released or captured on terminal status. */
     @Column(name = "hold_ledger_entry_id")
     private UUID holdLedgerEntryId;
+
+    /** When set, the owner has removed this request from their history. */
+    @Column(name = "archived_at")
+    private Instant archivedAt;
 }

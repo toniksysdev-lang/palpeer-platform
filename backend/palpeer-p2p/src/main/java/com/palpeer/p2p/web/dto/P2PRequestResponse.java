@@ -9,6 +9,8 @@ import java.util.UUID;
 public record P2PRequestResponse(
         UUID id,
         UUID userId,
+        /** Profile full name when set; otherwise an email-local-part / generic fallback. */
+        String posterDisplayName,
         P2PSide side,
         String baseCurrencyCode,
         String quoteCurrencyCode,

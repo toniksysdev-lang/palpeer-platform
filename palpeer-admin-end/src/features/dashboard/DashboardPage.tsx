@@ -66,8 +66,8 @@ export function DashboardPage() {
               Palpeer control surface
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-secondary">
-              A live overview of users, verification, P2P activity, and balances across the
-              platform. There is no fee or revenue model yet.
+              A live overview of users, verification, P2P activity, balances, and assessed platform
+              fees across the last 30 days.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -88,7 +88,7 @@ export function DashboardPage() {
         />
       ) : null}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <KpiCard
           label="Total users"
           icon={Users}
@@ -102,6 +102,20 @@ export function DashboardPage() {
           state={kpiState(kyc.status)}
           value={kyc.data?.totalElements}
           hint="Cases in all statuses"
+        />
+        <KpiCard
+          label="Pending KYC queue"
+          icon={ShieldCheck}
+          state={kpiState(summary.status)}
+          value={summaryData ? pendingKycCount(summaryData.kyc.byStatus) : undefined}
+          hint={
+            <>
+              Submitted + under review ·{' '}
+              <Link to="/admin/kyc?status=SUBMITTED" className="text-primary hover:underline">
+                Open queue
+              </Link>
+            </>
+          }
         />
         <KpiCard
           label="P2P requests"
@@ -131,9 +145,6 @@ export function DashboardPage() {
           value={bonuses.data?.totalElements}
           hint="Total bonuses issued"
         />
-      </section>
-
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="Transaction volume"
           icon={Banknote}
@@ -154,20 +165,6 @@ export function DashboardPage() {
             ) : (
               'Successful funding, withdrawal, and exchange in the last 30 days'
             )
-          }
-        />
-        <KpiCard
-          label="Pending KYC queue"
-          icon={ShieldCheck}
-          state={kpiState(summary.status)}
-          value={summaryData ? pendingKycCount(summaryData.kyc.byStatus) : undefined}
-          hint={
-            <>
-              Submitted + under review ·{' '}
-              <Link to="/admin/kyc?status=SUBMITTED" className="text-primary hover:underline">
-                Open queue
-              </Link>
-            </>
           }
         />
         <KpiCard
@@ -202,8 +199,41 @@ export function DashboardPage() {
         <KpiCard
           label="Platform fees / revenue"
           icon={Banknote}
-          state="unavailable"
-          hint="No fee model exists on the platform yet."
+          state={kpiState(summary.status)}
+          display={
+            summaryData?.fees?.byCurrency?.length ? (
+              <ul className="space-y-0.5">
+                {summaryData.fees.byCurrency.slice(0, 3).map((row) => (
+                  <li
+                    key={row.currencyCode}
+                    className="flex items-baseline justify-between gap-2 font-mono text-sm text-text-primary"
+                  >
+                    <span className="font-semibold">{formatDecimal(row.amount, 2)}</span>
+                    <span className="text-xs text-text-muted">{row.currencyCode}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="font-mono text-2xl font-semibold text-text-muted">0</p>
+            )
+          }
+          hint={
+            summaryData ? (
+              <>
+                Assessed on {formatDecimal(summaryData.fees?.orderCount ?? 0, 0)} completed P2P
+                orders since {formatDate(summaryData.from)}
+                {summaryData.fees?.byCurrency && summaryData.fees.byCurrency.length > 3
+                  ? ` · +${summaryData.fees.byCurrency.length - 3} more`
+                  : ''}
+                {' · '}
+                <Link to="/admin/fees/p2p" className="text-primary hover:underline">
+                  Fee tiers
+                </Link>
+              </>
+            ) : (
+              'P2P fees assessed in the last 30 days'
+            )
+          }
         />
       </section>
 
@@ -281,18 +311,26 @@ export function DashboardPage() {
                     <Link
                       to={`/admin/kyc/${item.caseId}`}
                       state={{ case: item }}
-                      className="truncate font-mono text-xs text-primary hover:underline"
+                      className="truncate text-sm font-medium text-primary hover:underline"
                     >
-                      {item.caseId}
+                      {item.fullName?.trim() || 'Unnamed applicant'}
                     </Link>
                     <p className="truncate text-xs text-text-muted">
-                      User{' '}
-                      <Link
-                        to={`/admin/users/${item.userId}`}
-                        className="font-mono text-primary hover:underline"
-                      >
-                        {item.userId}
-                      </Link>
+                      {item.email ? (
+                        <Link
+                          to={`/admin/users/${item.userId}`}
+                          className="text-primary hover:underline"
+                        >
+                          {item.email}
+                        </Link>
+                      ) : (
+                        <Link
+                          to={`/admin/users/${item.userId}`}
+                          className="font-mono text-primary hover:underline"
+                        >
+                          {item.userId}
+                        </Link>
+                      )}
                     </p>
                   </div>
                   <StatusBadge status={item.status} />

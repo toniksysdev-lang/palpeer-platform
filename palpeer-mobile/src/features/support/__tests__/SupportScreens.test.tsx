@@ -69,13 +69,14 @@ describe('HelpCenterScreen', () => {
     expect(screen.getByText('No matching answers')).toBeTruthy();
   });
 
-  it('says contact details are unavailable instead of inventing them', async () => {
+  it('shows support@palpeer.com and omits phone when unset', async () => {
     setSupport(NONE);
     await renderWithProviders(<HelpCenterScreen />);
 
-    expect(screen.getByTestId('support-unavailable')).toBeTruthy();
-    expect(screen.queryByTestId('support-email')).toBeNull();
+    expect(screen.getByTestId('support-email')).toBeTruthy();
+    expect(screen.getByText('support@palpeer.com')).toBeTruthy();
     expect(screen.queryByTestId('support-phone')).toBeNull();
+    expect(screen.queryByTestId('support-unavailable')).toBeNull();
   });
 
   it('opens a support email with app details but no account data', async () => {

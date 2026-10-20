@@ -16,17 +16,22 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Brute-force protection for PIN checks. Every method runs in its own transaction so attempt
- * counters survive the caller's rollback when the PIN (or reset answer) is wrong.
+ * Brute-force protection for PIN checks and security-answer checks. Counters are separate so a
+ * wrong security answer does not burn a PIN attempt (admin Settings → PIN lockout still supplies
+ * the shared max-attempts / lockout-hours policy for both).
  *
- * Callers must {@link #reserve} before comparing, then report {@link #recordFailure} or
- * {@link #recordSuccess}. Reserving counts the attempt up front, so parallel requests can never
- * exceed {@code maxAttempts} guesses per lockout window. Limits come from {@link PinPolicyService}
- * (admin Settings → No of PIN entries / hours).
+ * Failures are counted only after a wrong secret is confirmed — reservations no longer increment
+ * the counter up front (that caused premature lockouts and stuck "locked" states without
+ * {@code lockedUntil}).
  */
 @Component
 @RequiredArgsConstructor
 public class PinAttemptGuard {
+
+    public enum Kind {
+        PIN,
+        SECURITY_ANSWER
+    }
 
     private final PinCredentialRepository pinCredentialRepository;
     private final PinPolicyService pinPolicyService;
@@ -34,47 +39,58 @@ public class PinAttemptGuard {
     private final Clock clock;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void reserve(UUID userId) {
+    public void ensureNotLocked(UUID userId, Kind kind) {
         PinCredential credential = lock(userId);
+        Instant lockedUntil = lockedUntil(credential, kind);
         Instant now = clock.instant();
-        if (credential.getLockedUntil() != null) {
-            if (credential.getLockedUntil().isAfter(now)) {
-                throw locked();
-            }
-            credential.setLockedUntil(null);
-            credential.setFailedAttempts(0);
-        }
-        if (credential.getFailedAttempts() >= pinPolicyService.maxAttempts()) {
+        if (lockedUntil != null && lockedUntil.isAfter(now)) {
             throw locked();
         }
-        credential.setFailedAttempts(credential.getFailedAttempts() + 1);
-        pinCredentialRepository.save(credential);
+        if (lockedUntil != null) {
+            clear(credential, kind);
+            pinCredentialRepository.save(credential);
+        }
     }
 
-    /** Returns true when this failure locked the PIN. */
+    /** Returns true when this failure locked the channel. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean recordFailure(UUID userId) {
+    public boolean recordFailure(UUID userId, Kind kind) {
         PinCredential credential = lock(userId);
-        if (credential.getFailedAttempts() < pinPolicyService.maxAttempts()) {
+        Instant now = clock.instant();
+        Instant lockedUntil = lockedUntil(credential, kind);
+        if (lockedUntil != null && lockedUntil.isAfter(now)) {
+            return true;
+        }
+        if (lockedUntil != null) {
+            clear(credential, kind);
+        }
+
+        int attempts = failedAttempts(credential, kind) + 1;
+        setFailedAttempts(credential, kind, attempts);
+        int max = pinPolicyService.maxAttempts();
+        if (attempts < max) {
+            pinCredentialRepository.save(credential);
             return false;
         }
-        credential.setLockedUntil(clock.instant().plus(pinPolicyService.lockoutDuration()));
-        credential.setFailedAttempts(0);
+
+        Instant until = now.plus(pinPolicyService.lockoutDuration());
+        setLockedUntil(credential, kind, until);
+        setFailedAttempts(credential, kind, 0);
         pinCredentialRepository.save(credential);
-        auditRecorder.record(AuditRecord.builder("SECURITY_PIN_LOCKED")
+        auditRecorder.record(AuditRecord.builder(
+                        kind == Kind.PIN ? "SECURITY_PIN_LOCKED" : "SECURITY_ANSWERS_LOCKED")
                 .entity("PinCredential:" + credential.getId())
                 .userRef(userId)
-                .newValue("lockedUntil=" + credential.getLockedUntil())
+                .newValue("lockedUntil=" + until + ";kind=" + kind.name())
                 .build());
         return true;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordSuccess(UUID userId) {
+    public void recordSuccess(UUID userId, Kind kind) {
         PinCredential credential = lock(userId);
-        if (credential.getFailedAttempts() != 0 || credential.getLockedUntil() != null) {
-            credential.setFailedAttempts(0);
-            credential.setLockedUntil(null);
+        if (failedAttempts(credential, kind) != 0 || lockedUntil(credential, kind) != null) {
+            clear(credential, kind);
             pinCredentialRepository.save(credential);
         }
     }
@@ -82,6 +98,39 @@ public class PinAttemptGuard {
     private PinCredential lock(UUID userId) {
         return pinCredentialRepository.findByUserIdForUpdate(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("PIN not set"));
+    }
+
+    private static int failedAttempts(PinCredential credential, Kind kind) {
+        return kind == Kind.PIN
+                ? credential.getFailedAttempts()
+                : credential.getSecurityAnswerFailedAttempts();
+    }
+
+    private static Instant lockedUntil(PinCredential credential, Kind kind) {
+        return kind == Kind.PIN
+                ? credential.getLockedUntil()
+                : credential.getSecurityAnswerLockedUntil();
+    }
+
+    private static void setFailedAttempts(PinCredential credential, Kind kind, int attempts) {
+        if (kind == Kind.PIN) {
+            credential.setFailedAttempts(attempts);
+        } else {
+            credential.setSecurityAnswerFailedAttempts(attempts);
+        }
+    }
+
+    private static void setLockedUntil(PinCredential credential, Kind kind, Instant until) {
+        if (kind == Kind.PIN) {
+            credential.setLockedUntil(until);
+        } else {
+            credential.setSecurityAnswerLockedUntil(until);
+        }
+    }
+
+    private static void clear(PinCredential credential, Kind kind) {
+        setFailedAttempts(credential, kind, 0);
+        setLockedUntil(credential, kind, null);
     }
 
     static BusinessException locked() {

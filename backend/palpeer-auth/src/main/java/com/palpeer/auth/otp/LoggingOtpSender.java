@@ -4,12 +4,14 @@ import com.palpeer.auth.domain.OtpChannel;
 import com.palpeer.auth.domain.OtpPurpose;
 import com.palpeer.common.mail.EmailSender;
 import com.palpeer.common.mail.PalpeerEmailTemplates;
+import com.palpeer.common.sms.SmsSender;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * Delivers OTP codes: EMAIL via branded SMTP HTML templates; SMS remains a placeholder.
+ * Delivers OTP codes: EMAIL via branded templates; SMS via {@link SmsSender}
+ * (Telnyx / Twilio / BulkSMS when configured, else logging fallback).
  */
 @Slf4j
 @Component
@@ -17,17 +19,19 @@ public class LoggingOtpSender implements OtpSender {
 
     private final boolean logCode;
     private final EmailSender emailSender;
+    private final SmsSender smsSender;
 
     public LoggingOtpSender(
             @Value("${palpeer.security.otp.log-code:false}") boolean logCode,
-            EmailSender emailSender) {
+            EmailSender emailSender,
+            SmsSender smsSender) {
         this.logCode = logCode;
         this.emailSender = emailSender;
+        this.smsSender = smsSender;
     }
 
     @Override
     public void send(OtpChannel channel, String destination, OtpPurpose purpose, String code) {
-        // Log before delivery so the code is always available when SMTP is blocked.
         if (logCode) {
             log.warn(
                     "DEV OTP [channel={}, destination={}, purpose={}, code={}]",
@@ -40,7 +44,30 @@ public class LoggingOtpSender implements OtpSender {
         if (channel == OtpChannel.EMAIL) {
             sendEmailOtp(destination, purpose, code);
         } else {
-            log.info("OTP SMS placeholder [destination={}, purpose={}]", destination, purpose);
+            sendSmsOtp(destination, purpose, code);
+        }
+    }
+
+    private void sendSmsOtp(String destination, OtpPurpose purpose, String code) {
+        String body = "PALPEER verification code: "
+                + code
+                + ". It expires in 10 minutes. Do not share this code.";
+        try {
+            smsSender.send(destination, body);
+            log.info("OTP SMS sent [destination={}, purpose={}]", destination, purpose);
+        } catch (RuntimeException ex) {
+            log.error(
+                    "OTP SMS failed [destination={}, purpose={}]: {} — continuing without SMS",
+                    destination,
+                    purpose,
+                    ex.getMessage());
+            if (!logCode) {
+                log.warn(
+                        "Set OTP_LOG_CODE=true so clients receive debugOtp while SMS is unavailable"
+                                + " [destination={}, purpose={}]",
+                        destination,
+                        purpose);
+            }
         }
     }
 
@@ -59,9 +86,6 @@ public class LoggingOtpSender implements OtpSender {
                     rendered.subject(),
                     rendered.html() == null ? 0 : rendered.html().length());
         } catch (RuntimeException ex) {
-            // Free hosts (e.g. Render) often block outbound SMTP (connect timeout on :587/:465).
-            // Soft-fail so registration can continue; the OTP is still stored and returned as
-            // debugOtp when log-code is enabled (see AuthService / render.yaml OTP_LOG_CODE).
             log.error(
                     "OTP email failed [destination={}, purpose={}]: {} — continuing without email",
                     destination,

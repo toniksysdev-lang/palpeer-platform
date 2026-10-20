@@ -1,6 +1,10 @@
 /** `rawBody` sends exact JSON text (e.g. money with more digits than a JS number holds). */
 type Reply = { status: number; body?: unknown; rawBody?: string };
-type Handler = (request: { body: unknown; headers: Record<string, string> }) => Reply;
+type Handler = (request: {
+  body: unknown;
+  headers: Record<string, string>;
+  query: string;
+}) => Reply;
 
 export type RecordedCall = {
   method: string;
@@ -43,7 +47,7 @@ export function installFetchMock(routes: Record<string, Reply | Reply[] | Handle
     const route = routes[key];
     let reply: Reply | undefined;
     if (typeof route === 'function') {
-      reply = route({ body, headers });
+      reply = route({ body, headers, query: search });
     } else if (Array.isArray(route)) {
       if (!queues.has(key)) queues.set(key, [...route]);
       reply = queues.get(key)?.shift();

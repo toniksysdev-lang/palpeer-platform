@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Shield,
-  UserRound,
   X,
 } from 'lucide-react';
 import { useShell } from '@/app/providers/ShellProvider';
@@ -17,8 +15,14 @@ import { Button } from '@/components/ui/Button';
 import { findNavItem, primaryNav, type NavItem } from '@/config/navigation';
 import { cn } from '@/lib/cn';
 
+function pathWithoutHash(path: string) {
+  const hashAt = path.indexOf('#');
+  return hashAt >= 0 ? path.slice(0, hashAt) : path;
+}
+
 function isPathActive(pathname: string, path: string) {
-  return pathname === path || pathname.startsWith(`${path}/`);
+  const base = pathWithoutHash(path);
+  return pathname === base || pathname.startsWith(`${base}/`);
 }
 
 function NavLeaf({
@@ -144,7 +148,7 @@ function NavGroup({
 function NavList({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const { can } = useAuth();
   const location = useLocation();
-  const activeId = findNavItem(location.pathname)?.id;
+  const activeId = findNavItem(location.pathname, location.hash)?.id;
   const visible = useMemo(
     () =>
       primaryNav
@@ -208,9 +212,6 @@ function SidebarChrome({
 }) {
   const { logout } = useAuth();
   const { push } = useToast();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const settingsActive = findNavItem(location.pathname)?.id === 'settings';
 
   async function onLogout() {
     onCloseMobile?.();
@@ -265,38 +266,10 @@ function SidebarChrome({
       <NavList collapsed={!mobile && collapsed} onNavigate={onCloseMobile} />
 
       <div className="mt-auto shrink-0 border-t border-border px-3 py-4">
-        <Link
-          to="/admin/settings"
-          onClick={onCloseMobile}
-          aria-current={settingsActive ? 'page' : undefined}
-          className={cn(
-            'ki-nav-item',
-            settingsActive ? 'ki-nav-item-active' : 'ki-nav-item-inactive',
-            !mobile && collapsed && 'justify-center !px-2',
-          )}
-        >
-          <UserRound className="h-[1.1rem] w-[1.1rem] shrink-0" aria-hidden />
-          {(mobile || !collapsed) && <span className="flex-1 text-left">Admin profile</span>}
-        </Link>
         <button
           type="button"
           className={cn(
-            'ki-nav-item ki-nav-item-inactive mt-1 w-full cursor-pointer',
-            !mobile && collapsed && 'justify-center !px-2',
-          )}
-          title="Security settings"
-          onClick={() => {
-            onCloseMobile?.();
-            navigate('/admin/settings#security');
-          }}
-        >
-          <Shield className="h-[1.1rem] w-[1.1rem] shrink-0" aria-hidden />
-          {(mobile || !collapsed) && <span className="flex-1 text-left">Security</span>}
-        </button>
-        <button
-          type="button"
-          className={cn(
-            'ki-nav-item ki-nav-item-inactive mt-1 w-full cursor-pointer',
+            'ki-nav-item ki-nav-item-inactive w-full cursor-pointer',
             !mobile && collapsed && 'justify-center !px-2',
           )}
           onClick={() => void onLogout()}

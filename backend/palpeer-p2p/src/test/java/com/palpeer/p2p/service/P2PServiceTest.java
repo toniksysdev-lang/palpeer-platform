@@ -3,6 +3,7 @@ package com.palpeer.p2p.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,6 +23,8 @@ import com.palpeer.p2p.repository.P2PRequestRepository;
 import com.palpeer.p2p.web.dto.CreateP2PRequestDto;
 import com.palpeer.p2p.web.dto.P2POrderResponse;
 import com.palpeer.p2p.web.dto.P2POrderSummaryResponse;
+import com.palpeer.profile.repository.ProfileRepository;
+import com.palpeer.user.repository.UserRepository;
 import com.palpeer.wallet.domain.Wallet;
 import com.palpeer.wallet.repository.WalletRepository;
 import java.math.BigDecimal;
@@ -44,7 +47,10 @@ class P2PServiceTest {
     @Mock private P2POrderRepository p2POrderRepository;
     @Mock private CurrencyService currencyService;
     @Mock private P2PRateBoundsService p2PRateBoundsService;
+    @Mock private P2PFeeTierService p2PFeeTierService;
     @Mock private WalletRepository walletRepository;
+    @Mock private ProfileRepository profileRepository;
+    @Mock private UserRepository userRepository;
     @Mock private LedgerService ledgerService;
     @Mock private com.palpeer.common.audit.AuditRecorder auditRecorder;
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
@@ -58,17 +64,20 @@ class P2PServiceTest {
     void setUp() {
         ownerId = UUID.randomUUID();
         acceptorId = UUID.randomUUID();
+        lenient().when(profileRepository.findByUserId(any())).thenReturn(Optional.empty());
+        lenient().when(userRepository.findById(any())).thenReturn(Optional.empty());
     }
 
     @Test
     void create_persistsOpenRequest() {
-        when(p2PRequestRepository.save(any(P2PRequest.class))).thenAnswer(inv -> {
+        when(p2PRequestRepository.saveAndFlush(any(P2PRequest.class))).thenAnswer(inv -> {
             P2PRequest r = inv.getArgument(0);
             if (r.getId() == null) {
                 r.setId(UUID.randomUUID());
             }
             return r;
         });
+        when(p2PRequestRepository.save(any(P2PRequest.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var response = p2PService.create(ownerId, new CreateP2PRequestDto(
                 P2PSide.BUY, "USD", "NGN",
@@ -92,13 +101,14 @@ class P2PServiceTest {
         wallet.setCurrencyCode("USD");
         when(walletRepository.findByUserIdAndCurrencyCodeIgnoreCase(ownerId, "USD"))
                 .thenReturn(Optional.of(wallet));
-        when(p2PRequestRepository.save(any(P2PRequest.class))).thenAnswer(inv -> {
+        when(p2PRequestRepository.saveAndFlush(any(P2PRequest.class))).thenAnswer(inv -> {
             P2PRequest r = inv.getArgument(0);
             if (r.getId() == null) {
                 r.setId(UUID.randomUUID());
             }
             return r;
         });
+        when(p2PRequestRepository.save(any(P2PRequest.class))).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerService.post(any(LedgerPostingRequest.class))).thenAnswer(inv -> {
             LedgerEntry entry = new LedgerEntry();
             entry.setId(holdId);
@@ -116,6 +126,45 @@ class P2PServiceTest {
         assertThat(post.getValue().entryType()).isEqualTo(LedgerEntryType.HOLD);
         assertThat(post.getValue().walletId()).isEqualTo(walletId);
         assertThat(post.getValue().amount()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    void create_sellNgnCadHoldsNairaWalletNotCad() {
+        UUID ngnWalletId = UUID.randomUUID();
+        UUID holdId = UUID.randomUUID();
+        Wallet ngnWallet = new Wallet();
+        ngnWallet.setId(ngnWalletId);
+        ngnWallet.setUserId(ownerId);
+        ngnWallet.setCurrencyCode("NGN");
+        when(walletRepository.findByUserIdAndCurrencyCodeIgnoreCase(ownerId, "NGN"))
+                .thenReturn(Optional.of(ngnWallet));
+        when(p2PRequestRepository.saveAndFlush(any(P2PRequest.class))).thenAnswer(inv -> {
+            P2PRequest r = inv.getArgument(0);
+            if (r.getId() == null) {
+                r.setId(UUID.randomUUID());
+            }
+            return r;
+        });
+        when(p2PRequestRepository.save(any(P2PRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerService.post(any(LedgerPostingRequest.class))).thenAnswer(inv -> {
+            LedgerEntry entry = new LedgerEntry();
+            entry.setId(holdId);
+            return entry;
+        });
+
+        var response = p2PService.create(ownerId, new CreateP2PRequestDto(
+                P2PSide.SELL, "NGN", "CAD",
+                new BigDecimal("100000.00"), new BigDecimal("0.001"),
+                null, null));
+
+        assertThat(response.baseCurrencyCode()).isEqualTo("NGN");
+        assertThat(response.quoteCurrencyCode()).isEqualTo("CAD");
+        ArgumentCaptor<LedgerPostingRequest> post = ArgumentCaptor.forClass(LedgerPostingRequest.class);
+        verify(ledgerService).post(post.capture());
+        assertThat(post.getValue().entryType()).isEqualTo(LedgerEntryType.HOLD);
+        assertThat(post.getValue().walletId()).isEqualTo(ngnWalletId);
+        assertThat(post.getValue().amount()).isEqualByComparingTo("100000.00");
+        verify(walletRepository, never()).findByUserIdAndCurrencyCodeIgnoreCase(ownerId, "CAD");
     }
 
     @Test
@@ -214,6 +263,39 @@ class P2PServiceTest {
     }
 
     @Test
+    void delete_archivesCancelledRequest() {
+        P2PRequest request = openRequest();
+        request.setStatus(P2PStatus.CANCELLED);
+        when(p2PRequestRepository.findByIdAndUserId(request.getId(), ownerId)).thenReturn(Optional.of(request));
+        when(p2PRequestRepository.save(any(P2PRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        p2PService.delete(ownerId, request.getId());
+
+        assertThat(request.getArchivedAt()).isNotNull();
+        assertThat(request.getStatus()).isEqualTo(P2PStatus.CANCELLED);
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void deleteOrder_archivesCancelledOrderForCaller() {
+        P2POrder order = new P2POrder();
+        order.setId(UUID.randomUUID());
+        order.setRequestId(UUID.randomUUID());
+        order.setRequesterId(ownerId);
+        order.setAcceptorId(acceptorId);
+        order.setAmount(new BigDecimal("10"));
+        order.setRate(new BigDecimal("1"));
+        order.setStatus(P2PStatus.CANCELLED);
+        when(p2POrderRepository.findByIdAndPartyUserId(order.getId(), ownerId)).thenReturn(Optional.of(order));
+        when(p2POrderRepository.save(any(P2POrder.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        p2PService.deleteOrder(ownerId, order.getId());
+
+        assertThat(order.getRequesterArchivedAt()).isNotNull();
+        assertThat(order.getAcceptorArchivedAt()).isNull();
+    }
+
+    @Test
     void expireIfDue_expiresPastDueOpenRequestAndPublishesClosed() {
         P2PRequest request = openRequest();
         request.setExpiresAt(java.time.Instant.now().minusSeconds(1));
@@ -253,7 +335,7 @@ class P2PServiceTest {
         order.setAmount(new BigDecimal("100.00"));
         order.setRate(new BigDecimal("1500.00"));
         order.setStatus(P2PStatus.ACCEPTED);
-        when(p2POrderRepository.findByRequesterIdOrAcceptorIdOrderByCreatedAtDesc(acceptorId, acceptorId))
+        when(p2POrderRepository.findVisibleForUserOrderByCreatedAtDesc(acceptorId))
                 .thenReturn(List.of(order));
         when(p2PRequestRepository.findAllById(Set.of(request.getId()))).thenReturn(List.of(request));
 
@@ -268,8 +350,7 @@ class P2PServiceTest {
 
     @Test
     void listMyOrders_emptySkipsRequestLookup() {
-        when(p2POrderRepository.findByRequesterIdOrAcceptorIdOrderByCreatedAtDesc(ownerId, ownerId))
-                .thenReturn(List.of());
+        when(p2POrderRepository.findVisibleForUserOrderByCreatedAtDesc(ownerId)).thenReturn(List.of());
 
         assertThat(p2PService.listMyOrders(ownerId)).isEmpty();
         verify(p2PRequestRepository, never()).findAllById(any());

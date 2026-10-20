@@ -10,18 +10,21 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { badgeLabel } from '@/features/notifications/logic';
 import { useTheme } from '@/providers/ThemeProvider';
-import { useGetChatRoomsQuery } from '@/services/api/chatApi';
+import { useGetChatRoomsQuery, useGetChatUnreadCountQuery } from '@/services/api/chatApi';
 import { toAppError } from '@/services/api/errors';
 import { useGetMyOrdersQuery } from '@/services/api/p2pApi';
+import { palette } from '@/theme/colors';
 import { formatDateTime } from '@/utils/datetime';
 
 import { orderPairLabel } from '../logic';
 
-/** One conversation per P2P order. The room list has no last message or unread count (C-2). */
+/** One conversation per P2P order or negotiation, with per-room unread badges. */
 export function ChatRoomsScreen() {
   const theme = useTheme();
   const rooms = useGetChatRoomsQuery();
+  const unread = useGetChatUnreadCountQuery();
   const orders = useGetMyOrdersQuery();
 
   let body;
@@ -48,13 +51,18 @@ export function ChatRoomsScreen() {
       const title = room.negotiationId
         ? 'Negotiation chat'
         : orderPairLabel(order);
+      const unreadText = badgeLabel(room.unreadCount);
       return (
         <Card
           key={room.id}
           variant="outlined"
           padding="md"
           onPress={() => router.push({ pathname: '/chat/[roomId]', params: { roomId: room.id } })}
-          accessibilityLabel={`Conversation about ${title}`}
+          accessibilityLabel={
+            unreadText
+              ? `Conversation about ${title}, ${room.unreadCount} unread`
+              : `Conversation about ${title}`
+          }
           testID={`chat-room-${room.id}`}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
@@ -65,6 +73,28 @@ export function ChatRoomsScreen() {
                 Started {formatDateTime(room.createdAt) ?? ''}
               </AppText>
             </View>
+            {unreadText ? (
+              <View
+                testID={`chat-room-unread-${room.id}`}
+                style={{
+                  minWidth: 18,
+                  minHeight: 18,
+                  paddingHorizontal: 5,
+                  borderRadius: 9,
+                  backgroundColor: theme.colors.danger,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <AppText
+                  variant="caption"
+                  maxFontSizeMultiplier={1.3}
+                  style={{ color: palette.neutral0, fontSize: 11, lineHeight: 14 }}
+                >
+                  {unreadText}
+                </AppText>
+              </View>
+            ) : null}
             {order ? <StatusBadge status={order.status} /> : null}
             <Icon icon={ChevronRight} color={theme.colors.textMuted} />
           </View>
@@ -81,6 +111,7 @@ export function ChatRoomsScreen() {
           refreshing={rooms.isFetching && !rooms.isLoading}
           onRefresh={() => {
             void rooms.refetch();
+            void unread.refetch();
             void orders.refetch();
           }}
           tintColor={theme.colors.primary}

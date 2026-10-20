@@ -9,6 +9,7 @@ import type {
   SetPinRequest,
   SetSecurityQuestionsRequest,
   VerifyPinRequest,
+  VerifySecurityAnswersRequest,
 } from '@/types/api/security';
 
 /**
@@ -28,6 +29,9 @@ export const securityCommands = {
   },
   resetPin(body: ResetPinRequest): Promise<ApiResult<void>> {
     return authorizedRequest('/security/pin/reset', { method: 'POST', body });
+  },
+  verifyAnswers(body: VerifySecurityAnswersRequest): Promise<ApiResult<void>> {
+    return authorizedRequest('/security/questions/verify', { method: 'POST', body });
   },
   setQuestions(body: SetSecurityQuestionsRequest): Promise<ApiResult<SecurityQuestionResponse[]>> {
     return authorizedRequest('/security/questions', { method: 'PUT', body });

@@ -111,6 +111,38 @@ palpeer:
       client-id: ${PALPEER_SENDPULSE_CLIENT_ID:${PALPEER_SMTP_USERNAME:}}
       client-secret: ${PALPEER_SENDPULSE_CLIENT_SECRET:${PALPEER_SMTP_PASSWORD:}}
       base-url: ${PALPEER_SENDPULSE_BASE_URL:https://api.sendpulse.com}
+  sms:
+    # Enable exactly one live provider at a time (telnyx | twilio | bulksms).
+    bulksms:
+      # JSON REST API. Legacy EAPI is deprecated by BulkSMS.
+      # Docs: https://www.bulksms.com/developer/json/v1/
+      enabled: ${BULKSMS_ENABLED:false}
+      token-id: ${BULKSMS_TOKEN_ID:}
+      token-secret: ${BULKSMS_TOKEN_SECRET:}
+      base-url: ${BULKSMS_BASE_URL:https://api.bulksms.com/v1}
+      sender: ${BULKSMS_SENDER:Palpeer}
+      timeout-ms: ${BULKSMS_TIMEOUT_MS:15000}
+    twilio:
+      # Docs: https://www.twilio.com/docs/messaging/api
+      # Prefer API Key SID/Secret for auth; Account SID is still required in the API path.
+      # Requires TWILIO_FROM_NUMBER or TWILIO_MESSAGING_SERVICE_SID.
+      enabled: ${TWILIO_ENABLED:false}
+      account-sid: ${TWILIO_ACCOUNT_SID:}
+      api-key-sid: ${TWILIO_API_KEY_SID:}
+      api-key-secret: ${TWILIO_API_KEY_SECRET:}
+      auth-token: ${TWILIO_AUTH_TOKEN:}
+      from-number: ${TWILIO_FROM_NUMBER:}
+      messaging-service-sid: ${TWILIO_MESSAGING_SERVICE_SID:}
+      friendly-name: ${TWILIO_FRIENDLY_NAME:}
+      timeout-ms: ${TWILIO_TIMEOUT_MS:15000}
+    telnyx:
+      # Docs: https://developers.telnyx.com/docs/api/v2/messaging
+      enabled: ${TELNYX_ENABLED:false}
+      api-key: ${TELNYX_API_KEY:}
+      base-url: ${TELNYX_API_URL:https://api.telnyx.com/v2}
+      messaging-profile-id: ${TELNYX_MESSAGING_PROFILE_ID:}
+      from-number: ${TELNYX_FROM_NUMBER:}
+      timeout-ms: ${TELNYX_TIMEOUT_MS:15000}
   storage:
     local:
       root: ${PALPEER_STORAGE_ROOT:./data/private-storage}

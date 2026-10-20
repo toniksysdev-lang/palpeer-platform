@@ -2,10 +2,12 @@ package com.palpeer.p2p.web;
 
 import com.palpeer.auth.security.UserPrincipal;
 import com.palpeer.common.api.ApiResponse;
+import com.palpeer.p2p.service.P2PRateBoundsService;
 import com.palpeer.p2p.service.P2PService;
 import com.palpeer.p2p.web.dto.CreateP2PRequestDto;
 import com.palpeer.p2p.web.dto.P2POrderResponse;
 import com.palpeer.p2p.web.dto.P2POrderSummaryResponse;
+import com.palpeer.p2p.web.dto.P2PRateBoundsResponse;
 import com.palpeer.p2p.web.dto.P2PRequestResponse;
 import com.palpeer.p2p.web.dto.PublicP2PRateResponse;
 import com.palpeer.p2p.web.dto.UpdateP2PRequestDto;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class P2PController {
 
     private final P2PService p2PService;
+    private final P2PRateBoundsService p2PRateBoundsService;
 
     @PostMapping("/requests")
     @ResponseStatus(HttpStatus.CREATED)
@@ -56,12 +60,21 @@ public class P2PController {
     }
 
     @DeleteMapping("/requests/{requestId}")
-    @Operation(summary = "Cancel (delete) OPEN P2P request")
+    @Operation(summary = "Cancel an OPEN request, or remove a cancelled/expired request from history")
     public ApiResponse<Void> delete(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable UUID requestId) {
         p2PService.delete(principal.getId(), requestId);
-        return ApiResponse.ok("P2P request cancelled", null);
+        return ApiResponse.ok("P2P request removed", null);
+    }
+
+    @DeleteMapping("/orders/{orderId}")
+    @Operation(summary = "Remove a cancelled P2P order from the caller's history")
+    public ApiResponse<Void> deleteOrder(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID orderId) {
+        p2PService.deleteOrder(principal.getId(), orderId);
+        return ApiResponse.ok("P2P order removed", null);
     }
 
     @PostMapping("/requests/{requestId}/accept")
@@ -95,6 +108,13 @@ public class P2PController {
     @Operation(summary = "List OPEN P2P requests")
     public ApiResponse<List<P2PRequestResponse>> listOpen() {
         return ApiResponse.ok(p2PService.listOpen());
+    }
+
+    @GetMapping("/rate-bounds")
+    @Operation(summary = "Get configured min/max rate for a currency pair, if any")
+    public ApiResponse<P2PRateBoundsResponse> getRateBounds(
+            @RequestParam String baseCurrencyCode, @RequestParam String quoteCurrencyCode) {
+        return ApiResponse.ok(p2PRateBoundsService.findByPair(baseCurrencyCode, quoteCurrencyCode));
     }
 
     @GetMapping("/orders/{orderId}")

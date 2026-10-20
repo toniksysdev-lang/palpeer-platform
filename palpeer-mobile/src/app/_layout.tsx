@@ -9,6 +9,7 @@ import { OfflineBanner } from '@/components/feedback/OfflineBanner';
 import { BrandSplash } from '@/features/auth/components/BrandSplash';
 import { OfferBiometricUnlock } from '@/features/security/OfferBiometricUnlock';
 import { RequirePinSetup } from '@/features/security/RequirePinSetup';
+import { RequireSecurityQuestions } from '@/features/security/RequireSecurityQuestions';
 import { LockScreen } from '@/features/security/lock/LockScreen';
 import { useAppLockLifecycle } from '@/features/security/lock/useAppLockLifecycle';
 import { useAppSwitcherPrivacy } from '@/features/security/lock/useAppSwitcherPrivacy';
@@ -79,9 +80,11 @@ function RootNavigator() {
         {/* Public, but must stay last: a guarded-out `/` falls back to the first allowed screen. */}
         <Stack.Screen name="view-rates" />
         <Stack.Screen name="support" />
+        <Stack.Screen name="p2p-share/[id]" />
       </Stack>
       <OfflineBanner />
       {isAuthenticated ? <RequirePinSetup /> : null}
+      {isAuthenticated ? <RequireSecurityQuestions /> : null}
       {isAuthenticated ? <OfferBiometricUnlock /> : null}
       {isAuthenticated && locked ? <LockScreen /> : null}
     </>

@@ -18,6 +18,8 @@ import { useToast } from '@/providers/ToastProvider';
 import { openExternal, supportMailto, telUrl } from '../appInfo';
 import { searchFaq, type FaqItem } from '../faq';
 
+const DEFAULT_SUPPORT_EMAIL = 'support@palpeer.com';
+
 export function HelpCenterScreen() {
   const theme = useTheme();
   const [query, setQuery] = useState('');
@@ -101,7 +103,8 @@ function FaqEntry({
 
 function ContactSupport() {
   const toast = useToast();
-  const { email, phone } = appConfig.support;
+  const email = appConfig.support.email ?? DEFAULT_SUPPORT_EMAIL;
+  const phone = appConfig.support.phone;
 
   const open = async (url: string, fallback: string) => {
     if (!(await openExternal(url))) toast.show({ type: 'error', title: fallback });
@@ -113,20 +116,18 @@ function ContactSupport() {
         tone="info"
         message="Never share your password, transaction PIN or one-time codes with anyone, including someone who says they're from support."
       />
-      {email ? (
-        <NavRow
-          icon={Mail}
-          title="Email support"
-          detail={email}
-          onPress={() =>
-            void open(
-              supportMailto(email, 'PALPEER support request'),
-              `No email app found. Write to ${email}.`,
-            )
-          }
-          testID="support-email"
-        />
-      ) : null}
+      <NavRow
+        icon={Mail}
+        title="Email support"
+        detail={email}
+        onPress={() =>
+          void open(
+            supportMailto(email, 'PALPEER support request'),
+            `No email app found. Write to ${email}.`,
+          )
+        }
+        testID="support-email"
+      />
       {phone ? (
         <NavRow
           icon={Phone}
@@ -135,11 +136,6 @@ function ContactSupport() {
           onPress={() => void open(telUrl(phone), `Calling isn't available. Call ${phone}.`)}
           testID="support-phone"
         />
-      ) : null}
-      {!email && !phone ? (
-        <AppText tone="secondary" testID="support-unavailable">
-          Support contact details aren&apos;t available in this version of the app yet.
-        </AppText>
       ) : null}
     </RowSection>
   );

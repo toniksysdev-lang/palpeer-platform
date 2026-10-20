@@ -19,11 +19,13 @@ import { ReviewRow } from '@/features/wallets/components/ReviewRow';
 import { useMoneyFormat } from '@/features/wallets/useMoneyFormat';
 import { useNow } from '@/hooks/useNow';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useToast } from '@/providers/ToastProvider';
 import { toAppError } from '@/services/api/errors';
 import { useGetMyNegotiationsQuery } from '@/services/api/negotiationApi';
 import {
   useAcceptRequestMutation,
   useCancelRequestMutation,
+  useDeleteRequestMutation,
   useGetMyOrdersQuery,
   useGetRequestQuery,
 } from '@/services/api/p2pApi';
@@ -31,22 +33,36 @@ import { useAppSelector } from '@/store';
 import { formatDateTime } from '@/utils/datetime';
 
 import { ExpiryCountdown } from '../components/ExpiryCountdown';
+import { FlippableRateLine } from '../components/FlippableRateLine';
 import { NoSettlementNotice } from '../components/NoSettlementNotice';
 import { requestActionErrorMessage } from '../errors';
-import { canAccept, canManage, effectiveStatus, p2pRateLine, sideLabel } from '../logic';
+import {
+  acceptConfirmMessage,
+  canAccept,
+  canDeleteRequest,
+  canManage,
+  effectiveStatus,
+  p2pRateLine,
+  quoteTotal,
+  sideLabel,
+} from '../logic';
+import { canShareSellOrder, shareSellOrder } from '../shareSellOrder';
 
 export function RequestDetailScreen() {
   const theme = useTheme();
+  const toast = useToast();
   const now = useNow();
   const { id } = useLocalSearchParams<{ id: string }>();
   const userId = useAppSelector((state) => state.session.userId);
-  const { format } = useMoneyFormat();
+  const { format, precision } = useMoneyFormat();
   const request = useGetRequestQuery(id);
   const [accept, acceptState] = useAcceptRequestMutation();
   const [cancel, cancelState] = useCancelRequestMutation();
-  const [confirming, setConfirming] = useState<'accept' | 'cancel' | null>(null);
+  const [remove, removeState] = useDeleteRequestMutation();
+  const [confirming, setConfirming] = useState<'accept' | 'cancel' | 'delete' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [cancelled, setCancelled] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   const data = request.data;
   const status = data ? effectiveStatus(data, now) : null;
@@ -80,8 +96,21 @@ export function RequestDetailScreen() {
   const quote = data.quoteCurrencyCode;
   const amount = format(data.amount, base);
   const rate = p2pRateLine(data.rate, base, quote);
+  const quotePrecision = precision(quote) ?? 2;
+  const debitCurrency = data.side === 'SELL' ? quote : base;
+  const debitRaw =
+    data.side === 'SELL' ? quoteTotal(data.amount, data.rate, quotePrecision) : data.amount;
+  const acceptMessage = acceptConfirmMessage({
+    side: data.side,
+    formattedBaseAmount: amount,
+    rateLine: rate,
+    posterName: data.posterDisplayName ?? 'Palpeer user',
+    formattedDebitAmount: format(debitRaw, debitCurrency),
+    debitCurrencyCode: debitCurrency,
+  });
   const acceptable = canAccept(data, userId, now);
   const manageable = canManage(data, userId, now);
+  const deletable = cancelled || canDeleteRequest(data, userId, now);
 
   const runAccept = async () => {
     setActionError(null);
@@ -103,6 +132,17 @@ export function RequestDetailScreen() {
       return;
     }
     setCancelled(true);
+  };
+
+  const runDelete = async () => {
+    setActionError(null);
+    const result = await remove(data.id);
+    setConfirming(null);
+    if ('error' in result) {
+      setActionError(requestActionErrorMessage(toAppError(result.error)));
+      return;
+    }
+    router.replace({ pathname: '/p2p/history', params: { tab: 'requests' } });
   };
 
   // At most one negotiation per counterparty per request (R-N-1); the owner can have several.
@@ -142,8 +182,28 @@ export function RequestDetailScreen() {
       </View>
     );
   } else if (manageable) {
+    const shareable = canShareSellOrder(data, own, status);
     footer = (
       <View style={{ gap: theme.spacing.sm }}>
+        {shareable ? (
+          <Button
+            label="Share Your Sell Order"
+            onPress={() => {
+              void (async () => {
+                setSharing(true);
+                try {
+                  await shareSellOrder(data, amount);
+                } catch {
+                  toast.show({ type: 'error', title: "Couldn't open the share sheet" });
+                } finally {
+                  setSharing(false);
+                }
+              })();
+            }}
+            loading={sharing}
+            testID="p2p-share-sell"
+          />
+        ) : null}
         <Button
           label="Edit request"
           variant="outline"
@@ -167,6 +227,16 @@ export function RequestDetailScreen() {
         label="View order"
         onPress={() => router.push({ pathname: '/p2p/order/[id]', params: { id: order.id } })}
         testID="p2p-view-order"
+      />
+    );
+  } else if (deletable) {
+    footer = (
+      <Button
+        label="Delete from history"
+        variant="danger"
+        onPress={() => setConfirming('delete')}
+        loading={removeState.isLoading}
+        testID="p2p-delete-request"
       />
     );
   } else if (myNegotiation) {
@@ -205,7 +275,11 @@ export function RequestDetailScreen() {
 
       <FormAlert
         tone="success"
-        message={cancelled ? 'Your request was cancelled.' : null}
+        message={
+          cancelled
+            ? 'Your request was cancelled. You can delete it from your history below.'
+            : null
+        }
         testID="p2p-cancelled"
       />
       <FormAlert message={actionError} testID="p2p-action-error" />
@@ -215,7 +289,29 @@ export function RequestDetailScreen() {
 
       <Card variant="outlined" padding="md">
         <ReviewRow label="Amount" value={amount} testID="p2p-request-amount" />
-        <ReviewRow label="Rate" value={rate} testID="p2p-request-rate" />
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: theme.spacing.md,
+            paddingVertical: theme.spacing.sm,
+          }}
+        >
+          <AppText tone="secondary" style={{ flex: 1 }}>
+            Rate
+          </AppText>
+          <View style={{ flex: 2, alignItems: 'flex-end' }}>
+            <FlippableRateLine
+              rate={data.rate}
+              base={base}
+              quote={quote}
+              variant="bodyStrong"
+              tone="primary"
+              align="right"
+              testID="p2p-request-rate"
+            />
+          </View>
+        </View>
         <ReviewRow
           label="Expires"
           value={formatDateTime(data.expiresAt) ?? 'No expiry'}
@@ -256,7 +352,7 @@ export function RequestDetailScreen() {
       <ConfirmDialog
         visible={confirming === 'accept'}
         title="Accept this request?"
-        message={`You agree to ${amount} at ${rate}. This creates an order between you and the person who posted it. Palpeer doesn't move any money for it.`}
+        message={acceptMessage}
         confirmLabel="Accept"
         loading={acceptState.isLoading}
         onConfirm={() => void runAccept()}
@@ -271,6 +367,17 @@ export function RequestDetailScreen() {
         destructive
         loading={cancelState.isLoading}
         onConfirm={() => void runCancel()}
+        onCancel={() => setConfirming(null)}
+      />
+      <ConfirmDialog
+        visible={confirming === 'delete'}
+        title="Delete from history?"
+        message="This cancelled request will be removed from your P2P history. This can't be undone."
+        confirmLabel="Delete"
+        cancelLabel="Keep"
+        destructive
+        loading={removeState.isLoading}
+        onConfirm={() => void runDelete()}
         onCancel={() => setConfirming(null)}
       />
     </Screen>

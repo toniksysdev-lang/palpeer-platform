@@ -5,7 +5,7 @@ import { Screen } from '@/components/layout/Screen';
 import { StackHeader } from '@/components/layout/StackHeader';
 import { NavRow, RowSection } from '@/components/ui/NavRow';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
-import { appInfoLine } from '@/features/support/appInfo';
+import { appVersion } from '@/features/support/appInfo';
 import { useAppearance } from '@/hooks/useAppearance';
 import type { AppearancePreference } from '@/store/slices/preferencesSlice';
 
@@ -60,7 +60,12 @@ export function SettingsScreen() {
           onPress={() => router.push('/support')}
           testID="settings-support"
         />
-        <NavRow icon={Info} title="App version" detail={appInfoLine()} testID="settings-version" />
+        <NavRow
+          icon={Info}
+          title="App version"
+          detail={appVersion() ?? '—'}
+          testID="settings-version"
+        />
       </RowSection>
     </Screen>
   );

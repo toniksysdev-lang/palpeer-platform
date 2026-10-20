@@ -14,7 +14,12 @@ export type ChatRoomResponse = {
   createdAt: IsoInstant;
   participantALastReadAt: IsoInstant | null;
   participantBLastReadAt: IsoInstant | null;
+  /** Messages from the other participant after my last-read marker. */
+  unreadCount: number;
 };
+
+/** VERIFIED: `GET /chat/unread-count` body (`{ count }`). */
+export type ChatUnreadCountResponse = { count: number };
 
 /**
  * VERIFIED: `ChatMessageResponse`, from REST (inside the envelope) and from STOMP

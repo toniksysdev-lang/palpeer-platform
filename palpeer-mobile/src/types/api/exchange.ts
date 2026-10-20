@@ -28,6 +28,20 @@ export type PublicP2PRateResponse = {
   createdAt: IsoInstant;
 };
 
+/** VERIFIED: `PublicP2PRequestResponse` from `GET /public/p2p-requests/{id}` (share / guest Accept). */
+export type PublicP2PRequestResponse = {
+  id: Uuid;
+  side: P2PSide;
+  status: 'OPEN';
+  baseCurrencyCode: string;
+  quoteCurrencyCode: string;
+  amount: Money;
+  rate: Money;
+  posterDisplayName: string | null;
+  expiresAt: IsoInstant | null;
+  createdAt: IsoInstant;
+};
+
 /** Which side of the exchange the user typed; the backend calculates the other side. */
 export type ExchangeFixedSide = 'SOURCE' | 'TARGET';
 
