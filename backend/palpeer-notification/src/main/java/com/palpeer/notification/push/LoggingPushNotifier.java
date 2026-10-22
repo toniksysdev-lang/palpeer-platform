@@ -3,15 +3,14 @@ package com.palpeer.notification.push;
 import com.palpeer.notification.domain.DeviceToken;
 import com.palpeer.notification.domain.Notification;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.stereotype.Component;
 
 /**
  * Dev/stub push delivery when FCM is disabled or credentials are missing.
+ *
+ * <p>Registered by {@link PushNotifierFallbackConfig} (not as a {@code @Component}) so
+ * {@code @ConditionalOnMissingBean(PushNotifier)} evaluates correctly.
  */
 @Slf4j
-@Component
-@ConditionalOnMissingBean(PushNotifier.class)
 public class LoggingPushNotifier implements PushNotifier {
 
     @Override

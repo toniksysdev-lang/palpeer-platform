@@ -60,6 +60,8 @@ node web-emulator/server.cjs --port=3333 --app=http://localhost:8081
 '@
 
 Start-NamedWindow 'PALPEER Admin :5173' (Join-Path $Root 'palpeer-admin-end') @'
+# Agent/CI shells often leak NODE_ENV=production; that flips Vite PROD during `vite` serve.
+$env:NODE_ENV = 'development'
 npm run dev
 '@
 

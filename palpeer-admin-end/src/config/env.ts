@@ -17,15 +17,19 @@ const appEnv =
     ? parsed.VITE_APP_ENV
     : 'development';
 
+// Prefer Vite MODE over NODE_ENV-derived PROD — agent/CI shells often leak NODE_ENV=production
+// into `vite` serve, which incorrectly flips import.meta.env.PROD while MODE stays "development".
+const isProdBuild = import.meta.env.MODE === 'production';
+
 /** Production builds must never enable mock mode. */
-const useMockApi = import.meta.env.PROD ? false : parsed.VITE_USE_MOCK_API === 'true';
+const useMockApi = isProdBuild ? false : parsed.VITE_USE_MOCK_API === 'true';
 
 function resolveApiBaseUrl(): string {
-  const raw = (parsed.VITE_API_BASE_URL || (import.meta.env.DEV ? '/api/v1' : 'http://localhost:8085/api/v1')).trim();
+  const raw = (parsed.VITE_API_BASE_URL || (!isProdBuild ? '/api/v1' : 'http://localhost:8085/api/v1')).trim();
 
   // Same-origin relative base (recommended for Vite proxy) — avoids localhost vs 127.0.0.1 CORS breaks.
   if (raw.startsWith('/') && !raw.startsWith('//')) {
-    if (import.meta.env.PROD) {
+    if (isProdBuild) {
       throw new Error('Production builds require an absolute VITE_API_BASE_URL.');
     }
     return raw.replace(/\/$/, '') || '/api/v1';
@@ -43,7 +47,7 @@ function resolveApiBaseUrl(): string {
   }
 
   // Production admin traffic must not call plaintext APIs (except local loopback for rare previews).
-  if (import.meta.env.PROD && url.protocol !== 'https:') {
+  if (isProdBuild && url.protocol !== 'https:') {
     const host = url.hostname;
     const loopback = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
     if (!loopback) {
@@ -61,7 +65,7 @@ function resolveWsUrl(): string {
     if (url.protocol !== 'http:' && url.protocol !== 'https:' && url.protocol !== 'ws:' && url.protocol !== 'wss:') {
       throw new Error('invalid');
     }
-    if (import.meta.env.PROD && (url.protocol === 'http:' || url.protocol === 'ws:')) {
+    if (isProdBuild && (url.protocol === 'http:' || url.protocol === 'ws:')) {
       const host = url.hostname;
       const loopback = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
       if (!loopback) {
@@ -79,5 +83,5 @@ export const appConfig = {
   wsUrl: resolveWsUrl(),
   appEnv,
   useMockApi,
-  isProduction: import.meta.env.PROD,
+  isProduction: isProdBuild,
 } as const;
