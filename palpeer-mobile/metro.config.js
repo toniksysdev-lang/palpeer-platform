@@ -20,13 +20,18 @@ config.watcher = {
 
 // Apply NativeWind first, then wrap enhanceMiddleware so it is not dropped.
 const withCss = withNativeWind(config, { input: './global.css' });
-const previousEnhance = withCss.server?.enhanceMiddleware;
-withCss.server = {
-  ...withCss.server,
-  enhanceMiddleware: (middleware, server) => {
-    const base = previousEnhance ? previousEnhance(middleware, server) : middleware;
-    return enhanceSupportChatProxy(base);
-  },
-};
+
+// Dev-only CORS proxy for Expo web. Skip on EAS / CI export:embed workers.
+const onEasOrCi = Boolean(process.env.EAS_BUILD || process.env.CI);
+if (!onEasOrCi) {
+  const previousEnhance = withCss.server?.enhanceMiddleware;
+  withCss.server = {
+    ...withCss.server,
+    enhanceMiddleware: (middleware, server) => {
+      const base = previousEnhance ? previousEnhance(middleware, server) : middleware;
+      return enhanceSupportChatProxy(base);
+    },
+  };
+}
 
 module.exports = withCss;
