@@ -380,6 +380,7 @@ export function PlatformFeesPage() {
             <Pagination
               page={pageData.number}
               totalPages={pageData.totalPages}
+              totalElements={pageData.totalElements}
               onPageChange={(nextPage) => {
                 const next = new URLSearchParams(searchParams);
                 next.set('page', String(nextPage));
