@@ -23,8 +23,7 @@
         "NODE_OPTIONS": "--max-old-space-size=4096"
       },
       "android": {
-        "buildType": "apk",
-        "resourceClass": "large"
+        "buildType": "apk"
       }
     },
     "production": {
@@ -32,9 +31,6 @@
       "autoIncrement": true,
       "ios": {
         "resourceClass": "m-medium"
-      },
-      "android": {
-        "resourceClass": "large"
       },
       "env": {
         "EXPO_PUBLIC_ENV": "production",
