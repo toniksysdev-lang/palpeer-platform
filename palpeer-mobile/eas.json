@@ -1,7 +1,8 @@
 {
   "cli": {
     "version": ">= 16.0.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "remote",
+    "requireCommit": true
   },
   "build": {
     "development": {
@@ -20,13 +21,19 @@
         "EXPO_PUBLIC_API_BASE_URL": "https://palpeer-api.onrender.com/api/v1",
         "EXPO_PUBLIC_WS_URL": "https://palpeer-api.onrender.com/ws"
       },
-      "android": { "buildType": "apk" }
+      "android": {
+        "buildType": "apk",
+        "resourceClass": "medium"
+      }
     },
     "production": {
       "environment": "production",
       "autoIncrement": true,
       "ios": {
         "resourceClass": "m-medium"
+      },
+      "android": {
+        "resourceClass": "medium"
       },
       "env": {
         "EXPO_PUBLIC_ENV": "production",

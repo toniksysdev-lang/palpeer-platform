@@ -53,4 +53,6 @@ firebase-service-account.json
 
 # Local EAS / debug APK drops
 *.apk
+package.json.ir_*
+target-state*.png
 

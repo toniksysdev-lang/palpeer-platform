@@ -39,3 +39,5 @@ jest-*-out*.txt
 target-state*.png
 *.apk
 palpeer-preview*.apk
+package.json.ir_*
+target-state*.png
