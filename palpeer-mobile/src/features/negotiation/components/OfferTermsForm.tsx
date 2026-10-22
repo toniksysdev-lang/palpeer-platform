@@ -41,6 +41,8 @@ export function OfferTermsForm({
   amountError,
   rateError,
   editable = true,
+  amountEditable,
+  rateEditable,
   testID,
 }: {
   base: string;
@@ -51,11 +53,16 @@ export function OfferTermsForm({
   onRateChange: (value: string) => void;
   amountError?: string | null;
   rateError?: string | null;
+  /** When set, applies to both fields unless `amountEditable` / `rateEditable` override. */
   editable?: boolean;
+  amountEditable?: boolean;
+  rateEditable?: boolean;
   testID: string;
 }) {
   const theme = useTheme();
   const { precision } = useMoneyFormat();
+  const amountOpen = amountEditable ?? editable;
+  const rateOpen = rateEditable ?? editable;
   const [rateUnit, setRateUnit] = useState(() => preferredRateUnit(base, quote));
   const [rateAnchor, setRateAnchor] = useState<RateEntryAnchor | null>(() =>
     isPositiveMoney(rate) ? anchorFromApiRate(base, quote, rate) : null,
@@ -95,7 +102,7 @@ export function OfferTermsForm({
         currencyCode={base}
         placeholder="0.00"
         error={amountError}
-        editable={editable}
+        editable={amountOpen}
         testID={`${testID}-amount`}
       />
       <View style={{ gap: theme.spacing.xs }}>
@@ -111,8 +118,8 @@ export function OfferTermsForm({
         >
           <AppText variant="bodyStrong">1</AppText>
           <Pressable
-            onPress={editable ? flipRateUnit : undefined}
-            disabled={!editable}
+            onPress={rateOpen ? flipRateUnit : undefined}
+            disabled={!rateOpen}
             accessibilityRole="button"
             accessibilityLabel={`Rate unit: ${rateUnit}. Tap to switch.`}
             testID={`${testID}-rate-unit`}
@@ -127,7 +134,7 @@ export function OfferTermsForm({
               paddingVertical: theme.spacing.sm,
               backgroundColor: theme.colors.surface,
               minHeight: 52,
-              opacity: editable ? 1 : 0.6,
+              opacity: rateOpen ? 1 : 0.6,
             }}
           >
             <AppText variant="bodyStrong">{rateUnit}</AppText>
@@ -147,7 +154,7 @@ export function OfferTermsForm({
               placeholder="0.00"
               padOnBlur={false}
               error={rateError}
-              editable={editable}
+              editable={rateOpen}
               testID={`${testID}-rate`}
             />
           </View>

@@ -1,8 +1,6 @@
 package com.palpeer.common.mail;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import java.io.IOException;
-import java.io.InputStream;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -15,7 +13,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Conditional;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -56,9 +53,21 @@ public class SendPulseEmailSender implements EmailSender {
             throw new IllegalArgumentException("Email body is required");
         }
 
+        String fromEmail = mailProperties.getFrom() == null ? "" : mailProperties.getFrom().trim();
+        String fromName =
+                StringUtils.hasText(mailProperties.getFromName())
+                        ? mailProperties.getFromName().trim()
+                        : "Palpeer";
+        if (fromEmail.toLowerCase().endsWith(".ng")) {
+            log.warn(
+                    "Mail From={} uses .ng — SendPulse SPF/DKIM for palpeer.com.ng are often"
+                            + " incomplete; prefer noreply@palpeer.com (see docs/mail-deliverability.md)",
+                    fromEmail);
+        }
+
         Map<String, Object> from = new LinkedHashMap<>();
-        from.put("name", mailProperties.getFromName());
-        from.put("email", mailProperties.getFrom());
+        from.put("name", fromName);
+        from.put("email", fromEmail);
 
         Map<String, Object> recipient = new LinkedHashMap<>();
         recipient.put("email", to.trim());
@@ -76,12 +85,16 @@ public class SendPulseEmailSender implements EmailSender {
         } else {
             email.put("auto_plain_text", true);
         }
-        if (StringUtils.hasText(mailProperties.getHeaderFrom())) {
-            Map<String, Object> replyTo = new LinkedHashMap<>();
-            replyTo.put("email", mailProperties.getHeaderFrom().trim());
-            replyTo.put("name", mailProperties.getFromName());
-            email.put("reply_to", replyTo);
-        }
+        // Always set Reply-To to a monitored inbox (never leave it as noreply@).
+        String replyEmail = resolveReplyTo(fromEmail);
+        Map<String, Object> replyTo = new LinkedHashMap<>();
+        replyTo.put("email", replyEmail);
+        replyTo.put(
+                "name",
+                replyEmail.equalsIgnoreCase(EmailBrand.SUPPORT_EMAIL)
+                        ? "Palpeer Support"
+                        : fromName);
+        email.put("reply_to", replyTo);
 
         Map<String, Object> body = Map.of("email", email);
         try {
@@ -178,8 +191,8 @@ public class SendPulseEmailSender implements EmailSender {
     }
 
     /**
-     * REST cannot attach CID inlines the way SMTP MIME does — swap the logo to a data URI so
-     * branded HTML still renders.
+     * REST cannot attach CID inlines the way SMTP MIME does — swap the logo to the public HTTPS
+     * URL (smaller than a data-URI embed; better for Yahoo/Gmail filters).
      */
     String prepareHtml(String htmlBody) {
         if (!StringUtils.hasText(htmlBody)) {
@@ -188,26 +201,21 @@ public class SendPulseEmailSender implements EmailSender {
         if (!htmlBody.contains(EmailBrand.LOGO_CID_SRC)) {
             return htmlBody;
         }
-        String dataUri = loadLogoDataUri();
-        if (dataUri == null) {
-            log.warn("Email logo missing on classpath (mail/palpeer-logo.png); HTML may show broken image");
-            return htmlBody;
-        }
-        return htmlBody.replace(EmailBrand.LOGO_CID_SRC, dataUri);
+        return htmlBody.replace(EmailBrand.LOGO_CID_SRC, EmailBrand.LOGO_HTTPS_URL);
     }
 
-    private String loadLogoDataUri() {
-        ClassPathResource logo = new ClassPathResource("mail/palpeer-logo.png");
-        if (!logo.exists()) {
-            return null;
+    /** Prefer configured header-from; fall back to support@; never use noreply as Reply-To. */
+    String resolveReplyTo(String fromEmail) {
+        String configured =
+                mailProperties.getHeaderFrom() == null ? "" : mailProperties.getHeaderFrom().trim();
+        if (StringUtils.hasText(configured)
+                && !configured.toLowerCase().startsWith("noreply@")) {
+            return configured;
         }
-        try (InputStream in = logo.getInputStream()) {
-            byte[] bytes = in.readAllBytes();
-            return "data:image/png;base64," + Base64.getEncoder().encodeToString(bytes);
-        } catch (IOException ex) {
-            log.warn("Failed to load email logo: {}", ex.getMessage());
-            return null;
+        if (StringUtils.hasText(fromEmail) && !fromEmail.toLowerCase().startsWith("noreply@")) {
+            return fromEmail;
         }
+        return EmailBrand.SUPPORT_EMAIL;
     }
 
     private static String truncate(String value, int max) {

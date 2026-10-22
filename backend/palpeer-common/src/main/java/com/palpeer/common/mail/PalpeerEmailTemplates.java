@@ -14,14 +14,15 @@ public final class PalpeerEmailTemplates {
      * {@link EmailBrand}.
      */
     public static RenderedEmail emailVerification(String code) {
-        String subject = "Verify your PALPEER email";
+        // Title case subjects — ALL-CAPS subjects are a common spam-filter signal.
+        String subject = "Verify your Palpeer email";
 
         String html = EmailLayout.wrap(
-                "Your PALPEER verification code is " + code,
+                "Your Palpeer verification code is " + code,
                 subject,
                 EmailLayout.heading("Confirm your email")
                         + EmailLayout.paragraph(
-                                "Thanks for signing up for PALPEER. Enter this one-time code in the"
+                                "Thanks for signing up for Palpeer. Enter this one-time code in the"
                                         + " app to verify your email and finish creating your"
                                         + " account.")
                         + EmailLayout.otpCodeBox(code)
@@ -29,19 +30,19 @@ public final class PalpeerEmailTemplates {
                                 "The code expires in 10 minutes. For your security, don’t share it"
                                         + " with anyone.")
                         + EmailLayout.mutedNote(
-                                "If you didn’t create a PALPEER account, you can safely ignore this"
+                                "If you didn’t create a Palpeer account, you can safely ignore this"
                                         + " email.")
                         + EmailLayout.primaryButton("Open Palpeer", EmailBrand.SITE_URL));
 
         String text =
                 """
-                PALPEER — Verify your email
+                Palpeer — Verify your email
 
                 Thanks for signing up. Enter this code in the app to verify your email:
 
                 %s
 
-                This code expires in 10 minutes. If you did not create a PALPEER account, ignore this email.
+                This code expires in 10 minutes. If you did not create a Palpeer account, ignore this email.
 
                 %s
                 """
@@ -57,12 +58,12 @@ public final class PalpeerEmailTemplates {
         }
 
         String subject = switch (normalized) {
-            case "password reset" -> "Reset your PALPEER password";
-            default -> "Your PALPEER verification code";
+            case "password reset" -> "Reset your Palpeer password";
+            default -> "Your Palpeer verification code";
         };
 
         String html = EmailLayout.wrap(
-                "Your PALPEER code is " + code,
+                "Your Palpeer code is " + code,
                 subject,
                 EmailLayout.heading(subject)
                         + EmailLayout.paragraph(
@@ -76,7 +77,7 @@ public final class PalpeerEmailTemplates {
 
         String text =
                 """
-                PALPEER — %s
+                Palpeer — %s
 
                 Your %s code is: %s
 
@@ -90,13 +91,13 @@ public final class PalpeerEmailTemplates {
     }
 
     public static RenderedEmail welcome(String email) {
-        String subject = "Welcome to PALPEER";
+        String subject = "Welcome to Palpeer";
         String safeEmail = email == null || email.isBlank() ? "your account" : email.trim();
 
         String html = EmailLayout.wrap(
-                "Welcome to PALPEER — " + EmailBrand.TAGLINE,
+                "Welcome to Palpeer — " + EmailBrand.TAGLINE,
                 subject,
-                EmailLayout.heading("Welcome to PALPEER")
+                EmailLayout.heading("Welcome to Palpeer")
                         + EmailLayout.paragraph(
                                 "Thanks for joining. You're signed up as "
                                         + safeEmail
@@ -113,7 +114,7 @@ public final class PalpeerEmailTemplates {
 
         String text =
                 """
-                PALPEER — Welcome
+                Palpeer — Welcome
 
                 Thanks for joining. You're signed up as %s.
 
@@ -143,7 +144,7 @@ public final class PalpeerEmailTemplates {
             String whenLabel,
             String suspendUrl,
             String supportEmail) {
-        String subject = "New device signed in to your PALPEER account";
+        String subject = "New device signed in to your Palpeer account";
         String safeEmail = email == null || email.isBlank() ? "your account" : email.trim();
         String device = deviceLabel == null || deviceLabel.isBlank() ? "a new device" : deviceLabel.trim();
         String when = whenLabel == null || whenLabel.isBlank() ? "just now" : whenLabel.trim();
@@ -180,7 +181,7 @@ public final class PalpeerEmailTemplates {
 
         String text =
                 """
-                PALPEER — New device sign-in
+                Palpeer — New device sign-in
 
                 Someone signed in to %s from %s (%s). Other sessions on your account were ended.
 
@@ -206,7 +207,7 @@ public final class PalpeerEmailTemplates {
     public static RenderedEmail notification(
             String title, String body, String ctaLabel, String ctaUrl) {
         StringBuilder inner = new StringBuilder();
-        inner.append(EmailLayout.heading(title == null ? "PALPEER" : title));
+        inner.append(EmailLayout.heading(title == null ? "Palpeer" : title));
         if (body != null && !body.isBlank()) {
             for (String paragraph : body.split("\\n\\n")) {
                 String trimmed = paragraph.trim();
@@ -222,11 +223,11 @@ public final class PalpeerEmailTemplates {
         }
         inner.append(EmailLayout.mutedNote(EmailBrand.TAGLINE + " — instantly."));
 
-        String safeTitle = title == null || title.isBlank() ? "PALPEER notification" : title;
+        String safeTitle = title == null || title.isBlank() ? "Palpeer notification" : title;
         String html = EmailLayout.wrap(safeTitle, safeTitle, inner.toString());
         String text =
                 """
-                PALPEER
+                Palpeer
 
                 %s
 
@@ -240,5 +241,67 @@ public final class PalpeerEmailTemplates {
                                 ctaUrl == null || ctaUrl.isBlank() ? EmailBrand.SITE_URL : ctaUrl);
 
         return new RenderedEmail(safeTitle, html, text);
+    }
+
+    /**
+     * Wallet funding update (initiated / awaiting payment / credited / failed / reversed).
+     */
+    public static RenderedEmail walletFunding(String title, String body) {
+        return walletMovement("Wallet funding", title, body, "Open Palpeer wallet");
+    }
+
+    /**
+     * Wallet withdrawal update (initiated / sent / failed / reversed).
+     */
+    public static RenderedEmail walletWithdrawal(String title, String body) {
+        return walletMovement("Wallet withdrawal", title, body, "Open Palpeer wallet");
+    }
+
+    private static RenderedEmail walletMovement(
+            String kindLabel, String title, String body, String ctaLabel) {
+        String safeTitle = title == null || title.isBlank() ? kindLabel : title.trim();
+        String subject = "Palpeer — " + safeTitle;
+
+        StringBuilder inner = new StringBuilder();
+        inner.append(EmailLayout.heading(safeTitle));
+        inner.append(EmailLayout.paragraph(
+                kindLabel
+                        + " update on your Palpeer account. Details are below — open the app for the"
+                        + " latest status."));
+        if (body != null && !body.isBlank()) {
+            for (String paragraph : body.split("\\n\\n")) {
+                String trimmed = paragraph.trim();
+                if (!trimmed.isEmpty()) {
+                    inner.append(EmailLayout.paragraph(trimmed.replace('\n', ' ')));
+                }
+            }
+        }
+        inner.append(EmailLayout.primaryButton(ctaLabel, EmailBrand.SITE_URL));
+        inner.append(EmailLayout.mutedNote(
+                "If you did not request this movement, contact "
+                        + EmailBrand.SUPPORT_EMAIL
+                        + " right away."));
+
+        String html = EmailLayout.wrap(subject, subject, inner.toString());
+        String text =
+                """
+                Palpeer — %s
+
+                %s
+
+                %s
+
+                If you did not request this, contact %s.
+
+                %s
+                """
+                        .formatted(
+                                safeTitle,
+                                kindLabel + " update on your Palpeer account.",
+                                body == null ? "" : body,
+                                EmailBrand.SUPPORT_EMAIL,
+                                EmailBrand.SITE_URL);
+
+        return new RenderedEmail(subject, html, text);
     }
 }

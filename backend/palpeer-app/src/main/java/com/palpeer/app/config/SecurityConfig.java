@@ -77,6 +77,8 @@ public class SecurityConfig {
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/otp/verify",
                                 "/api/v1/auth/otp/resend",
+                                "/api/v1/auth/signup/status",
+                                "/api/v1/auth/signup/resend-email-otp",
                                 "/api/v1/auth/otp/phone/request",
                                 "/api/v1/auth/otp/phone/verify",
                                 "/api/v1/auth/password-reset/request",

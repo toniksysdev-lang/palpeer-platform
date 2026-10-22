@@ -4,6 +4,7 @@ import type {
   CreatePromotionInput,
   PromotionSummary,
   ReferralSummary,
+  UpdatePromotionInput,
 } from '@/types/promotions';
 import type { AdminBonusSearchParams, AdminReferralSearchParams } from '@/services/api/promotions';
 import { ApiClientError } from '@/types/api';
@@ -124,10 +125,44 @@ export function mockCreatePromotion(input: CreatePromotionInput): PromotionSumma
     endsAt: input.endsAt ?? null,
     bonusAmount: input.bonusAmount ?? null,
     bonusCurrencyCode: input.bonusCurrencyCode ?? null,
+    eligibilityJson: input.eligibilityJson ?? null,
     createdAt: new Date().toISOString(),
   };
   promotions.unshift(created);
   return { ...created };
+}
+
+export function mockUpdatePromotion(id: string, input: UpdatePromotionInput): PromotionSummary {
+  const index = promotions.findIndex((row) => row.id === id);
+  if (index < 0) {
+    throw new ApiClientError(404, 'RESOURCE_NOT_FOUND', 'Promotion not found.');
+  }
+  const code = input.code.trim().toUpperCase();
+  if (
+    promotions.some(
+      (row) => row.id !== id && row.code.toLowerCase() === code.toLowerCase(),
+    )
+  ) {
+    throw new ApiClientError(409, 'PROMOTION_EXISTS', 'Promotion code already exists.');
+  }
+  const updated: PromotionSummary = {
+    ...promotions[index],
+    code,
+    title: input.title.trim(),
+    description: input.description ?? null,
+    promotionType: input.promotionType,
+    active: input.active,
+    startsAt: input.startsAt ?? null,
+    endsAt: input.endsAt ?? null,
+    bonusAmount: input.bonusAmount ?? null,
+    bonusCurrencyCode: input.bonusCurrencyCode ?? null,
+    eligibilityJson:
+      input.eligibilityJson !== undefined
+        ? input.eligibilityJson
+        : promotions[index].eligibilityJson,
+  };
+  promotions[index] = updated;
+  return { ...updated };
 }
 
 export function mockListAdminReferrals(

@@ -30,6 +30,20 @@ function describe(withdrawal: WithdrawalTransactionResponse): { title: string; m
     case 'INITIATED':
     case 'PENDING':
     case 'PROCESSING':
+      if (withdrawal.providerName === 'APAYLO' && withdrawal.currencyCode === 'CAD') {
+        return {
+          title: 'Interac / EFT payout in progress',
+          message:
+            'The amount is held until Apaylo confirms delivery to your Interac email/phone or bank account.',
+        };
+      }
+      if (withdrawal.providerName === 'KUDA' || withdrawal.currencyCode === 'NGN') {
+        return {
+          title: 'Bank transfer in progress',
+          message:
+            'The amount is held until the transfer to your Nigerian bank account is confirmed.',
+        };
+      }
       return {
         title: 'Withdrawal in progress',
         message: 'The amount is held in your pending balance until the transfer completes.',

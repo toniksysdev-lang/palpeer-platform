@@ -75,8 +75,11 @@ describe('ExchangeScreen', () => {
     await renderWithProviders(<ExchangeScreen />);
 
     await typeIntoNumberField('exchange-send', '100');
-    expect(await screen.findByTestId('exchange-rate')).toHaveTextContent('1 CAD = 1,050 NGN');
-    expect(screen.getByTestId('exchange-receive')).toHaveTextContent(/104999\.99/);
+    expect(await screen.findByTestId('exchange-rate')).toHaveTextContent(/1 CAD = 1,050 NGN/);
+    expect(screen.getByTestId('exchange-receive')).toHaveTextContent(/104,?999\.99/);
+
+    await fireEvent.press(screen.getByTestId('exchange-rate'));
+    expect(screen.getByTestId('exchange-rate')).toHaveTextContent(/1 NGN = 0\.000952 CAD/);
 
     const [calc] = posts(calls, '/exchange/calculate');
     expect(calc?.rawBody).toBe(
@@ -180,11 +183,13 @@ describe('ExchangeReviewScreen', () => {
 
     expect(await screen.findByTestId('exchange-review-send')).toHaveTextContent('100.00 CAD');
     expect(screen.getByTestId('exchange-review-receive')).toHaveTextContent('105,000.00 NGN');
-    expect(screen.getByTestId('exchange-review-rate')).toHaveTextContent('1 CAD = 1,050 NGN');
+    expect(screen.getByTestId('exchange-review-rate')).toHaveTextContent(/1 CAD = 1,050 NGN/);
+    await fireEvent.press(screen.getByTestId('exchange-review-rate'));
+    expect(screen.getByTestId('exchange-review-rate')).toHaveTextContent(/1 NGN = 0\.000952 CAD/);
     expect(screen.getByTestId('exchange-countdown')).toHaveTextContent(
       /Quote valid for 0:(59|60)|1:00/,
     );
-    expect(screen.queryByText(/fee/i)).toBeNull();
+    expect(screen.queryByTestId('exchange-review-fee')).toBeNull();
 
     await fireEvent.press(screen.getByTestId('exchange-confirm'));
     await waitFor(() =>
@@ -252,7 +257,7 @@ describe('ExchangeReviewScreen', () => {
     expect(posts(calls, '/exchange/preview')[1]?.rawBody).toBe(
       '{"sourceWalletId":"w-cad","targetWalletId":"w-ngn","targetAmount":105000.00}',
     );
-    expect(screen.getByTestId('exchange-review-rate')).toHaveTextContent('1 CAD = 1,040 NGN');
+    expect(screen.getByTestId('exchange-review-rate')).toHaveTextContent(/1 CAD = 1,040 NGN/);
 
     await fireEvent.press(screen.getByTestId('exchange-confirm'));
     await waitFor(() => expect(router.replace).toHaveBeenCalled());

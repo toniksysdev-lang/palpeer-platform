@@ -1,0 +1,148 @@
+﻿[
+  {
+    "keyValue": {
+      "createdAt": "2026-10-07T20:48:26.558129Z",
+      "dashboardUrl": "https://dashboard.render.com/r/red-db3b06ijnfac7399b920",
+      "id": "red-db3b06ijnfac7399b920",
+      "ipAllowList": [],
+      "name": "palpeer-redis",
+      "options": {
+        "maxmemoryPolicy": "allkeys_lru",
+        "persistenceMode": "off"
+      },
+      "owner": {
+        "email": "toniksysdev@gmail.com",
+        "id": "tea-db30u27lk1mc73926fug",
+        "name": "Tonik's workspace",
+        "type": "team"
+      },
+      "plan": "free",
+      "region": "oregon",
+      "status": "available",
+      "updatedAt": "2026-10-07T20:48:26.558129Z",
+      "version": "8.1.10"
+    }
+  },
+  {
+    "postgres": {
+      "connectionPool": "none",
+      "createdAt": "2026-10-07T20:48:25.064102Z",
+      "dashboardUrl": "https://dashboard.render.com/d/dpg-db3b06cs728c73btuss0-a",
+      "databaseName": "palpeer_db",
+      "databaseUser": "palpeer_db_user",
+      "diskAutoscalingEnabled": false,
+      "expiresAt": "2026-11-06T20:48:25.064102Z",
+      "highAvailabilityEnabled": false,
+      "id": "dpg-db3b06cs728c73btuss0-a",
+      "ipAllowList": [],
+      "name": "palpeer-db",
+      "owner": {
+        "email": "toniksysdev@gmail.com",
+        "id": "tea-db30u27lk1mc73926fug",
+        "name": "Tonik's workspace",
+        "type": "team"
+      },
+      "plan": "free",
+      "readReplicas": [],
+      "region": "oregon",
+      "role": "primary",
+      "status": "available",
+      "suspended": "not_suspended",
+      "suspenders": [],
+      "updatedAt": "2026-10-07T20:48:25.064102Z",
+      "version": "16"
+    }
+  },
+  {
+    "service": {
+      "autoDeploy": "yes",
+      "autoDeployTrigger": "commit",
+      "branch": "main",
+      "createdAt": "2026-10-07T21:08:48.999326Z",
+      "dashboardUrl": "https://dashboard.render.com/static/srv-db3b9o3ncjis73f2dkmg",
+      "id": "srv-db3b9o3ncjis73f2dkmg",
+      "name": "palpeer-admin",
+      "notifyOnFail": "default",
+      "ownerId": "tea-db30u27lk1mc73926fug",
+      "repo": "https://github.com/toniksysdev-lang/palpeer-platform",
+      "rootDir": "palpeer-admin-end",
+      "serviceDetails": {
+        "buildCommand": "npm ci \u0026\u0026 node scripts/render-env.mjs \u0026\u0026 npm run build",
+        "buildPlan": "starter",
+        "ipAllowList": [
+          {
+            "cidrBlock": "0.0.0.0/0",
+            "description": "everywhere"
+          }
+        ],
+        "previews": {
+          "generation": "off"
+        },
+        "publishPath": "dist",
+        "pullRequestPreviewsEnabled": "no",
+        "renderSubdomainPolicy": "enabled",
+        "url": "https://palpeer-admin.onrender.com"
+      },
+      "slug": "palpeer-admin",
+      "suspended": "not_suspended",
+      "suspenders": [],
+      "type": "static_site",
+      "updatedAt": "2026-10-18T13:47:53.775508Z"
+    }
+  },
+  {
+    "service": {
+      "autoDeploy": "yes",
+      "autoDeployTrigger": "commit",
+      "branch": "main",
+      "createdAt": "2026-10-07T22:18:04.826501Z",
+      "dashboardUrl": "https://dashboard.render.com/web/srv-db3ca6tg1s2s739rpof0",
+      "id": "srv-db3ca6tg1s2s739rpof0",
+      "name": "palpeer-api",
+      "notifyOnFail": "default",
+      "ownerId": "tea-db30u27lk1mc73926fug",
+      "repo": "https://github.com/toniksysdev-lang/palpeer-platform",
+      "rootDir": "backend",
+      "serviceDetails": {
+        "buildPlan": "starter",
+        "cache": {
+          "profile": "no-cache"
+        },
+        "env": "docker",
+        "envSpecificDetails": {
+          "dockerCommand": "",
+          "dockerContext": ".",
+          "dockerfilePath": "./Dockerfile"
+        },
+        "healthCheckPath": "",
+        "ipAllowList": [
+          {
+            "cidrBlock": "0.0.0.0/0",
+            "description": "everywhere"
+          }
+        ],
+        "maintenanceMode": {
+          "enabled": false,
+          "uri": ""
+        },
+        "numInstances": 1,
+        "openPorts": [],
+        "plan": "free",
+        "previews": {
+          "generation": "off"
+        },
+        "pullRequestPreviewsEnabled": "no",
+        "region": "oregon",
+        "renderSubdomainPolicy": "enabled",
+        "runtime": "docker",
+        "sshAddress": "srv-db3ca6tg1s2s739rpof0@ssh.oregon.render.com",
+        "url": "https://palpeer-api.onrender.com"
+      },
+      "slug": "palpeer-api",
+      "suspended": "not_suspended",
+      "suspenders": [],
+      "type": "web_service",
+      "updatedAt": "2026-10-18T17:14:09.452041Z"
+    }
+  }
+]

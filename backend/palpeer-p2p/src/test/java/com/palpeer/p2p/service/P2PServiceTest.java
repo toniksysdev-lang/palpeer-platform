@@ -3,6 +3,7 @@ package com.palpeer.p2p.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -52,6 +53,8 @@ class P2PServiceTest {
     @Mock private ProfileRepository profileRepository;
     @Mock private UserRepository userRepository;
     @Mock private LedgerService ledgerService;
+    @Mock private com.palpeer.wallet.service.PlatformFeeRevenueService platformFeeRevenueService;
+    @Mock private com.palpeer.promotion.service.PromotionService promotionService;
     @Mock private com.palpeer.common.audit.AuditRecorder auditRecorder;
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
@@ -66,6 +69,13 @@ class P2PServiceTest {
         acceptorId = UUID.randomUUID();
         lenient().when(profileRepository.findByUserId(any())).thenReturn(Optional.empty());
         lenient().when(userRepository.findById(any())).thenReturn(Optional.empty());
+        lenient()
+                .when(promotionService.applyP2PFeeDiscount(
+                        any(), any(), any(), anyBoolean(), org.mockito.ArgumentMatchers.nullable(String.class)))
+                .thenAnswer(inv -> inv.getArgument(2));
+        lenient()
+                .when(promotionService.applyP2PFeeDiscount(any(), any(), any(), anyBoolean()))
+                .thenAnswer(inv -> inv.getArgument(2));
     }
 
     @Test
@@ -82,7 +92,7 @@ class P2PServiceTest {
         var response = p2PService.create(ownerId, new CreateP2PRequestDto(
                 P2PSide.BUY, "USD", "NGN",
                 new BigDecimal("100.00"), new BigDecimal("1500.00"),
-                null, "cash"));
+                null, "cash", null));
 
         assertThat(response.status()).isEqualTo(P2PStatus.OPEN);
         assertThat(response.baseCurrencyCode()).isEqualTo("USD");
@@ -118,7 +128,7 @@ class P2PServiceTest {
         var response = p2PService.create(ownerId, new CreateP2PRequestDto(
                 P2PSide.SELL, "USD", "NGN",
                 new BigDecimal("100.00"), new BigDecimal("1500.00"),
-                null, null));
+                null, null, null));
 
         assertThat(response.status()).isEqualTo(P2PStatus.OPEN);
         ArgumentCaptor<LedgerPostingRequest> post = ArgumentCaptor.forClass(LedgerPostingRequest.class);
@@ -155,7 +165,7 @@ class P2PServiceTest {
         var response = p2PService.create(ownerId, new CreateP2PRequestDto(
                 P2PSide.SELL, "NGN", "CAD",
                 new BigDecimal("100000.00"), new BigDecimal("0.001"),
-                null, null));
+                null, null, null));
 
         assertThat(response.baseCurrencyCode()).isEqualTo("NGN");
         assertThat(response.quoteCurrencyCode()).isEqualTo("CAD");
@@ -220,6 +230,9 @@ class P2PServiceTest {
         wallet.setId(id);
         wallet.setUserId(userId);
         wallet.setCurrencyCode(currency);
+        // Enough for settle assertions (buyer quote + any unheld seller base).
+        wallet.setAvailableBalance(new java.math.BigDecimal("1000000"));
+        wallet.setPendingBalance(java.math.BigDecimal.ZERO);
         return wallet;
     }
 

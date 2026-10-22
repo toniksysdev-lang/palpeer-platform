@@ -18,6 +18,8 @@ import {
 } from '@/services/api/authApi';
 import { toAppError } from '@/services/api/errors';
 import { accountCommands } from '@/services/auth/accountCommands';
+import { preferencesStorage } from '@/services/storage/preferencesStorage';
+import { signupDraftStorage } from '@/services/storage/signupDraftStorage';
 
 import { AuthLayout } from '../components/AuthLayout';
 import { authErrorMessage } from '../errors';
@@ -88,6 +90,14 @@ export function VerifyOtpScreen({ purpose }: Props) {
     try {
       if (preRegisterPhone) {
         await verifyPhoneOtp({ phone, code: value }).unwrap();
+        if (countryIso2.length === 2) {
+          await preferencesStorage.setSignupCountryIso2(countryIso2);
+        }
+        await signupDraftStorage.save({
+          phone,
+          countryIso2: countryIso2 || null,
+          step: 'REGISTER',
+        });
         toast.show({ type: 'success', title: 'Phone verified' });
         goToRegister();
         return;
@@ -99,6 +109,20 @@ export function VerifyOtpScreen({ purpose }: Props) {
       if (isPhone) {
         goToLogin();
       } else {
+        const draft = await signupDraftStorage.load();
+        const resolvedCountry =
+          (countryIso2.length === 2 ? countryIso2 : null) ||
+          draft?.countryIso2 ||
+          (await preferencesStorage.getSignupCountryIso2());
+        if (resolvedCountry) {
+          await preferencesStorage.setSignupCountryIso2(resolvedCountry);
+        }
+        await signupDraftStorage.save({
+          phone: phone || draft?.phone || undefined,
+          email,
+          countryIso2: resolvedCountry,
+          step: 'LOGIN',
+        });
         toast.show({ type: 'success', title: 'Email verified' });
         goToLogin();
       }

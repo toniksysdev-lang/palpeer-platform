@@ -15,11 +15,18 @@ public class PalpeerMailProperties {
      */
     private String provider = "auto";
 
-    /** Envelope / From address. */
-    private String from = "noreply@palpeer.com.ng";
+    /**
+     * Envelope / From address. Prefer an address on a SendPulse-authenticated domain (e.g.
+     * {@code noreply@palpeer.com}).
+     */
+    private String from = "noreply@palpeer.com";
 
-    private String fromName = "PALPEER SUPPORT";
+    /** Display name — avoid ALL-CAPS (spam filter signal). */
+    private String fromName = "Palpeer";
 
-    /** Optional Reply-To / Header From override. */
-    private String headerFrom;
+    /**
+     * Reply-To address. Prefer a monitored inbox (e.g. {@code support@palpeer.com}), not
+     * {@code noreply@…}.
+     */
+    private String headerFrom = "support@palpeer.com";
 }

@@ -39,4 +39,25 @@ describe('ConfirmDialog', () => {
     );
     expect(screen.queryByText('Hidden')).not.toBeInTheDocument();
   });
+
+  it('disables confirm when confirmDisabled is set', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+
+    render(
+      <ConfirmDialog
+        open
+        title="Delete"
+        description="Needs extra confirmation."
+        confirmLabel="Delete forever"
+        confirmDisabled
+        onConfirm={onConfirm}
+        onClose={() => undefined}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Delete forever' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Delete forever' }));
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
 });

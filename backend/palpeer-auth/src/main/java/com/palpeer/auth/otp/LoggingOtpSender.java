@@ -2,11 +2,13 @@ package com.palpeer.auth.otp;
 
 import com.palpeer.auth.domain.OtpChannel;
 import com.palpeer.auth.domain.OtpPurpose;
+import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.mail.EmailSender;
 import com.palpeer.common.mail.PalpeerEmailTemplates;
 import com.palpeer.common.sms.SmsSender;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 /**
@@ -87,17 +89,25 @@ public class LoggingOtpSender implements OtpSender {
                     rendered.html() == null ? 0 : rendered.html().length());
         } catch (RuntimeException ex) {
             log.error(
-                    "OTP email failed [destination={}, purpose={}]: {} — continuing without email",
+                    "OTP email failed [destination={}, purpose={}]: {}",
                     destination,
                     purpose,
                     ex.getMessage());
-            if (!logCode) {
+            if (logCode) {
+                // Code already logged above; keep going so debugOtp / server logs still work in
+                // local/dev when SMTP is down.
                 log.warn(
-                        "Set OTP_LOG_CODE=true so clients receive debugOtp while SMTP is unavailable"
+                        "OTP_LOG_CODE=true — continuing without email"
                                 + " [destination={}, purpose={}]",
                         destination,
                         purpose);
+                return;
             }
+            throw new BusinessException(
+                    "OTP_EMAIL_FAILED",
+                    "Could not send the email. Try again shortly.",
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    ex);
         }
     }
 }

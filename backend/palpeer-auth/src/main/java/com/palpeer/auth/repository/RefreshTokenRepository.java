@@ -23,4 +23,7 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
 
     /** Any historical session on this install (revoked or active) — used for "new device" detection. */
     boolean existsByUserIdAndDeviceIdentifier(UUID userId, String deviceIdentifier);
+
+    /** True once the user has ever obtained a refresh token (first login completed). */
+    boolean existsByUserId(UUID userId);
 }

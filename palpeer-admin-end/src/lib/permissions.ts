@@ -1,4 +1,10 @@
-/** Seeded backend permission codes (Flyway V19–V25). */
+/**
+ * Seeded backend permission codes (Flyway V19–V44+).
+ * Keep in sync with admin_permissions rows for Roles / Permissions UIs and mocks.
+ * Covers: users (+notes), KYC, rates/currencies, wallets/pool, transactions/payments,
+ * P2P, fees (P2P + InstantEX), negotiations, chat, cards, notifications/push,
+ * promotions/referrals/marketing, reports (platform fee revenue), audit, admin:manage.
+ */
 export const KNOWN_PERMISSIONS = [
   'users:read',
   'users:write',
@@ -16,6 +22,7 @@ export const KNOWN_PERMISSIONS = [
   'cards:read',
   'cards:write',
   'negotiations:read',
+  'negotiations:write',
   'chat:read',
   'notifications:read',
   'notifications:write',

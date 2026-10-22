@@ -15,12 +15,13 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Admin inventory for negotiations — read-only, no participant checks.
+ * Admin inventory and interventions for negotiations (no participant checks).
  */
 @RestController
 @RequestMapping("/api/v1/admin/negotiations")
@@ -48,5 +49,19 @@ public class AdminNegotiationController {
     @Operation(summary = "Get negotiation by id")
     public ApiResponse<NegotiationResponse> get(@PathVariable UUID id) {
         return ApiResponse.ok(negotiationService.adminGet(id));
+    }
+
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize("hasAuthority('negotiations:write')")
+    @Operation(summary = "Force-cancel an OPEN negotiation")
+    public ApiResponse<NegotiationResponse> cancel(@PathVariable UUID id) {
+        return ApiResponse.ok("Negotiation cancelled", negotiationService.adminCancel(id));
+    }
+
+    @PostMapping("/{id}/accept")
+    @PreAuthorize("hasAuthority('negotiations:write')")
+    @Operation(summary = "Force-accept the current pending offer and create the P2P order")
+    public ApiResponse<NegotiationResponse> accept(@PathVariable UUID id) {
+        return ApiResponse.ok("Negotiation accepted", negotiationService.adminAccept(id));
     }
 }

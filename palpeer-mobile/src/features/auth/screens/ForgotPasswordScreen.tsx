@@ -30,8 +30,15 @@ export function ForgotPasswordScreen() {
     setFormError(null);
     const email = values.email.trim();
     try {
-      await requestReset({ email }).unwrap();
-      router.push({ pathname: '/reset-password', params: { email } });
+      const result = await requestReset({ email }).unwrap();
+      const debugOtp =
+        typeof result?.debugOtp === 'string' && result.debugOtp.length > 0
+          ? result.debugOtp
+          : undefined;
+      router.push({
+        pathname: '/reset-password',
+        params: { email, ...(debugOtp ? { debugOtp } : null) },
+      });
     } catch (error) {
       setFormError(applyServerErrors(error, setError, ['email']));
     }

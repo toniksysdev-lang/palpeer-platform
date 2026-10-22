@@ -6,13 +6,15 @@ import com.palpeer.notification.domain.NotificationChannel;
 import com.palpeer.notification.web.dto.CreateNotificationRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * Delivers {@link UserNotifyEvent} / {@link BroadcastPushEvent} after the source transaction commits
- * so failed money movements never notify.
+ * so failed money movements never notify. Delivery is {@link Async} so HTTP callers are not blocked
+ * by push/email fan-out.
  */
 @Slf4j
 @Component
@@ -21,6 +23,7 @@ public class NotifyEventListener {
 
     private final NotificationService notificationService;
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onUserNotify(UserNotifyEvent event) {
         if (event == null || event.userId() == null) {
@@ -45,13 +48,14 @@ public class NotifyEventListener {
         }
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onBroadcastPush(BroadcastPushEvent event) {
         if (event == null) {
             return;
         }
         try {
-            int count = notificationService.broadcastPush(
+            BroadcastPushStats stats = notificationService.broadcastPush(
                     event.excludeUserId(),
                     event.title(),
                     event.body(),
@@ -59,8 +63,10 @@ public class NotifyEventListener {
                     event.referenceType(),
                     event.referenceId());
             log.info(
-                    "Broadcast push delivered count={} category={} ref={}",
-                    count,
+                    "Broadcast push delivered recipients={} devicePush={} failed={} category={} ref={}",
+                    stats.recipientCount(),
+                    stats.devicePushCount(),
+                    stats.failedCount(),
                     event.category(),
                     event.referenceId());
         } catch (RuntimeException ex) {

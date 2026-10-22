@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Building2, Zap } from 'lucide-react-native';
-import { useState } from 'react';
-import { View } from 'react-native';
+import { Building2, ChevronRight, Plus, UserRound, Zap } from 'lucide-react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Pressable, View } from 'react-native';
 
 import { Screen } from '@/components/layout/Screen';
 import { StackHeader } from '@/components/layout/StackHeader';
@@ -12,11 +12,17 @@ import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
+import { Input } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useAppSelector } from '@/store';
 import { useToast } from '@/providers/ToastProvider';
 import { toAppError } from '@/services/api/errors';
 import { useCreateFundingMutation, useGetWalletQuery } from '@/services/api/walletApi';
+import {
+  interacAddressesStorage,
+  type InteracAddress,
+} from '@/services/storage/interacAddressesStorage';
 import { isPositiveMoney, toMoney } from '@/utils/money';
 
 import { ReviewRow } from '../components/ReviewRow';
@@ -25,37 +31,63 @@ import { hasPaymentRail, railFor } from '../rails';
 import { useIdempotencyKey } from '../useIdempotencyKey';
 import { useMoneyFormat } from '../useMoneyFormat';
 
-/** CAD Apaylo funds only via Instant Interac deposit (no other CAD methods). */
+/** CAD Apaylo Instant Interac deposit (customer sends to Palpeer account — no request email). */
 const CAD_FUNDING_METHOD = {
   label: 'Interac, Instant deposit via Interac',
   title: 'Interac',
   subtitle: 'Instant deposit via Interac',
-  hint: 'We’ll send an Interac request to your account email. Accept it in your banking app to fund your CAD wallet instantly.',
 } as const;
 
 const METHOD_COPY = {
   APAYLO: CAD_FUNDING_METHOD.label,
-  KUDA: 'Bank transfer to your PALPEER virtual account. The account details are shown next.',
+  KUDA: 'Bank transfer to your PALPEER virtual account. After you confirm, we show the account number to pay.',
   KORAPAY: 'Bank transfer to a one-time Korapay account. Account details are shown after you confirm.',
 } as const;
 
-/** Amount → review → `POST /funding`. The method follows the wallet currency (R-W-3). */
+type CadStep = 'amount' | 'payWith' | 'addAddress' | 'review';
+
+function isValidEmail(value: string): boolean {
+  const email = value.trim();
+  return email.length >= 5 && email.includes('@') && !email.includes(' ');
+}
+
+function displayName(address: InteracAddress): string {
+  return `${address.firstName} ${address.lastName}`.trim() || address.email;
+}
+
+/** Amount → (CAD: Interac address) → review → `POST /funding`. Method follows wallet currency (R-W-3). */
 export function FundWalletScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const toast = useToast();
+  const userId = useAppSelector((state) => state.session.userId) ?? '';
   const wallet = useGetWalletQuery(id);
   const { format, precision } = useMoneyFormat();
   const [createFunding, createState] = useCreateFundingMutation();
   const idempotency = useIdempotencyKey();
   const [amount, setAmount] = useState('');
-  const [step, setStep] = useState<'amount' | 'review'>('amount');
+  const [step, setStep] = useState<CadStep | 'rail-review'>('amount');
   const [error, setError] = useState<string | null>(null);
+  const [addresses, setAddresses] = useState<InteracAddress[]>([]);
+  const [selected, setSelected] = useState<InteracAddress | null>(null);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [interacEmail, setInteracEmail] = useState('');
+
+  const reloadAddresses = useCallback(async () => {
+    if (!userId) return;
+    const list = await interacAddressesStorage.list(userId);
+    setAddresses(list);
+  }, [userId]);
+
+  useEffect(() => {
+    void reloadAddresses();
+  }, [reloadAddresses]);
 
   if (wallet.error && !wallet.data) {
     return (
       <Screen>
-        <StackHeader title="Fund wallet" />
+        <StackHeader title="Add money" />
         <ErrorState error={toAppError(wallet.error)} onRetry={() => void wallet.refetch()} />
       </Screen>
     );
@@ -63,7 +95,7 @@ export function FundWalletScreen() {
   if (!wallet.data) {
     return (
       <Screen>
-        <StackHeader title="Fund wallet" />
+        <StackHeader title="Add money" />
         <Skeleton height={72} />
       </Screen>
     );
@@ -93,15 +125,24 @@ export function FundWalletScreen() {
           return decimals > 0 ? `${i}.${f.padEnd(decimals, '0').slice(0, decimals)}` : i;
         })()
       : amount;
-  const valid = isPositiveMoney(normalizedAmount || '0');
+  const validAmount = isPositiveMoney(normalizedAmount || '0');
   const isCadApaylo = rail === 'APAYLO';
+  const addFormValid =
+    firstName.trim().length > 0 && lastName.trim().length > 0 && isValidEmail(interacEmail);
 
-  const submit = async () => {
+  const submit = async (payer: InteracAddress | null) => {
     setError(null);
     const result = await createFunding({
       walletId,
       amount: toMoney(normalizedAmount),
       idempotencyKey: idempotency.current(),
+      ...(isCadApaylo && payer
+        ? {
+            interacEmail: payer.email,
+            interacFirstName: payer.firstName,
+            interacLastName: payer.lastName,
+          }
+        : null),
     });
     if ('error' in result) {
       const appError = toAppError(result.error);
@@ -109,21 +150,189 @@ export function FundWalletScreen() {
       setError(walletErrorMessage(appError));
       return;
     }
-    toast.show({ type: 'info', title: 'Funding request sent' });
+    toast.show({ type: 'info', title: 'Funding started' });
     router.replace({
       pathname: '/wallet/funding/[fundingId]',
       params: { fundingId: result.data.id },
     });
   };
 
-  if (step === 'review') {
+  const goAmountContinue = () => {
+    if (normalizedAmount && normalizedAmount !== amount) setAmount(normalizedAmount);
+    if (isCadApaylo) {
+      setStep('payWith');
+      return;
+    }
+    setStep('rail-review');
+  };
+
+  const saveAndSelectAddress = async () => {
+    if (!userId || !addFormValid) return;
+    const saved = await interacAddressesStorage.save(userId, {
+      firstName,
+      lastName,
+      email: interacEmail,
+    });
+    setSelected(saved);
+    await reloadAddresses();
+    setStep('review');
+  };
+
+  if (isCadApaylo && step === 'payWith') {
+    return (
+      <Screen scroll>
+        <StackHeader title="Pay with" onBack={() => setStep('amount')} />
+        <View style={{ gap: theme.spacing.sm }} testID="fund-pay-with">
+          <Pressable
+            onPress={() => {
+              setFirstName('');
+              setLastName('');
+              setInteracEmail('');
+              setStep('addAddress');
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Add Interac address"
+            testID="fund-add-interac"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: theme.spacing.md,
+              padding: theme.spacing.md,
+              borderRadius: theme.radius.lg,
+              backgroundColor: theme.colors.surface,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+            }}
+          >
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: theme.radius.md,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: theme.colors.primarySoft,
+              }}
+            >
+              <Icon icon={Plus} color={theme.colors.primary} />
+            </View>
+            <AppText variant="bodyStrong" style={{ flex: 1 }}>
+              Add Interac address
+            </AppText>
+            <Icon icon={ChevronRight} color={theme.colors.textMuted} size="sm" />
+          </Pressable>
+
+          {addresses.map((address) => (
+            <Pressable
+              key={address.id}
+              onPress={() => {
+                setSelected(address);
+                setStep('review');
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`${displayName(address)}, ${address.email}`}
+              testID={`fund-interac-${address.id}`}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: theme.spacing.md,
+                padding: theme.spacing.md,
+                borderRadius: theme.radius.lg,
+                backgroundColor: theme.colors.surface,
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+              }}
+            >
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: theme.radius.md,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: theme.colors.warningSoft,
+                }}
+              >
+                <Icon icon={Zap} color={theme.colors.warning} />
+              </View>
+              <View style={{ flex: 1, gap: theme.spacing.xxs }}>
+                <AppText variant="bodyStrong">{displayName(address)}</AppText>
+                <AppText variant="caption" tone="secondary">
+                  {address.email}
+                </AppText>
+              </View>
+              <Icon icon={ChevronRight} color={theme.colors.textMuted} size="sm" />
+            </Pressable>
+          ))}
+        </View>
+      </Screen>
+    );
+  }
+
+  if (isCadApaylo && step === 'addAddress') {
+    return (
+      <Screen
+        scroll
+        keyboardAware
+        footer={
+          <Button
+            label="Continue"
+            onPress={() => void saveAndSelectAddress()}
+            disabled={!addFormValid}
+            testID="fund-interac-continue"
+          />
+        }
+      >
+        <StackHeader title="Enter Interac email" onBack={() => setStep('payWith')} />
+        <AppText variant="body" tone="secondary">
+          We are verifying your Interac email address. We will not have access to your Interac
+          account.
+        </AppText>
+        <Input
+          appearance="elevated"
+          label="First name"
+          placeholder="First name"
+          value={firstName}
+          onChangeText={setFirstName}
+          autoCapitalize="words"
+          textContentType="givenName"
+          testID="fund-interac-first"
+        />
+        <Input
+          appearance="elevated"
+          label="Last name"
+          placeholder="Last name"
+          value={lastName}
+          onChangeText={setLastName}
+          autoCapitalize="words"
+          textContentType="familyName"
+          testID="fund-interac-last"
+        />
+        <Input
+          appearance="elevated"
+          label="Interac email"
+          placeholder="Enter your Interac email"
+          value={interacEmail}
+          onChangeText={setInteracEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          textContentType="emailAddress"
+          autoComplete="email"
+          testID="fund-interac-email"
+        />
+      </Screen>
+    );
+  }
+
+  if ((isCadApaylo && step === 'review' && selected) || step === 'rail-review') {
+    const title = isCadApaylo ? 'Review details' : 'Review';
     return (
       <Screen
         scroll
         footer={
           <Button
-            label="Confirm funding"
-            onPress={() => void submit()}
+            label={isCadApaylo ? 'Continue' : 'Confirm funding'}
+            onPress={() => void submit(isCadApaylo ? selected : null)}
             loading={createState.isLoading}
             loadingLabel="Starting…"
             testID="fund-confirm"
@@ -131,31 +340,83 @@ export function FundWalletScreen() {
         }
       >
         <StackHeader
-          title="Review"
+          title={title}
           onBack={() => {
             idempotency.reset();
             setError(null);
-            setStep('amount');
+            setStep(isCadApaylo ? 'payWith' : 'amount');
           }}
         />
         <FormAlert message={error} testID="fund-error" />
+
+        {isCadApaylo && selected ? (
+          <View style={{ alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.md }}>
+            <View
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 28,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: theme.colors.primarySoft,
+              }}
+            >
+              <Icon icon={UserRound} color={theme.colors.primary} />
+            </View>
+            <AppText variant="h2" testID="fund-review-amount">
+              {format(toMoney(normalizedAmount), code)}
+            </AppText>
+          </View>
+        ) : null}
+
         <Card variant="outlined" padding="md">
-          <ReviewRow label="Wallet" value={`${code} wallet`} />
-          <ReviewRow
-            label="Amount"
-            value={format(toMoney(normalizedAmount), code)}
-            testID="fund-review-amount"
-          />
-          <ReviewRow
-            label="Method"
-            value={METHOD_COPY[rail]}
-            testID="fund-review-method"
-          />
+          {isCadApaylo ? (
+            <>
+              <ReviewRow label="Fee" value={format(toMoney('0'), code)} />
+              <ReviewRow
+                label="You will receive"
+                value={format(toMoney(normalizedAmount), code)}
+                testID="fund-review-receive"
+              />
+            </>
+          ) : (
+            <>
+              <ReviewRow label="Wallet" value={`${code} wallet`} />
+              <ReviewRow
+                label="Amount"
+                value={format(toMoney(normalizedAmount), code)}
+                testID="fund-review-amount"
+              />
+              <ReviewRow
+                label="Method"
+                value={METHOD_COPY[rail]}
+                testID="fund-review-method"
+              />
+            </>
+          )}
         </Card>
-        {isCadApaylo ? (
-          <AppText variant="caption" tone="secondary">
-            {CAD_FUNDING_METHOD.hint}
-          </AppText>
+
+        {isCadApaylo && selected ? (
+          <View style={{ gap: theme.spacing.sm, marginTop: theme.spacing.md }}>
+            <AppText variant="overline" tone="muted">
+              Pay with
+            </AppText>
+            <Card variant="outlined" padding="md" testID="fund-review-interac">
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                <Icon icon={Zap} color={theme.colors.warning} />
+                <View style={{ flex: 1, gap: theme.spacing.xxs }}>
+                  <AppText variant="bodyStrong">{displayName(selected)}</AppText>
+                  <AppText variant="caption" tone="secondary">
+                    {selected.email}
+                  </AppText>
+                </View>
+              </View>
+            </Card>
+            <AppText variant="caption" tone="secondary">
+              Next you will send Interac e-Transfer from your banking app to Palpeer’s Interac
+              account. We do not email you a request to accept.
+            </AppText>
+          </View>
         ) : (
           <AppText variant="caption" tone="secondary">
             Any fees are shown by your bank or the payment provider. Your balance only changes once
@@ -173,18 +434,15 @@ export function FundWalletScreen() {
       footer={
         <Button
           label="Continue"
-          onPress={() => {
-            if (normalizedAmount && normalizedAmount !== amount) setAmount(normalizedAmount);
-            setStep('review');
-          }}
-          disabled={!valid}
+          onPress={goAmountContinue}
+          disabled={!validAmount}
           testID="fund-continue"
         />
       }
     >
-      <StackHeader title={`Fund ${code}`} />
+      <StackHeader title={isCadApaylo ? 'Add money' : `Fund ${code}`} />
       <AmountInput
-        label="Amount"
+        label={isCadApaylo ? 'Amount to add' : 'Amount'}
         value={amount}
         onChangeText={setAmount}
         precision={decimals}
@@ -197,7 +455,7 @@ export function FundWalletScreen() {
       {isCadApaylo ? (
         <View style={{ gap: theme.spacing.sm }} testID="fund-method-apaylo">
           <AppText variant="overline" tone="muted">
-            Funding method
+            Pay with
           </AppText>
           <Card
             variant="outlined"
@@ -218,9 +476,6 @@ export function FundWalletScreen() {
               </View>
             </View>
           </Card>
-          <AppText variant="caption" tone="secondary">
-            {CAD_FUNDING_METHOD.hint}
-          </AppText>
         </View>
       ) : (
         <View style={{ flexDirection: 'row', gap: theme.spacing.sm, alignItems: 'flex-start' }}>

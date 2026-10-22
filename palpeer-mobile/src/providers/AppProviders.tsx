@@ -41,4 +41,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   );
 }
 
-const styles = StyleSheet.create({ root: { flex: 1 } });
+const styles = StyleSheet.create({
+  // Match BrandSplash / boot HTML so the provider shell never flashes a foreign color.
+  root: { flex: 1, backgroundColor: '#FFFFFF' },
+});

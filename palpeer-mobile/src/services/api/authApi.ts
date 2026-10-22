@@ -3,6 +3,8 @@ import type {
   OtpResendResponse,
   PasswordResetRequest,
   SessionResponse,
+  SignupStatusRequest,
+  SignupStatusResponse,
 } from '@/types/api/auth';
 import { secureStorage } from '@/services/storage/secureStorage';
 
@@ -20,6 +22,22 @@ export const authApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     resendOtp: build.mutation<OtpResendResponse, OtpResendRequest>({
       query: (body) => ({ path: '/auth/otp/resend', method: 'POST', body, public: true }),
+    }),
+    getSignupStatus: build.mutation<SignupStatusResponse, SignupStatusRequest>({
+      query: (body) => ({
+        path: '/auth/signup/status',
+        method: 'POST',
+        body,
+        public: true,
+      }),
+    }),
+    resendSignupEmailOtp: build.mutation<OtpResendResponse, SignupStatusRequest>({
+      query: (body) => ({
+        path: '/auth/signup/resend-email-otp',
+        method: 'POST',
+        body,
+        public: true,
+      }),
     }),
     requestPhoneOtp: build.mutation<OtpResendResponse, { phone: string }>({
       query: (body) => ({
@@ -40,7 +58,7 @@ export const authApi = baseApi.injectEndpoints({
     getRegistrationCountries: build.query<string[], void>({
       query: () => ({ path: '/public/registration-countries', method: 'GET', public: true }),
     }),
-    requestPasswordReset: build.mutation<void, PasswordResetRequest>({
+    requestPasswordReset: build.mutation<OtpResendResponse, PasswordResetRequest>({
       query: (body) => ({
         path: '/auth/password-reset/request',
         method: 'POST',
@@ -75,6 +93,8 @@ export const authApi = baseApi.injectEndpoints({
 
 export const {
   useResendOtpMutation,
+  useGetSignupStatusMutation,
+  useResendSignupEmailOtpMutation,
   useRequestPhoneOtpMutation,
   useVerifyPhoneOtpMutation,
   useGetRegistrationCountriesQuery,

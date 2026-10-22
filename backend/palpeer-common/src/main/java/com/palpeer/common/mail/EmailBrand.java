@@ -38,6 +38,12 @@ public final class EmailBrand {
     public static final String TAGLINE = "Your Rate, Your Way";
 
     /**
+     * Public logo for HTML mail (SendPulse REST cannot attach CID inlines). Prefer this over a
+     * huge data-URI embed — smaller messages score better with Yahoo/Gmail spam filters.
+     */
+    public static final String LOGO_HTTPS_URL = SITE_URL + "/logo.png";
+
+    /**
      * Content-ID for the inline logo attached by {@code SmtpEmailSender}
      * ({@code classpath:mail/palpeer-logo.png}). Templates reference {@code cid:palpeer-logo}.
      */

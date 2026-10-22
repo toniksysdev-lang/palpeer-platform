@@ -18,6 +18,8 @@ import { useSecretCommand } from '@/hooks/useSecretCommand';
 import { useSensitiveScreen } from '@/hooks/useSensitiveScreen';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
+import { useGetSignupStatusMutation, useResendSignupEmailOtpMutation } from '@/services/api/authApi';
+import { toAppError } from '@/services/api/errors';
 import { accountCommands } from '@/services/auth/accountCommands';
 import { sessionManager } from '@/services/auth/session';
 import {
@@ -35,11 +37,12 @@ import {
 
 import { AuthLayout } from '../components/AuthLayout';
 import { GoogleSignInSection } from '../components/GoogleSignInSection';
-import { applyServerErrors } from '../errors';
+import { applyServerErrors, authErrorMessage } from '../errors';
 import { loginSchema, type LoginForm } from '../schemas';
 
 const NOTICES: Record<string, string> = {
   verified: 'Your account is ready. Sign in to continue.',
+  exists: 'An account already exists for this phone. Sign in to continue.',
   reset: 'Your password was reset. Sign in with your new password.',
 };
 
@@ -60,6 +63,8 @@ export function LoginScreen() {
   const expiredNotice = useAppSelector((state) => state.session.expiredNotice);
   const signOutReason = useAppSelector((state) => state.session.signOutReason);
   const [login] = useSecretCommand(accountCommands.login);
+  const [getSignupStatus] = useGetSignupStatusMutation();
+  const [resendSignupEmailOtp] = useResendSignupEmailOtpMutation();
   const [formError, setFormError] = useState<string | null>(null);
   const [biometricLabel, setBiometricLabel] = useState<string | null>(null);
   const [biometricBusy, setBiometricBusy] = useState(false);
@@ -149,6 +154,47 @@ export function LoginScreen() {
     setBiometricBusy(false);
   }, [biometricBusy, biometricLabel, dispatch, toast]);
 
+  const continueEmailVerification = async (identifier: string) => {
+    const looksLikeEmail = identifier.includes('@');
+    let email = looksLikeEmail ? identifier.toLowerCase() : '';
+    let phone = looksLikeEmail ? '' : identifier;
+
+    if (!looksLikeEmail) {
+      try {
+        const status = await getSignupStatus({ phone: identifier }).unwrap();
+        if (status.email) email = status.email;
+        phone = status.phone || identifier;
+        try {
+          await resendSignupEmailOtp({ phone }).unwrap();
+        } catch {
+          // Verify screen still lets them resend.
+        }
+      } catch (raw) {
+        setFormError(authErrorMessage(toAppError(raw)));
+        return;
+      }
+    }
+
+    if (!email) {
+      setFormError('Verify your email before signing in. Use the email you registered with.');
+      return;
+    }
+
+    toast.show({
+      type: 'info',
+      title: 'Verify your email to continue',
+      message: 'Enter the code we sent, then sign in again.',
+    });
+    router.push({
+      pathname: '/verify-email',
+      params: {
+        email,
+        ...(phone ? { phone } : null),
+        resume: '1',
+      },
+    });
+  };
+
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null);
     const identifier = values.email.trim();
@@ -157,6 +203,11 @@ export function LoginScreen() {
       const sessionEmail = identifier.includes('@') ? identifier.toLowerCase() : null;
       await sessionManager.start(tokens, sessionEmail);
     } catch (error) {
+      const appError = toAppError(error);
+      if (appError.code === 'EMAIL_NOT_VERIFIED') {
+        await continueEmailVerification(identifier);
+        return;
+      }
       setFormError(applyServerErrors(error, setError, ['email', 'password']));
     }
   });
@@ -174,7 +225,7 @@ export function LoginScreen() {
       centered
       header={
         <View style={{ alignItems: 'center', marginBottom: theme.spacing.md }}>
-          <PalpeerLogo width={150} />
+          <PalpeerLogo width={180} />
         </View>
       }
     >

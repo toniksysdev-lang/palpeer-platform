@@ -15,4 +15,12 @@ public class FcmCredentialsPresentCondition implements Condition {
         return StringUtils.hasText(env.getProperty("palpeer.fcm.credentials-json", ""))
                 || StringUtils.hasText(env.getProperty("palpeer.fcm.credentials-file", ""));
     }
+
+    public static boolean credentialsPresent(FcmProperties properties) {
+        if (properties == null) {
+            return false;
+        }
+        return StringUtils.hasText(properties.getCredentialsJson())
+                || StringUtils.hasText(properties.getCredentialsFile());
+    }
 }

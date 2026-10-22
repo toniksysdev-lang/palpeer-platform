@@ -46,6 +46,7 @@ jest.mock('expo-local-authentication', () => require('./mocks/localAuthenticatio
 jest.mock('expo-device', () => ({ deviceName: 'Test Phone', modelName: 'Pixel Test' }));
 
 jest.mock('expo-notifications', () => require('./mocks/notifications'));
+jest.mock('expo-audio', () => require('./mocks/expoAudio'));
 
 jest.mock('expo-clipboard', () => ({
   setStringAsync: jest.fn(async () => undefined),
@@ -90,3 +91,8 @@ jest.mock('expo-crypto', () => {
     },
   };
 });
+
+jest.mock('react-native-view-shot', () => require('./mocks/receiptExport'));
+jest.mock('expo-sharing', () => require('./mocks/receiptExport'));
+jest.mock('expo-print', () => require('./mocks/receiptExport'));
+jest.mock('expo-file-system/legacy', () => require('./mocks/receiptExport'));

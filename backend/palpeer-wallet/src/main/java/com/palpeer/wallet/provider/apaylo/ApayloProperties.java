@@ -17,14 +17,16 @@ public class ApayloProperties {
     private boolean sandbox = false;
 
     /**
-     * When sandbox is on, settle CAD funding/withdrawals immediately after Apaylo accepts the
-     * call (local demos cannot receive Interac/EFT webhooks). Live mode ignores this flag.
+     * When sandbox is on, settle CAD <em>withdrawals</em> immediately after Apaylo accepts the
+     * call (and settle pending funding on read if still PENDING). Funding initiation itself
+     * always stays PENDING with Instant Interac instructions until webhook/operator settle.
+     * Live mode should leave this false.
      */
-    private boolean autoSandboxSettle = true;
+    private boolean autoSandboxSettle = false;
 
     /**
-     * When sandbox mode cannot reach Apaylo, still settle CAD funding/withdrawals locally so
-     * wallet demos keep working. Never used with live mode.
+     * When sandbox mode cannot reach Apaylo, still settle CAD <em>withdrawals</em> locally.
+     * Funding never silent-credits offline. Never used with live mode.
      */
     private boolean offlineSandboxSettle = true;
 
@@ -49,14 +51,20 @@ public class ApayloProperties {
     private String sandboxBaseUrl = "https://sandboxapi.apaylo.com/sandboxapi.apaylo.com/api";
 
     /**
-     * Optional merchant display name / account label (informational; auth is Key+Signature).
+     * Searchable Interac account name customers send to (e.g. {@code Palpeer Global Holding Inc}).
      */
     private String accountId = "";
 
     /**
-     * Path for Interac Request Money (CAD funding).
+     * Apaylo APL reference (e.g. {@code APL1234}) required in Instant deposit Descriptions.
      */
-    private String createSearchableEtransferPath = "/Merchant/RequestInteracEtransferEmail";
+    private String aplReference = "";
+
+    /**
+     * Path for Instant Interac deposit / checkout (CAD funding). Prefer
+     * {@code /Merchant/RequestInteracEtransferLink} — no email is sent to the customer.
+     */
+    private String createSearchableEtransferPath = "/Merchant/RequestInteracEtransferLink";
 
     /**
      * Path for Interac send (CAD withdrawal to email/phone).

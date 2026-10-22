@@ -18,6 +18,7 @@ import com.palpeer.p2p.domain.P2PStatus;
 import com.palpeer.p2p.repository.P2POrderRepository;
 import com.palpeer.p2p.repository.P2PRequestRepository;
 import com.palpeer.p2p.web.dto.CreateP2PRequestDto;
+import com.palpeer.p2p.web.dto.P2PFeeEstimateResponse;
 import com.palpeer.p2p.web.dto.P2POrderResponse;
 import com.palpeer.p2p.web.dto.P2POrderSummaryResponse;
 import com.palpeer.p2p.web.dto.P2PRequestResponse;
@@ -26,10 +27,14 @@ import com.palpeer.p2p.web.dto.PublicP2PRequestResponse;
 import com.palpeer.p2p.web.dto.UpdateP2PRequestDto;
 import com.palpeer.profile.domain.Profile;
 import com.palpeer.profile.repository.ProfileRepository;
+import com.palpeer.promotion.service.PromotionService;
+import com.palpeer.promotion.web.dto.P2PFeePromotionDiscount;
 import com.palpeer.user.domain.User;
 import com.palpeer.user.repository.UserRepository;
+import com.palpeer.wallet.domain.PlatformFeeSourceType;
 import com.palpeer.wallet.domain.Wallet;
 import com.palpeer.wallet.repository.WalletRepository;
+import com.palpeer.wallet.service.PlatformFeeRevenueService;
 import jakarta.persistence.criteria.Predicate;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -67,6 +72,8 @@ public class P2PService {
     private final ProfileRepository profileRepository;
     private final UserRepository userRepository;
     private final LedgerService ledgerService;
+    private final PlatformFeeRevenueService platformFeeRevenueService;
+    private final PromotionService promotionService;
     private final AuditRecorder auditRecorder;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -94,6 +101,7 @@ public class P2PService {
         entity.setStatus(P2PStatus.OPEN);
         entity.setExpiresAt(request.expiresAt());
         entity.setNotes(trimToNull(request.notes()));
+        entity.setApplyBonusCredit(Boolean.TRUE.equals(request.applyBonusCredit()));
         // Flush so the request id exists before the ledger idempotency key is built.
         p2PRequestRepository.saveAndFlush(entity);
         // SELL listings temporarily move the base (sold) amount available → pending until settle/cancel/expire.
@@ -126,6 +134,9 @@ public class P2PService {
         }
         if (request.notes() != null) {
             entity.setNotes(trimToNull(request.notes()));
+        }
+        if (request.applyBonusCredit() != null) {
+            entity.setApplyBonusCredit(request.applyBonusCredit());
         }
         if (amountChanged && entity.getSide() == P2PSide.SELL) {
             releaseSellHold(entity);
@@ -199,7 +210,18 @@ public class P2PService {
 
     @Transactional
     public P2POrderResponse accept(UUID acceptorId, UUID requestId) {
-        return acceptInternal(acceptorId, requestId, null, null);
+        return accept(acceptorId, requestId, null, null);
+    }
+
+    @Transactional
+    public P2POrderResponse accept(UUID acceptorId, UUID requestId, Boolean applyBonusCredit) {
+        return accept(acceptorId, requestId, applyBonusCredit, null);
+    }
+
+    @Transactional
+    public P2POrderResponse accept(
+            UUID acceptorId, UUID requestId, Boolean applyBonusCredit, String promotionCode) {
+        return acceptInternal(acceptorId, requestId, null, null, applyBonusCredit, promotionCode);
     }
 
     /**
@@ -215,14 +237,16 @@ public class P2PService {
         if (amount.compareTo(java.math.BigDecimal.ZERO) <= 0 || rate.compareTo(java.math.BigDecimal.ZERO) <= 0) {
             throw new BusinessException("P2P_TERMS_INVALID", "amount and rate must be positive", HttpStatus.BAD_REQUEST);
         }
-        return acceptInternal(acceptorId, requestId, amount, rate);
+        return acceptInternal(acceptorId, requestId, amount, rate, null, null);
     }
 
     private P2POrderResponse acceptInternal(
             UUID acceptorId,
             UUID requestId,
             java.math.BigDecimal amount,
-            java.math.BigDecimal rate) {
+            java.math.BigDecimal rate,
+            Boolean applyBonusCredit,
+            String promotionCode) {
         P2PRequest request = p2PRequestRepository.findByIdForUpdate(requestId)
                 .orElseThrow(() -> new ResourceNotFoundException("P2P request not found"));
         refreshExpiry(request);
@@ -257,7 +281,13 @@ public class P2PService {
         order.setStatus(P2PStatus.ACCEPTED);
         p2POrderRepository.save(order);
 
-        settleAcceptedOrder(request, order);
+        UUID buyerId = request.getSide() == P2PSide.SELL ? acceptorId : request.getUserId();
+        boolean useBonusCredit = request.isApplyBonusCredit();
+        if (applyBonusCredit != null && acceptorId.equals(buyerId)) {
+            useBonusCredit = applyBonusCredit;
+        }
+
+        settleAcceptedOrder(request, order, useBonusCredit, promotionCode);
 
         request.setStatus(P2PStatus.COMPLETED);
         order.setStatus(P2PStatus.COMPLETED);
@@ -265,6 +295,11 @@ public class P2PService {
         p2POrderRepository.save(order);
         publishClosed(request);
         notifyP2PAccepted(request, order);
+        // Either party completing a P2P trade can unlock a pending referrer bonus (as invitee).
+        eventPublisher.publishEvent(
+                new com.palpeer.common.notify.UserQualifyingTradeCompletedEvent(order.getRequesterId()));
+        eventPublisher.publishEvent(
+                new com.palpeer.common.notify.UserQualifyingTradeCompletedEvent(order.getAcceptorId()));
         return toOrderResponse(order);
     }
 
@@ -272,7 +307,8 @@ public class P2PService {
      * Moves base from seller → buyer and quote from buyer → seller, then clears any SELL hold.
      * SELL listings: requester sells base; BUY listings: acceptor sells base.
      */
-    private void settleAcceptedOrder(P2PRequest request, P2POrder order) {
+    private void settleAcceptedOrder(
+            P2PRequest request, P2POrder order, boolean applyBonusCredit, String promotionCode) {
         UUID sellerId = request.getSide() == P2PSide.SELL ? order.getRequesterId() : order.getAcceptorId();
         UUID buyerId = request.getSide() == P2PSide.SELL ? order.getAcceptorId() : order.getRequesterId();
         String base = request.getBaseCurrencyCode();
@@ -288,11 +324,19 @@ public class P2PService {
         Wallet buyerQuote = requireWallet(buyerId, quote, "buyer");
         Wallet sellerQuote = requireWallet(sellerId, quote, "seller");
 
+        // Fail fast with a clear code before any ledger posts (buyer quote + seller base when unheld).
+        assertSufficientAvailable(buyerQuote, quoteAmount, "buyer");
+        boolean sellHoldCoversBase =
+                request.getSide() == P2PSide.SELL && request.getHoldLedgerEntryId() != null;
+        if (!sellHoldCoversBase) {
+            assertSufficientAvailable(sellerBase, baseAmount, "seller");
+        }
+
         String orderRef = order.getId().toString();
         String prefix = "p2p-order:" + orderRef;
 
         // Base leg: seller pays base, buyer receives base.
-        if (request.getSide() == P2PSide.SELL && request.getHoldLedgerEntryId() != null) {
+        if (sellHoldCoversBase) {
             // Capture hold into a debit (pending → gone), then credit the buyer.
             captureSellHold(request);
         } else {
@@ -332,11 +376,33 @@ public class P2PService {
                 orderRef,
                 "P2P settle — seller quote credit"));
 
-        BigDecimal fee = p2PFeeTierService.resolveFee(base, quote, baseAmount);
-        if (fee != null && fee.signum() > 0) {
-            int basePrecision = currencyService.getByCode(base).precision();
-            order.setFeeAmount(fee.setScale(basePrecision, RoundingMode.HALF_EVEN));
-            order.setFeeCurrencyCode(base);
+        BigDecimal grossFee = scaledP2PFee(base, quote, baseAmount, order.getRate());
+        if (grossFee != null && grossFee.signum() > 0) {
+            BigDecimal fee = promotionService.applyP2PFeeDiscount(
+                    buyerId, base, grossFee, applyBonusCredit, promotionCode);
+            if (fee != null && fee.signum() > 0) {
+                order.setFeeAmount(fee);
+                order.setFeeCurrencyCode(base);
+                ledgerService.post(new LedgerPostingRequest(
+                        buyerBase.getId(),
+                        LedgerEntryType.DEBIT,
+                        fee,
+                        prefix + ":fee-debit",
+                        "P2P_ORDER",
+                        orderRef,
+                        "P2P settle — buyer platform fee"));
+                platformFeeRevenueService.record(
+                        PlatformFeeSourceType.P2P,
+                        "P2P_ORDER",
+                        order.getId(),
+                        buyerId,
+                        base,
+                        fee,
+                        "P2P platform fee");
+            } else {
+                order.setFeeAmount(BigDecimal.ZERO);
+                order.setFeeCurrencyCode(base);
+            }
         }
 
         auditRecorder.record(AuditRecord.builder("P2P_ORDER_SETTLED")
@@ -371,6 +437,23 @@ public class P2PService {
                                 + currencyCode
                                 + " wallet before this order can settle",
                         HttpStatus.BAD_REQUEST));
+    }
+
+    private static void assertSufficientAvailable(Wallet wallet, BigDecimal required, String role) {
+        BigDecimal available =
+                wallet.getAvailableBalance() == null ? BigDecimal.ZERO : wallet.getAvailableBalance();
+        if (available.compareTo(required) < 0) {
+            throw new BusinessException(
+                    "INSUFFICIENT_AVAILABLE_BALANCE",
+                    "The "
+                            + role
+                            + " needs at least "
+                            + required.toPlainString()
+                            + " "
+                            + wallet.getCurrencyCode()
+                            + " available",
+                    HttpStatus.UNPROCESSABLE_ENTITY);
+        }
     }
 
     @Transactional
@@ -706,20 +789,35 @@ public class P2PService {
     }
 
     private P2PRequestResponse toRequestResponse(P2PRequest entity, String posterDisplayName) {
+        String base = entity.getBaseCurrencyCode();
+        BigDecimal estimatedFee =
+                scaledP2PFee(base, entity.getQuoteCurrencyCode(), entity.getAmount(), entity.getRate());
         return new P2PRequestResponse(
                 entity.getId(),
                 entity.getUserId(),
                 posterDisplayName,
                 entity.getSide(),
-                entity.getBaseCurrencyCode(),
+                base,
                 entity.getQuoteCurrencyCode(),
                 entity.getAmount(),
                 entity.getRate(),
                 entity.getStatus(),
                 entity.getExpiresAt(),
                 entity.getNotes(),
-                entity.getCreatedAt()
-        );
+                entity.getCreatedAt(),
+                estimatedFee,
+                estimatedFee != null ? base : null,
+                entity.isApplyBonusCredit());
+    }
+
+    private BigDecimal scaledP2PFee(
+            String baseCurrencyCode, String quoteCurrencyCode, BigDecimal amount, BigDecimal rate) {
+        BigDecimal fee = p2PFeeTierService.resolveFee(baseCurrencyCode, quoteCurrencyCode, amount, rate);
+        if (fee == null || fee.signum() <= 0) {
+            return null;
+        }
+        int basePrecision = currencyService.getByCode(baseCurrencyCode).precision();
+        return fee.setScale(basePrecision, RoundingMode.HALF_EVEN);
     }
 
     private String resolvePosterDisplayName(UUID userId) {
@@ -765,8 +863,65 @@ public class P2PService {
                 order.getAmount(),
                 order.getRate(),
                 order.getStatus(),
-                order.getCreatedAt()
-        );
+                order.getCreatedAt(),
+                order.getFeeAmount(),
+                order.getFeeCurrencyCode());
+    }
+
+    /**
+     * Fee preview for mobile create/accept flows. Promo discount applies only when the buyer
+     * supplies a matching {@code promotionCode}; bonus credit only when {@code applyBonusCredit}.
+     */
+    @Transactional(readOnly = true)
+    public P2PFeeEstimateResponse estimateFee(
+            UUID viewerId,
+            String baseCurrencyCode,
+            String quoteCurrencyCode,
+            BigDecimal amount,
+            BigDecimal rate,
+            boolean applyBonusCredit) {
+        return estimateFee(
+                viewerId, baseCurrencyCode, quoteCurrencyCode, amount, rate, applyBonusCredit, null);
+    }
+
+    @Transactional(readOnly = true)
+    public P2PFeeEstimateResponse estimateFee(
+            UUID viewerId,
+            String baseCurrencyCode,
+            String quoteCurrencyCode,
+            BigDecimal amount,
+            BigDecimal rate,
+            boolean applyBonusCredit,
+            String promotionCode) {
+        String base = normalize(baseCurrencyCode);
+        String quote = normalize(quoteCurrencyCode);
+        currencyService.requireExists(base);
+        currencyService.requireExists(quote);
+        if (amount == null || amount.signum() <= 0) {
+            return new P2PFeeEstimateResponse(
+                    base, quote, amount, null, null, null, null, null, null);
+        }
+        BigDecimal fee = scaledP2PFee(base, quote, amount, rate);
+        if (fee == null || fee.signum() <= 0) {
+            return new P2PFeeEstimateResponse(
+                    base, quote, amount, null, null, null, null, null, null);
+        }
+        if (viewerId == null) {
+            return new P2PFeeEstimateResponse(
+                    base, quote, amount, fee, base, BigDecimal.ZERO, fee, null, BigDecimal.ZERO);
+        }
+        P2PFeePromotionDiscount discount = promotionService.previewP2PFeeDiscount(
+                viewerId, base, fee, applyBonusCredit, promotionCode);
+        return new P2PFeeEstimateResponse(
+                base,
+                quote,
+                amount,
+                discount.originalFeeAmount(),
+                base,
+                discount.discountAmount(),
+                discount.feeAfterDiscount(),
+                discount.promotionCode(),
+                discount.pendingBonusCredit());
     }
 
     private P2POrderSummaryResponse toOrderSummary(P2POrder order, P2PRequest request) {

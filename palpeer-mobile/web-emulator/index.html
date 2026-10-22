@@ -8,7 +8,7 @@
       :root {
         --bezel: #111418;
         --bezel-edge: #2a3038;
-        --screen: #000;
+        --screen: #ffffff;
         --desk: #e8ece9;
         --ink: #1b2420;
         --muted: #63706a;
@@ -118,25 +118,6 @@
         font-weight: 600;
       }
 
-      .status {
-        margin-top: 16px;
-        font-size: 12px;
-        color: var(--muted);
-        padding: 10px 12px;
-        border-radius: 10px;
-        background: #f4f6f5;
-      }
-
-      .status.ok {
-        color: #086647;
-        background: #e8f7f0;
-      }
-
-      .status.bad {
-        color: #ce2c31;
-        background: #fdecec;
-      }
-
       .stage {
         display: flex;
         align-items: center;
@@ -169,14 +150,80 @@
         z-index: 2;
       }
 
+      .screen-wrap {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        border-radius: 34px;
+        overflow: hidden;
+        background: var(--screen);
+      }
+
       .screen {
         width: 100%;
         height: 100%;
         border: 0;
         border-radius: 34px;
-        background: var(--screen);
+        background: transparent;
         overflow: hidden;
         display: block;
+        position: relative;
+        z-index: 1;
+      }
+
+      /* Match BrandSplash until the Expo iframe paints (no instructional copy). */
+      .screen-boot {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+        padding: 24px;
+        background: #ffffff;
+        pointer-events: none;
+        transition: opacity 140ms ease-out;
+      }
+
+      .screen-boot.is-hidden {
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      .screen-boot img {
+        width: 200px;
+        height: 84px;
+        object-fit: contain;
+      }
+
+      .screen-boot .track {
+        width: 148px;
+        height: 4px;
+        border-radius: 999px;
+        background: #f4f6f5;
+        overflow: hidden;
+        margin-top: 4px;
+      }
+
+      .screen-boot .fill {
+        height: 100%;
+        width: 28%;
+        border-radius: 999px;
+        background: #0e9f6e;
+        animation: preview-boot-bar 1.6s ease-in-out infinite alternate;
+      }
+
+      @keyframes preview-boot-bar {
+        from {
+          transform: translateX(0);
+          width: 28%;
+        }
+        to {
+          transform: translateX(160%);
+          width: 55%;
+        }
       }
 
       .side-btn {
@@ -232,7 +279,6 @@
           <a href="http://localhost:5173" target="_blank" rel="noreferrer">Admin console</a>
         </div>
 
-        <div class="status" id="status">Checking Expo web…</div>
       </aside>
 
       <main class="stage">
@@ -240,14 +286,20 @@
           <span class="side-btn power"></span>
           <span class="side-btn vol-up"></span>
           <span class="side-btn vol-down"></span>
-          <!-- camera/microphone required for KYC capture inside this cross-origin Expo iframe -->
-          <iframe
-            class="screen"
-            id="frame"
-            title="PALPEER mobile"
-            allow="camera *; microphone *; clipboard-read *; clipboard-write *"
-            allowfullscreen
-          ></iframe>
+          <div class="screen-wrap">
+            <div class="screen-boot" id="screen-boot" aria-hidden="true">
+              <img src="/palpeer-logo.png" alt="" width="200" height="84" />
+              <div class="track"><div class="fill"></div></div>
+            </div>
+            <!-- camera/microphone required for KYC capture inside this cross-origin Expo iframe -->
+            <iframe
+              class="screen"
+              id="frame"
+              title="PALPEER mobile"
+              allow="camera *; microphone *; clipboard-read *; clipboard-write *"
+              allowfullscreen
+            ></iframe>
+          </div>
         </div>
       </main>
     </div>
@@ -263,10 +315,23 @@
 
       const phone = document.getElementById('phone');
       const frame = document.getElementById('frame');
-      const statusEl = document.getElementById('status');
+      const boot = document.getElementById('screen-boot');
       const devicesEl = document.getElementById('devices');
       const openRaw = document.getElementById('open-raw');
       openRaw.href = APP_URL;
+
+      function hideBoot() {
+        if (!boot || boot.classList.contains('is-hidden')) return;
+        boot.classList.add('is-hidden');
+        window.setTimeout(() => boot.remove(), 180);
+      }
+
+      // Keep the branded overlay until Expo's BrandSplash mounts (avoids a white gap).
+      window.addEventListener('message', (event) => {
+        if (event?.data?.type === 'palpeer-brand-splash-ready') hideBoot();
+      });
+      // Fallback if postMessage never arrives (older build / blocked).
+      window.setTimeout(hideBoot, 15_000);
       frame.src = APP_URL;
 
       function applyDevice(device) {
@@ -289,24 +354,6 @@
 
       const saved = localStorage.getItem('palpeer.preview.device');
       applyDevice(devices.find((d) => d.id === saved) || devices[0]);
-
-      async function ping() {
-        try {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 4000);
-          await fetch(APP_URL, { mode: 'no-cors', cache: 'no-store', signal: controller.signal });
-          clearTimeout(timer);
-          statusEl.textContent = 'Expo web is reachable at ' + APP_URL;
-          statusEl.className = 'status ok';
-        } catch (error) {
-          statusEl.textContent =
-            'Cannot reach Expo web at ' + APP_URL + ' (timed out or down). Run npm run web in palpeer-mobile.';
-          statusEl.className = 'status bad';
-        }
-      }
-
-      ping();
-      setInterval(ping, 5000);
     </script>
   </body>
 </html>

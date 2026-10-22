@@ -21,6 +21,8 @@ export type AppConfig = {
   env: AppEnvironment;
   apiBaseUrl: string;
   wsUrl: string;
+  /** Support-Ticketing AI / live-chat API (e.g. https://app.palpeer.com.ng/api). */
+  supportChatApiBaseUrl: string;
   requestTimeoutMs: number;
   sessionRestoreTimeoutMs: number;
   support: SupportConfig;
@@ -83,6 +85,7 @@ type RawEnv = {
   EXPO_PUBLIC_ENV?: string;
   EXPO_PUBLIC_API_BASE_URL?: string;
   EXPO_PUBLIC_WS_URL?: string;
+  EXPO_PUBLIC_SUPPORT_CHAT_API_BASE_URL?: string;
   EXPO_PUBLIC_SUPPORT_EMAIL?: string;
   EXPO_PUBLIC_SUPPORT_PHONE?: string;
   EXPO_PUBLIC_PRIVACY_POLICY_URL?: string;
@@ -95,6 +98,10 @@ type RawEnv = {
   EXPO_PUBLIC_IOS_STORE_URL?: string;
 };
 
+const DEFAULT_SUPPORT_CHAT_API = 'https://app.palpeer.com.ng/api';
+/** Same-origin Metro proxy path used on Expo web to avoid CORS. */
+export const SUPPORT_CHAT_WEB_PROXY_PATH = '/support-chat-api';
+
 const DEFAULT_ANDROID_STORE =
   'https://play.google.com/store/apps/details?id=com.palpeer.app';
 
@@ -105,10 +112,20 @@ function parseOptionalId(value: string | undefined): string | null {
 
 export function buildConfig(raw: RawEnv): AppConfig {
   const env = parseEnvironment(raw.EXPO_PUBLIC_ENV);
+  const supportChatConfigured = parseEndpoint(
+    raw.EXPO_PUBLIC_SUPPORT_CHAT_API_BASE_URL,
+    env,
+    ['https://'],
+  );
+  // Web must use the Metro same-origin proxy — app.palpeer.com.ng does not send CORS headers.
+  const supportChatDirect = supportChatConfigured || DEFAULT_SUPPORT_CHAT_API;
+  const supportChatApiBaseUrl =
+    Platform.OS === 'web' ? SUPPORT_CHAT_WEB_PROXY_PATH : supportChatDirect;
   return {
     env,
     apiBaseUrl: parseEndpoint(raw.EXPO_PUBLIC_API_BASE_URL, env, ['https://']),
     wsUrl: parseEndpoint(raw.EXPO_PUBLIC_WS_URL, env, ['https://', 'wss://']),
+    supportChatApiBaseUrl,
     // Staging/production often hit a cold Render free instance; keep headroom beyond 15s.
     requestTimeoutMs: env === 'development' ? 15_000 : 60_000,
     sessionRestoreTimeoutMs: 8_000,
@@ -145,6 +162,7 @@ const rawConfig = buildConfig({
   EXPO_PUBLIC_ENV: process.env.EXPO_PUBLIC_ENV,
   EXPO_PUBLIC_API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL,
   EXPO_PUBLIC_WS_URL: process.env.EXPO_PUBLIC_WS_URL,
+  EXPO_PUBLIC_SUPPORT_CHAT_API_BASE_URL: process.env.EXPO_PUBLIC_SUPPORT_CHAT_API_BASE_URL,
   EXPO_PUBLIC_SUPPORT_EMAIL: process.env.EXPO_PUBLIC_SUPPORT_EMAIL,
   EXPO_PUBLIC_SUPPORT_PHONE: process.env.EXPO_PUBLIC_SUPPORT_PHONE,
   EXPO_PUBLIC_PRIVACY_POLICY_URL: process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL,
@@ -161,8 +179,13 @@ export const appConfig: AppConfig = {
   ...rawConfig,
   apiBaseUrl: rewriteEmulatorHostForWeb(rawConfig.apiBaseUrl),
   wsUrl: rewriteEmulatorHostForWeb(rawConfig.wsUrl),
+  supportChatApiBaseUrl: rewriteEmulatorHostForWeb(rawConfig.supportChatApiBaseUrl),
 };
 
 export function isApiConfigured(config: AppConfig = appConfig): boolean {
   return config.apiBaseUrl.length > 0;
+}
+
+export function isSupportChatConfigured(config: AppConfig = appConfig): boolean {
+  return config.supportChatApiBaseUrl.length > 0;
 }

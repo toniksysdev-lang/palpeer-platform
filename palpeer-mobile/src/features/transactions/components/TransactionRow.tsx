@@ -4,6 +4,7 @@ import {
   ArrowRightLeft,
   ArrowUpRight,
   ChevronRight,
+  Gift,
   Users,
   type LucideIcon,
 } from 'lucide-react-native';
@@ -26,6 +27,7 @@ const ICONS: Record<TransactionActivityType, LucideIcon> = {
   EXCHANGE: ArrowLeftRight,
   TRANSFER: ArrowRightLeft,
   P2P: Users,
+  BONUS: Gift,
 };
 
 /** "100.00 CAD → 108,945.12 NGN" for exchanges/P2P; the single amount otherwise. */

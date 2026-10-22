@@ -11,6 +11,7 @@ export function ConfirmDialog({
   cancelLabel = 'Cancel',
   tone = 'danger',
   busy,
+  confirmDisabled = false,
   onConfirm,
   onClose,
   children,
@@ -22,6 +23,8 @@ export function ConfirmDialog({
   cancelLabel?: string;
   tone?: 'danger' | 'primary';
   busy?: boolean;
+  /** Extra gate (e.g. typed affirmation) — kept separate from busy so the label stays clear. */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onClose: () => void;
   children?: ReactNode;
@@ -65,8 +68,8 @@ export function ConfirmDialog({
           <Button
             variant={tone === 'danger' ? 'danger' : 'primary'}
             onClick={onConfirm}
-            disabled={busy}
-            className={cn(busy && 'opacity-70')}
+            disabled={busy || confirmDisabled}
+            className={cn((busy || confirmDisabled) && 'opacity-70')}
           >
             {busy ? 'Working…' : confirmLabel}
           </Button>

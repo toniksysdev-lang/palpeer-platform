@@ -20,14 +20,28 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
 
     Optional<ChatMessage> findByIdAndRoomId(UUID id, UUID roomId);
 
+    /**
+     * Unread for {@code userId} in one room when they have never marked it read — every message
+     * from the other party. Split from the timestamped query so PostgreSQL never sees a null
+     * {@code Instant} bind in {@code :lastReadAt is null} (SQLState 42P18).
+     */
+    @Query("""
+            select count(m) from ChatMessage m
+            where m.roomId = :roomId
+              and m.senderId <> :userId
+            """)
+    long countUnreadInRoom(
+            @Param("roomId") UUID roomId,
+            @Param("userId") UUID userId);
+
     /** Unread for {@code userId} in one room: messages from the other party after {@code lastReadAt}. */
     @Query("""
             select count(m) from ChatMessage m
             where m.roomId = :roomId
               and m.senderId <> :userId
-              and (:lastReadAt is null or m.createdAt > :lastReadAt)
+              and m.createdAt > :lastReadAt
             """)
-    long countUnreadInRoom(
+    long countUnreadInRoomAfter(
             @Param("roomId") UUID roomId,
             @Param("userId") UUID userId,
             @Param("lastReadAt") Instant lastReadAt);

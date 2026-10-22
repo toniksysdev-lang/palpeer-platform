@@ -11,6 +11,10 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { baseApi } from '@/services/api/baseApi';
 import {
+  useGetPinStatusQuery,
+  useGetSecurityQuestionsQuery,
+} from '@/services/api/securityApi';
+import {
   getBiometricCapability,
   type BiometricCapability,
 } from '@/services/biometrics/biometrics';
@@ -26,8 +30,8 @@ import { securityErrorMessage } from './errors';
 const OFFER_DELAY_MS = 700;
 
 /**
- * After the first successful login on a device (password or Google), offer Fingerprint / Face ID
- * unlock. Subsequent cold starts use the existing LockScreen when the user accepts.
+ * After PIN + security questions are done on first login, offer Fingerprint / Face ID unlock.
+ * Subsequent cold starts use LockScreen; Login keeps a fingerprint button when the session is parked.
  */
 export function OfferBiometricUnlock() {
   const theme = useTheme();
@@ -38,11 +42,18 @@ export function OfferBiometricUnlock() {
   const locked = useAppSelector((state) => state.appLock.locked);
   const biometricEnabled = useAppSelector((state) => state.appLock.biometricEnabled);
   const prompted = useAppSelector((state) => state.preferences.biometricUnlockPrompted);
+  const pinStatus = useGetPinStatusQuery(undefined, { skip: !authenticated });
+  const questions = useGetSecurityQuestionsQuery(undefined, {
+    skip: !authenticated || !pinStatus.data?.pinSet,
+  });
 
   const [capability, setCapability] = useState<BiometricCapability | null>(null);
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const securityReady =
+    !!pinStatus.data?.pinSet && !!questions.data && questions.data.length > 0;
 
   useEffect(() => {
     let active = true;
@@ -59,6 +70,7 @@ export function OfferBiometricUnlock() {
       authenticated &&
       !!userId &&
       !locked &&
+      securityReady &&
       !biometricEnabled &&
       !prompted &&
       capability?.status === 'available';
@@ -70,7 +82,15 @@ export function OfferBiometricUnlock() {
 
     const timer = setTimeout(() => setVisible(true), OFFER_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [authenticated, userId, locked, biometricEnabled, prompted, capability]);
+  }, [
+    authenticated,
+    userId,
+    locked,
+    securityReady,
+    biometricEnabled,
+    prompted,
+    capability,
+  ]);
 
   const label = capability && capability.status !== 'unsupported' ? capability.label : 'Fingerprint';
 

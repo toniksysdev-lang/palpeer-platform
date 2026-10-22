@@ -24,7 +24,7 @@ import {
 } from '@/features/negotiation/logic';
 import { useNegotiationRealtime } from '@/features/negotiation/useNegotiationRealtime';
 import { FlippableRateLine } from '@/features/p2p/components/FlippableRateLine';
-import { effectiveStatus, p2pRateLine } from '@/features/p2p/logic';
+import { effectiveStatus, p2pRateLine, viewerIsP2PBuyer } from '@/features/p2p/logic';
 import { useMoneyFormat } from '@/features/wallets/useMoneyFormat';
 import { useNow } from '@/hooks/useNow';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -58,6 +58,8 @@ import type { NegotiationResponse } from '@/types/api/negotiation';
 import type { P2PRequestResponse } from '@/types/api/p2p';
 import { isPositiveMoney, toMoney } from '@/utils/money';
 
+import { useChatReceiveSound } from '../useChatReceiveSound';
+
 import { MessageBubble } from '../components/MessageBubble';
 import {
   buildChatItems,
@@ -65,17 +67,17 @@ import {
   chatErrorMessage,
   connectionNotice,
   isRetryableReadError,
-  NEGOTIATION_PREFILLS,
+  negotiationAcceptBothMessage,
   negotiationAcceptFieldMessage,
   negotiationPairLabel,
-  negotiationTermsMessage,
+  negotiationPrefillsFor,
   orderPairLabel,
+  prefillUsesAmount,
+  prefillUsesRate,
   seenMessageId,
   unreadIncoming,
   type ChatItem,
 } from '../logic';
-
-const PREFILL_OPTIONS = NEGOTIATION_PREFILLS.map((title) => ({ key: title, title }));
 
 const NO_OUTBOX: OutboxMessage[] = [];
 const READ_RETRY_MS = 5_000;
@@ -95,8 +97,19 @@ export function ChatRoomScreen() {
     : room.data
       ? orderPairLabel(order)
       : 'Chat';
-  const messagingClosed =
+  // Order rooms close when the trade is COMPLETED. Negotiation rooms close for both
+  // participants as soon as the offer is accepted (or cancelled) — including the buyer
+  // still on this page after the seller accepts.
+  const negotiationEnded =
+    negotiation.data?.status === 'ACCEPTED' || negotiation.data?.status === 'CANCELLED';
+  const orderCompleted =
     Boolean(room.data?.p2pOrderId) && order?.status === 'COMPLETED';
+  const messagingClosed = orderCompleted || negotiationEnded;
+  const messagingClosedMessage = negotiationEnded
+    ? negotiation.data?.status === 'ACCEPTED'
+      ? 'This offer was accepted. Messaging is closed on this negotiation.'
+      : 'This negotiation has ended. Messaging is closed.'
+    : 'Messaging is closed for this completed order.';
   const header = <StackHeader title={title} />;
 
   if (room.error && !room.data) {
@@ -122,6 +135,7 @@ export function ChatRoomScreen() {
       room={room.data}
       header={header}
       messagingClosed={messagingClosed}
+      messagingClosedMessage={messagingClosedMessage}
       negotiation={negotiation.data}
       request={request.data}
     />
@@ -133,6 +147,7 @@ function Conversation({
   room: roomData,
   header,
   messagingClosed,
+  messagingClosedMessage,
   negotiation,
   request,
 }: {
@@ -140,6 +155,7 @@ function Conversation({
   room: ChatRoomResponse;
   header: React.ReactNode;
   messagingClosed: boolean;
+  messagingClosedMessage: string;
   negotiation?: NegotiationResponse;
   request?: P2PRequestResponse;
 }) {
@@ -155,6 +171,7 @@ function Conversation({
   const [markRead] = useMarkChatReadMutation();
   const [draft, setDraft] = useState('');
   const negotiationMode = Boolean(roomData.negotiationId);
+  const playReceiveSound = useChatReceiveSound();
 
   const { refetch } = history;
   const { refetch: refetchRoom } = room;
@@ -165,8 +182,12 @@ function Conversation({
       if (message.clientMessageId) {
         dispatch(messageConfirmed({ roomId, clientMessageId: message.clientMessageId }));
       }
+      // Room topic broadcasts to both sides; only chime for the other participant.
+      if (userId && message.senderId !== userId) {
+        playReceiveSound();
+      }
     },
-    [dispatch, roomId],
+    [dispatch, playReceiveSound, roomId, userId],
   );
   const onReceipt = useCallback(
     (receipt: ChatReadReceipt) => dispatch(applyReadReceipt(receipt)),
@@ -349,11 +370,7 @@ function Conversation({
   const canSendFreeText = !messagingClosed && draft.trim().length > 0;
 
   const closedFooter = (
-    <FormAlert
-      tone="info"
-      message="Messaging is closed for this completed order."
-      testID="chat-messaging-closed"
-    />
+    <FormAlert tone="info" message={messagingClosedMessage} testID="chat-messaging-closed" />
   );
 
   const freeTextFooter = (
@@ -461,8 +478,35 @@ function NegotiationComposer({
 
   const open = negotiation.status === 'OPEN';
   const canAct = open && myTurn && requestOpen;
-  const canPropose = canAct && isPositiveMoney(amountDraft) && isPositiveMoney(rateDraft);
-  const canSendPrefill = Boolean(prefillKey);
+  const ownRequest = userId != null && request.userId === userId;
+  const isSeller = !viewerIsP2PBuyer(request.side, ownRequest);
+  const availablePrefills = negotiationPrefillsFor({ isSeller, canAct });
+  const prefillOptions = availablePrefills.map((item) => ({
+    key: item.id,
+    title: item.label,
+  }));
+  const selectedPrefill = availablePrefills.find((item) => item.id === prefillKey) ?? null;
+  const amountEditable =
+    canAct || (selectedPrefill != null && prefillUsesAmount(selectedPrefill.fields));
+  const rateEditable =
+    canAct || (selectedPrefill != null && prefillUsesRate(selectedPrefill.fields));
+  const canSendPrefill = (() => {
+    if (!selectedPrefill) return false;
+    if (selectedPrefill.action === 'accept_amount') {
+      return canAct && !!offer && isPositiveMoney(rateDraft);
+    }
+    if (selectedPrefill.action === 'accept_rate') {
+      return canAct && !!offer && isPositiveMoney(amountDraft);
+    }
+    if (selectedPrefill.action === 'accept_both') {
+      return canAct && !!offer;
+    }
+    return (
+      (!prefillUsesAmount(selectedPrefill.fields) || isPositiveMoney(amountDraft)) &&
+      (!prefillUsesRate(selectedPrefill.fields) || isPositiveMoney(rateDraft))
+    );
+  })();
+  const prefillBusy = counterState.isLoading || acceptState.isLoading;
 
   const postCounter = async (amount: string, rate: string, chatLine: string) => {
     setActionError(null);
@@ -478,20 +522,9 @@ function NegotiationComposer({
     return true;
   };
 
-  const sendPropose = async () => {
-    if (!canPropose) return;
-    const amount = toMoney(amountDraft);
-    const rate = toMoney(rateDraft);
-    await postCounter(
-      amount,
-      rate,
-      negotiationTermsMessage(format(amount, base), p2pRateLine(rate, base, quote)),
-    );
-  };
-
   const acceptAmountOnly = async () => {
-    if (!canAct || !offer || !isPositiveMoney(rateDraft)) return;
-    await postCounter(
+    if (!canAct || !offer || !isPositiveMoney(rateDraft)) return false;
+    return postCounter(
       offer.amount,
       rateDraft,
       negotiationAcceptFieldMessage('amount', format(offer.amount, base)),
@@ -499,8 +532,8 @@ function NegotiationComposer({
   };
 
   const acceptRateOnly = async () => {
-    if (!canAct || !offer || !isPositiveMoney(amountDraft)) return;
-    await postCounter(
+    if (!canAct || !offer || !isPositiveMoney(amountDraft)) return false;
+    return postCounter(
       amountDraft,
       offer.rate,
       negotiationAcceptFieldMessage('rate', p2pRateLine(offer.rate, base, quote)),
@@ -511,20 +544,44 @@ function NegotiationComposer({
     setActionError(null);
     const result = await accept({ id: negotiation.id, p2pRequestId: negotiation.p2pRequestId });
     setConfirmAccept(false);
+    setPrefillKey(null);
     if ('error' in result) {
       setActionError(negotiationErrorMessage(toAppError(result.error)));
       return;
     }
-    enqueue("I've accepted the offer. Let's complete the order.");
+    enqueue(negotiationAcceptBothMessage());
     const orderId = result.data.p2pOrderId;
     if (orderId) {
       router.replace({ pathname: '/p2p/order/[id]', params: { id: orderId } });
     }
   };
 
-  const sendPrefill = () => {
-    if (!prefillKey) return;
-    enqueue(prefillKey);
+  const sendPrefill = async () => {
+    if (!selectedPrefill || !canSendPrefill) return;
+    if (selectedPrefill.action === 'accept_both') {
+      setConfirmAccept(true);
+      return;
+    }
+    if (selectedPrefill.action === 'accept_amount') {
+      const ok = await acceptAmountOnly();
+      if (ok) setPrefillKey(null);
+      return;
+    }
+    if (selectedPrefill.action === 'accept_rate') {
+      const ok = await acceptRateOnly();
+      if (ok) setPrefillKey(null);
+      return;
+    }
+    const amountLabel = isPositiveMoney(amountDraft) ? format(toMoney(amountDraft), base) : undefined;
+    const rateLabel = isPositiveMoney(rateDraft)
+      ? p2pRateLine(toMoney(rateDraft), base, quote)
+      : undefined;
+    enqueue(
+      selectedPrefill.build({
+        amount: prefillUsesAmount(selectedPrefill.fields) ? amountLabel : undefined,
+        rateLine: prefillUsesRate(selectedPrefill.fields) ? rateLabel : undefined,
+      }),
+    );
     setPrefillKey(null);
   };
 
@@ -556,38 +613,7 @@ function NegotiationComposer({
         />
       ) : null}
 
-      {canAct ? (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
-          <View style={{ flexGrow: 1, flexBasis: '30%' }}>
-            <Button
-              label="Accept amount"
-              variant="outline"
-              onPress={() => void acceptAmountOnly()}
-              loading={counterState.isLoading}
-              disabled={!isPositiveMoney(rateDraft)}
-              testID="chat-accept-amount"
-            />
-          </View>
-          <View style={{ flexGrow: 1, flexBasis: '30%' }}>
-            <Button
-              label="Accept rate"
-              variant="outline"
-              onPress={() => void acceptRateOnly()}
-              loading={counterState.isLoading}
-              disabled={!isPositiveMoney(amountDraft)}
-              testID="chat-accept-rate"
-            />
-          </View>
-          <View style={{ flexGrow: 1, flexBasis: '30%' }}>
-            <Button
-              label="Accept"
-              onPress={() => setConfirmAccept(true)}
-              loading={acceptState.isLoading}
-              testID="chat-accept-offer"
-            />
-          </View>
-        </View>
-      ) : open ? (
+      {open && !canAct ? (
         <FormAlert
           tone="info"
           message="Waiting for their reply. You can still send a suggested message."
@@ -601,21 +627,44 @@ function NegotiationComposer({
         <View style={{ flex: 1 }}>
           <PickerField
             label="Suggested message"
-            value={prefillKey ?? ''}
+            value={selectedPrefill?.label ?? ''}
             placeholder="Choose a message"
             onPress={() => setPrefillOpen(true)}
             testID="chat-prefill-picker"
           />
         </View>
         <Button
-          label="Send"
+          label={selectedPrefill?.action ? 'Confirm' : 'Send'}
           leftIcon={Send}
-          onPress={sendPrefill}
-          disabled={!canSendPrefill}
+          onPress={() => void sendPrefill()}
+          loading={prefillBusy}
+          disabled={!canSendPrefill || prefillBusy}
           fullWidth={false}
           testID="chat-send-prefill"
         />
       </View>
+
+      {selectedPrefill?.action === 'accept_amount' ? (
+        <AppText variant="caption" tone="secondary" testID="chat-prefill-edit-hint">
+          Keeps their amount. Edit your rate below, then confirm.
+        </AppText>
+      ) : selectedPrefill?.action === 'accept_rate' ? (
+        <AppText variant="caption" tone="secondary" testID="chat-prefill-edit-hint">
+          Keeps their rate. Edit your amount below, then confirm.
+        </AppText>
+      ) : selectedPrefill?.action === 'accept_both' ? (
+        <AppText variant="caption" tone="secondary" testID="chat-prefill-edit-hint">
+          Accepts both terms and creates the order.
+        </AppText>
+      ) : selectedPrefill && selectedPrefill.fields !== 'none' && !canAct ? (
+        <AppText variant="caption" tone="secondary" testID="chat-prefill-edit-hint">
+          {selectedPrefill.fields === 'both'
+            ? 'Edit amount and rate below, then send.'
+            : selectedPrefill.fields === 'amount'
+              ? 'Edit the amount below, then send.'
+              : 'Edit the rate below, then send.'}
+        </AppText>
+      ) : null}
 
       <OfferTermsForm
         base={base}
@@ -624,34 +673,24 @@ function NegotiationComposer({
         rate={rateDraft}
         onAmountChange={setAmountDraft}
         onRateChange={setRateDraft}
-        editable={canAct}
+        amountEditable={amountEditable}
+        rateEditable={rateEditable}
         testID="chat"
       />
 
-      {canAct ? (
-        <Button
-          label="Send counter"
-          leftIcon={Send}
-          onPress={() => void sendPropose()}
-          loading={counterState.isLoading}
-          disabled={!canPropose}
-          testID="chat-send-counter"
-        />
-      ) : null}
-
       <AppText variant="caption" tone="secondary">
-        Only amount and rate are negotiated here. Accept amount or rate to keep that term and counter
-        on the other; Accept completes the deal.
+        Only amount and rate are negotiated here. Choose “I Accept amount” or “I Accept rate” to keep
+        that term and counter on the other; “I Accept the amount and the rate” completes the deal.
       </AppText>
 
       {prefillOpen ? (
         <PickerSheet
           visible={prefillOpen}
           title="Suggested message"
-          options={PREFILL_OPTIONS}
+          options={prefillOptions}
           selectedKey={prefillKey}
           onSelect={(key) => {
-            setPrefillKey(key);
+            setPrefillKey(key || null);
             setPrefillOpen(false);
           }}
           onClose={() => setPrefillOpen(false)}
@@ -667,7 +706,7 @@ function NegotiationComposer({
             ? `You agree to ${format(offer.amount, base)} at ${p2pRateLine(offer.rate, base, quote)}. This creates an order.`
             : ''
         }
-        confirmLabel="Accept"
+        confirmLabel="I Accept the amount and the rate"
         loading={acceptState.isLoading}
         onConfirm={() => void acceptFull()}
         onCancel={() => setConfirmAccept(false)}

@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Lock, Mail } from 'lucide-react-native';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { View, type TextInput } from 'react-native';
 
@@ -19,7 +19,9 @@ import { useSensitiveScreen } from '@/hooks/useSensitiveScreen';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useSecretCommand } from '@/hooks/useSecretCommand';
 import { accountCommands } from '@/services/auth/accountCommands';
+import { preferencesStorage } from '@/services/storage/preferencesStorage';
 import { referralStorage } from '@/services/storage/referralStorage';
+import { signupDraftStorage } from '@/services/storage/signupDraftStorage';
 
 import { AuthLayout } from '../components/AuthLayout';
 import { LegalAgreement } from '../components/LegalAgreement';
@@ -30,10 +32,35 @@ export function RegisterScreen() {
   useSensitiveScreen();
   const theme = useTheme();
   const numberPad = useOptionalNumberPad();
-  const params = useLocalSearchParams<{ phone?: string }>();
+  const params = useLocalSearchParams<{ phone?: string; countryIso2?: string }>();
   const phone = typeof params.phone === 'string' ? params.phone.trim() : '';
+  const countryIso2Param =
+    typeof params.countryIso2 === 'string' ? params.countryIso2.trim().toUpperCase() : '';
+  const [countryIso2, setCountryIso2] = useState(countryIso2Param);
   const [register] = useSecretCommand(accountCommands.register);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Keep phone-signup country through account creation so profile can default residence.
+  useEffect(() => {
+    if (countryIso2Param.length === 2) {
+      setCountryIso2(countryIso2Param);
+      void preferencesStorage.setSignupCountryIso2(countryIso2Param);
+      return;
+    }
+    void (async () => {
+      const fromPref = await preferencesStorage.getSignupCountryIso2();
+      if (fromPref) {
+        setCountryIso2(fromPref);
+        return;
+      }
+      const draft = await signupDraftStorage.load();
+      const fromDraft = draft?.countryIso2?.trim().toUpperCase() ?? '';
+      if (fromDraft.length === 2) {
+        setCountryIso2(fromDraft);
+        await preferencesStorage.setSignupCountryIso2(fromDraft);
+      }
+    })();
+  }, [countryIso2Param]);
 
   // Account form has no digit fields; dismiss pad left open by prior OTP/phone screens.
   useFocusEffect(
@@ -76,9 +103,22 @@ export function RegisterScreen() {
       });
       // Register has no referral field on the API — apply after the user signs in.
       await referralStorage.save(normalizeReferralCode(values.referralCode ?? ''));
+      if (countryIso2.length === 2) {
+        await preferencesStorage.setSignupCountryIso2(countryIso2);
+      }
+      await signupDraftStorage.save({
+        phone,
+        email: result.email,
+        countryIso2: countryIso2.length === 2 ? countryIso2 : null,
+        step: 'EMAIL_OTP',
+      });
       router.replace({
         pathname: '/verify-email',
-        params: { email: result.email },
+        params: {
+          email: result.email,
+          phone,
+          ...(countryIso2.length === 2 ? { countryIso2 } : null),
+        },
       });
     } catch (error) {
       setFormError(applyServerErrors(error, setError, ['email', 'password']));

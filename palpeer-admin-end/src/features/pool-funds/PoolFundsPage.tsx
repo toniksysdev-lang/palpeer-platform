@@ -103,7 +103,7 @@ export function PoolFundsPage() {
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-secondary">
               Live settlement balances from each payment rail, adjusted by successful wallet funding,
               withdrawals, and InstantEX (source currency in, target currency out). Apaylo is CAD;
-              Korapay and Kuda are NGN (InstantEX NGN uses Korapay).
+              Kuda is the active NGN rail (InstantEX NGN is attributed to Kuda).
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -124,18 +124,11 @@ export function PoolFundsPage() {
         />
       ) : null}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-2">
         <BalanceCard
           title="Apaylo (CAD)"
           icon={Landmark}
           balance={query.data?.apaylo}
-          isLoading={query.isLoading}
-          isError={query.isError}
-        />
-        <BalanceCard
-          title="Korapay (NGN)"
-          icon={WalletCards}
-          balance={query.data?.korapay}
           isLoading={query.isLoading}
           isError={query.isError}
         />

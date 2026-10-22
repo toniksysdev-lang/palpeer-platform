@@ -15,6 +15,8 @@ public record CreateP2PRequestDto(
         @NotNull @DecimalMin(value = "0", inclusive = false) BigDecimal amount,
         @NotNull @DecimalMin(value = "0", inclusive = false) BigDecimal rate,
         Instant expiresAt,
-        @Size(max = 500) String notes
+        @Size(max = 500) String notes,
+        /** Optional; when true on a BUY listing, apply PENDING bonus credit to the fee at settle. */
+        Boolean applyBonusCredit
 ) {
 }

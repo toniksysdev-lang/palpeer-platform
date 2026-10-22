@@ -74,8 +74,9 @@ class SendPulseEmailSenderTest {
         sendPulse.setBaseUrl(baseUrl);
 
         PalpeerMailProperties mail = new PalpeerMailProperties();
-        mail.setFrom("noreply@palpeer.com.ng");
-        mail.setFromName("PALPEER");
+        mail.setFrom("noreply@palpeer.com");
+        mail.setFromName("Palpeer");
+        mail.setHeaderFrom("support@palpeer.com");
 
         SendPulseEmailSender sender = new SendPulseEmailSender(sendPulse, mail);
         String html = "<p>hi <img src=\"" + EmailBrand.LOGO_CID_SRC + "\"/></p>";
@@ -86,12 +87,26 @@ class SendPulseEmailSenderTest {
         assertThat(lastAuth.get()).isEqualTo("Bearer test-token");
         assertThat(lastBody.get()).contains("\"subject\":\"OTP\"");
         assertThat(lastBody.get()).contains("user@example.com");
-        // HTML is base64; logo cid should have been rewritten before encoding
+        assertThat(lastBody.get()).contains("\"reply_to\"");
+        assertThat(lastBody.get()).contains("support@palpeer.com");
+        // HTML is base64; logo cid should have been rewritten to HTTPS before encoding
         assertThat(lastBody.get()).doesNotContain(EmailBrand.LOGO_CID_SRC);
         String htmlB64 =
                 lastBody.get().replaceAll("(?s).*\"html\"\\s*:\\s*\"([^\"]+)\".*", "$1");
         String decoded = new String(Base64.getDecoder().decode(htmlB64), StandardCharsets.UTF_8);
-        assertThat(decoded).contains("data:image/png;base64,");
+        assertThat(decoded).contains(EmailBrand.LOGO_HTTPS_URL);
+        assertThat(decoded).doesNotContain("data:image/");
+    }
+
+    @Test
+    void prepareHtml_rewritesCidLogoToHttps() {
+        SendPulseMailProperties sendPulse = new SendPulseMailProperties();
+        sendPulse.setClientId("id");
+        sendPulse.setClientSecret("secret");
+        SendPulseEmailSender sender = new SendPulseEmailSender(sendPulse, new PalpeerMailProperties());
+        String html = "<img src=\"" + EmailBrand.LOGO_CID_SRC + "\"/>";
+        assertThat(sender.prepareHtml(html)).contains(EmailBrand.LOGO_HTTPS_URL);
+        assertThat(sender.prepareHtml(html)).doesNotContain(EmailBrand.LOGO_CID_SRC);
     }
 
     @Test

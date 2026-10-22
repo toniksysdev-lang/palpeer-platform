@@ -1,4 +1,4 @@
-import { formatNationalPhone, toE164 } from '../signupCountries';
+import { formatNationalPhone, iso2FromE164, toE164 } from '../signupCountries';
 
 describe('formatNationalPhone', () => {
   it('formats CA/US progressively as (XXX) XXX-XXXX', () => {
@@ -23,5 +23,22 @@ describe('formatNationalPhone', () => {
 describe('toE164', () => {
   it('joins dial code with national digits only', () => {
     expect(toE164('+1', '(506) 210-0661')).toBe('+15062100661');
+  });
+});
+
+describe('iso2FromE164', () => {
+  it('matches corridor dial codes', () => {
+    expect(iso2FromE164('+2348012345678')).toBe('NG');
+    expect(iso2FromE164('+447911123456')).toBe('GB');
+    expect(iso2FromE164('+233201234567')).toBe('GH');
+  });
+
+  it('prefers corridor countries when dial codes collide', () => {
+    expect(iso2FromE164('+15062100661')).toBe('CA');
+  });
+
+  it('returns null for short or empty input', () => {
+    expect(iso2FromE164(null)).toBeNull();
+    expect(iso2FromE164('+234')).toBeNull();
   });
 });

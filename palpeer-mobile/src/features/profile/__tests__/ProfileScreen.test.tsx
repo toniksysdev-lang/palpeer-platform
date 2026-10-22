@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import { sessionManager } from '@/services/auth/session';
 import { secureStorage } from '@/services/storage/secureStorage';
+import { biometricRestored } from '@/store/slices/appLockSlice';
 import { sessionStarted } from '@/store/slices/sessionSlice';
 import { fail, installFetchMock, ok } from '@/tests/fetchMock';
 import { router } from '@/tests/mocks/expoRouter';
@@ -94,6 +95,8 @@ describe('ProfileScreen', () => {
     expect(router.push).toHaveBeenCalledWith('/notifications/settings');
     await fireEvent.press(screen.getByTestId('profile-referrals'));
     expect(router.push).toHaveBeenCalledWith('/referrals');
+    await fireEvent.press(screen.getByTestId('profile-bonuses'));
+    expect(router.push).toHaveBeenCalledWith('/referrals/bonuses');
   });
 
   it('links to security, privacy, settings, promotions and help', async () => {
@@ -105,6 +108,7 @@ describe('ProfileScreen', () => {
       'profile-privacy': '/settings/privacy',
       'profile-settings': '/settings',
       'profile-promotions': '/promotions',
+      'profile-live-chat': '/support/live-chat',
       'profile-support': '/support',
     };
     for (const [testID, path] of Object.entries(expected)) {
@@ -126,5 +130,30 @@ describe('ProfileScreen', () => {
     expect(signOut).not.toHaveBeenCalled();
     await fireEvent.press(await screen.findByTestId('confirm-dialog-confirm'));
     await waitFor(() => expect(signOut).toHaveBeenCalled());
+  });
+
+  it('parks the session for fingerprint login when biometrics are enabled', async () => {
+    installFetchMock({ ...KYC, 'GET /profiles/me': ok(emptyProfile) });
+    await secureStorage.saveSession({
+      refreshToken: 'refresh-parked',
+      userId: 'u-1',
+      email: 'ada@example.com',
+    });
+    await secureStorage.setBiometricUserId('u-1');
+    const dismiss = jest.spyOn(sessionManager, 'dismissToLogin');
+    const signOut = jest.spyOn(sessionManager, 'signOut');
+    await renderWithProviders(<ProfileScreen />, {
+      prepareStore: (store) => {
+        store.dispatch(sessionStarted({ userId: 'u-1', email: 'ada@example.com' }));
+        store.dispatch(biometricRestored(true));
+      },
+    });
+
+    await fireEvent.press(await screen.findByTestId('profile-sign-out'));
+    await fireEvent.press(await screen.findByTestId('confirm-dialog-confirm'));
+    await waitFor(() => expect(dismiss).toHaveBeenCalled());
+    expect(signOut).not.toHaveBeenCalled();
+    expect(await secureStorage.loadSession()).not.toBeNull();
+    expect(await secureStorage.getBiometricUserId()).toBe('u-1');
   });
 });

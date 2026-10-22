@@ -100,10 +100,12 @@ palpeer:
     credentials-json: ${PALPEER_FCM_CREDENTIALS_JSON:}
   mail:
     # auto | sendpulse | smtp — auto uses SendPulse REST when client-id/secret are set.
+    # From must be on a SendPulse-authenticated domain (palpeer.com). Reply-To = monitored inbox.
+    # See docs/mail-deliverability.md
     provider: ${PALPEER_MAIL_PROVIDER:auto}
-    from: ${PALPEER_MAIL_FROM:noreply@palpeer.com.ng}
-    from-name: ${PALPEER_MAIL_FROM_NAME:PALPEER SUPPORT}
-    header-from: ${PALPEER_MAIL_HEADER_FROM:noreply@palpeer.com.ng}
+    from: ${PALPEER_MAIL_FROM:noreply@palpeer.com}
+    from-name: ${PALPEER_MAIL_FROM_NAME:Palpeer}
+    header-from: ${PALPEER_MAIL_HEADER_FROM:support@palpeer.com}
     sendpulse:
       # Force-on even with provider=auto; still needs client-id + client-secret.
       enabled: ${PALPEER_SENDPULSE_ENABLED:false}
@@ -183,7 +185,8 @@ palpeer:
   apaylo:
     enabled: ${APAYLO_ENABLED:false}
     sandbox: ${APAYLO_SANDBOX:false}
-    auto-sandbox-settle: ${APAYLO_AUTO_SANDBOX_SETTLE:true}
+    # false = CAD funding stays PENDING with Instant Interac details until webhook settles.
+    auto-sandbox-settle: ${APAYLO_AUTO_SANDBOX_SETTLE:false}
     offline-sandbox-settle: ${APAYLO_OFFLINE_SANDBOX_SETTLE:true}
     api-key: ${APAYLO_API_KEY:}
     shared-key: ${APAYLO_SHARED_KEY:}
@@ -191,7 +194,8 @@ palpeer:
     base-url: ${APAYLO_BASE_URL:https://api.etransfer.apaylo.com/api.apaylo.com/api}
     sandbox-base-url: ${APAYLO_SANDBOX_BASE_URL:https://sandboxapi.apaylo.com/sandboxapi.apaylo.com/api}
     account-id: ${APAYLO_ACCOUNT_ID:}
-    create-searchable-etransfer-path: ${APAYLO_CREATE_SEARCHABLE_PATH:/Merchant/RequestInteracEtransferEmail}
+    apl-reference: ${APAYLO_APL_REFERENCE:}
+    create-searchable-etransfer-path: ${APAYLO_CREATE_SEARCHABLE_PATH:/Merchant/RequestInteracEtransferLink}
     send-interac-etransfer-path: ${APAYLO_SEND_INTERAC_PATH:/Merchant/SendInteracEtransfer}
     send-eft-path: ${APAYLO_SEND_EFT_PATH:/EFT/CreateEFTTransaction}
     interac-security-question: ${APAYLO_INTERAC_SECURITY_QUESTION:What is the name of this transfer?}
@@ -202,10 +206,17 @@ palpeer:
   kuda:
     enabled: ${KUDA_ENABLED:false}
     sandbox: ${KUDA_SANDBOX:true}
+    # false = funding stays PENDING with VA details until webhook (real payment process).
+    auto-sandbox-settle: ${KUDA_AUTO_SANDBOX_SETTLE:false}
+    offline-sandbox-settle: ${KUDA_OFFLINE_SANDBOX_SETTLE:true}
+    # true skips customer transfer (FUND_VIRTUAL_ACCOUNT demo). Leave false for real funding UX.
+    demo-fund-enabled: ${KUDA_DEMO_FUND_ENABLED:false}
     email: ${KUDA_EMAIL:}
     api-key: ${KUDA_API_KEY:}
     base-url: ${KUDA_BASE_URL:}
     sender-name: ${KUDA_SENDER_NAME:PALPEER}
+    webhook-username: ${KUDA_WEBHOOK_USERNAME:}
+    webhook-password: ${KUDA_WEBHOOK_PASSWORD:}
     webhook-secret: ${KUDA_WEBHOOK_SECRET:}
     webhook-signature-header: ${KUDA_WEBHOOK_SIGNATURE_HEADER:X-Webhook-Signature}
   korapay:

@@ -33,12 +33,26 @@ function buildUrl(path: string): string {
   return `${base}${path}`;
 }
 
+function networkErrorMessage(error: unknown): string {
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return 'The request was cancelled or timed out. Try again or increase the timeout.';
+  }
+  if (error instanceof Error) {
+    if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+      return 'The request timed out before the server responded.';
+    }
+  }
+  return 'Network error. Check your connection and try again.';
+}
+
 function mapHumanMessage(status: number, code: string, fallback: string): string {
   switch (code) {
     case 'INVALID_CREDENTIALS':
       return 'Invalid email or password.';
     case 'USER_DISABLED':
       return 'This account is disabled.';
+    case 'EMAIL_NOT_VERIFIED':
+      return 'Verify your email before signing in.';
     case 'INVALID_REFRESH_TOKEN':
     case 'REFRESH_TOKEN_EXPIRED':
       return 'Your session has expired. Please sign in again.';
@@ -64,7 +78,14 @@ function mapHumanMessage(status: number, code: string, fallback: string): string
     case 429:
       return 'Too many requests. Please wait and try again.';
     case 500:
-      return 'A server error occurred. Please try again later.';
+    case 502:
+    case 503:
+      // Vite's API proxy returns an empty body when the backend on :8085 is down.
+      // Do not treat a real JSON "Internal server error" body as an unreachable API.
+      if (!fallback || fallback === 'Request failed.') {
+        return 'Cannot reach the API server. Check that the backend is running on port 8085.';
+      }
+      return fallback || 'A server error occurred. Please try again later.';
     default:
       return fallback || 'Something went wrong.';
   }
@@ -165,8 +186,8 @@ export async function apiBinaryRequest(
       credentials: 'omit',
       cache: 'no-store',
     });
-  } catch {
-    throw new ApiClientError(0, 'NETWORK_ERROR', 'Network error. Check your connection and try again.');
+  } catch (error) {
+    throw new ApiClientError(0, 'NETWORK_ERROR', networkErrorMessage(error));
   }
 
   if (response.status === 401 && !options.skipRefresh) {
@@ -234,8 +255,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       credentials: 'omit',
       cache: 'no-store',
     });
-  } catch {
-    throw new ApiClientError(0, 'NETWORK_ERROR', 'Network error. Check your connection and try again.');
+  } catch (error) {
+    throw new ApiClientError(0, 'NETWORK_ERROR', networkErrorMessage(error));
   }
 
   if (response.status === 401 && options.auth !== false && !options.skipRefresh) {

@@ -550,35 +550,72 @@ describe('offers in P2P screens', () => {
     expect(await screen.findByText('No offers yet')).toBeTruthy();
   });
 
-  it('lets a non-owner make an offer on an open request', async () => {
+  it('lets a non-owner make an offer and opens the buyer–seller chat', async () => {
     setSearchParams({ id: 'r-1' });
-    installFetchMock({
+    const { calls } = installFetchMock({
       'GET /currencies': CURRENCIES,
+      'GET /wallets': ok([]),
       'GET /p2p/requests/r-1': ok(p2pRequest()),
       'GET /negotiations/me': ok([]),
+      'POST /negotiations/offers': created(negotiation({ id: 'n-new' })),
+      'POST /chat/rooms': created({
+        id: 'room-neg-1',
+        p2pOrderId: null,
+        negotiationId: 'n-new',
+        participantAId: ME,
+        participantBId: OTHER,
+        createdAt: '2026-09-29T10:00:00Z',
+        participantALastReadAt: null,
+        participantBLastReadAt: null,
+        unreadCount: 0,
+      }),
     });
     await renderWithProviders(<RequestDetailScreen />, signedIn);
     await fireEvent.press(await screen.findByTestId('p2p-make-offer'));
-    expect(router.push).toHaveBeenCalledWith({
-      pathname: '/negotiation/offer',
-      params: { requestId: 'r-1' },
-    });
+    await waitFor(() =>
+      expect(router.push).toHaveBeenCalledWith({
+        pathname: '/chat/[roomId]',
+        params: { roomId: 'room-neg-1' },
+      }),
+    );
+    expect(callsTo(calls, 'POST', '/negotiations/offers')[0]?.rawBody).toBe(
+      '{"p2pRequestId":"r-1","amount":100,"rate":1500}',
+    );
+    expect(callsTo(calls, 'POST', '/chat/rooms')[0]?.rawBody).toBe('{"negotiationId":"n-new"}');
+    // Buyer picks a suggested message in chat — nothing is auto-sent here.
+    expect(callsTo(calls, 'POST', '/chat/rooms/room-neg-1/messages')).toHaveLength(0);
   });
 
-  it('points to my existing offer instead of a second one', async () => {
+  it('opens the existing offer chat instead of starting a second negotiation', async () => {
     setSearchParams({ id: 'r-1' });
-    installFetchMock({
+    const { calls } = installFetchMock({
       'GET /currencies': CURRENCIES,
+      'GET /wallets': ok([]),
       'GET /p2p/requests/r-1': ok(p2pRequest()),
       'GET /negotiations/me': ok([negotiation({ id: 'n-1' })]),
+      'POST /chat/rooms': created({
+        id: 'room-n-1',
+        p2pOrderId: null,
+        negotiationId: 'n-1',
+        participantAId: ME,
+        participantBId: OTHER,
+        createdAt: '2026-09-29T10:00:00Z',
+        participantALastReadAt: null,
+        participantBLastReadAt: null,
+        unreadCount: 0,
+      }),
     });
     await renderWithProviders(<RequestDetailScreen />, signedIn);
     await fireEvent.press(await screen.findByTestId('p2p-view-offer'));
     expect(screen.queryByTestId('p2p-make-offer')).toBeNull();
-    expect(router.push).toHaveBeenCalledWith({
-      pathname: '/negotiation/[id]',
-      params: { id: 'n-1' },
-    });
+    await waitFor(() =>
+      expect(router.push).toHaveBeenCalledWith({
+        pathname: '/chat/[roomId]',
+        params: { roomId: 'room-n-1' },
+      }),
+    );
+    expect(callsTo(calls, 'POST', '/negotiations/offers')).toHaveLength(0);
+    expect(callsTo(calls, 'POST', '/chat/rooms')[0]?.rawBody).toBe('{"negotiationId":"n-1"}');
   });
 
   it('shows the owner every offer on their request', async () => {

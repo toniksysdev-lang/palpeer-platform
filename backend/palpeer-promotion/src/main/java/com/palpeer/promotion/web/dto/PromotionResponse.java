@@ -16,6 +16,8 @@ public record PromotionResponse(
         Instant endsAt,
         BigDecimal bonusAmount,
         String bonusCurrencyCode,
+        String formulaJson,
+        String eligibilityJson,
         Instant createdAt
 ) {
 }

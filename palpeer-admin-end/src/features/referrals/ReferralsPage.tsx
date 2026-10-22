@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Gift, Search } from 'lucide-react';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { Drawer } from '@/components/dialogs/Drawer';
-import { ContractPendingState } from '@/components/feedback/ContractPendingState';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { DataTable, type DataColumn } from '@/components/tables/DataTable';
 import { Pagination } from '@/components/tables/Pagination';
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { appConfig } from '@/config/env';
+import { useToast } from '@/app/providers/ToastProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { formatDateTime, formatDecimal } from '@/lib/format';
 import {
@@ -19,7 +20,12 @@ import {
   mockListAdminBonuses,
   mockListAdminReferrals,
 } from '@/mocks/promotions';
-import { getAdminReferral, listAdminBonuses, listAdminReferrals } from '@/services/api/promotions';
+import {
+  getAdminReferral,
+  listAdminBonuses,
+  listAdminReferrals,
+  settleAdminBonus,
+} from '@/services/api/promotions';
 import { ApiClientError } from '@/types/api';
 import {
   BONUS_STATUSES,
@@ -76,8 +82,11 @@ function UserIdLink({
 
 export function ReferralsPage() {
   const { can } = useAuth();
+  const { push } = useToast();
+  const queryClient = useQueryClient();
   const canUsers = can('users:read');
   const allowed = can('promotions:write');
+  const [settleTarget, setSettleTarget] = useState<BonusSummary | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const tab = searchParams.get('tab') === 'bonuses' ? 'bonuses' : 'referrals';
@@ -152,6 +161,28 @@ export function ReferralsPage() {
         return mockListAdminBonuses(params);
       }
       return listAdminBonuses(params);
+    },
+  });
+
+  const settleMutation = useMutation({
+    mutationFn: async (bonusId: string) => {
+      if (appConfig.useMockApi) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        return { id: bonusId, status: 'GRANTED' } as BonusSummary;
+      }
+      return settleAdminBonus(bonusId);
+    },
+    onSuccess: async () => {
+      setSettleTarget(null);
+      push({ tone: 'success', title: 'Bonus settled', description: 'Wallet credited via ledger.' });
+      await queryClient.invalidateQueries({ queryKey: ['admin-bonuses'] });
+    },
+    onError: (error) => {
+      push({
+        tone: 'error',
+        title: 'Settlement failed',
+        description: error instanceof ApiClientError ? error.message : 'Request failed.',
+      });
     },
   });
 
@@ -296,6 +327,17 @@ export function ReferralsPage() {
         header: 'Created',
         cell: (row) => <span className="text-xs text-text-muted">{formatDateTime(row.createdAt)}</span>,
       },
+      {
+        id: 'actions',
+        header: '',
+        className: 'text-right',
+        cell: (row) =>
+          row.status === 'PENDING' ? (
+            <Button variant="secondary" size="sm" onClick={() => setSettleTarget(row)}>
+              Settle
+            </Button>
+          ) : null,
+      },
     ],
     [canUsers],
   );
@@ -321,8 +363,8 @@ export function ReferralsPage() {
               <h1 className="text-xl font-semibold text-text-primary">Referrals</h1>
             </div>
             <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-              Referrals and bonuses across all users. Campaign rules and bonus settlement are not
-              available yet. Create referral promotions on{' '}
+              Referrals and bonuses across all users. Settle PENDING bonuses to credit the user wallet
+              via the ledger. Campaign formulas and eligibility live under{' '}
               <Link to="/admin/promotions" className="text-primary hover:underline">
                 Promotions
               </Link>
@@ -466,9 +508,21 @@ export function ReferralsPage() {
         )}
       </section>
 
-      <ContractPendingState
-        title="Bonus ledger settlement"
-        description="Bonuses stay PENDING until they are credited to the user's wallet. Automatic settlement is not available yet."
+      <ConfirmDialog
+        open={Boolean(settleTarget)}
+        title="Settle bonus?"
+        description={
+          settleTarget
+            ? `Credit ${formatDecimal(settleTarget.amount)} ${settleTarget.currencyCode} to the user's wallet?`
+            : ''
+        }
+        confirmLabel="Settle bonus"
+        tone="primary"
+        busy={settleMutation.isPending}
+        onClose={() => setSettleTarget(null)}
+        onConfirm={() => {
+          if (settleTarget) settleMutation.mutate(settleTarget.id);
+        }}
       />
 
       <Drawer

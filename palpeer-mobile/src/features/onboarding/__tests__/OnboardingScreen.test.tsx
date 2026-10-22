@@ -1,6 +1,8 @@
-import { fireEvent, screen } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import { pendingNavigation } from '@/services/navigation/pendingNavigation';
+import { signupDraftStorage } from '@/services/storage/signupDraftStorage';
 import { router } from '@/tests/mocks/expoRouter';
 import { renderWithProviders } from '@/tests/render';
 import { preferencesLoaded } from '@/store/slices/preferencesSlice';
@@ -22,9 +24,10 @@ async function renderWelcome() {
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
   pendingNavigation.clear();
+  await AsyncStorage.clear();
 });
 
 describe('OnboardingScreen (welcome)', () => {
@@ -48,6 +51,35 @@ describe('OnboardingScreen (welcome)', () => {
 
     expect(router.push).toHaveBeenCalledWith('/enter-phone');
     expect(pendingNavigation.peek()).toBeNull();
+  });
+
+  it('Continue registration resumes from a saved email OTP draft', async () => {
+    await signupDraftStorage.save({
+      phone: '+15062100661',
+      email: 'ada@example.com',
+      step: 'EMAIL_OTP',
+    });
+    await renderWelcome();
+
+    expect(await screen.findByTestId('welcome-continue-registration')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('welcome-continue-registration'));
+
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: '/verify-email',
+      params: { email: 'ada@example.com', phone: '+15062100661' },
+    });
+  });
+
+  it('Start over clears the draft and opens phone entry', async () => {
+    await signupDraftStorage.save({
+      phone: '+15062100661',
+      step: 'REGISTER',
+    });
+    await renderWelcome();
+
+    await fireEvent.press(await screen.findByTestId('welcome-start-over'));
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith('/enter-phone'));
+    expect(await signupDraftStorage.load()).toBeNull();
   });
 
   it('Login opens the sign-in screen', async () => {

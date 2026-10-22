@@ -1,4 +1,5 @@
-import { ChevronDown, ChevronUp, Mail, Phone, Search, SearchX } from 'lucide-react-native';
+import { router } from 'expo-router';
+import { ChevronDown, ChevronUp, Mail, MessageCircle, Phone, Search, SearchX } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
@@ -115,6 +116,13 @@ function ContactSupport() {
       <FormAlert
         tone="info"
         message="Never share your password, transaction PIN or one-time codes with anyone, including someone who says they're from support."
+      />
+      <NavRow
+        icon={MessageCircle}
+        title="Live chat"
+        detail="AI assistant with live-agent handoff"
+        onPress={() => router.push('/support/live-chat')}
+        testID="support-live-chat"
       />
       <NavRow
         icon={Mail}

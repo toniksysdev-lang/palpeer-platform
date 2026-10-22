@@ -3,6 +3,7 @@ package com.palpeer.notification.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -167,8 +168,44 @@ class NotificationPhase12Test {
                         UUID.randomUUID()));
 
         assertThat(response.status()).isEqualTo(NotificationStatus.SENT);
-        verify(emailSender).send(any(), any(), any(), any());
+        ArgumentCaptor<String> subjectCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailSender).send(eq("user@example.com"), subjectCaptor.capture(), any(), any());
+        assertThat(subjectCaptor.getValue()).contains("Funding successful");
         verify(pushNotifier).send(any(DeviceToken.class), any(Notification.class));
+    }
+
+    @Test
+    void createBoth_keepsInAppSentWhenPushHasNoTokens() {
+        UUID userId = UUID.randomUUID();
+        User user = new User();
+        user.setId(userId);
+        user.setEmail("user@example.com");
+
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> {
+            Notification n = inv.getArgument(0);
+            if (n.getId() == null) {
+                n.setId(UUID.randomUUID());
+            }
+            return n;
+        });
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(deviceTokenRepository.findByUserIdAndEnabledTrue(userId)).thenReturn(List.of());
+
+        NotificationResponse response = notificationService.create(
+                userId,
+                new CreateNotificationRequest(
+                        "Withdrawal initiated",
+                        "Your withdrawal of 100 NGN is pending.",
+                        "TRANSACTION",
+                        NotificationChannel.BOTH,
+                        "WITHDRAWAL",
+                        UUID.randomUUID()));
+
+        assertThat(response.status()).isEqualTo(NotificationStatus.SENT);
+        ArgumentCaptor<String> subjectCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailSender).send(eq("user@example.com"), subjectCaptor.capture(), any(), any());
+        assertThat(subjectCaptor.getValue()).contains("Withdrawal initiated");
+        verify(pushNotifier, never()).send(any(), any());
     }
 
     @Test
@@ -185,10 +222,10 @@ class NotificationPhase12Test {
         });
         when(deviceTokenRepository.findByUserIdAndEnabledTrue(other)).thenReturn(List.of());
 
-        int sent = notificationService.broadcastPush(
+        BroadcastPushStats sent = notificationService.broadcastPush(
                 poster, "New P2P SELL order", "Sell 100 NGN for CAD at rate 0.001", "P2P", "P2P_REQUEST", UUID.randomUUID());
 
-        assertThat(sent).isEqualTo(1);
+        assertThat(sent.recipientCount()).isEqualTo(1);
         verify(deviceTokenRepository).findByUserIdAndEnabledTrue(other);
         verify(deviceTokenRepository, never()).findByUserIdAndEnabledTrue(poster);
     }

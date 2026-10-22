@@ -5,7 +5,6 @@ import { router, setSearchParams } from '@/tests/mocks/expoRouter';
 import { typeIntoNumberField } from '@/tests/numberPad';
 import { renderWithProviders } from '@/tests/render';
 
-
 import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
 import { ResetPasswordScreen } from '../screens/ResetPasswordScreen';
 
@@ -28,7 +27,9 @@ describe('ForgotPasswordScreen', () => {
   });
 
   it('requests a reset code and continues to the reset screen', async () => {
-    const { calls } = installFetchMock({ 'POST /auth/password-reset/request': ok() });
+    const { calls } = installFetchMock({
+      'POST /auth/password-reset/request': ok({ debugOtp: null }),
+    });
     await renderWithProviders(<ForgotPasswordScreen />);
 
     await fireEvent.changeText(screen.getByTestId('forgot-email'), 'ada@example.com');
@@ -40,6 +41,36 @@ describe('ForgotPasswordScreen', () => {
       }),
     );
     expect(calls[0]?.body).toEqual({ email: 'ada@example.com' });
+  });
+
+  it('forwards a debug OTP when the API returns one', async () => {
+    installFetchMock({
+      'POST /auth/password-reset/request': ok({ debugOtp: '654321' }),
+    });
+    await renderWithProviders(<ForgotPasswordScreen />);
+
+    await fireEvent.changeText(screen.getByTestId('forgot-email'), 'ada@example.com');
+    await fireEvent.press(screen.getByTestId('forgot-submit'));
+    await waitFor(() =>
+      expect(router.push).toHaveBeenCalledWith({
+        pathname: '/reset-password',
+        params: { email: 'ada@example.com', debugOtp: '654321' },
+      }),
+    );
+  });
+
+  it('shows email delivery failures on the form', async () => {
+    installFetchMock({
+      'POST /auth/password-reset/request': fail(503, 'OTP_EMAIL_FAILED'),
+    });
+    await renderWithProviders(<ForgotPasswordScreen />);
+
+    await fireEvent.changeText(screen.getByTestId('forgot-email'), 'ada@example.com');
+    await fireEvent.press(screen.getByTestId('forgot-submit'));
+    expect(
+      await screen.findByText('We could not send the email. Check your address and try again.'),
+    ).toBeTruthy();
+    expect(router.push).not.toHaveBeenCalled();
   });
 });
 
@@ -60,6 +91,14 @@ describe('ResetPasswordScreen', () => {
     installFetchMock({});
     await renderWithProviders(<ResetPasswordScreen />);
     expect(screen.getByText(/If an account exists for ada@example.com/)).toBeTruthy();
+  });
+
+  it('shows a dev reset code when provided', async () => {
+    setSearchParams({ email: 'ada@example.com', debugOtp: '112233' });
+    installFetchMock({});
+    await renderWithProviders(<ResetPasswordScreen />);
+    expect(screen.getByTestId('reset-debug-otp')).toBeTruthy();
+    expect(screen.getByText('Dev reset code: 112233')).toBeTruthy();
   });
 
   it('confirms the reset and returns to sign in', async () => {

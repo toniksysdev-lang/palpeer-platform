@@ -18,6 +18,8 @@ import com.palpeer.auth.web.dto.RefreshTokenRequest;
 import com.palpeer.auth.web.dto.RegisterRequest;
 import com.palpeer.auth.web.dto.RegisterResponse;
 import com.palpeer.auth.web.dto.SessionResponse;
+import com.palpeer.auth.web.dto.SignupStatusRequest;
+import com.palpeer.auth.web.dto.SignupStatusResponse;
 import com.palpeer.common.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -106,6 +108,19 @@ public class AuthController {
         return ApiResponse.ok("OTP resent", authService.resendOtp(request));
     }
 
+    @PostMapping("/signup/status")
+    @Operation(summary = "Resolve where phone signup should continue (resume incomplete registration)")
+    public ApiResponse<SignupStatusResponse> signupStatus(@Valid @RequestBody SignupStatusRequest request) {
+        return ApiResponse.ok(authService.signupStatus(request));
+    }
+
+    @PostMapping("/signup/resend-email-otp")
+    @Operation(summary = "Resend email verification OTP for an incomplete signup (by phone)")
+    public ApiResponse<OtpResendResponse> resendSignupEmailOtp(
+            @Valid @RequestBody SignupStatusRequest request) {
+        return ApiResponse.ok("OTP resent", authService.resendSignupEmailOtp(request));
+    }
+
     @PostMapping("/otp/phone/request")
     @Operation(summary = "Send SMS OTP to a phone before registration")
     public ApiResponse<OtpResendResponse> requestPhoneOtp(@Valid @RequestBody PhoneOtpRequest request) {
@@ -121,9 +136,11 @@ public class AuthController {
 
     @PostMapping("/password-reset/request")
     @Operation(summary = "Request password reset OTP")
-    public ApiResponse<Void> requestPasswordReset(@Valid @RequestBody PasswordResetRequestDto request) {
-        authService.requestPasswordReset(request);
-        return ApiResponse.ok("If the account exists, a reset OTP has been sent", null);
+    public ApiResponse<OtpResendResponse> requestPasswordReset(
+            @Valid @RequestBody PasswordResetRequestDto request) {
+        return ApiResponse.ok(
+                "If the account exists, a reset OTP has been sent",
+                authService.requestPasswordReset(request));
     }
 
     @PostMapping("/password-reset/confirm")

@@ -51,7 +51,7 @@ The existing APK had no screen list available as a binary, so screen names come 
 | Screen | Route | Backing | Status | Notes |
 |---|---|---|---|---|
 | Fund: amount → review | `app/wallet/[id]/fund.tsx` | `GET /wallets/{id}`, `POST /funding` + `Idempotency-Key` | LIVE | Two steps in one screen. The method follows the wallet currency; no method picker, no fee line (W-2). |
-| Fund: instructions / status | `app/wallet/funding/[fundingId].tsx` | `GET /funding/{id}` (poll 5 s while in progress with a provider, 30 s otherwise) | LIVE | Shows `fundingInstructions` verbatim while `PENDING`. `INITIATED` with no provider = "Funding isn't available for {CUR} yet". Success only on `SUCCESS`; balances refresh on a final status. |
+| Fund: instructions / status | `app/wallet/funding/[fundingId].tsx` | `GET /funding/{id}` (poll 5 s while in progress with a provider, 30 s otherwise) | LIVE | NGN: VA `paymentDetails`. CAD: Instant Interac `paymentDetails` (payee/amount/reference, copy) while awaiting send. Credit only on `SUCCESS`. `INITIATED` with no provider = "Funding isn't available for {CUR} yet". |
 | Withdraw: amount + destination → review + PIN | `app/wallet/[id]/withdraw.tsx` | `GET /security/pin`, `POST /security/pin/verify`, `POST /withdrawals` + `Idempotency-Key` | PARTIAL | CAD: Interac email/phone or EFT; NGN: bank code + account number. PIN check is a **client-side step** (R-SEC-2, S-1). |
 | Withdraw: status | `app/wallet/withdrawal/[withdrawalId].tsx` | `GET /withdrawals/{id}` (poll) | LIVE | Held / complete / failed (amount released) / reversed copy. Destination shown masked. |
 

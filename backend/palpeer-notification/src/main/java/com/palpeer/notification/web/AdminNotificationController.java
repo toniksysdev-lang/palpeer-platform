@@ -1,6 +1,9 @@
 package com.palpeer.notification.web;
 
 import com.palpeer.common.api.ApiResponse;
+import com.palpeer.notification.push.FcmCredentialsPresentCondition;
+import com.palpeer.notification.push.FcmProperties;
+import com.palpeer.notification.service.BroadcastPushStats;
 import com.palpeer.notification.service.NotificationService;
 import com.palpeer.notification.web.dto.AdminBroadcastPushRequest;
 import com.palpeer.notification.web.dto.AdminBroadcastPushResponse;
@@ -32,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminNotificationController {
 
     private final NotificationService notificationService;
+    private final FcmProperties fcmProperties;
 
     @GetMapping
     @PreAuthorize("hasAuthority('notifications:read')")
@@ -49,13 +53,19 @@ public class AdminNotificationController {
         String category = request.category() == null || request.category().isBlank()
                 ? "ADMIN"
                 : request.category().trim();
-        int count = notificationService.broadcastPush(
+        BroadcastPushStats stats = notificationService.broadcastPush(
                 null,
                 request.title().trim(),
                 request.body().trim(),
                 category,
                 "ADMIN_BROADCAST",
                 null);
-        return ApiResponse.ok(new AdminBroadcastPushResponse(count, request.title().trim()));
+        boolean fcmEnabled = fcmProperties.isEnabled() && FcmCredentialsPresentCondition.credentialsPresent(fcmProperties);
+        return ApiResponse.ok(new AdminBroadcastPushResponse(
+                stats.recipientCount(),
+                request.title().trim(),
+                stats.devicePushCount(),
+                stats.failedCount(),
+                fcmEnabled));
     }
 }

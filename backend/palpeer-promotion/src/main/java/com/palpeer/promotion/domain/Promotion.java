@@ -46,6 +46,15 @@ public class Promotion extends BaseEntity {
     @Column(name = "bonus_amount", precision = 28, scale = 12)
     private BigDecimal bonusAmount;
 
-    @Column(name = "bonus_currency_code", length = 10)
+    /** One or more ISO codes, comma-separated (e.g. CAD,NGN). */
+    @Column(name = "bonus_currency_code", length = 200)
     private String bonusCurrencyCode;
+
+    /** JSON campaign formula (e.g. type FLAT|PERCENT, value). */
+    @Column(name = "formula_json", columnDefinition = "TEXT")
+    private String formulaJson;
+
+    /** JSON eligibility rules (minKycLevel, minCompletedOrders, countries CSV). */
+    @Column(name = "eligibility_json", columnDefinition = "TEXT")
+    private String eligibilityJson;
 }

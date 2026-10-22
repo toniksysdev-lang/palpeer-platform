@@ -160,7 +160,11 @@ function NavList({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: (
           };
         })
         .filter((item) => {
-          if (!can(item.permission)) return false;
+          if (item.permissionsAny?.length) {
+            if (!item.permissionsAny.some((code) => can(code))) return false;
+          } else if (!can(item.permission)) {
+            return false;
+          }
           if (item.children) return item.children.length > 0;
           return true;
         }),

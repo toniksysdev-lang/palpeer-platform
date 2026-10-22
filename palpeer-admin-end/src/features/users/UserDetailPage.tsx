@@ -10,6 +10,7 @@ import { ErrorState } from '@/components/feedback/ErrorState';
 import { DataTable, type DataColumn } from '@/components/tables/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { appConfig } from '@/config/env';
@@ -36,6 +37,9 @@ import { ApiClientError } from '@/types/api';
 import type { TransactionItem } from '@/types/users';
 import { USER_STATUSES, type UserStatus } from '@/types/users';
 
+/** Must be typed exactly (case-sensitive) to enable permanent delete. */
+const DELETE_AFFIRMATION = 'DELETE';
+
 export function UserDetailPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
@@ -51,6 +55,8 @@ export function UserDetailPage() {
   const [enabledDraft, setEnabledDraft] = useState<'true' | 'false' | ''>('');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteAcknowledged, setDeleteAcknowledged] = useState(false);
+  const [deleteAffirmation, setDeleteAffirmation] = useState('');
 
   const userQuery = useQuery({
     queryKey: ['admin-user', id, appConfig.useMockApi],
@@ -126,6 +132,8 @@ export function UserDetailPage() {
     },
     onSuccess: async () => {
       setDeleteConfirmOpen(false);
+      setDeleteAcknowledged(false);
+      setDeleteAffirmation('');
       push({
         tone: 'success',
         title: 'User deleted',
@@ -140,6 +148,19 @@ export function UserDetailPage() {
       push({ tone: 'error', title: 'Delete failed', description: message });
     },
   });
+
+  const openDeleteConfirm = () => {
+    setDeleteAcknowledged(false);
+    setDeleteAffirmation('');
+    setDeleteConfirmOpen(true);
+  };
+
+  const closeDeleteConfirm = () => {
+    if (deleteMutation.isPending) return;
+    setDeleteConfirmOpen(false);
+    setDeleteAcknowledged(false);
+    setDeleteAffirmation('');
+  };
 
   const txColumns = useMemo<DataColumn<TransactionItem>[]>(
     () => [
@@ -320,7 +341,7 @@ export function UserDetailPage() {
             <Button
               variant="danger"
               disabled={deleteMutation.isPending}
-              onClick={() => setDeleteConfirmOpen(true)}
+              onClick={openDeleteConfirm}
             >
               Delete
             </Button>
@@ -457,9 +478,42 @@ export function UserDetailPage() {
         confirmLabel="Delete forever"
         tone="danger"
         busy={deleteMutation.isPending}
-        onClose={() => setDeleteConfirmOpen(false)}
-        onConfirm={() => deleteMutation.mutate()}
-      />
+        confirmDisabled={
+          !deleteAcknowledged || deleteAffirmation.trim() !== DELETE_AFFIRMATION
+        }
+        onClose={closeDeleteConfirm}
+        onConfirm={() => {
+          if (!deleteAcknowledged || deleteAffirmation.trim() !== DELETE_AFFIRMATION) return;
+          deleteMutation.mutate();
+        }}
+      >
+        <div className="space-y-4">
+          <label className="flex cursor-pointer items-start gap-3 rounded-[0.6rem] border border-border bg-surface-secondary/40 p-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 rounded border-border text-danger focus:ring-danger/30"
+              checked={deleteAcknowledged}
+              disabled={deleteMutation.isPending}
+              onChange={(event) => setDeleteAcknowledged(event.target.checked)}
+              data-testid="delete-user-acknowledge"
+            />
+            <span>
+              I understand this permanently deletes <strong className="text-text-primary">{user.email}</strong>{' '}
+              and cannot be undone.
+            </span>
+          </label>
+          <Input
+            label={`Type ${DELETE_AFFIRMATION} to confirm`}
+            value={deleteAffirmation}
+            onChange={(event) => setDeleteAffirmation(event.target.value)}
+            placeholder={DELETE_AFFIRMATION}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={deleteMutation.isPending}
+            data-testid="delete-user-affirmation"
+          />
+        </div>
+      </ConfirmDialog>
     </div>
   );
 }

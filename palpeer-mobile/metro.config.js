@@ -1,6 +1,6 @@
-const path = require('path');
 const { getDefaultConfig } = require('expo/metro-config');
 const { withNativeWind } = require('nativewind/metro');
+const { enhanceSupportChatProxy } = require('./scripts/supportChatProxy.cjs');
 
 const config = getDefaultConfig(__dirname);
 
@@ -18,4 +18,15 @@ config.watcher = {
   healthCheck: { enabled: false },
 };
 
-module.exports = withNativeWind(config, { input: './global.css' });
+// Apply NativeWind first, then wrap enhanceMiddleware so it is not dropped.
+const withCss = withNativeWind(config, { input: './global.css' });
+const previousEnhance = withCss.server?.enhanceMiddleware;
+withCss.server = {
+  ...withCss.server,
+  enhanceMiddleware: (middleware, server) => {
+    const base = previousEnhance ? previousEnhance(middleware, server) : middleware;
+    return enhanceSupportChatProxy(base);
+  },
+};
+
+module.exports = withCss;

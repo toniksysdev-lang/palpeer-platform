@@ -34,6 +34,20 @@ const signedIn = {
 
 const NO_NEGOTIATIONS = ok([]);
 
+const feeEstimate = (overrides: Record<string, unknown> = {}) =>
+  ok({
+    baseCurrencyCode: 'USD',
+    quoteCurrencyCode: 'NGN',
+    amount: 100,
+    estimatedFeeAmount: '1.50',
+    estimatedFeeCurrency: 'USD',
+    feeDiscountAmount: null,
+    feeAfterDiscount: '1.50',
+    appliedPromotionCode: null,
+    pendingBonusCredit: null,
+    ...overrides,
+  });
+
 const callsTo = (calls: RecordedCall[], method: string, path: string) =>
   calls.filter((call) => call.method === method && call.path === path);
 
@@ -211,6 +225,17 @@ describe('CreateRequestScreen', () => {
     expect(screen.getByTestId('p2p-create-quote')).toHaveTextContent(/CAD/);
   });
 
+  it('shows a currency switch control between sell and receive', async () => {
+    createRoutes({ 'GET /currencies': CURRENCIES, 'GET /wallets': WALLETS });
+    await renderWithProviders(<CreateRequestScreen />, signedIn);
+
+    expect(await screen.findByTestId('p2p-create-base')).toHaveTextContent(/CAD/);
+    expect(screen.getByTestId('p2p-create-quote')).toHaveTextContent(/NGN/);
+    await fireEvent.press(screen.getByTestId('p2p-create-currency-switch'));
+    expect(screen.getByTestId('p2p-create-base')).toHaveTextContent(/NGN/);
+    expect(screen.getByTestId('p2p-create-quote')).toHaveTextContent(/CAD/);
+  });
+
   it('posts NGN/CAD when selling NGN for CAD using sell-anchored rate', async () => {
     const { calls } = createRoutes({
       'GET /currencies': CURRENCIES,
@@ -226,10 +251,11 @@ describe('CreateRequestScreen', () => {
     });
     await renderWithProviders(<CreateRequestScreen />, signedIn);
 
-    await fireEvent.press(await screen.findByTestId('p2p-create-quote'));
-    await fireEvent.press(await screen.findByTestId('p2p-currency-sheet-option-CAD'));
+    await fireEvent.press(await screen.findByTestId('p2p-create-currency-switch'));
     // Rate unit follows the sell currency so You receive = amount × rate.
+    expect(screen.getByTestId('p2p-create-base')).toHaveTextContent(/NGN/);
     expect(screen.getByTestId('p2p-create-rate-unit')).toHaveTextContent(/NGN/);
+    expect(screen.getByTestId('p2p-create-rate-switch')).toHaveTextContent(/^1 NGN/);
     expect(screen.getByTestId('p2p-create-rate-hint')).toHaveTextContent(
       /Enter CAD per 1 NGN\. NGN stays fixed at 1/,
     );
@@ -253,7 +279,7 @@ describe('CreateRequestScreen', () => {
     expect(Number(body.rate)).toBeCloseTo(0.001);
   });
 
-  it('lets the rate unit dropdown flip without corrupting the typed CAD rate', async () => {
+  it('lets the rate dropdown flip without corrupting the typed CAD rate', async () => {
     const { calls } = createRoutes({
       'GET /currencies': CURRENCIES,
       'GET /wallets': WALLETS,
@@ -268,15 +294,15 @@ describe('CreateRequestScreen', () => {
     });
     await renderWithProviders(<CreateRequestScreen />, signedIn);
 
-    await fireEvent.press(await screen.findByTestId('p2p-create-quote'));
-    await fireEvent.press(await screen.findByTestId('p2p-currency-sheet-option-CAD'));
-    // Switch to CAD-anchored entry and type 980 NGN per 1 CAD
+    await fireEvent.press(await screen.findByTestId('p2p-create-currency-switch'));
+    // Default unit = sell NGN; dropdown → CAD-anchored entry, type 980 NGN per 1 CAD
     await fireEvent.press(screen.getByTestId('p2p-create-rate-unit'));
     await fireEvent.press(await screen.findByTestId('p2p-rate-unit-sheet-option-CAD'));
+    expect(screen.getByTestId('p2p-create-rate-unit')).toHaveTextContent(/CAD/);
     await typeIntoNumberField('p2p-create-rate', '980');
     expect(screen.getByTestId('p2p-create-rate')).toHaveTextContent(/980/);
 
-    // Flip to NGN — shows 1/980 (12 dp)
+    // Flip entry unit to NGN — shows 1/980 (12 dp)
     await fireEvent.press(screen.getByTestId('p2p-create-rate-unit'));
     await fireEvent.press(await screen.findByTestId('p2p-rate-unit-sheet-option-NGN'));
     expect(screen.getByTestId('p2p-create-rate-unit')).toHaveTextContent(/NGN/);
@@ -300,6 +326,21 @@ describe('CreateRequestScreen', () => {
     expect(body.baseCurrencyCode).toBe('NGN');
     expect(body.quoteCurrencyCode).toBe('CAD');
     expect(Number(body.rate)).toBeCloseTo(1 / 980);
+  });
+
+  it('flips only the Switch preview label without changing rate entry fields', async () => {
+    createRoutes({ 'GET /currencies': CURRENCIES, 'GET /wallets': WALLETS });
+    await renderWithProviders(<CreateRequestScreen />, signedIn);
+
+    await fireEvent.press(await screen.findByTestId('p2p-create-currency-switch'));
+    expect(screen.getByTestId('p2p-create-rate-unit')).toHaveTextContent(/NGN/);
+    await typeIntoNumberField('p2p-create-rate', '0.001');
+    expect(screen.getByTestId('p2p-create-rate-switch')).toHaveTextContent(/^1 NGN/);
+
+    await fireEvent.press(screen.getByTestId('p2p-create-rate-switch'));
+    expect(screen.getByTestId('p2p-create-rate-switch')).toHaveTextContent(/^1 CAD/);
+    expect(screen.getByTestId('p2p-create-rate-unit')).toHaveTextContent(/NGN/);
+    expect(screen.getByTestId('p2p-create-rate')).toHaveTextContent(/0\.001/);
   });
 
   it('keeps Review request disabled until amount, rate, and minimum order are valid', async () => {
@@ -360,8 +401,7 @@ describe('CreateRequestScreen', () => {
     });
     await renderWithProviders(<CreateRequestScreen />, signedIn);
 
-    await fireEvent.press(await screen.findByTestId('p2p-create-quote'));
-    await fireEvent.press(await screen.findByTestId('p2p-currency-sheet-option-CAD'));
+    await fireEvent.press(await screen.findByTestId('p2p-create-currency-switch'));
     // Default unit = sell NGN → quote-per-base bounds
     expect(await screen.findByTestId('p2p-create-rate-bounds')).toHaveTextContent(
       /Rate must be between 0\.001020408163 and 0\.001052631579 for NGN\/CAD/,
@@ -369,7 +409,8 @@ describe('CreateRequestScreen', () => {
 
     await fireEvent.press(screen.getByTestId('p2p-create-rate-unit'));
     await fireEvent.press(await screen.findByTestId('p2p-rate-unit-sheet-option-CAD'));
-    // Switched unit = CAD → clean integers (same as admin Rate Switch)
+    // Entry unit = CAD → clean integers (same as admin Rate Switch)
+    expect(screen.getByTestId('p2p-create-rate-unit')).toHaveTextContent(/CAD/);
     expect(screen.getByTestId('p2p-create-rate-bounds')).toHaveTextContent(
       'Rate must be between 950 and 980 for NGN/CAD',
     );
@@ -397,12 +438,106 @@ describe('CreateRequestScreen', () => {
 });
 
 describe('RequestDetailScreen — state transitions', () => {
-  it('OPEN → ACCEPTED: a non-owner accepts and lands on the new order', async () => {
+  it('does not auto-apply promo; buyer enters a code then Apply', async () => {
     setSearchParams({ id: 'r-1' });
     const { calls } = installFetchMock({
       'GET /currencies': CURRENCIES,
+      'GET /wallets': WALLETS,
       'GET /negotiations/me': NO_NEGOTIATIONS,
+      'GET /p2p/fee-estimate': ({ query }) => {
+        const params = new URLSearchParams(query.startsWith('?') ? query.slice(1) : query);
+        const code = params.get('promotionCode');
+        if (code === 'FEE50') {
+          return feeEstimate({
+            estimatedFeeAmount: '1.50',
+            feeDiscountAmount: '0.50',
+            feeAfterDiscount: '1.00',
+            appliedPromotionCode: 'FEE50',
+          });
+        }
+        return feeEstimate({
+          estimatedFeeAmount: '1.50',
+          feeDiscountAmount: null,
+          feeAfterDiscount: '1.50',
+          appliedPromotionCode: null,
+        });
+      },
       'GET /p2p/requests/r-1': ok(p2pRequest()),
+      'POST /p2p/requests/r-1/accept': created(p2pOrder({ id: 'o-promo' })),
+    });
+    await renderWithProviders(<RequestDetailScreen />, signedIn);
+
+    expect(await screen.findByTestId('p2p-request-fee')).toHaveTextContent(/1\.50 USD/);
+    expect(screen.queryByTestId('p2p-request-fee-discount')).toBeNull();
+    expect(screen.getByTestId('p2p-request-net-receive')).toHaveTextContent(/98\.50 USD/);
+    expect(screen.getByTestId('p2p-promo-code')).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByTestId('p2p-promo-code-input'), 'fee50');
+    await fireEvent.press(screen.getByTestId('p2p-promo-code-apply'));
+
+    expect(await screen.findByTestId('p2p-request-fee-gross')).toHaveTextContent(/1\.50 USD/);
+    expect(screen.getByText(/Promo discount \(FEE50\)/)).toBeTruthy();
+    expect(screen.getByTestId('p2p-request-fee-discount')).toHaveTextContent(/0\.50 USD/);
+    expect(screen.getByTestId('p2p-request-fee')).toHaveTextContent(/1\.00 USD/);
+    expect(screen.getByTestId('p2p-request-net-receive')).toHaveTextContent(/99\.00 USD/);
+
+    await fireEvent.press(screen.getByTestId('p2p-accept'));
+    await fireEvent.press(await screen.findByTestId('confirm-dialog-confirm'));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/(tabs)/p2p'));
+    const acceptCalls = callsTo(calls, 'POST', '/p2p/requests/r-1/accept');
+    expect(acceptCalls[0]?.query).toContain('promotionCode=FEE50');
+  });
+
+  it('lets the buyer opt in to apply pending bonus credit toward the fee', async () => {
+    setSearchParams({ id: 'r-1' });
+    const { calls } = installFetchMock({
+      'GET /currencies': CURRENCIES,
+      'GET /wallets': WALLETS,
+      'GET /negotiations/me': NO_NEGOTIATIONS,
+      'GET /p2p/fee-estimate': ({ query }) => {
+        const apply = new URLSearchParams(query.startsWith('?') ? query.slice(1) : query).get(
+          'applyBonusCredit',
+        ) === 'true';
+        return feeEstimate({
+          estimatedFeeAmount: '1.50',
+          pendingBonusCredit: '0.50',
+          feeDiscountAmount: apply ? '0.50' : null,
+          feeAfterDiscount: apply ? '1.00' : '1.50',
+        });
+      },
+      'GET /p2p/requests/r-1': ok(p2pRequest()),
+      'POST /p2p/requests/r-1/accept': created(p2pOrder({ id: 'o-bonus' })),
+    });
+    await renderWithProviders(<RequestDetailScreen />, signedIn);
+
+    expect(await screen.findByTestId('p2p-apply-bonus')).toBeTruthy();
+    expect(screen.getByTestId('p2p-request-fee')).toHaveTextContent(/1\.50 USD/);
+    expect(screen.getByTestId('p2p-request-net-receive')).toHaveTextContent(/98\.50 USD/);
+    expect(screen.queryByTestId('p2p-request-fee-discount')).toBeNull();
+
+    fireEvent(screen.getByTestId('p2p-apply-bonus-switch'), 'valueChange', true);
+    expect(await screen.findByTestId('p2p-request-fee-discount')).toHaveTextContent(/0\.50 USD/);
+    expect(screen.getByTestId('p2p-request-fee')).toHaveTextContent(/1\.00 USD/);
+    expect(screen.getByTestId('p2p-request-net-receive')).toHaveTextContent(/99\.00 USD/);
+
+    await fireEvent.press(screen.getByTestId('p2p-accept'));
+    await fireEvent.press(await screen.findByTestId('confirm-dialog-confirm'));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/(tabs)/p2p'));
+    const acceptCalls = callsTo(calls, 'POST', '/p2p/requests/r-1/accept');
+    expect(acceptCalls).toHaveLength(1);
+    expect(acceptCalls[0]?.query).toContain('applyBonusCredit=true');
+  });
+
+  it('OPEN → COMPLETED: a non-owner accepts and returns to the P2P tab', async () => {
+    setSearchParams({ id: 'r-1' });
+    const { calls } = installFetchMock({
+      'GET /currencies': CURRENCIES,
+      'GET /wallets': WALLETS,
+      'GET /negotiations/me': NO_NEGOTIATIONS,
+      'GET /p2p/fee-estimate': feeEstimate(),
+      'GET /p2p/requests/r-1': ok(
+        p2pRequest({ estimatedFeeAmount: '1.50', estimatedFeeCurrency: 'USD' }),
+      ),
       'POST /p2p/requests/r-1/accept': created(p2pOrder({ id: 'o-9' })),
     });
     await renderWithProviders(<RequestDetailScreen />, signedIn);
@@ -411,23 +546,48 @@ describe('RequestDetailScreen — state transitions', () => {
     expect(screen.queryByTestId('p2p-edit')).toBeNull();
     expect(screen.queryByTestId('p2p-cancel')).toBeNull();
     expect(screen.getByTestId('p2p-no-settlement')).toBeTruthy();
+    expect(screen.getByTestId('p2p-request-fee')).toHaveTextContent(/1\.50 USD/);
+    expect(screen.getByTestId('p2p-request-net-receive')).toHaveTextContent(/98\.50 USD/);
+    expect(screen.getByTestId('p2p-request-you-pay')).toHaveTextContent(/150,000\.00 NGN/);
 
     await fireEvent.press(screen.getByTestId('p2p-accept'));
     expect(await screen.findByText('Accept this request?')).toBeTruthy();
     expect(
       screen.getByText(
-        'You agree to buy 100.00 USD at rate of 1 USD = 1,500 NGN. This creates an order between you and the Ada Lovelace who posted it. 150,000.00 NGN will be deducted from your NGN wallet.',
+        'You agree to buy 100.00 USD at rate of 1 USD = 1,500 NGN. This creates an order between you and the Ada Lovelace who posted it. A platform fee of 1.50 USD applies, so you receive 98.50 USD. 150,000.00 NGN will be deducted from your NGN wallet.',
       ),
     ).toBeTruthy();
     await fireEvent.press(screen.getByTestId('confirm-dialog-confirm'));
 
-    await waitFor(() =>
-      expect(router.replace).toHaveBeenCalledWith({
-        pathname: '/p2p/order/[id]',
-        params: { id: 'o-9' },
-      }),
-    );
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/(tabs)/p2p'));
     expect(callsTo(calls, 'POST', '/p2p/requests/r-1/accept')).toHaveLength(1);
+  });
+
+  it('blocks Accept when the buyer lacks enough quote balance', async () => {
+    setSearchParams({ id: 'r-1' });
+    installFetchMock({
+      'GET /currencies': CURRENCIES,
+      'GET /wallets': ok([
+        {
+          id: 'w-ngn-low',
+          userId: ME,
+          currencyCode: 'NGN',
+          availableBalance: '1000.00',
+          pendingBalance: '0.00',
+        },
+      ]),
+      'GET /negotiations/me': NO_NEGOTIATIONS,
+      'GET /p2p/fee-estimate': feeEstimate(),
+      'GET /p2p/requests/r-1': ok(
+        p2pRequest({ estimatedFeeAmount: '1.50', estimatedFeeCurrency: 'USD' }),
+      ),
+    });
+    await renderWithProviders(<RequestDetailScreen />, signedIn);
+
+    expect(await screen.findByTestId('p2p-accept-funding-error')).toHaveTextContent(
+      /enough available NGN/,
+    );
+    expect(screen.getByTestId('p2p-accept').props.accessibilityState?.disabled).toBe(true);
   });
 
   it('409 P2P_NOT_OPEN: someone else got there first, so the refreshed status replaces Accept', async () => {
@@ -435,7 +595,15 @@ describe('RequestDetailScreen — state transitions', () => {
     let status = 'OPEN';
     installFetchMock({
       'GET /currencies': CURRENCIES,
+      'GET /wallets': WALLETS,
       'GET /negotiations/me': NO_NEGOTIATIONS,
+      'GET /p2p/fee-estimate': ok({
+        baseCurrencyCode: 'USD',
+        quoteCurrencyCode: 'NGN',
+        amount: 100,
+        estimatedFeeAmount: null,
+        estimatedFeeCurrency: null,
+      }),
       'GET /p2p/requests/r-1': () => ok(p2pRequest({ status })),
       'POST /p2p/requests/r-1/accept': () => {
         status = 'ACCEPTED';
@@ -464,7 +632,15 @@ describe('RequestDetailScreen — state transitions', () => {
     setSearchParams({ id: 'r-1' });
     installFetchMock({
       'GET /currencies': CURRENCIES,
+      'GET /wallets': WALLETS,
       'GET /negotiations/me': NO_NEGOTIATIONS,
+      'GET /p2p/fee-estimate': ok({
+        baseCurrencyCode: 'USD',
+        quoteCurrencyCode: 'NGN',
+        amount: 100,
+        estimatedFeeAmount: null,
+        estimatedFeeCurrency: null,
+      }),
       'GET /p2p/requests/r-1': ok(p2pRequest()),
       'POST /p2p/requests/r-1/accept': fail(409, 'P2P_SELF_ACCEPT'),
     });
@@ -519,7 +695,15 @@ describe('RequestDetailScreen — state transitions', () => {
     setSearchParams({ id: 'r-1' });
     installFetchMock({
       'GET /currencies': CURRENCIES,
+      'GET /wallets': WALLETS,
       'GET /negotiations/me': NO_NEGOTIATIONS,
+      'GET /p2p/fee-estimate': ok({
+        baseCurrencyCode: 'USD',
+        quoteCurrencyCode: 'NGN',
+        amount: 100,
+        estimatedFeeAmount: null,
+        estimatedFeeCurrency: null,
+      }),
       'GET /p2p/requests/r-1': ok(p2pRequest({ expiresAt: '2020-01-01T00:00:00Z' })),
     });
     await renderWithProviders(<RequestDetailScreen />, signedIn);

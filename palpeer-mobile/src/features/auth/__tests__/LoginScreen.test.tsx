@@ -26,6 +26,7 @@ describe('LoginScreen', () => {
     jest.clearAllMocks();
     setSearchParams({});
     await secureStorage.clearAll();
+    await sessionManager.expire();
     localAuth.reset();
   });
 
@@ -176,6 +177,26 @@ describe('LoginScreen', () => {
     await fireEvent.press(screen.getByTestId('login-submit'));
 
     expect(await screen.findByText('Email/phone or password is incorrect.')).toBeTruthy();
+    expect(await secureStorage.loadSession()).toBeNull();
+  });
+
+  it('sends unverified accounts to email OTP instead of starting a session', async () => {
+    installFetchMock({
+      'POST /auth/login': fail(403, 'EMAIL_NOT_VERIFIED', 'Verify your email before signing in.'),
+    });
+    await renderWithProviders(<LoginScreen />);
+
+    await fireEvent.changeText(screen.getByTestId('login-email'), 'ada@example.com');
+    await fireEvent.changeText(screen.getByTestId('login-password'), 'correct-horse');
+    await fireEvent.press(screen.getByTestId('login-submit'));
+
+    await waitFor(() =>
+      expect(router.push).toHaveBeenCalledWith({
+        pathname: '/verify-email',
+        params: { email: 'ada@example.com', resume: '1' },
+      }),
+    );
+    expect(sessionManager.getAccessToken()).toBeNull();
     expect(await secureStorage.loadSession()).toBeNull();
   });
 

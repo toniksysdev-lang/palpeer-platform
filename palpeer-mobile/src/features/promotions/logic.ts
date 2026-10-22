@@ -1,11 +1,16 @@
+import { Decimal } from 'decimal.js-light';
+
 import type { AppError } from '@/services/api/errors';
 import type {
+  BonusCurrencySummary,
+  BonusResponse,
   BonusStatus,
   PromotionResponse,
   PromotionType,
   ReferralStatus,
 } from '@/types/api/promotion';
 import { formatDateTime } from '@/utils/datetime';
+import { toMoney } from '@/utils/money';
 
 export const REFERRAL_CODE_MAX = 40;
 
@@ -68,6 +73,45 @@ export function bonusStatusTone(status: BonusStatus): 'warning' | 'success' | 'n
     default:
       return 'neutral';
   }
+}
+
+/**
+ * Per-wallet totals matching `GET /promotions/bonuses/mine/summary`.
+ * Used when the summary endpoint is unavailable or still loading.
+ */
+export function summarizeBonuses(
+  bonuses: readonly Pick<BonusResponse, 'amount' | 'currencyCode' | 'status'>[],
+): BonusCurrencySummary[] {
+  const unused = new Map<string, Decimal>();
+  const used = new Map<string, Decimal>();
+  for (const bonus of bonuses) {
+    if (bonus.status === 'FAILED') continue;
+    const currency = (bonus.currencyCode ?? '').trim().toUpperCase();
+    if (!currency) continue;
+    let amount: Decimal;
+    try {
+      amount = new Decimal(String(bonus.amount ?? '').trim() || '0');
+    } catch {
+      continue;
+    }
+    if (bonus.status === 'PENDING') {
+      unused.set(currency, (unused.get(currency) ?? new Decimal(0)).plus(amount));
+    } else if (bonus.status === 'GRANTED' || bonus.status === 'CANCELLED') {
+      used.set(currency, (used.get(currency) ?? new Decimal(0)).plus(amount));
+    }
+  }
+  return [...new Set([...unused.keys(), ...used.keys()])]
+    .sort((a, b) => a.localeCompare(b))
+    .map((currencyCode) => {
+      const unusedAmount = unused.get(currencyCode) ?? new Decimal(0);
+      const usedAmount = used.get(currencyCode) ?? new Decimal(0);
+      return {
+        currencyCode,
+        totalAmount: toMoney(unusedAmount.plus(usedAmount).toFixed()),
+        unusedAmount: toMoney(unusedAmount.toFixed()),
+        usedAmount: toMoney(usedAmount.toFixed()),
+      };
+    });
 }
 
 /** VERIFIED codes from PromotionService.applyReferral. */

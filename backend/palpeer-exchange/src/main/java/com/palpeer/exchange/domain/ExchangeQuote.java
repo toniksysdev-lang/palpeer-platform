@@ -45,7 +45,8 @@ public class ExchangeQuote extends BaseEntity {
     /**
      * CONTRACT_PENDING (P7-01): buy vs sell rate selection rule.
      */
-    @Column(name = "rate_side", nullable = false, length = 10)
+    /** Values include {@code SELL} and {@code INVERSE_BUY} (see ExchangeQuoteService). */
+    @Column(name = "rate_side", nullable = false, length = 20)
     private String rateSide;
 
     @Column(name = "expires_at", nullable = false)

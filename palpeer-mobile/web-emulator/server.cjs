@@ -39,6 +39,18 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (url.pathname === '/palpeer-logo.png') {
+    const logoPath = path.join(ROOT, 'palpeer-logo.png');
+    if (fs.existsSync(logoPath)) {
+      res.writeHead(200, {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'public, max-age=86400',
+      });
+      fs.createReadStream(logoPath).pipe(res);
+      return;
+    }
+  }
+
   res.writeHead(404, { 'Content-Type': 'text/plain' });
   res.end('Not found');
 });

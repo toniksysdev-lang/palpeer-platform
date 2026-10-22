@@ -1,6 +1,7 @@
 import type { SpringPage } from '@/types/api/common';
 import type {
   ApplyReferralRequest,
+  BonusCurrencySummary,
   BonusResponse,
   PromotionResponse,
   ReferralResponse,
@@ -36,7 +37,10 @@ export const promotionApi = baseApi.injectEndpoints({
     }),
     applyReferral: build.mutation<ReferralResponse, ApplyReferralRequest>({
       query: (body) => ({ path: '/promotions/referrals/apply', method: 'POST', body }),
-      invalidatesTags: (_result, error) => (error ? [] : [BONUSES, MY_REFERRALS, MY_CODE]),
+      invalidatesTags: (_result, error) =>
+        error
+          ? []
+          : [BONUSES, MY_REFERRALS, MY_CODE, { type: 'Wallet' as const, id: 'LIST' }],
     }),
     getMyBonuses: build.infiniteQuery<SpringPage<BonusResponse>, void, number>({
       infiniteQueryOptions: {
@@ -53,6 +57,22 @@ export const promotionApi = baseApi.injectEndpoints({
       }),
       providesTags: [BONUSES],
     }),
+    getMyBonusSummary: build.query<BonusCurrencySummary[], void>({
+      query: () => ({ path: '/promotions/bonuses/mine/summary' }),
+      transformResponse: (rows: unknown): BonusCurrencySummary[] => {
+        if (!Array.isArray(rows)) return [];
+        return rows.map((row) => {
+          const r = row as Record<string, unknown>;
+          return {
+            currencyCode: String(r.currencyCode ?? '').trim().toUpperCase(),
+            totalAmount: String(r.totalAmount ?? '0'),
+            unusedAmount: String(r.unusedAmount ?? '0'),
+            usedAmount: String(r.usedAmount ?? '0'),
+          } as BonusCurrencySummary;
+        });
+      },
+      providesTags: [BONUSES],
+    }),
   }),
 });
 
@@ -62,4 +82,5 @@ export const {
   useGetMyReferralsQuery,
   useApplyReferralMutation,
   useGetMyBonusesInfiniteQuery,
+  useGetMyBonusSummaryQuery,
 } = promotionApi;

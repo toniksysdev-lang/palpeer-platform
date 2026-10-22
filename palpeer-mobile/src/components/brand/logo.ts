@@ -1,2 +1,6 @@
-/** Official PALPEER lockup shared with the admin console (Vite public asset). */
-export const PALPEER_LOGO_URI = 'http://localhost:5173/palpeer-logo.png';
+/**
+ * Official PALPEER lockup (same main mark as admin / public palpeer-logo.png).
+ * Bundled with the app so Expo Go and devices do not depend on localhost.
+ */
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+export const PALPEER_LOGO = require('../../../assets/palpeer-logo.png') as number;

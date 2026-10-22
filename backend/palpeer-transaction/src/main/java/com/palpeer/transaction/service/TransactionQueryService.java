@@ -9,6 +9,9 @@ import com.palpeer.p2p.domain.P2PRequest;
 import com.palpeer.p2p.domain.P2PStatus;
 import com.palpeer.p2p.repository.P2POrderRepository;
 import com.palpeer.p2p.repository.P2PRequestRepository;
+import com.palpeer.promotion.domain.Bonus;
+import com.palpeer.promotion.domain.BonusStatus;
+import com.palpeer.promotion.repository.BonusRepository;
 import com.palpeer.transaction.domain.TransactionActivityType;
 import com.palpeer.transaction.web.dto.TransactionItemResponse;
 import com.palpeer.transaction.web.dto.TransactionPageResponse;
@@ -80,6 +83,7 @@ public class TransactionQueryService {
     private final WalletTransferRepository transferRepository;
     private final P2POrderRepository p2pOrderRepository;
     private final P2PRequestRepository p2pRequestRepository;
+    private final BonusRepository bonusRepository;
     private final WalletRepository walletRepository;
     private final UserRepository userRepository;
 
@@ -91,13 +95,19 @@ public class TransactionQueryService {
         List<P2POrder> p2pOrders = p2pOrderRepository.findByPartyUserIdAndStatusInOrderByCreatedAtDesc(
                 userId, SETTLED_P2P_STATUSES, page);
 
+        List<Bonus> bonuses = bonusRepository.findByUserIdAndStatusOrderByCreatedAtDesc(userId, BonusStatus.GRANTED)
+                .stream()
+                .limit(size)
+                .toList();
+
         List<TransactionItemResponse> merged = Stream.of(
                         fundingRepository.findByUserIdOrderByCreatedAtDesc(userId, page).stream().map(this::fromFunding),
                         withdrawalRepository.findByUserIdOrderByCreatedAtDesc(userId, page).stream().map(this::fromWithdrawal),
                         exchangeRepository.findByUserIdOrderByCreatedAtDesc(userId, page).stream().map(this::fromExchange),
                         transferRepository.findByPartyUserIdOrderByCreatedAtDesc(userId, page).stream()
                                 .map(this::fromTransfer),
-                        mapP2POrders(p2pOrders).stream())
+                        mapP2POrders(p2pOrders).stream(),
+                        bonuses.stream().map(this::fromBonus))
                 .flatMap(s -> s)
                 .sorted(Comparator.comparing(TransactionItemResponse::createdAt).reversed())
                 .limit(size)
@@ -125,6 +135,12 @@ public class TransactionQueryService {
                     .filter(o -> SETTLED_P2P_STATUSES.contains(o.getStatus()))
                     .map(this::fromP2P)
                     .orElseThrow(() -> new ResourceNotFoundException("P2P order not found"));
+            case BONUS -> bonusRepository
+                    .findById(id)
+                    .filter(b -> b.getUserId().equals(userId))
+                    .filter(b -> b.getStatus() == BonusStatus.GRANTED)
+                    .map(this::fromBonus)
+                    .orElseThrow(() -> new ResourceNotFoundException("Bonus not found"));
         };
     }
 
@@ -177,6 +193,12 @@ public class TransactionQueryService {
                     .findByPartyUserIdAndStatusInAndCreatedAtBetweenOrderByCreatedAtDesc(
                             userId, SETTLED_P2P_STATUSES, rangeFrom, rangeTo, fetchPage)));
         }
+        if (typeFilter == null || typeFilter == TransactionActivityType.BONUS) {
+            bonusRepository
+                    .findByUserIdAndStatusAndCreatedAtGreaterThanEqualAndCreatedAtLessThanEqualOrderByCreatedAtDesc(
+                            userId, BonusStatus.GRANTED, rangeFrom, rangeTo, fetchPage)
+                    .forEach(b -> candidates.add(fromBonus(b)));
+        }
 
         List<TransactionItemResponse> sorted = candidates.stream()
                 .sorted(Comparator.comparing(TransactionItemResponse::createdAt).reversed())
@@ -206,6 +228,8 @@ public class TransactionQueryService {
                 .findByPartyUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanEqual(userId, rangeFrom, rangeTo);
         List<P2POrder> p2pOrders = p2pOrderRepository.findByPartyUserIdAndStatusInAndCreatedAtBetween(
                 userId, SETTLED_P2P_STATUSES, rangeFrom, rangeTo);
+        List<Bonus> bonuses = bonusRepository.findByUserIdAndStatusAndCreatedAtBetween(
+                userId, BonusStatus.GRANTED, rangeFrom, rangeTo);
 
         Map<String, Long> countByType = new LinkedHashMap<>();
         countByType.put(TransactionActivityType.FUNDING.name(), (long) fundings.size());
@@ -213,6 +237,7 @@ public class TransactionQueryService {
         countByType.put(TransactionActivityType.EXCHANGE.name(), (long) exchanges.size());
         countByType.put(TransactionActivityType.TRANSFER.name(), (long) transfers.size());
         countByType.put(TransactionActivityType.P2P.name(), (long) p2pOrders.size());
+        countByType.put(TransactionActivityType.BONUS.name(), (long) bonuses.size());
 
         Map<String, Long> countByStatus = new LinkedHashMap<>();
         // Namespace by type so MoneyMovementStatus and ExchangeTransactionStatus do not collide (P11-04)
@@ -221,6 +246,7 @@ public class TransactionQueryService {
         exchanges.forEach(e -> countByStatus.merge("EXCHANGE:" + e.getStatus().name(), 1L, Long::sum));
         transfers.forEach(t -> countByStatus.merge("TRANSFER:SUCCESS", 1L, Long::sum));
         p2pOrders.forEach(o -> countByStatus.merge("P2P:" + o.getStatus().name(), 1L, Long::sum));
+        bonuses.forEach(b -> countByStatus.merge("BONUS:" + b.getStatus().name(), 1L, Long::sum));
 
         Map<String, CurrencyAccumulator> fundingTotals = new HashMap<>();
         for (FundingTransaction f : fundings) {
@@ -241,7 +267,12 @@ public class TransactionQueryService {
                 .filter(e -> e.getStatus() == ExchangeTransactionStatus.SUCCESS)
                 .count();
 
-        long total = fundings.size() + withdrawals.size() + exchanges.size() + transfers.size() + p2pOrders.size();
+        long total = fundings.size()
+                + withdrawals.size()
+                + exchanges.size()
+                + transfers.size()
+                + p2pOrders.size()
+                + bonuses.size();
 
         return new TransactionSummaryResponse(
                 rangeFrom,
@@ -333,6 +364,11 @@ public class TransactionQueryService {
                     .filter(o -> SETTLED_P2P_STATUSES.contains(o.getStatus()))
                     .map(this::fromP2P)
                     .orElseThrow(() -> new ResourceNotFoundException("P2P order not found"));
+            case BONUS -> bonusRepository
+                    .findById(id)
+                    .filter(b -> b.getStatus() == BonusStatus.GRANTED)
+                    .map(this::fromBonus)
+                    .orElseThrow(() -> new ResourceNotFoundException("Bonus not found"));
         };
         return withUserEmail(item);
     }
@@ -365,6 +401,9 @@ public class TransactionQueryService {
             candidates.addAll(mapP2POrders(p2pOrderRepository.findAll(p2pSpec(filter, sources.p2pStatuses()), window)
                     .getContent()));
         }
+        if (sources.bonus()) {
+            bonusRepository.findAll(bonusSpec(filter), window).forEach(b -> candidates.add(fromBonus(b)));
+        }
 
         return candidates.stream()
                 .sorted(Comparator.comparing(TransactionItemResponse::createdAt).reversed())
@@ -389,7 +428,32 @@ public class TransactionQueryService {
         if (sources.p2p()) {
             total += p2pOrderRepository.count(p2pSpec(filter, sources.p2pStatuses()));
         }
+        if (sources.bonus()) {
+            total += bonusRepository.count(bonusSpec(filter));
+        }
         return total;
+    }
+
+    private static Specification<Bonus> bonusSpec(AdminTransactionFilter filter) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.equal(root.get("status"), BonusStatus.GRANTED));
+            if (filter.userId() != null) {
+                predicates.add(cb.equal(root.get("userId"), filter.userId()));
+            }
+            if (filter.currencyCode() != null && !filter.currencyCode().isBlank()) {
+                predicates.add(cb.equal(
+                        cb.upper(root.get("currencyCode")),
+                        filter.currencyCode().trim().toUpperCase(Locale.ROOT)));
+            }
+            if (filter.from() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), filter.from()));
+            }
+            if (filter.to() != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), filter.to()));
+            }
+            return cb.and(predicates.toArray(Predicate[]::new));
+        };
     }
 
     private Map<UUID, String> walletCurrencies(List<ExchangeTransaction> exchanges) {
@@ -525,6 +589,7 @@ public class TransactionQueryService {
             boolean exchange,
             boolean transfer,
             boolean p2p,
+            boolean bonus,
             MoneyMovementStatus movementStatus,
             ExchangeTransactionStatus exchangeStatus,
             Collection<P2PStatus> p2pStatuses) {
@@ -542,12 +607,15 @@ public class TransactionQueryService {
             // Transfers are always SUCCESS when recorded.
             boolean transferOk = !hasStatus || "SUCCESS".equalsIgnoreCase(filter.status().trim());
             boolean p2pOk = !p2pStatuses.isEmpty();
+            boolean bonusOk = !hasStatus || "GRANTED".equalsIgnoreCase(filter.status().trim())
+                    || "SUCCESS".equalsIgnoreCase(filter.status().trim());
             return new AdminSources(
                     (type == null || type == TransactionActivityType.FUNDING) && movementOk,
                     (type == null || type == TransactionActivityType.WITHDRAWAL) && movementOk,
                     (type == null || type == TransactionActivityType.EXCHANGE) && exchangeOk,
                     (type == null || type == TransactionActivityType.TRANSFER) && transferOk,
                     (type == null || type == TransactionActivityType.P2P) && p2pOk,
+                    (type == null || type == TransactionActivityType.BONUS) && bonusOk,
                     movement,
                     exchange,
                     p2pStatuses);
@@ -603,6 +671,11 @@ public class TransactionQueryService {
         if (typeFilter == null || typeFilter == TransactionActivityType.P2P) {
             total += p2pOrderRepository
                     .findByPartyUserIdAndStatusInAndCreatedAtBetween(userId, SETTLED_P2P_STATUSES, from, to)
+                    .size();
+        }
+        if (typeFilter == null || typeFilter == TransactionActivityType.BONUS) {
+            total += bonusRepository
+                    .findByUserIdAndStatusAndCreatedAtBetween(userId, BonusStatus.GRANTED, from, to)
                     .size();
         }
         return total;
@@ -725,6 +798,34 @@ public class TransactionQueryService {
                 Map.of(),
                 t.getCreatedAt(),
                 t.getUpdatedAt());
+    }
+
+    private TransactionItemResponse fromBonus(Bonus bonus) {
+        UUID walletId = walletRepository
+                .findByUserIdAndCurrencyCodeIgnoreCase(bonus.getUserId(), bonus.getCurrencyCode())
+                .map(Wallet::getId)
+                .orElse(null);
+        Map<String, UUID> ledger = new LinkedHashMap<>();
+        if (bonus.getLedgerEntryId() != null) {
+            ledger.put("credit", bonus.getLedgerEntryId());
+        }
+        return new TransactionItemResponse(
+                TransactionActivityType.BONUS,
+                bonus.getId(),
+                bonus.getUserId(),
+                null,
+                bonus.getStatus().name(),
+                walletId,
+                null,
+                bonus.getCurrencyCode(),
+                null,
+                bonus.getAmount(),
+                null,
+                null,
+                bonus.getReason(),
+                Map.copyOf(ledger),
+                bonus.getCreatedAt(),
+                bonus.getUpdatedAt());
     }
 
     private List<TransactionItemResponse> mapP2POrders(List<P2POrder> orders) {

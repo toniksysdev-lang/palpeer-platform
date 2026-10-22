@@ -18,6 +18,8 @@ public record FundingTransactionResponse(
         String providerName,
         String providerReference,
         String fundingInstructions,
+        /** Structured VA / bank-transfer details while awaiting payment; null otherwise. */
+        FundingPaymentDetails paymentDetails,
         Instant createdAt
 ) {
 }

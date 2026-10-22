@@ -15,7 +15,10 @@ import { NegotiationsPage } from '@/features/negotiations/NegotiationsPage';
 import { AuditPage } from '@/features/audit/AuditPage';
 import { NotificationsPage } from '@/features/notifications/NotificationsPage';
 import { PushMessagePage } from '@/features/push-message/PushMessagePage';
+import { InstantExFeesPage } from '@/features/fees/InstantExFeesPage';
 import { P2PFeesPage } from '@/features/fees/P2PFeesPage';
+import { PlatformFeeDetailPage } from '@/features/platform-fees/PlatformFeeDetailPage';
+import { PlatformFeesPage } from '@/features/platform-fees/PlatformFeesPage';
 import { P2PDetailPage } from '@/features/p2p/P2PDetailPage';
 import { P2PPage } from '@/features/p2p/P2PPage';
 import { PermissionsPage } from '@/features/permissions/PermissionsPage';
@@ -152,6 +155,30 @@ export function AppRouter() {
           element={
             <RequirePermission permission="fees:read">
               <P2PFeesPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="fees/instantex"
+          element={
+            <RequirePermission permission="fees:read">
+              <InstantExFeesPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="platform-fees"
+          element={
+            <RequirePermission anyOf={['reports:read', 'fees:read']}>
+              <PlatformFeesPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="platform-fees/:id"
+          element={
+            <RequirePermission anyOf={['reports:read', 'fees:read']}>
+              <PlatformFeeDetailPage />
             </RequirePermission>
           }
         />

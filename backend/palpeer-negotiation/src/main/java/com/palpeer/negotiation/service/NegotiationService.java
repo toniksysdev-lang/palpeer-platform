@@ -1,5 +1,7 @@
 package com.palpeer.negotiation.service;
 
+import com.palpeer.common.audit.AuditRecord;
+import com.palpeer.common.audit.AuditRecorder;
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
 import com.palpeer.common.notify.UserNotifyEvent;
@@ -44,6 +46,7 @@ public class NegotiationService {
     private final P2PRequestRepository p2PRequestRepository;
     private final P2PService p2PService;
     private final ApplicationEventPublisher eventPublisher;
+    private final AuditRecorder auditRecorder;
 
     /**
      * Start negotiation with an initial offer against an OPEN P2P request.
@@ -278,6 +281,61 @@ public class NegotiationService {
         Negotiation negotiation = negotiationRepository.findById(negotiationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Negotiation not found"));
         return toResponse(negotiation);
+    }
+
+    /**
+     * Admin force-cancel of an OPEN negotiation. Pending offer is rejected; chat stays readable
+     * but participants can no longer counter/accept.
+     */
+    @Transactional
+    public NegotiationResponse adminCancel(UUID negotiationId) {
+        Negotiation negotiation = negotiationRepository
+                .findByIdForUpdate(negotiationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Negotiation not found"));
+        assertOpen(negotiation);
+        rejectPendingOffer(negotiation);
+        close(negotiation, NegotiationCloseReason.CANCELLED, null);
+        auditRecorder.record(AuditRecord.builder("ADMIN_NEGOTIATION_CANCEL")
+                .entity("Negotiation:" + negotiation.getId())
+                .newValue("status=CANCELLED;p2pRequestId=" + negotiation.getP2pRequestId())
+                .build());
+        return changed(negotiation);
+    }
+
+    /**
+     * Admin force-accept of the current pending offer (creates the P2P order as the counterparty).
+     */
+    @Transactional
+    public NegotiationResponse adminAccept(UUID negotiationId) {
+        UUID requestId = negotiationRepository
+                .findById(negotiationId)
+                .map(Negotiation::getP2pRequestId)
+                .orElseThrow(() -> new ResourceNotFoundException("Negotiation not found"));
+        p2PRequestRepository.findByIdForUpdate(requestId);
+        Negotiation negotiation = negotiationRepository
+                .findByIdForUpdate(negotiationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Negotiation not found"));
+        assertOpen(negotiation);
+
+        NegotiationOffer current = requireCurrentPendingOffer(negotiation);
+        current.setStatus(NegotiationOfferStatus.ACCEPTED);
+        negotiationOfferRepository.save(current);
+        negotiation.setStatus(NegotiationStatus.ACCEPTED);
+        negotiationRepository.save(negotiation);
+
+        UUID orderAcceptorId = negotiation.getCounterpartyId();
+        P2POrderResponse order = p2PService.acceptWithTerms(
+                orderAcceptorId,
+                negotiation.getP2pRequestId(),
+                current.getAmount(),
+                current.getRate());
+        negotiation.setP2pOrderId(order.id());
+        negotiationRepository.save(negotiation);
+        auditRecorder.record(AuditRecord.builder("ADMIN_NEGOTIATION_ACCEPT")
+                .entity("Negotiation:" + negotiation.getId())
+                .newValue("status=ACCEPTED;p2pOrderId=" + order.id())
+                .build());
+        return changed(negotiation);
     }
 
     private NegotiationOffer createOffer(

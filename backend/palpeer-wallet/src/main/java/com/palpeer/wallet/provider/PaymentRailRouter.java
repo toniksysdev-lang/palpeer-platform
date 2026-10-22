@@ -15,7 +15,7 @@ public class PaymentRailRouter {
 
     private final List<PaymentRailProvider> providers;
 
-    /** Funding: prefer Korapay for NGN when enabled ({@code @Order}), else first enabled rail. */
+    /** Funding: prefer Kuda for NGN when enabled ({@code @Order}), else first enabled rail. */
     public PaymentRailProvider requireForCurrency(String currencyCode) {
         String code = normalize(currencyCode);
         return providers.stream()
@@ -26,7 +26,7 @@ public class PaymentRailRouter {
     }
 
     /**
-     * Withdrawals: prefer Korapay for NGN when enabled, else Kuda; other currencies use the first
+     * Withdrawals: prefer Kuda for NGN when enabled, else Korapay; other currencies use the first
      * enabled non-Korapay rail for that currency.
      */
     public PaymentRailProvider requireForWithdrawal(String currencyCode) {
@@ -35,12 +35,12 @@ public class PaymentRailRouter {
             return providers.stream()
                     .filter(PaymentRailProvider::isEnabled)
                     .filter(p -> p.supportedCurrencies().contains(code))
-                    .filter(p -> KorapayPaymentRail.NAME.equals(p.providerName())
-                            || KudaPaymentRail.NAME.equals(p.providerName()))
+                    .filter(p -> KudaPaymentRail.NAME.equals(p.providerName())
+                            || KorapayPaymentRail.NAME.equals(p.providerName()))
                     .findFirst()
                     .orElseThrow(() -> new BusinessException(
                             "PAYMENT_RAIL_UNAVAILABLE",
-                            "NGN withdrawals require Korapay or Kuda. Enable KORAPAY_ENABLED or KUDA_ENABLED.",
+                            "NGN withdrawals require Kuda or Korapay. Enable KUDA_ENABLED or KORAPAY_ENABLED.",
                             HttpStatus.SERVICE_UNAVAILABLE));
         }
         return providers.stream()
@@ -65,7 +65,7 @@ public class PaymentRailRouter {
         return new BusinessException(
                 "PAYMENT_RAIL_UNAVAILABLE",
                 "No enabled payment rail for currency " + code
-                        + " (CAD→Apaylo, NGN→Korapay/Kuda). Configure provider credentials or use manual process.",
+                        + " (CAD→Apaylo, NGN→Kuda/Korapay). Configure provider credentials or use manual process.",
                 HttpStatus.SERVICE_UNAVAILABLE);
     }
 }

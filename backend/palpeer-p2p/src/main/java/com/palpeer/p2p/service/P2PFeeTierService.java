@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class P2PFeeTierService {
 
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
+    private static final int FEE_MATH_SCALE = 12;
 
     private final P2PFeeTierRepository p2PFeeTierRepository;
     private final CurrencyService currencyService;
@@ -62,23 +64,63 @@ public class P2PFeeTierService {
     }
 
     /**
-     * Resolve the fee for a P2P amount on a pair. Returns zero when no matching active tier exists.
+     * Resolve buyer platform fee in the request <strong>base</strong> currency.
+     *
+     * <p>Admin tiers follow Configured P2P bounds pairs (e.g. CAD/NGN). Sell posts may store the
+     * opposite orientation (NGN/CAD). Matching tries the request pair first, then the inverse pair
+     * using {@code rate} (quote units per 1 base) to convert amount ranges and FIXED fees.
+     *
+     * @param rate quote-per-base for the request; required to match inverse tiers (may be null)
      */
     @Transactional(readOnly = true)
-    public BigDecimal resolveFee(String baseCurrencyCode, String quoteCurrencyCode, BigDecimal amount) {
+    public BigDecimal resolveFee(
+            String baseCurrencyCode, String quoteCurrencyCode, BigDecimal amount, BigDecimal rate) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             return BigDecimal.ZERO;
         }
         String base = normalize(baseCurrencyCode);
         String quote = normalize(quoteCurrencyCode);
+
+        Optional<BigDecimal> direct = matchFee(base, quote, amount, amount, false, null);
+        if (direct.isPresent()) {
+            return direct.get();
+        }
+
+        if (rate == null || rate.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal amountInTierBase =
+                amount.multiply(rate).setScale(FEE_MATH_SCALE, RoundingMode.HALF_EVEN);
+        return matchFee(quote, base, amountInTierBase, amount, true, rate).orElse(BigDecimal.ZERO);
+    }
+
+    private Optional<BigDecimal> matchFee(
+            String tierBase,
+            String tierQuote,
+            BigDecimal amountForRange,
+            BigDecimal requestBaseAmount,
+            boolean reverse,
+            BigDecimal rate) {
         return p2PFeeTierRepository
                 .findByBaseCurrencyCodeIgnoreCaseAndQuoteCurrencyCodeIgnoreCaseAndActiveTrueOrderByMinAmountAsc(
-                        base, quote)
+                        tierBase, tierQuote)
                 .stream()
-                .filter(tier -> matchesAmount(tier, amount))
+                .filter(tier -> matchesAmount(tier, amountForRange))
                 .findFirst()
-                .map(tier -> computeFee(tier, amount))
-                .orElse(BigDecimal.ZERO);
+                .map(tier -> computeFeeInRequestBase(tier, requestBaseAmount, reverse, rate));
+    }
+
+    private static BigDecimal computeFeeInRequestBase(
+            P2PFeeTier tier, BigDecimal requestBaseAmount, boolean reverse, BigDecimal rate) {
+        if (tier.getFeeType() == P2PFeeType.PERCENTAGE) {
+            return requestBaseAmount
+                    .multiply(tier.getFeeValue())
+                    .divide(HUNDRED, FEE_MATH_SCALE, RoundingMode.HALF_UP);
+        }
+        if (!reverse) {
+            return tier.getFeeValue();
+        }
+        return tier.getFeeValue().divide(rate, FEE_MATH_SCALE, RoundingMode.HALF_EVEN);
     }
 
     private void apply(P2PFeeTier tier, UpsertP2PFeeTierRequest request) {
@@ -129,9 +171,8 @@ public class P2PFeeTierService {
 
     private static boolean rangesOverlap(
             BigDecimal aMin, BigDecimal aMax, BigDecimal bMin, BigDecimal bMax) {
-        BigDecimal aHi = aMax == null ? null : aMax;
-        BigDecimal bHi = bMax == null ? null : bMax;
-        // [aMin, aHi] overlaps [bMin, bHi] when aMin <= bHi and bMin <= aHi (null hi = +inf)
+        BigDecimal aHi = aMax;
+        BigDecimal bHi = bMax;
         boolean aBeforeBEnd = bHi == null || aMin.compareTo(bHi) <= 0;
         boolean bBeforeAEnd = aHi == null || bMin.compareTo(aHi) <= 0;
         return aBeforeBEnd && bBeforeAEnd;
@@ -142,13 +183,6 @@ public class P2PFeeTierService {
             return false;
         }
         return tier.getMaxAmount() == null || amount.compareTo(tier.getMaxAmount()) <= 0;
-    }
-
-    private static BigDecimal computeFee(P2PFeeTier tier, BigDecimal amount) {
-        if (tier.getFeeType() == P2PFeeType.FIXED) {
-            return tier.getFeeValue();
-        }
-        return amount.multiply(tier.getFeeValue()).divide(HUNDRED, 12, RoundingMode.HALF_UP);
     }
 
     private static void validateValue(P2PFeeType feeType, BigDecimal feeValue) {

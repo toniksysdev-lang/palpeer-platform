@@ -265,6 +265,9 @@ public class AdminUserService {
                 userId);
         exec("DELETE FROM kyc_cases WHERE user_id = :userId", userId);
 
+        // Platform fee revenue rows reference users
+        execOptional("DELETE FROM platform_fee_revenues WHERE user_id = :userId", userId);
+
         // Promotions / notifications / security / profile / auth / notes
         exec("DELETE FROM bonuses WHERE user_id = :userId", userId);
         exec(
@@ -281,6 +284,15 @@ public class AdminUserService {
         exec("DELETE FROM profiles WHERE user_id = :userId", userId);
         exec("DELETE FROM otp_challenges WHERE user_id = :userId", userId);
         exec("DELETE FROM refresh_tokens WHERE user_id = :userId", userId);
+        execOptional(
+                "DELETE FROM account_suspend_tokens WHERE user_id = :userId",
+                userId);
+        execOptional(
+                """
+                DELETE FROM phone_pre_verifications
+                WHERE phone = (SELECT phone FROM users WHERE id = :userId)
+                """,
+                userId);
         exec(
                 """
                 DELETE FROM admin_user_notes
@@ -334,6 +346,14 @@ public class AdminUserService {
 
     private void exec(String sql, UUID userId) {
         entityManager.createNativeQuery(sql).setParameter("userId", userId).executeUpdate();
+    }
+
+    private void execOptional(String sql, UUID userId) {
+        try {
+            exec(sql, userId);
+        } catch (RuntimeException ex) {
+            log.warn("Optional purge skipped [userId={}]: {}", userId, ex.getMessage());
+        }
     }
 
     private User requireUser(UUID userId) {

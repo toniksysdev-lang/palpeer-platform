@@ -11,6 +11,8 @@ public record ExchangeCalculationResponse(
         BigDecimal sourceAmount,
         BigDecimal targetAmount,
         BigDecimal appliedRate,
-        String rateSide
+        String rateSide,
+        BigDecimal estimatedFeeAmount,
+        String estimatedFeeCurrency
 ) {
 }

@@ -30,3 +30,21 @@ export async function getAdminNegotiation(negotiationId: string): Promise<Negoti
     `/admin/negotiations/${encodeURIComponent(negotiationId)}`,
   );
 }
+
+export async function adminCancelNegotiation(
+  negotiationId: string,
+): Promise<NegotiationSummary> {
+  return apiRequest<NegotiationSummary>(
+    `/admin/negotiations/${encodeURIComponent(negotiationId)}/cancel`,
+    { method: 'POST' },
+  );
+}
+
+export async function adminAcceptNegotiation(
+  negotiationId: string,
+): Promise<NegotiationSummary> {
+  return apiRequest<NegotiationSummary>(
+    `/admin/negotiations/${encodeURIComponent(negotiationId)}/accept`,
+    { method: 'POST' },
+  );
+}

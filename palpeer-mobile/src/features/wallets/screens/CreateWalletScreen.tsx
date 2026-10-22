@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TextLink } from '@/components/ui/TextLink';
+import { useEnsureProfile } from '@/features/profile/useEnsureProfile';
 import { usePinPrompt } from '@/features/security/PinPromptProvider';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
@@ -35,6 +36,8 @@ export function CreateWalletScreen() {
   const currencies = useGetCurrenciesQuery();
   const wallets = useGetWalletsQuery();
   const registrationCountries = useGetRegistrationCountriesQuery();
+  const { profile, loading: profileLoading, error: profileError, retry: retryProfile } =
+    useEnsureProfile();
   const pinStatus = useGetPinStatusQuery();
   const { requestPin } = usePinPrompt();
   const [createWallet, createState] = useCreateWalletMutation();
@@ -43,9 +46,10 @@ export function CreateWalletScreen() {
   const [confirming, setConfirming] = useState(false);
 
   const header = <StackHeader title="New wallet" />;
-  const loadError = currencies.error ?? wallets.error ?? registrationCountries.error;
+  const loadError =
+    currencies.error ?? wallets.error ?? registrationCountries.error ?? profileError;
 
-  if (loadError && !(currencies.data && wallets.data && registrationCountries.data)) {
+  if (loadError && !(currencies.data && wallets.data && registrationCountries.data && profile)) {
     return (
       <Screen>
         {header}
@@ -55,13 +59,14 @@ export function CreateWalletScreen() {
             void currencies.refetch();
             void wallets.refetch();
             void registrationCountries.refetch();
+            retryProfile();
           }}
         />
       </Screen>
     );
   }
 
-  if (!currencies.data || !wallets.data || !registrationCountries.data) {
+  if (!currencies.data || !wallets.data || !registrationCountries.data || profileLoading || !profile) {
     return (
       <Screen>
         {header}
@@ -80,12 +85,23 @@ export function CreateWalletScreen() {
   const symbolFor = (code: string) =>
     currencies.data.find((currency) => currency.code.toUpperCase() === code.toUpperCase())
       ?.symbol ?? code;
+  const profileComplete = Boolean(profile.complete);
   const pinReady = Boolean(pinStatus.data?.pinSet);
   const pinLoading = pinStatus.isLoading || pinStatus.isFetching;
+
+  const goCompleteProfile = () => {
+    router.push('/profile/personal');
+  };
 
   const submit = async () => {
     if (!selectedOption || confirming || !selectedOption.creatable) return;
     setError(null);
+
+    if (!profile.complete) {
+      setError('Complete your profile before creating a wallet.');
+      goCompleteProfile();
+      return;
+    }
 
     if (pinLoading) {
       setError('Checking your PIN status…');
@@ -166,7 +182,13 @@ export function CreateWalletScreen() {
               : 'Choose a country'
           }
           onPress={() => void submit()}
-          disabled={!selectedOption || !selectedCreatable || confirming || pinLoading}
+          disabled={
+            !selectedOption
+            || !selectedCreatable
+            || confirming
+            || pinLoading
+            || !profileComplete
+          }
           loading={confirming || createState.isLoading}
           loadingLabel="Creating…"
           testID="create-wallet-submit"
@@ -175,7 +197,21 @@ export function CreateWalletScreen() {
     >
       {header}
       <FormAlert message={error} testID="create-wallet-error" />
-      {!pinReady && !pinLoading ? (
+      {!profileComplete ? (
+        <View style={{ gap: theme.spacing.xs }}>
+          <FormAlert
+            tone="info"
+            message="Complete your profile before creating a wallet."
+            testID="create-wallet-profile-incomplete"
+          />
+          <TextLink
+            label="Complete your profile"
+            onPress={goCompleteProfile}
+            testID="create-wallet-complete-profile"
+          />
+        </View>
+      ) : null}
+      {profileComplete && !pinReady && !pinLoading ? (
         <View style={{ gap: theme.spacing.xs }}>
           <FormAlert
             tone="info"

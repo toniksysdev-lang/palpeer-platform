@@ -227,7 +227,11 @@ public class ChatService {
             Instant lastRead = room.getParticipantAId().equals(viewerId)
                     ? room.getParticipantALastReadAt()
                     : room.getParticipantBLastReadAt();
-            unread = chatMessageRepository.countUnreadInRoom(room.getId(), viewerId, lastRead);
+            // Avoid binding a null Instant into "(:lastReadAt is null or …)" — PostgreSQL rejects it
+            // (could not determine data type of parameter) and Make-an-offer → open chat returns 500.
+            unread = lastRead == null
+                    ? chatMessageRepository.countUnreadInRoom(room.getId(), viewerId)
+                    : chatMessageRepository.countUnreadInRoomAfter(room.getId(), viewerId, lastRead);
         }
         return new ChatRoomResponse(
                 room.getId(),

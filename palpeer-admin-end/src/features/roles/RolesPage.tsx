@@ -298,8 +298,12 @@ export function RolesPage() {
               <h1 className="text-xl font-semibold text-text-primary">Roles</h1>
             </div>
             <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-              Define admin roles and attach permission codes. Assign roles to operators from the
-              Admins module. <code className="font-mono text-xs">SUPER_ADMIN</code> must retain{' '}
+              Define admin roles and attach permission codes from the live catalog (users, KYC,
+              wallets/pool funds, rates, P2P, fee management including InstantEX fees, platform fee
+              revenue via <code className="font-mono text-xs">fees:read</code>/
+              <code className="font-mono text-xs">reports:read</code>, negotiations, chat, cards,
+              notifications/push, promotions/referrals/marketing, reports, audit, payments). Assign
+              roles from Admins. <code className="font-mono text-xs">SUPER_ADMIN</code> must retain{' '}
               <code className="font-mono text-xs">admin:manage</code>.
             </p>
           </div>

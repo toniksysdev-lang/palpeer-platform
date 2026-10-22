@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.palpeer.common.audit.AuditRecord;
 import com.palpeer.common.exception.BusinessException;
+import com.palpeer.common.notify.UserNotifyEvent;
 import com.palpeer.ledger.domain.LedgerEntry;
 import com.palpeer.ledger.domain.LedgerEntryType;
 import com.palpeer.ledger.service.LedgerPostingRequest;
@@ -45,6 +46,7 @@ class FundingServiceTest {
     @Mock private com.palpeer.common.audit.AuditRecorder auditRecorder;
     @Mock private PaymentRailRouter paymentRailRouter;
     @Mock private ApayloProperties apayloProperties;
+    @Mock private com.palpeer.wallet.repository.PaymentVirtualAccountRepository paymentVirtualAccountRepository;
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
     @Mock private FundingUnverifiedLimitService fundingUnverifiedLimitService;
 
@@ -128,6 +130,13 @@ class FundingServiceTest {
                     assertThat(a.action()).isEqualTo("FUNDING_OPERATOR_PROCESS");
                     assertThat(a.userRef()).isEqualTo(operatorId.toString());
                 });
+
+        ArgumentCaptor<UserNotifyEvent> notify = ArgumentCaptor.forClass(UserNotifyEvent.class);
+        verify(eventPublisher).publishEvent(notify.capture());
+        assertThat(notify.getValue().referenceType()).isEqualTo("FUNDING");
+        assertThat(notify.getValue().title()).isEqualTo("Funding successful");
+        assertThat(notify.getValue().sendEmail()).isTrue();
+        assertThat(notify.getValue().sendPush()).isTrue();
     }
 
     @Test

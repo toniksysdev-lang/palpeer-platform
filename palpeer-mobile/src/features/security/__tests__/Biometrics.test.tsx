@@ -19,7 +19,7 @@ import { LOCK_AFTER_BACKGROUND_MS, useAppLockLifecycle } from '../lock/useAppLoc
 import { LockScreen } from '../lock/LockScreen';
 import { DevicesScreen } from '../screens/DevicesScreen';
 import { SecurityHubScreen } from '../screens/SecurityHubScreen';
-import { PIN_STATUS } from './helpers';
+import { PIN_STATUS, QUESTIONS } from './helpers';
 
 jest.mock('expo-router', () => require('../../../tests/mocks/expoRouter'));
 
@@ -201,6 +201,8 @@ describe('post-login biometric offer', () => {
 
   it('offers Fingerprint unlock after the first login and enables it', async () => {
     const { calls } = installFetchMock({
+      'GET /security/pin': ok(PIN_STATUS(true)),
+      'GET /security/questions': ok(QUESTIONS),
       'GET /security/devices': ok([]),
       'POST /security/devices': {
         status: 201,
@@ -226,7 +228,11 @@ describe('post-login biometric offer', () => {
   });
 
   it('does not ask again after Not now', async () => {
-    installFetchMock({ 'GET /security/devices': ok([]) });
+    installFetchMock({
+      'GET /security/pin': ok(PIN_STATUS(true)),
+      'GET /security/questions': ok(QUESTIONS),
+      'GET /security/devices': ok([]),
+    });
     const { store } = await renderOffer();
 
     await act(async () => {
@@ -240,6 +246,10 @@ describe('post-login biometric offer', () => {
   });
 
   it('skips the offer when biometrics were already prompted', async () => {
+    installFetchMock({
+      'GET /security/pin': ok(PIN_STATUS(true)),
+      'GET /security/questions': ok(QUESTIONS),
+    });
     await startSession();
     await renderWithProviders(<OfferBiometricUnlock />, {
       prepareStore: (store) => {
@@ -253,6 +263,20 @@ describe('post-login biometric offer', () => {
         );
       },
     });
+
+    await act(async () => {
+      jest.advanceTimersByTime(800);
+    });
+
+    expect(screen.queryByTestId('biometric-offer')).toBeNull();
+  });
+
+  it('waits until PIN and security questions are set before offering', async () => {
+    installFetchMock({
+      'GET /security/pin': ok(PIN_STATUS(false)),
+      'GET /security/questions': ok([]),
+    });
+    await renderOffer();
 
     await act(async () => {
       jest.advanceTimersByTime(800);

@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import { fail, installFetchMock, ok } from '@/tests/fetchMock';
@@ -19,6 +20,22 @@ const REGISTERED = {
   message: 'Registration successful. OTP verification required.',
 };
 
+const COUNTRIES = ok(['CA', 'NG']);
+
+function signupStatus(nextStep: string, extra: Record<string, unknown> = {}) {
+  return ok({
+    nextStep,
+    phone: '+15062100661',
+    email: null,
+    maskedEmail: null,
+    emailVerified: false,
+    phoneVerified: false,
+    hasLoggedIn: false,
+    status: null,
+    ...extra,
+  });
+}
+
 async function fillRegister(confirm = 'correct-horse') {
   await fireEvent.changeText(screen.getByTestId('register-email'), ' Ada@Example.com ');
   await fireEvent.changeText(screen.getByTestId('register-password'), 'correct-horse');
@@ -27,31 +44,145 @@ async function fillRegister(confirm = 'correct-horse') {
 }
 
 describe('EnterPhoneScreen', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
     setSearchParams({});
+    await AsyncStorage.clear();
   });
 
   it('requires a phone number before continuing', async () => {
+    installFetchMock({ 'GET /public/registration-countries': COUNTRIES });
     await renderWithProviders(<EnterPhoneScreen />);
     await fireEvent.press(screen.getByTestId('enter-phone-continue'));
     expect(await screen.findByText('Enter a valid phone number')).toBeTruthy();
     expect(router.push).not.toHaveBeenCalled();
   });
 
-  it('continues to phone verification with an E.164 number', async () => {
+  it('starts phone OTP when the number is new', async () => {
+    const { calls } = installFetchMock({
+      'GET /public/registration-countries': COUNTRIES,
+      'POST /auth/signup/status': signupStatus('PHONE_OTP_REQUIRED'),
+      'POST /auth/otp/phone/request': ok({ debugOtp: null }),
+    });
     await renderWithProviders(<EnterPhoneScreen />);
     expect(screen.queryByTestId('number-pad-dock-grid')).toBeNull();
     await typeIntoNumberField('enter-phone-number', '5062100661');
     expect(screen.getByTestId('enter-phone-number')).toHaveTextContent('(506) 210-0661');
     await fireEvent.press(screen.getByTestId('enter-phone-continue'));
-    expect(router.push).toHaveBeenCalledWith({
-      pathname: '/verify-phone',
-      params: { phone: '+15062100661', signup: '1', countryIso2: 'CA' },
+    await waitFor(() =>
+      expect(router.push).toHaveBeenCalledWith({
+        pathname: '/verify-phone',
+        params: { phone: '+15062100661', signup: '1', countryIso2: 'CA' },
+      }),
+    );
+    expect(calls.some((c) => c.path === '/auth/signup/status')).toBe(true);
+    expect(calls.some((c) => c.path === '/auth/otp/phone/request')).toBe(true);
+  });
+
+  it('still sends phone OTP when signup/status is forbidden on the API', async () => {
+    const { calls } = installFetchMock({
+      'GET /public/registration-countries': COUNTRIES,
+      'POST /auth/signup/status': fail(403, 'FORBIDDEN'),
+      'POST /auth/otp/phone/request': ok({ debugOtp: null }),
     });
+    await renderWithProviders(<EnterPhoneScreen />);
+    await typeIntoNumberField('enter-phone-number', '5062100661');
+    await fireEvent.press(screen.getByTestId('enter-phone-continue'));
+    await waitFor(() =>
+      expect(router.push).toHaveBeenCalledWith({
+        pathname: '/verify-phone',
+        params: { phone: '+15062100661', signup: '1', countryIso2: 'CA' },
+      }),
+    );
+    expect(calls.some((c) => c.path === '/auth/otp/phone/request')).toBe(true);
+  });
+
+  it('resumes create-account when the phone is already pre-verified', async () => {
+    installFetchMock({
+      'GET /public/registration-countries': COUNTRIES,
+      'POST /auth/signup/status': signupStatus('REGISTER_REQUIRED', { phoneVerified: true }),
+    });
+    await renderWithProviders(<EnterPhoneScreen />);
+    await typeIntoNumberField('enter-phone-number', '5062100661');
+    await fireEvent.press(screen.getByTestId('enter-phone-continue'));
+    await waitFor(() =>
+      expect(router.push).toHaveBeenCalledWith({
+        pathname: '/register',
+        params: { phone: '+15062100661', countryIso2: 'CA' },
+      }),
+    );
+  });
+
+  it('resumes email OTP for an incomplete registration', async () => {
+    installFetchMock({
+      'GET /public/registration-countries': COUNTRIES,
+      'POST /auth/signup/status': signupStatus('EMAIL_OTP_REQUIRED', {
+        email: 'ada@example.com',
+        maskedEmail: 'a***@example.com',
+        phoneVerified: true,
+        status: 'PENDING_VERIFICATION',
+      }),
+      'POST /auth/signup/resend-email-otp': ok({ debugOtp: null }),
+    });
+    await renderWithProviders(<EnterPhoneScreen />);
+    await typeIntoNumberField('enter-phone-number', '5062100661');
+    await fireEvent.press(screen.getByTestId('enter-phone-continue'));
+    await waitFor(() =>
+      expect(router.push).toHaveBeenCalledWith({
+        pathname: '/verify-email',
+        params: { email: 'ada@example.com', phone: '+15062100661', resume: '1' },
+      }),
+    );
+  });
+
+  it('sends verified-but-never-logged-in users to login', async () => {
+    installFetchMock({
+      'GET /public/registration-countries': COUNTRIES,
+      'POST /auth/signup/status': signupStatus('LOGIN_READY', {
+        email: 'ada@example.com',
+        maskedEmail: 'a***@example.com',
+        emailVerified: true,
+        phoneVerified: true,
+        hasLoggedIn: false,
+        status: 'ACTIVE',
+      }),
+    });
+    await renderWithProviders(<EnterPhoneScreen />);
+    await typeIntoNumberField('enter-phone-number', '5062100661');
+    await fireEvent.press(screen.getByTestId('enter-phone-continue'));
+    await waitFor(() =>
+      expect(router.push).toHaveBeenCalledWith({
+        pathname: '/login',
+        params: { email: 'ada@example.com', notice: 'verified' },
+      }),
+    );
+  });
+
+  it('sends fully registered users to login with exists notice', async () => {
+    installFetchMock({
+      'GET /public/registration-countries': COUNTRIES,
+      'POST /auth/signup/status': signupStatus('LOGIN_READY', {
+        email: 'ada@example.com',
+        maskedEmail: 'a***@example.com',
+        emailVerified: true,
+        phoneVerified: true,
+        hasLoggedIn: true,
+        status: 'ACTIVE',
+      }),
+    });
+    await renderWithProviders(<EnterPhoneScreen />);
+    await typeIntoNumberField('enter-phone-number', '5062100661');
+    await fireEvent.press(screen.getByTestId('enter-phone-continue'));
+    await waitFor(() =>
+      expect(router.push).toHaveBeenCalledWith({
+        pathname: '/login',
+        params: { email: 'ada@example.com', notice: 'exists' },
+      }),
+    );
   });
 
   it('shows the custom 3×4 pad only after tapping the phone field', async () => {
+    installFetchMock({ 'GET /public/registration-countries': COUNTRIES });
     await renderWithProviders(<EnterPhoneScreen />);
     expect(screen.queryByTestId('number-pad-dock-grid')).toBeNull();
     await fireEvent.press(screen.getByTestId('enter-phone-number'));
@@ -67,9 +198,10 @@ describe('EnterPhoneScreen', () => {
 });
 
 describe('RegisterScreen', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
     setSearchParams({ phone: '+15062100661' });
+    await AsyncStorage.clear();
   });
 
   it('blocks mismatched passwords on the client', async () => {
@@ -98,7 +230,7 @@ describe('RegisterScreen', () => {
     await waitFor(() =>
       expect(router.replace).toHaveBeenCalledWith({
         pathname: '/verify-email',
-        params: { email: 'ada@example.com' },
+        params: { email: 'ada@example.com', phone: '+15062100661' },
       }),
     );
     expect(calls[0]?.body).toEqual({
@@ -127,13 +259,16 @@ describe('RegisterScreen', () => {
 });
 
 describe('VerifyOtpScreen', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
+    await AsyncStorage.clear();
   });
 
-  it('lets the user enter a signup phone OTP and continues to create account without calling the API', async () => {
+  it('verifies a signup phone OTP then continues to create account', async () => {
     setSearchParams({ phone: '+15062100661', signup: '1' });
-    const { calls } = installFetchMock({});
+    const { calls } = installFetchMock({
+      'POST /auth/otp/phone/verify': ok(undefined, 'Phone verified'),
+    });
     await renderWithProviders(<VerifyOtpScreen purpose="PHONE_VERIFICATION" />);
 
     expect(screen.getByTestId('verify-code').props.accessibilityValue).toEqual({ text: '' });
@@ -145,7 +280,7 @@ describe('VerifyOtpScreen', () => {
         params: { phone: '+15062100661' },
       }),
     );
-    expect(calls).toHaveLength(0);
+    expect(calls[0]?.body).toEqual({ phone: '+15062100661', code: '123456' });
   });
 
   it('lets the user skip signup phone verification', async () => {

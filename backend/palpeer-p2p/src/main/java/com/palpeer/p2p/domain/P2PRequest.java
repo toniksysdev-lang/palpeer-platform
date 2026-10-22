@@ -64,4 +64,11 @@ public class P2PRequest extends BaseEntity {
     /** When set, the owner has removed this request from their history. */
     @Column(name = "archived_at")
     private Instant archivedAt;
+
+    /**
+     * When true and the requester is the buyer (BUY listing), PENDING bonus credit may be applied
+     * to the platform fee at settle. SELL acceptors pass the flag on accept instead.
+     */
+    @Column(name = "apply_bonus_credit", nullable = false)
+    private boolean applyBonusCredit = false;
 }

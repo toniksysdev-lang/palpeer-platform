@@ -19,6 +19,11 @@ public record P2PRequestResponse(
         P2PStatus status,
         Instant expiresAt,
         String notes,
-        Instant createdAt
+        Instant createdAt,
+        /** Estimated platform fee when a tier matches (base currency); null when none. */
+        BigDecimal estimatedFeeAmount,
+        String estimatedFeeCurrency,
+        /** Buyer opted in to apply PENDING bonus credit toward the platform fee. */
+        boolean applyBonusCredit
 ) {
 }

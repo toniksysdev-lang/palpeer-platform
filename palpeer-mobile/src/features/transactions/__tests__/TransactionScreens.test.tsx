@@ -10,7 +10,8 @@ import { renderWithProviders } from '@/tests/render';
 import { CURRENCIES, rawOk } from '../../wallets/__tests__/fixtures';
 import { ActivityScreen } from '../screens/ActivityScreen';
 import { TransactionDetailScreen } from '../screens/TransactionDetailScreen';
-import { exchangeItem, historyPage, item, summary, withdrawalItem } from './fixtures';
+import * as saveReceipt from '../saveReceipt';
+import { exchangeItem, historyPage, item, p2pItem, summary, withdrawalItem } from './fixtures';
 
 jest.mock('expo-router', () => require('../../../tests/mocks/expoRouter'));
 
@@ -233,7 +234,9 @@ describe('TransactionDetailScreen', () => {
     await renderWithProviders(<TransactionDetailScreen />);
 
     expect(await screen.findByTestId('movement-title')).toHaveTextContent('Exchange complete');
-    expect(screen.getByTestId('movement-amount')).toHaveTextContent('108,945.12 NGN');
+    expect(screen.getByTestId('movement-amount')).toHaveTextContent(
+      '100.00 CAD → 108,945.12 NGN',
+    );
     expect(screen.getByTestId('transaction-sent')).toHaveTextContent('100.00 CAD');
     expect(screen.getByTestId('transaction-received')).toHaveTextContent('108,945.12 NGN');
     expect(screen.getByTestId('transaction-rate')).toHaveTextContent('1 CAD = 1,089.4512 NGN');
@@ -299,11 +302,50 @@ describe('TransactionDetailScreen', () => {
   });
 
   it("doesn't call the backend for a link with an unknown type", async () => {
-    setSearchParams({ type: 'BONUS', id: 'b-1' });
+    setSearchParams({ type: 'CARD', id: 'c-1' });
     const { calls } = installFetchMock({ 'GET /currencies': CURRENCIES });
     await renderWithProviders(<TransactionDetailScreen />);
     expect(await screen.findByText('Transaction not found')).toBeTruthy();
     await settle();
     expect(calls.filter((call) => call.path.startsWith('/transactions'))).toHaveLength(0);
+  });
+
+  it('shows Save as Image / PDF on a completed P2P trade and captures the receipt view', async () => {
+    setSearchParams({ type: 'P2P', id: 'o-1' });
+    installFetchMock({
+      'GET /currencies': CURRENCIES,
+      'GET /transactions/P2P/o-1': ok(p2pItem()),
+    });
+    const saveImage = jest.spyOn(saveReceipt, 'saveReceiptAsImage').mockResolvedValue(undefined);
+    const savePdf = jest.spyOn(saveReceipt, 'saveReceiptAsPdf').mockResolvedValue(undefined);
+
+    await renderWithProviders(<TransactionDetailScreen />);
+
+    expect(await screen.findByTestId('movement-title')).toHaveTextContent('P2P trade complete');
+    expect(screen.getByTestId('transaction-receipt')).toBeTruthy();
+
+    await fireEvent.press(screen.getByTestId('transaction-save-image'));
+    await waitFor(() => expect(saveImage).toHaveBeenCalled());
+    expect(saveImage.mock.calls[0]?.[1]).toBe('p2p-receipt-o-1');
+
+    await fireEvent.press(screen.getByTestId('transaction-save-pdf'));
+    await waitFor(() => expect(savePdf).toHaveBeenCalled());
+    expect(savePdf.mock.calls[0]?.[1]).toBe('p2p-receipt-o-1');
+
+    saveImage.mockRestore();
+    savePdf.mockRestore();
+  });
+
+  it('hides Save as Image / PDF for non-completed P2P trades', async () => {
+    setSearchParams({ type: 'P2P', id: 'o-2' });
+    installFetchMock({
+      'GET /currencies': CURRENCIES,
+      'GET /transactions/P2P/o-2': ok(p2pItem({ id: 'o-2', status: 'ACCEPTED' })),
+    });
+    await renderWithProviders(<TransactionDetailScreen />);
+
+    expect(await screen.findByTestId('movement-title')).toHaveTextContent('P2P order accepted');
+    expect(screen.queryByTestId('transaction-save-image')).toBeNull();
+    expect(screen.queryByTestId('transaction-save-pdf')).toBeNull();
   });
 });

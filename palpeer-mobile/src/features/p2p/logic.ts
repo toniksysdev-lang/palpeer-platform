@@ -418,6 +418,72 @@ export function quoteTotal(amount: string, rate: string, quotePrecision: number)
 }
 
 /**
+ * Whether the current viewer pays the platform fee (admin P2P fee tiers).
+ * SELL listings: acceptor is the buyer. BUY listings: poster is the buyer.
+ */
+export function viewerIsP2PBuyer(side: P2PSide, own: boolean): boolean {
+  return side === 'SELL' ? !own : own;
+}
+
+/** Base amount remaining after the buyer platform fee (half-even to currency precision). */
+export function netBaseAfterFee(
+  amount: string,
+  feeAmount: string | null | undefined,
+  precision: number,
+): string | null {
+  if (!isPositiveMoney(amount) || feeAmount == null || !isPositiveMoney(String(feeAmount))) {
+    return null;
+  }
+  const net = new Decimal(amount).minus(new Decimal(feeAmount));
+  if (net.lte(0)) return null;
+  return net.toFixed(precision, Decimal.ROUND_HALF_EVEN);
+}
+
+/**
+ * What the acceptor must have available to fund settle.
+ * SELL: buyer (acceptor) pays quote. BUY: seller (acceptor) pays base.
+ */
+export function acceptorFundingRequirement(
+  side: P2PSide,
+  baseCurrencyCode: string,
+  quoteCurrencyCode: string,
+  amount: string,
+  rate: string,
+  quotePrecision: number,
+): { currencyCode: string; amount: string } {
+  if (side === 'SELL') {
+    return {
+      currencyCode: quoteCurrencyCode,
+      amount: quoteTotal(amount, rate, quotePrecision),
+    };
+  }
+  return { currencyCode: baseCurrencyCode, amount: toMoney(amount) };
+}
+
+export type AcceptFundingIssue =
+  | { kind: 'missing_wallet'; currencyCode: string }
+  | { kind: 'insufficient'; currencyCode: string; required: string; available: string };
+
+/** Client-side gate before Accept — mirrors settle debit of the acceptor's funding wallet. */
+export function acceptFundingIssue(
+  requirement: { currencyCode: string; amount: string },
+  wallet: { availableBalance: string } | null | undefined,
+): AcceptFundingIssue | null {
+  if (!wallet) {
+    return { kind: 'missing_wallet', currencyCode: requirement.currencyCode };
+  }
+  if (compareMoney(wallet.availableBalance, requirement.amount) < 0) {
+    return {
+      kind: 'insufficient',
+      currencyCode: requirement.currencyCode,
+      required: requirement.amount,
+      available: wallet.availableBalance,
+    };
+  }
+  return null;
+}
+
+/**
  * Accept-confirm copy for the counterparty. SELL listings: acceptor buys base and pays quote.
  * BUY listings: acceptor sells base (base wallet is debited).
  */
@@ -428,13 +494,25 @@ export function acceptConfirmMessage(args: {
   posterName: string;
   formattedDebitAmount: string;
   debitCurrencyCode: string;
+  formattedFeeAmount?: string | null;
+  formattedNetBaseAmount?: string | null;
 }): string {
   const verb = args.side === 'SELL' ? 'buy' : 'sell';
   const poster = args.posterName.trim() || 'Palpeer user';
+  const feeLine =
+    args.formattedFeeAmount && args.side === 'SELL'
+      ? ` A platform fee of ${args.formattedFeeAmount} applies` +
+        (args.formattedNetBaseAmount
+          ? `, so you receive ${args.formattedNetBaseAmount}.`
+          : '.')
+      : args.formattedFeeAmount
+        ? ` A platform fee of ${args.formattedFeeAmount} applies.`
+        : '';
   return (
     `You agree to ${verb} ${args.formattedBaseAmount} at rate of ${args.rateLine}. ` +
-    `This creates an order between you and the ${poster} who posted it. ` +
-    `${args.formattedDebitAmount} will be deducted from your ${args.debitCurrencyCode} wallet.`
+    `This creates an order between you and the ${poster} who posted it.` +
+    feeLine +
+    ` ${args.formattedDebitAmount} will be deducted from your ${args.debitCurrencyCode} wallet.`
   );
 }
 

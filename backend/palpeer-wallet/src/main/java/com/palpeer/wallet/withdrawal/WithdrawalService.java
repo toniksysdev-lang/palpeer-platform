@@ -17,10 +17,6 @@ import com.palpeer.wallet.domain.Wallet;
 import com.palpeer.wallet.funding.MoneyMovementStatus;
 import com.palpeer.wallet.provider.PaymentRailProvider;
 import com.palpeer.wallet.provider.PaymentRailRouter;
-import com.palpeer.wallet.provider.apaylo.ApayloPaymentRail;
-import com.palpeer.wallet.provider.apaylo.ApayloProperties;
-import com.palpeer.wallet.provider.korapay.KorapayPaymentRail;
-import com.palpeer.wallet.provider.korapay.KorapayProperties;
 import com.palpeer.wallet.repository.WalletRepository;
 import com.palpeer.wallet.service.PoolFundThresholdService;
 import com.palpeer.wallet.service.PoolLiquidityGuard;
@@ -67,8 +63,6 @@ public class WithdrawalService {
     private final LedgerService ledgerService;
     private final AuditRecorder auditRecorder;
     private final PaymentRailRouter paymentRailRouter;
-    private final KorapayProperties korapayProperties;
-    private final ApayloProperties apayloProperties;
     private final ApplicationEventPublisher eventPublisher;
     private final PoolLiquidityGuard poolLiquidityGuard;
     private final PoolFundThresholdService poolFundThresholdService;
@@ -114,24 +108,10 @@ public class WithdrawalService {
         return response;
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public WithdrawalTransactionResponse get(UUID userId, UUID withdrawalId) {
-        WithdrawalTransaction tx = requireOwned(userId, withdrawalId);
-        // Local sandboxes often cannot receive provider webhooks — settle pending withdrawals on read.
-        if (tx.getStatus() == MoneyMovementStatus.PENDING && shouldSandboxSettleWithdrawal(tx)) {
-            return settleSuccess(requireForUpdate(tx.getId()));
-        }
-        return toResponse(tx);
-    }
-
-    private boolean shouldSandboxSettleWithdrawal(WithdrawalTransaction tx) {
-        if (KorapayPaymentRail.NAME.equals(tx.getProviderName())) {
-            return korapayProperties.isSandbox() && korapayProperties.isAutoSandboxSettle();
-        }
-        if (ApayloPaymentRail.NAME.equals(tx.getProviderName())) {
-            return apayloProperties.isSandbox() && apayloProperties.isAutoSandboxSettle();
-        }
-        return false;
+        // Never auto-settle on poll. CAD/NGN payouts stay PENDING until webhook or operator process.
+        return toResponse(requireOwned(userId, withdrawalId));
     }
 
     /** Manual operator completion. Callers must be authorised operators, never the withdrawal owner. */
@@ -199,8 +179,13 @@ public class WithdrawalService {
         notifyWithdrawal(
                 tx,
                 "Withdrawal successful",
-                "Your withdrawal of " + formatMoney(tx.getAmount(), tx.getCurrencyCode())
-                        + " has been sent to your destination.");
+                "Your withdrawal of "
+                        + formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                        + " has been sent"
+                        + (tx.getDestinationReference() == null || tx.getDestinationReference().isBlank()
+                                ? "."
+                                : " to " + tx.getDestinationReference().trim() + ".")
+                        + " Funds have left your Palpeer wallet.");
         try {
             poolFundThresholdService.notifyIfThresholdHit(tx.getCurrencyCode());
         } catch (RuntimeException ex) {
@@ -255,8 +240,10 @@ public class WithdrawalService {
         notifyWithdrawal(
                 tx,
                 "Withdrawal failed",
-                "Your withdrawal of " + formatMoney(tx.getAmount(), tx.getCurrencyCode())
-                        + " could not be completed." + detail);
+                "Your withdrawal of "
+                        + formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                        + " could not be completed. Any hold on your balance has been released."
+                        + detail);
         return toResponse(tx);
     }
 
@@ -296,7 +283,8 @@ public class WithdrawalService {
         notifyWithdrawal(
                 tx,
                 "Withdrawal reversed",
-                "Your withdrawal of " + formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                "Your withdrawal of "
+                        + formatMoney(tx.getAmount(), tx.getCurrencyCode())
                         + " was reversed and credited back to your wallet.");
         return toResponse(tx);
     }
@@ -376,8 +364,10 @@ public class WithdrawalService {
         notifyWithdrawal(
                 tx,
                 "Withdrawal initiated",
-                "Your withdrawal of " + formatMoney(tx.getAmount(), tx.getCurrencyCode())
-                        + " is pending. Funds are held until settlement.");
+                "Your withdrawal of "
+                        + formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                        + " is pending. The amount is held in your wallet until the payout is"
+                        + " confirmed.");
         return toResponse(tx);
     }
 
@@ -449,6 +439,7 @@ public class WithdrawalService {
                 .build());
     }
 
+    /** In-app + push + email after commit ({@link UserNotifyEvent}). */
     private void notifyWithdrawal(WithdrawalTransaction tx, String title, String body) {
         eventPublisher.publishEvent(new UserNotifyEvent(
                 tx.getUserId(),

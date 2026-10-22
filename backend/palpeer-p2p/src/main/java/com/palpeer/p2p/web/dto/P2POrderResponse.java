@@ -13,6 +13,9 @@ public record P2POrderResponse(
         BigDecimal amount,
         BigDecimal rate,
         P2PStatus status,
-        Instant createdAt
+        Instant createdAt,
+        /** Platform fee charged to the buyer at settle (base currency); null when none. */
+        BigDecimal feeAmount,
+        String feeCurrencyCode
 ) {
 }

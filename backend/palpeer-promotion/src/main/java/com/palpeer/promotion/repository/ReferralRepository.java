@@ -19,4 +19,6 @@ public interface ReferralRepository extends JpaRepository<Referral, UUID>, JpaSp
     List<Referral> findByReferrerUserIdOrderByCreatedAtDesc(UUID referrerUserId);
 
     boolean existsByRefereeUserId(UUID refereeUserId);
+
+    Optional<Referral> findByRefereeUserId(UUID refereeUserId);
 }

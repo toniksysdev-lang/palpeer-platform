@@ -59,6 +59,27 @@ export type OtpResendResponse = {
   debugOtp?: string | null;
 };
 
+/** VERIFIED: `SignupStatusResponse` from POST /auth/signup/status. */
+export type SignupNextStep =
+  | 'PHONE_OTP_REQUIRED'
+  | 'REGISTER_REQUIRED'
+  | 'EMAIL_OTP_REQUIRED'
+  | 'LOGIN_READY'
+  | 'BLOCKED';
+
+export type SignupStatusResponse = {
+  nextStep: SignupNextStep;
+  phone: string;
+  email: string | null;
+  maskedEmail: string | null;
+  emailVerified: boolean;
+  phoneVerified: boolean;
+  hasLoggedIn: boolean;
+  status: string | null;
+};
+
+export type SignupStatusRequest = { phone: string };
+
 /** VERIFIED: `OtpPurpose`. */
 export type OtpPurpose = 'EMAIL_VERIFICATION' | 'PHONE_VERIFICATION' | 'PASSWORD_RESET';
 
@@ -80,7 +101,10 @@ export type OtpResendRequest = {
   channel: OtpChannel;
 };
 
-/** VERIFIED: `PasswordResetRequestDto`. Always 200 whether or not the account exists. */
+/**
+ * VERIFIED: `PasswordResetRequestDto`. Always 200 whether or not the account exists.
+ * Response is `OtpResendResponse` (`debugOtp` only when OTP log-code is enabled).
+ */
 export type PasswordResetRequest = {
   email: string;
 };

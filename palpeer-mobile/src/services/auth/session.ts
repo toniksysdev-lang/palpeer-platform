@@ -3,6 +3,7 @@ import type { AppError } from '@/services/api/errors';
 import { removeThisDeviceWithToken } from '@/services/biometrics/deviceRegistration';
 import { removePushRegistrationWithToken } from '@/services/push/pushNotifications';
 import { secureStorage } from '@/services/storage/secureStorage';
+import { signupDraftStorage } from '@/services/storage/signupDraftStorage';
 import type { SignOutReason } from '@/store/slices/sessionSlice';
 import type { AuthTokensResponse, LogoutRequest, RefreshTokenRequest } from '@/types/api/auth';
 import { logger } from '@/utils/logger';
@@ -61,6 +62,8 @@ export const sessionManager = {
       userId: tokens.userId,
       email,
     });
+    // First successful login ends the resume-registration draft.
+    await signupDraftStorage.clear();
     listener?.onStarted({ userId: tokens.userId, email });
   },
 

@@ -7,6 +7,8 @@ import type {
   PromotionSummary,
   ReferralStatus,
   ReferralSummary,
+  UpdatePromotionCampaignInput,
+  UpdatePromotionInput,
 } from '@/types/promotions';
 
 export async function listActivePromotions(): Promise<PromotionSummary[]> {
@@ -25,6 +27,7 @@ export async function createPromotion(input: CreatePromotionInput): Promise<Prom
       endsAt: input.endsAt || null,
       bonusAmount: input.bonusAmount ? input.bonusAmount : null,
       bonusCurrencyCode: input.bonusCurrencyCode?.trim() || null,
+      eligibilityJson: input.eligibilityJson ?? null,
     },
   });
 }
@@ -79,4 +82,54 @@ export async function listAdminBonuses(
   if (params.userId?.trim()) search.set('userId', params.userId.trim());
   if (params.referralId?.trim()) search.set('referralId', params.referralId.trim());
   return apiRequest<SpringPage<BonusSummary>>(`/admin/bonuses?${search.toString()}`);
+}
+
+export async function getAdminPromotion(id: string): Promise<PromotionSummary> {
+  return apiRequest<PromotionSummary>(`/admin/promotions/${encodeURIComponent(id)}`);
+}
+
+export async function updatePromotion(
+  id: string,
+  input: UpdatePromotionInput,
+): Promise<PromotionSummary> {
+  return apiRequest<PromotionSummary>(`/admin/promotions/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: {
+      code: input.code.trim(),
+      title: input.title.trim(),
+      description: input.description?.trim() || null,
+      promotionType: input.promotionType,
+      active: input.active,
+      startsAt: input.startsAt || null,
+      endsAt: input.endsAt || null,
+      bonusAmount: input.bonusAmount ? input.bonusAmount : null,
+      bonusCurrencyCode: input.bonusCurrencyCode?.trim() || null,
+      eligibilityJson: input.eligibilityJson ?? null,
+    },
+  });
+}
+
+export async function updatePromotionCampaign(
+  id: string,
+  input: UpdatePromotionCampaignInput,
+): Promise<PromotionSummary> {
+  return apiRequest<PromotionSummary>(`/admin/promotions/${encodeURIComponent(id)}/campaign`, {
+    method: 'PUT',
+    body: {
+      formulaJson: input.formulaJson ?? null,
+      eligibilityJson: input.eligibilityJson ?? null,
+    },
+  });
+}
+
+export async function settleAdminBonus(id: string): Promise<BonusSummary> {
+  return apiRequest<BonusSummary>(`/admin/bonuses/${encodeURIComponent(id)}/settle`, {
+    method: 'POST',
+  });
+}
+
+export async function cancelAdminBonus(id: string): Promise<BonusSummary> {
+  return apiRequest<BonusSummary>(`/admin/bonuses/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+  });
 }

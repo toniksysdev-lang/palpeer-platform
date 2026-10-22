@@ -6,9 +6,14 @@ import {
   buildChatItems,
   chatErrorMessage,
   connectionNotice,
+  NEGOTIATION_PREFILLS,
+  negotiationAcceptBothMessage,
   negotiationAcceptFieldMessage,
   negotiationAmountMessage,
+  negotiationPrefillsFor,
   negotiationTermsMessage,
+  prefillUsesAmount,
+  prefillUsesRate,
   seenMessageId,
   unreadIncoming,
 } from '../logic';
@@ -16,6 +21,56 @@ import {
 describe('negotiationAmountMessage', () => {
   it('prefixes a formatted amount', () => {
     expect(negotiationAmountMessage('100.00 CAD')).toBe('Proposed amount: 100.00 CAD');
+  });
+});
+
+describe('NEGOTIATION_PREFILLS', () => {
+  it('covers amount, rate, both, plain, and accept actions', () => {
+    expect(NEGOTIATION_PREFILLS.length).toBeGreaterThanOrEqual(8);
+    expect(NEGOTIATION_PREFILLS.some((item) => item.action === 'accept_amount')).toBe(true);
+    expect(NEGOTIATION_PREFILLS.some((item) => item.action === 'accept_rate')).toBe(true);
+    expect(NEGOTIATION_PREFILLS.some((item) => item.action === 'accept_both')).toBe(true);
+    expect(NEGOTIATION_PREFILLS.some((item) => item.audience === 'seller')).toBe(true);
+    expect(NEGOTIATION_PREFILLS.some((item) => item.fields === 'both')).toBe(true);
+  });
+
+  it('inserts amount and rate into related templates', () => {
+    const both = NEGOTIATION_PREFILLS.find((item) => item.id === 'meet-both')!;
+    expect(both.build({ amount: '100.00 CAD', rateLine: '1 CAD = 985 NGN' })).toBe(
+      'Can you meet at 100.00 CAD and 1 CAD = 985 NGN?',
+    );
+    const amountOnly = NEGOTIATION_PREFILLS.find((item) => item.id === 'propose-amount')!;
+    expect(amountOnly.build({ amount: '250.00 CAD' })).toBe('How about 250.00 CAD?');
+    const rateOnly = NEGOTIATION_PREFILLS.find((item) => item.id === 'propose-rate')!;
+    expect(rateOnly.build({ rateLine: '1 CAD = 990 NGN' })).toBe(
+      'Would 1 CAD = 990 NGN work for you?',
+    );
+  });
+
+  it('filters seller responses and accept actions by role and turn', () => {
+    const sellerWaiting = negotiationPrefillsFor({ isSeller: true, canAct: false });
+    expect(sellerWaiting.some((item) => item.id === 'seller-need-better-rate')).toBe(true);
+    expect(sellerWaiting.some((item) => item.action)).toBe(false);
+    expect(sellerWaiting.some((item) => item.id === 'propose-amount')).toBe(false);
+
+    const sellerActing = negotiationPrefillsFor({ isSeller: true, canAct: true });
+    expect(sellerActing.map((item) => item.id)).toEqual(
+      expect.arrayContaining(['accept-amount', 'accept-rate', 'accept-both', 'seller-amount-ok']),
+    );
+
+    const buyerActing = negotiationPrefillsFor({ isSeller: false, canAct: true });
+    expect(buyerActing.some((item) => item.id === 'propose-amount')).toBe(true);
+    expect(buyerActing.some((item) => item.id === 'seller-amount-ok')).toBe(false);
+    expect(buyerActing.some((item) => item.action === 'accept_both')).toBe(true);
+  });
+
+  it('marks which fields a prefill needs', () => {
+    expect(prefillUsesAmount('amount')).toBe(true);
+    expect(prefillUsesAmount('both')).toBe(true);
+    expect(prefillUsesAmount('rate')).toBe(false);
+    expect(prefillUsesRate('rate')).toBe(true);
+    expect(prefillUsesRate('both')).toBe(true);
+    expect(prefillUsesRate('none')).toBe(false);
   });
 });
 
@@ -29,8 +84,9 @@ describe('negotiationTermsMessage', () => {
 
 describe('negotiationAcceptFieldMessage', () => {
   it('describes accepting amount or rate', () => {
-    expect(negotiationAcceptFieldMessage('amount', '90.50 USD')).toContain('accept the amount');
-    expect(negotiationAcceptFieldMessage('rate', '1 USD = 1,480 NGN')).toContain('accept the rate');
+    expect(negotiationAcceptFieldMessage('amount', '90.50 USD')).toContain('I Accept amount');
+    expect(negotiationAcceptFieldMessage('rate', '1 USD = 1,480 NGN')).toContain('I Accept rate');
+    expect(negotiationAcceptBothMessage()).toBe('I Accept the amount and the rate.');
   });
 });
 

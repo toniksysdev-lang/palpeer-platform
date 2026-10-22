@@ -1,11 +1,10 @@
 import { ChevronRight, Share2 } from 'lucide-react-native';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
-import { IconButton } from '@/components/ui/IconButton';
 import { useMoneyFormat } from '@/features/wallets/useMoneyFormat';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
@@ -58,18 +57,36 @@ export function RequestCard({
       testID={`p2p-request-${request.id}`}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-        <View style={{ flex: 1, gap: theme.spacing.xxs }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
-            <AppText variant="bodyStrong" style={{ flexShrink: 1 }}>
+        <View style={{ flex: 1, minWidth: 0, gap: theme.spacing.xxs }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: theme.spacing.sm,
+            }}
+          >
+            <AppText variant="bodyStrong" numberOfLines={1} style={{ flexShrink: 0 }}>
               {base}/{quote}
             </AppText>
-            <Badge label={request.side === 'BUY' ? 'Buy' : 'Sell'} tone="info" />
-            {own && !showStatus ? <Badge label="Yours" /> : null}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                flexShrink: 0,
+                gap: theme.spacing.sm,
+              }}
+            >
+              <Badge label={request.side === 'BUY' ? 'Buy' : 'Sell'} tone="info" />
+              {own && !showStatus ? <Badge label="Yours" /> : null}
+            </View>
           </View>
-          <AppText variant="caption" tone="secondary">
+          <AppText variant="caption" tone="secondary" numberOfLines={1}>
             {label}
           </AppText>
-          <AppText variant="h3">{amount}</AppText>
+          <AppText variant="h3" numberOfLines={1}>
+            {amount}
+          </AppText>
           <FlippableRateLine
             rate={request.rate}
             base={base}
@@ -87,15 +104,27 @@ export function RequestCard({
               {formatDateTime(request.createdAt)}
             </AppText>
           )}
+          {shareable ? (
+            <Pressable
+              onPress={() => void onShare()}
+              accessibilityRole="button"
+              accessibilityLabel="Share Sell Link"
+              testID={`p2p-share-${request.id}`}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                alignSelf: 'flex-start',
+                gap: 6,
+                marginTop: theme.spacing.xxs,
+              }}
+            >
+              <Icon icon={Share2} size={16} color={theme.colors.primary} />
+              <AppText variant="caption" tone="brand">
+                Share Sell Link
+              </AppText>
+            </Pressable>
+          ) : null}
         </View>
-        {shareable ? (
-          <IconButton
-            icon={Share2}
-            accessibilityLabel="Share Your Sell Order"
-            onPress={() => void onShare()}
-            testID={`p2p-share-${request.id}`}
-          />
-        ) : null}
         {showStatus ? <StatusBadge status={status} /> : null}
         <Icon icon={ChevronRight} color={theme.colors.textMuted} />
       </View>

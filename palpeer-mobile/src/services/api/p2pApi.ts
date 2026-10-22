@@ -1,5 +1,6 @@
 import type {
   CreateP2PRequest,
+  P2PFeeEstimateResponse,
   P2POrderResponse,
   P2POrderSummaryResponse,
   P2PRateBoundsResponse,
@@ -46,6 +47,38 @@ export const p2pApi = baseApi.injectEndpoints({
       query: ({ baseCurrencyCode, quoteCurrencyCode }) => ({
         path: '/p2p/rate-bounds',
         query: { baseCurrencyCode, quoteCurrencyCode },
+      }),
+    }),
+    /** Buyer platform fee estimate from configured P2P fee tiers. */
+    getP2PFeeEstimate: build.query<
+      P2PFeeEstimateResponse,
+      {
+        baseCurrencyCode: string;
+        quoteCurrencyCode: string;
+        amount: string;
+        rate?: string;
+        applyBonusCredit?: boolean;
+        /** Explicit promo code — never auto-applied without this. */
+        promotionCode?: string | null;
+      }
+    >({
+      query: ({
+        baseCurrencyCode,
+        quoteCurrencyCode,
+        amount,
+        rate,
+        applyBonusCredit,
+        promotionCode,
+      }) => ({
+        path: '/p2p/fee-estimate',
+        query: {
+          baseCurrencyCode,
+          quoteCurrencyCode,
+          amount,
+          ...(rate ? { rate } : {}),
+          ...(applyBonusCredit ? { applyBonusCredit: true } : {}),
+          ...(promotionCode?.trim() ? { promotionCode: promotionCode.trim() } : {}),
+        },
       }),
     }),
     /** OPEN, non-expired requests from every user (including the caller), newest first. */
@@ -99,15 +132,34 @@ export const p2pApi = baseApi.injectEndpoints({
         MINE,
       ],
     }),
-    acceptRequest: build.mutation<P2POrderResponse, string>({
-      query: (id) => ({ path: `${requestPath(id)}/accept`, method: 'POST' }),
-      invalidatesTags: (_result, _error, id) => [
-        { type: 'P2PRequest', id },
-        OPEN_LIST,
-        MINE,
-        ORDERS,
-        WALLET_LIST,
-      ],
+    acceptRequest: build.mutation<
+      P2POrderResponse,
+      string | { id: string; applyBonusCredit?: boolean; promotionCode?: string | null }
+    >({
+      query: (arg) => {
+        const id = typeof arg === 'string' ? arg : arg.id;
+        const applyBonusCredit = typeof arg === 'string' ? undefined : arg.applyBonusCredit;
+        const promotionCode = typeof arg === 'string' ? undefined : arg.promotionCode?.trim();
+        return {
+          path: `${requestPath(id)}/accept`,
+          method: 'POST',
+          query: {
+            ...(applyBonusCredit ? { applyBonusCredit: true } : {}),
+            ...(promotionCode ? { promotionCode } : {}),
+          },
+        };
+      },
+      invalidatesTags: (_result, _error, arg) => {
+        const id = typeof arg === 'string' ? arg : arg.id;
+        return [
+          { type: 'P2PRequest', id },
+          OPEN_LIST,
+          MINE,
+          ORDERS,
+          WALLET_LIST,
+          { type: 'Bonus', id: 'MINE' },
+        ];
+      },
     }),
     /** Orders where the caller is the requester or the acceptor, newest first. */
     getMyOrders: build.query<P2POrderSummaryResponse[], void>({
@@ -132,6 +184,7 @@ export const p2pApi = baseApi.injectEndpoints({
 
 export const {
   useGetP2PRateBoundsQuery,
+  useGetP2PFeeEstimateQuery,
   useGetOpenRequestsQuery,
   useGetMyRequestsQuery,
   useGetRequestQuery,

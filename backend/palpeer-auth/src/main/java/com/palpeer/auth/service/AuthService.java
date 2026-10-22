@@ -28,6 +28,8 @@ import com.palpeer.auth.web.dto.PhoneOtpVerifyRequest;
 import com.palpeer.auth.web.dto.RegisterRequest;
 import com.palpeer.auth.web.dto.RegisterResponse;
 import com.palpeer.auth.web.dto.SessionResponse;
+import com.palpeer.auth.web.dto.SignupStatusRequest;
+import com.palpeer.auth.web.dto.SignupStatusResponse;
 import com.palpeer.auth.web.dto.SuspendAccountRequest;
 import com.palpeer.common.audit.AuditRecord;
 import com.palpeer.common.audit.AuditRecorder;
@@ -116,16 +118,91 @@ public class AuthService {
     }
 
     /**
+     * Resolves where phone-based signup should continue so the client can resume incomplete
+     * registration (email OTP, create-account, or login) instead of hard-stopping.
+     */
+    @Transactional(readOnly = true)
+    public SignupStatusResponse signupStatus(SignupStatusRequest request) {
+        String phone = normalizePhone(request.phone());
+        Optional<User> existing = userRepository.findByPhone(phone);
+        if (existing.isPresent()) {
+            return statusForUser(phone, existing.get());
+        }
+        if (hasFreshPhonePreVerification(phone)) {
+            return new SignupStatusResponse(
+                    SignupStatusResponse.REGISTER_REQUIRED,
+                    phone,
+                    null,
+                    null,
+                    false,
+                    true,
+                    false,
+                    null);
+        }
+        return new SignupStatusResponse(
+                SignupStatusResponse.PHONE_OTP_REQUIRED,
+                phone,
+                null,
+                null,
+                false,
+                false,
+                false,
+                null);
+    }
+
+    /**
      * Sends a pre-registration SMS OTP for the given phone (no user account yet).
+     * When an incomplete account already exists for the phone, returns conflict with
+     * {@code SIGNUP_INCOMPLETE} so the client can call {@link #signupStatus} and resume.
      */
     @Transactional
     public OtpResendResponse requestPhoneOtp(PhoneOtpRequest request) {
         String phone = normalizePhone(request.phone());
-        if (userRepository.existsByPhone(phone)) {
+        Optional<User> existing = userRepository.findByPhone(phone);
+        if (existing.isPresent()) {
+            SignupStatusResponse status = statusForUser(phone, existing.get());
+            if (SignupStatusResponse.EMAIL_OTP_REQUIRED.equals(status.nextStep())
+                    || (SignupStatusResponse.LOGIN_READY.equals(status.nextStep())
+                            && !status.hasLoggedIn())) {
+                throw new BusinessException(
+                        "SIGNUP_INCOMPLETE",
+                        "Registration is incomplete for this phone. Continue where you left off.",
+                        HttpStatus.CONFLICT);
+            }
+            if (SignupStatusResponse.BLOCKED.equals(status.nextStep())) {
+                throw new BusinessException(
+                        "USER_DISABLED", "This account has been disabled", HttpStatus.FORBIDDEN);
+            }
             throw new BusinessException(
                     "PHONE_ALREADY_REGISTERED", "Phone already registered", HttpStatus.CONFLICT);
         }
         String code = issuePhonePreRegisterOtp(phone);
+        return new OtpResendResponse(authProperties.getOtp().isLogCode() ? code : null);
+    }
+
+    /**
+     * Resends the email verification OTP for an incomplete signup identified by phone.
+     */
+    @Transactional
+    public OtpResendResponse resendSignupEmailOtp(SignupStatusRequest request) {
+        String phone = normalizePhone(request.phone());
+        User user = userRepository
+                .findByPhone(phone)
+                .orElseThrow(() -> new BusinessException(
+                        "USER_NOT_FOUND", "No account found for this phone", HttpStatus.NOT_FOUND));
+        if (!user.isEnabled()
+                || user.getStatus() == UserStatus.SUSPENDED
+                || user.getStatus() == UserStatus.CLOSED) {
+            throw new BusinessException(
+                    "USER_DISABLED", "This account has been disabled", HttpStatus.FORBIDDEN);
+        }
+        if (user.isEmailVerified()) {
+            throw new BusinessException(
+                    "EMAIL_ALREADY_VERIFIED",
+                    "Email is already verified. Sign in to continue.",
+                    HttpStatus.CONFLICT);
+        }
+        String code = issueOtp(user, OtpPurpose.EMAIL_VERIFICATION, OtpChannel.EMAIL);
         return new OtpResendResponse(authProperties.getOtp().isLogCode() ? code : null);
     }
 
@@ -178,8 +255,13 @@ public class AuthService {
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new BusinessException("INVALID_CREDENTIALS", "Invalid credentials", HttpStatus.UNAUTHORIZED);
         }
+        if (!user.isEmailVerified()) {
+            throw new BusinessException(
+                    "EMAIL_NOT_VERIFIED",
+                    "Verify your email before signing in.",
+                    HttpStatus.FORBIDDEN);
+        }
 
-        // CONTRACT_PENDING: whether unverified users may obtain tokens
         boolean remember = Boolean.TRUE.equals(request.rememberMe());
         return completeLogin(user, remember, request.device());
     }
@@ -330,10 +412,12 @@ public class AuthService {
     @Transactional
     public OtpResendResponse resendOtp(OtpResendRequest request) {
         if (request.purpose() == OtpPurpose.PASSWORD_RESET) {
-            // Align with password-reset/request: no account enumeration
-            userRepository.findByEmailIgnoreCase(request.email().trim()).ifPresent(user ->
-                    issueOtp(user, OtpPurpose.PASSWORD_RESET, request.channel()));
-            return new OtpResendResponse(null);
+            // Avoid account enumeration: unknown emails still return 200 with no debugOtp.
+            String code = userRepository
+                    .findByEmailIgnoreCase(request.email().trim())
+                    .map(user -> issueOtp(user, OtpPurpose.PASSWORD_RESET, request.channel()))
+                    .orElse(null);
+            return new OtpResendResponse(authProperties.getOtp().isLogCode() ? code : null);
         }
 
         User user = requireUserByEmail(request.email());
@@ -342,10 +426,13 @@ public class AuthService {
     }
 
     @Transactional
-    public void requestPasswordReset(PasswordResetRequestDto request) {
+    public OtpResendResponse requestPasswordReset(PasswordResetRequestDto request) {
         // Avoid account enumeration: always succeed from API perspective when user missing
-        userRepository.findByEmailIgnoreCase(request.email().trim()).ifPresent(user ->
-                issueOtp(user, OtpPurpose.PASSWORD_RESET, OtpChannel.EMAIL));
+        String code = userRepository
+                .findByEmailIgnoreCase(request.email().trim())
+                .map(user -> issueOtp(user, OtpPurpose.PASSWORD_RESET, OtpChannel.EMAIL))
+                .orElse(null);
+        return new OtpResendResponse(authProperties.getOtp().isLogCode() ? code : null);
     }
 
     @Transactional
@@ -368,13 +455,18 @@ public class AuthService {
         otpChallengeRepository.save(challenge);
 
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        // Inbox ownership proven by OTP — unblock login for incomplete email verification.
+        user.setEmailVerified(true);
+        if (user.isPhoneVerified() && user.getStatus() == UserStatus.PENDING_VERIFICATION) {
+            user.setStatus(UserStatus.ACTIVE);
+        }
         userRepository.save(user);
 
         revokeAllRefreshTokens(user.getId());
         auditRecorder.record(AuditRecord.builder("SECURITY_PASSWORD_RESET")
                 .entity("User:" + user.getId())
                 .userRef(user.getId())
-                .newValue("passwordReset=true;refreshTokensRevoked=true")
+                .newValue("passwordReset=true;emailVerified=true;refreshTokensRevoked=true")
                 .build());
     }
 
@@ -761,6 +853,66 @@ public class AuthService {
         boolean fresh = row.getExpiresAt().isAfter(Instant.now());
         phonePreVerificationRepository.delete(row);
         return fresh;
+    }
+
+    private boolean hasFreshPhonePreVerification(String phone) {
+        return phonePreVerificationRepository
+                .findByPhone(phone)
+                .filter(row -> row.getExpiresAt() != null && row.getExpiresAt().isAfter(Instant.now()))
+                .isPresent();
+    }
+
+    private SignupStatusResponse statusForUser(String phone, User user) {
+        boolean hasLoggedIn = refreshTokenRepository.existsByUserId(user.getId());
+        String email = user.getEmail();
+        String masked = maskEmail(email);
+        if (!user.isEnabled()
+                || user.getStatus() == UserStatus.SUSPENDED
+                || user.getStatus() == UserStatus.CLOSED) {
+            return new SignupStatusResponse(
+                    SignupStatusResponse.BLOCKED,
+                    phone,
+                    email,
+                    masked,
+                    user.isEmailVerified(),
+                    user.isPhoneVerified(),
+                    hasLoggedIn,
+                    user.getStatus().name());
+        }
+        if (!user.isEmailVerified()) {
+            return new SignupStatusResponse(
+                    SignupStatusResponse.EMAIL_OTP_REQUIRED,
+                    phone,
+                    email,
+                    masked,
+                    false,
+                    user.isPhoneVerified(),
+                    hasLoggedIn,
+                    user.getStatus().name());
+        }
+        return new SignupStatusResponse(
+                SignupStatusResponse.LOGIN_READY,
+                phone,
+                email,
+                masked,
+                true,
+                user.isPhoneVerified(),
+                hasLoggedIn,
+                user.getStatus().name());
+    }
+
+    static String maskEmail(String email) {
+        if (email == null || email.isBlank() || !email.contains("@")) {
+            return null;
+        }
+        String trimmed = email.trim();
+        int at = trimmed.indexOf('@');
+        String local = trimmed.substring(0, at);
+        String domain = trimmed.substring(at);
+        if (local.length() <= 1) {
+            return "*" + domain;
+        }
+        return local.charAt(0) + "***" + domain;
     }
 
     private static String normalizePhone(String phone) {

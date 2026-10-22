@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { RefreshControl, View } from 'react-native';
 
@@ -6,18 +7,22 @@ import { StackHeader } from '@/components/layout/StackHeader';
 import { EmptyState, ErrorState } from '@/components/feedback/StateViews';
 import { AppText } from '@/components/ui/AppText';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { formatRateValue } from '@/features/exchange/format';
 import { ExpiryCountdown } from '@/features/p2p/components/ExpiryCountdown';
 import { FlippableRateLine } from '@/features/p2p/components/FlippableRateLine';
+import { sellOrderAcceptPath } from '@/features/p2p/shareSellOrder';
 import { useTheme } from '@/providers/ThemeProvider';
 import {
   useGetPublicInstantRatesQuery,
   useGetPublicP2PRatesQuery,
 } from '@/services/api/currencyApi';
 import { toAppError, publicApiErrorMessage, type AppError } from '@/services/api/errors';
+import { pendingNavigation } from '@/services/navigation/pendingNavigation';
+import { useAppSelector } from '@/store';
 import type { PublicInstantRateResponse, PublicP2PRateResponse } from '@/types/api/exchange';
 import { formatDateTime } from '@/utils/datetime';
 import { formatMoney } from '@/utils/money';
@@ -152,32 +157,58 @@ function InstantExRatesPanel({
 
 function PublicP2PRateCard({ row }: { row: PublicP2PRateResponse }) {
   const theme = useTheme();
+  const isAuthenticated = useAppSelector((state) => state.session.status === 'authenticated');
   const amount = formatMoney(row.amount, { currencyCode: row.baseCurrencyCode });
+  const expired = row.expiresAt != null && Date.parse(row.expiresAt) <= Date.now();
+  /** Buyers take the other side of a sell listing. */
+  const canBuy = row.side === 'SELL';
+
+  const buyThisExchange = () => {
+    if (!canBuy || expired) return;
+    const path = sellOrderAcceptPath(row.id);
+    if (isAuthenticated) {
+      router.push({ pathname: '/p2p/request/[id]', params: { id: row.id } });
+      return;
+    }
+    pendingNavigation.set(path);
+    router.push('/login');
+  };
+
   return (
     <Card variant="outlined" padding="md" testID={`view-rates-p2p-${row.id}`}>
-      <View style={{ gap: theme.spacing.xxs }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
-          <AppText variant="bodyStrong" style={{ flexShrink: 1 }}>
-            {row.baseCurrencyCode}/{row.quoteCurrencyCode}
+      <View style={{ gap: theme.spacing.sm }}>
+        <View style={{ gap: theme.spacing.xxs }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+            <AppText variant="bodyStrong" style={{ flexShrink: 1 }}>
+              {row.baseCurrencyCode}/{row.quoteCurrencyCode}
+            </AppText>
+            <Badge label={row.side === 'BUY' ? 'Buy' : 'Sell'} tone="info" />
+          </View>
+          <AppText variant="h3">{amount}</AppText>
+          <FlippableRateLine
+            rate={row.rate}
+            base={row.baseCurrencyCode}
+            quote={row.quoteCurrencyCode}
+            testID={`view-rates-p2p-rate-${row.id}`}
+          />
+          {row.expiresAt ? (
+            <ExpiryCountdown
+              expiresAt={row.expiresAt}
+              testID={`view-rates-p2p-expires-${row.id}`}
+            />
+          ) : null}
+          <AppText variant="caption" tone="muted">
+            Posted {formatDateTime(row.createdAt) ?? '—'}
           </AppText>
-          <Badge label={row.side === 'BUY' ? 'Buy' : 'Sell'} tone="info" />
         </View>
-        <AppText variant="h3">{amount}</AppText>
-        <FlippableRateLine
-          rate={row.rate}
-          base={row.baseCurrencyCode}
-          quote={row.quoteCurrencyCode}
-          testID={`view-rates-p2p-rate-${row.id}`}
-        />
-        {row.expiresAt ? (
-          <ExpiryCountdown
-            expiresAt={row.expiresAt}
-            testID={`view-rates-p2p-expires-${row.id}`}
+        {canBuy ? (
+          <Button
+            label="Buy This Exchange"
+            onPress={buyThisExchange}
+            disabled={expired}
+            testID={`view-rates-p2p-buy-${row.id}`}
           />
         ) : null}
-        <AppText variant="caption" tone="muted">
-          Posted {formatDateTime(row.createdAt) ?? '—'}
-        </AppText>
       </View>
     </Card>
   );

@@ -46,11 +46,19 @@ public class SmtpEmailSender implements EmailSender {
                                     : MimeMessageHelper.MULTIPART_MODE_NO,
                             StandardCharsets.UTF_8.name());
             String fromEmail = properties.getFrom();
-            String fromName = properties.getFromName();
+            String fromName =
+                    StringUtils.hasText(properties.getFromName())
+                            ? properties.getFromName().trim()
+                            : "Palpeer";
             helper.setFrom(new InternetAddress(fromEmail, fromName, StandardCharsets.UTF_8.name()));
-            if (properties.getHeaderFrom() != null && !properties.getHeaderFrom().isBlank()) {
-                message.setHeader("Sender", properties.getHeaderFrom().trim());
-            }
+            String replyTo = resolveReplyTo(fromEmail);
+            helper.setReplyTo(
+                    new InternetAddress(
+                            replyTo,
+                            replyTo.equalsIgnoreCase(EmailBrand.SUPPORT_EMAIL)
+                                    ? "Palpeer Support"
+                                    : fromName,
+                            StandardCharsets.UTF_8.name()));
             helper.setTo(to);
             helper.setSubject(subject);
             if (hasHtml) {
@@ -85,5 +93,17 @@ public class SmtpEmailSender implements EmailSender {
                     ex);
             throw new IllegalStateException("Email delivery failed: " + ex.getMessage(), ex);
         }
+    }
+
+    private String resolveReplyTo(String fromEmail) {
+        String configured =
+                properties.getHeaderFrom() == null ? "" : properties.getHeaderFrom().trim();
+        if (StringUtils.hasText(configured) && !configured.toLowerCase().startsWith("noreply@")) {
+            return configured;
+        }
+        if (StringUtils.hasText(fromEmail) && !fromEmail.toLowerCase().startsWith("noreply@")) {
+            return fromEmail.trim();
+        }
+        return EmailBrand.SUPPORT_EMAIL;
     }
 }

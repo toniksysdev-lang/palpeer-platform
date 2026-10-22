@@ -4,6 +4,7 @@ import com.palpeer.auth.security.UserPrincipal;
 import com.palpeer.common.api.ApiResponse;
 import com.palpeer.promotion.service.PromotionService;
 import com.palpeer.promotion.web.dto.ApplyReferralRequest;
+import com.palpeer.promotion.web.dto.BonusCurrencySummary;
 import com.palpeer.promotion.web.dto.BonusResponse;
 import com.palpeer.promotion.web.dto.CreatePromotionRequest;
 import com.palpeer.promotion.web.dto.PromotionResponse;
@@ -78,5 +79,12 @@ public class PromotionController {
             @AuthenticationPrincipal UserPrincipal principal,
             @PageableDefault(size = 20) Pageable pageable) {
         return ApiResponse.ok(promotionService.myBonuses(principal.getId(), pageable));
+    }
+
+    @GetMapping("/bonuses/mine/summary")
+    @Operation(summary = "Per-currency bonus totals (total / unused / used)")
+    public ApiResponse<List<BonusCurrencySummary>> myBonusSummary(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ApiResponse.ok(promotionService.myBonusSummary(principal.getId()));
     }
 }

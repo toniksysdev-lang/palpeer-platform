@@ -41,6 +41,20 @@ public interface FundingTransactionRepository
 
     Optional<FundingTransaction> findByProviderNameAndProviderReference(String providerName, String providerReference);
 
+    @Query("""
+            select f from FundingTransaction f
+            where f.walletId = :walletId
+              and f.providerName = :providerName
+              and f.status = :status
+              and f.amount = :amount
+            order by f.createdAt desc
+            """)
+    List<FundingTransaction> findPendingByWalletProviderAmount(
+            @Param("walletId") UUID walletId,
+            @Param("providerName") String providerName,
+            @Param("status") MoneyMovementStatus status,
+            @Param("amount") java.math.BigDecimal amount);
+
     /**
      * Successful funding totals keyed by provider + currency.
      * Rows: [providerName (nullable), currencyCode, sum(amount)].

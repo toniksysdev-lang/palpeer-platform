@@ -193,6 +193,8 @@ class ChatServiceTest {
             room.setId(UUID.randomUUID());
             return room;
         });
+        // New rooms have null last-read markers — must use the null-safe unread count path.
+        when(chatMessageRepository.countUnreadInRoom(any(UUID.class), eq(counterparty))).thenReturn(0L);
 
         ChatRoomResponse created = chatService.createRoom(
                 counterparty, new CreateChatRoomRequest(null, negotiationId));
@@ -201,6 +203,9 @@ class ChatServiceTest {
         assertThat(created.p2pOrderId()).isNull();
         assertThat(created.participantAId()).isEqualTo(requester);
         assertThat(created.participantBId()).isEqualTo(counterparty);
+        assertThat(created.unreadCount()).isZero();
+        verify(chatMessageRepository).countUnreadInRoom(any(UUID.class), eq(counterparty));
+        verify(chatMessageRepository, never()).countUnreadInRoomAfter(any(), any(), any());
     }
 
     @Test

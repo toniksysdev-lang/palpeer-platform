@@ -1,5 +1,5 @@
 import { ChevronRight, Eye, EyeOff, Wallet } from 'lucide-react-native';
-import { Pressable, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { AppText } from '@/components/ui/AppText';
@@ -34,12 +34,9 @@ export function BalanceCard({ wallet, hidden, onToggleHidden, onOpen }: Props) {
   const available = format(wallet.availableBalance, code, { showCurrency: false });
   const hasPending = compareMoney(wallet.pendingBalance, '0') !== 0;
 
+  // Outer card is a View + absolute Pressable so the eye toggle is not a nested <button> on web.
   return (
-    <Pressable
-      onPress={onOpen}
-      accessibilityRole="button"
-      accessibilityLabel={`${walletName}, available ${hidden ? 'hidden' : `${code} ${available}`}`}
-      testID={`balance-card-${code}`}
+    <View
       style={[
         theme.shadows.card,
         {
@@ -48,19 +45,33 @@ export function BalanceCard({ wallet, hidden, onToggleHidden, onOpen }: Props) {
           minHeight: BALANCE_CARD_MIN_HEIGHT,
         },
       ]}
+      testID={`balance-card-${code}`}
     >
+      <Pressable
+        onPress={onOpen}
+        accessibilityRole="button"
+        accessibilityLabel={`${walletName}, available ${hidden ? 'hidden' : `${code} ${available}`}`}
+        style={StyleSheet.absoluteFillObject}
+      />
       <LinearGradient
         colors={[theme.colors.heroStart, theme.colors.heroEnd, '#0B6E4F']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
+        pointerEvents="box-none"
         style={{
           flex: 1,
           padding: theme.spacing.lg,
           gap: theme.spacing.md,
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, flex: 1 }}>
+        <View
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          pointerEvents="box-none"
+        >
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, flex: 1 }}
+            pointerEvents="none"
+          >
             <View
               style={{
                 width: 40,
@@ -93,7 +104,7 @@ export function BalanceCard({ wallet, hidden, onToggleHidden, onOpen }: Props) {
           </Pressable>
         </View>
 
-        <View style={{ gap: theme.spacing.xxs }}>
+        <View style={{ gap: theme.spacing.xxs }} pointerEvents="none">
           <AppText variant="caption" style={{ color: ON_HERO_SOFT }}>
             Available balance
           </AppText>
@@ -128,6 +139,6 @@ export function BalanceCard({ wallet, hidden, onToggleHidden, onOpen }: Props) {
           ) : null}
         </View>
       </LinearGradient>
-    </Pressable>
+    </View>
   );
 }

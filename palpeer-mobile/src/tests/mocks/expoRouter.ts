@@ -31,6 +31,17 @@ export function useRootNavigationState() {
   return { key: 'test-root' };
 }
 
+/** Runs on mount in tests (expo-router focuses the screen immediately). */
+export function useFocusEffect(effect: () => void | (() => void)) {
+  const { useEffect } = require('react') as typeof import('react');
+  useEffect(() => {
+    const cleanup = effect();
+    return typeof cleanup === 'function' ? cleanup : undefined;
+    // Intentionally omit deps — mirrors React Navigation's focus-effect contract in unit tests.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
+
 export function Redirect() {
   return null;
 }

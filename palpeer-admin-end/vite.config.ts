@@ -28,6 +28,9 @@ export default defineConfig({
       '/api': {
         target: 'http://127.0.0.1:8085',
         changeOrigin: true,
+        // User delete and other heavy admin calls can exceed the default proxy idle timeout.
+        timeout: 180_000,
+        proxyTimeout: 180_000,
       },
     },
   },

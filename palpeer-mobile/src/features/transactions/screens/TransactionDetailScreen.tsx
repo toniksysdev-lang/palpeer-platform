@@ -1,6 +1,7 @@
 import { skipToken } from '@reduxjs/toolkit/query';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Circle, CircleCheck, SearchX } from 'lucide-react-native';
+import { Circle, CircleCheck, FileDown, ImageDown, SearchX } from 'lucide-react-native';
+import { useRef, useState } from 'react';
 import { RefreshControl, View } from 'react-native';
 
 import { Screen } from '@/components/layout/Screen';
@@ -19,6 +20,7 @@ import { isInProgress } from '@/features/wallets/movementStatus';
 import { useFinalStatusRefresh } from '@/features/wallets/useFinalStatusRefresh';
 import { useMoneyFormat } from '@/features/wallets/useMoneyFormat';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useToast } from '@/providers/ToastProvider';
 import { toAppError } from '@/services/api/errors';
 import { useGetTransactionQuery } from '@/services/api/transactionApi';
 import type { TransactionItemResponse } from '@/types/api/transaction';
@@ -32,6 +34,7 @@ import {
   transactionPollMs,
   typeLabel,
 } from '../logic';
+import { saveReceiptAsImage, saveReceiptAsPdf } from '../saveReceipt';
 
 function Step({ label, detail, done }: { label: string; detail?: string | null; done: boolean }) {
   const theme = useTheme();
@@ -105,8 +108,13 @@ function detailsLink(item: TransactionItemResponse) {
   }
 }
 
+function canSaveP2PReceipt(item: TransactionItemResponse): boolean {
+  return item.type === 'P2P' && item.status === 'COMPLETED';
+}
+
 export function TransactionDetailScreen() {
   const theme = useTheme();
+  const toast = useToast();
   const params = useLocalSearchParams<{ type: string; id: string }>();
   const arg =
     isTransactionType(params.type) && params.id ? { type: params.type, id: params.id } : null;
@@ -117,10 +125,31 @@ export function TransactionDetailScreen() {
     skipPollingIfUnfocused: true,
   });
   const data = transaction.data;
+  const receiptRef = useRef<View>(null);
+  const [savingFormat, setSavingFormat] = useState<'image' | 'pdf' | null>(null);
   useFinalStatusRefresh(data?.walletId ?? undefined, data?.status);
   useFinalStatusRefresh(data?.secondaryWalletId ?? undefined, data?.status);
 
   const header = <StackHeader title={arg ? typeLabel(arg.type) : 'Transaction'} />;
+
+  const saveReceipt = async (kind: 'image' | 'pdf') => {
+    if (!data || savingFormat) return;
+    setSavingFormat(kind);
+    try {
+      if (kind === 'image') {
+        await saveReceiptAsImage(receiptRef, `p2p-receipt-${data.id}`);
+      } else {
+        await saveReceiptAsPdf(receiptRef, `p2p-receipt-${data.id}`);
+      }
+    } catch {
+      toast.show({
+        type: 'error',
+        title: kind === 'image' ? "Couldn't save image" : "Couldn't save PDF",
+      });
+    } finally {
+      setSavingFormat(null);
+    }
+  };
 
   if (!arg) {
     return (
@@ -158,6 +187,7 @@ export function TransactionDetailScreen() {
   const { title, message } = describeTransaction(data);
   const paired = data.type === 'EXCHANGE' || data.type === 'P2P';
   const link = detailsLink(data);
+  const showSave = canSaveP2PReceipt(data);
   const headline =
     paired && data.secondaryAmount && data.secondaryCurrencyCode
       ? `${format(data.amount, data.currencyCode)} → ${format(data.secondaryAmount, data.secondaryCurrencyCode)}`
@@ -175,10 +205,36 @@ export function TransactionDetailScreen() {
       }
       footer={
         <View style={{ gap: theme.spacing.sm }}>
+          {showSave ? (
+            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <Button
+                  label="Save as Image"
+                  variant="primary"
+                  leftIcon={ImageDown}
+                  loading={savingFormat === 'image'}
+                  disabled={savingFormat !== null}
+                  onPress={() => void saveReceipt('image')}
+                  testID="transaction-save-image"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button
+                  label="Save as PDF"
+                  variant="outline"
+                  leftIcon={FileDown}
+                  loading={savingFormat === 'pdf'}
+                  disabled={savingFormat !== null}
+                  onPress={() => void saveReceipt('pdf')}
+                  testID="transaction-save-pdf"
+                />
+              </View>
+            </View>
+          ) : null}
           {link ? (
             <Button
               label={link.label}
-              variant="outline"
+              variant={showSave ? 'ghost' : 'outline'}
               onPress={link.go}
               testID="transaction-details-link"
             />
@@ -186,7 +242,7 @@ export function TransactionDetailScreen() {
           {data.walletId ? (
             <Button
               label={`View ${data.currencyCode} wallet`}
-              variant={link ? 'ghost' : 'outline'}
+              variant={link || showSave ? 'ghost' : 'outline'}
               onPress={() =>
                 router.push({ pathname: '/wallet/[id]', params: { id: data.walletId! } })
               }
@@ -197,62 +253,80 @@ export function TransactionDetailScreen() {
       }
     >
       {header}
-      <MovementStatusHeader
-        status={data.status}
-        amount={headline}
-        title={title}
-        message={message}
-      />
-      {transaction.error ? (
-        <FormAlert tone="warning" message="Couldn't refresh the status. Pull down to try again." />
-      ) : null}
-
-      <Card variant="outlined" padding="md" testID="transaction-summary">
-        {paired ? (
-          <>
-            <ReviewRow
-              label={data.type === 'P2P' ? 'Base amount' : 'You sent'}
-              value={format(data.amount, data.currencyCode)}
-              testID="transaction-sent"
-            />
-            {data.secondaryAmount && data.secondaryCurrencyCode ? (
-              <ReviewRow
-                label={data.type === 'P2P' ? 'Quote amount' : 'You received'}
-                value={format(data.secondaryAmount, data.secondaryCurrencyCode)}
-                testID="transaction-received"
-              />
-            ) : null}
-            {data.appliedRate && data.secondaryCurrencyCode ? (
-              <ReviewRow
-                label="Rate"
-                value={formatRateLine(
-                  data.appliedRate,
-                  data.currencyCode,
-                  data.secondaryCurrencyCode,
-                )}
-                testID="transaction-rate"
-              />
-            ) : null}
-          </>
-        ) : (
-          <>
-            <ReviewRow
-              label="Amount"
-              value={format(data.amount, data.currencyCode)}
-              testID="transaction-amount"
-            />
-            <ReviewRow label="Wallet" value={`${data.currencyCode} wallet`} />
-          </>
-        )}
-        <ReviewRow label="Status" value={humanizeStatus(data.status)} testID="transaction-status" />
-        {data.failureReason ? (
-          <ReviewRow label="Reason" value={data.failureReason} testID="transaction-reason" />
+      {/* Capture target: same layout/colors as on-screen receipt body (excludes nav + actions). */}
+      <View
+        ref={receiptRef}
+        collapsable={false}
+        testID="transaction-receipt"
+        style={{
+          backgroundColor: theme.colors.background,
+          gap: theme.spacing.lg,
+        }}
+      >
+        <MovementStatusHeader
+          status={data.status}
+          amount={headline}
+          title={title}
+          message={message}
+        />
+        {transaction.error ? (
+          <FormAlert
+            tone="warning"
+            message="Couldn't refresh the status. Pull down to try again."
+          />
         ) : null}
-        <ReviewRow label="Date" value={formatDateTime(data.createdAt) ?? '—'} />
-        <ReviewRow label="Reference" value={data.id} testID="transaction-reference" />
-      </Card>
 
-      <Timeline item={data} />
+        <Card variant="outlined" padding="md" testID="transaction-summary">
+          {paired ? (
+            <>
+              <ReviewRow
+                label={data.type === 'P2P' ? 'Base amount' : 'You sent'}
+                value={format(data.amount, data.currencyCode)}
+                testID="transaction-sent"
+              />
+              {data.secondaryAmount && data.secondaryCurrencyCode ? (
+                <ReviewRow
+                  label={data.type === 'P2P' ? 'Quote amount' : 'You received'}
+                  value={format(data.secondaryAmount, data.secondaryCurrencyCode)}
+                  testID="transaction-received"
+                />
+              ) : null}
+              {data.appliedRate && data.secondaryCurrencyCode ? (
+                <ReviewRow
+                  label="Rate"
+                  value={formatRateLine(
+                    data.appliedRate,
+                    data.currencyCode,
+                    data.secondaryCurrencyCode,
+                  )}
+                  testID="transaction-rate"
+                />
+              ) : null}
+            </>
+          ) : (
+            <>
+              <ReviewRow
+                label="Amount"
+                value={format(data.amount, data.currencyCode)}
+                testID="transaction-amount"
+              />
+              <ReviewRow label="Wallet" value={`${data.currencyCode} wallet`} />
+            </>
+          )}
+          <ReviewRow
+            label="Status"
+            value={humanizeStatus(data.status)}
+            testID="transaction-status"
+          />
+          {data.failureReason ? (
+            <ReviewRow label="Reason" value={data.failureReason} testID="transaction-reason" />
+          ) : null}
+          <ReviewRow label="Date" value={formatDateTime(data.createdAt) ?? '—'} />
+          <ReviewRow label="Reference" value={data.id} testID="transaction-reference" />
+        </Card>
+
+        <Timeline item={data} />
+      </View>
     </Screen>
   );
 }

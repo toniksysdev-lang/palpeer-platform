@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.palpeer.common.exception.BusinessException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -19,7 +20,7 @@ import org.springframework.web.client.RestClientResponseException;
 
 /**
  * Kuda OpenAPI client (token + serviceType envelope).
- * Docs: https://kuda.com/business/open-api/ and https://kudabank.gitbook.io/kudabank/
+ * Docs: https://business-support.kuda.com/ and https://kuda.com/business/open-api/
  */
 @Slf4j
 @Component
@@ -37,11 +38,16 @@ public class KudaClient {
                 && notBlank(properties.getApiKey());
     }
 
+    public boolean isSandboxMode() {
+        return properties.isSandbox();
+    }
+
     public JsonNode invoke(String serviceType, Map<String, Object> data) {
         requireConfigured();
         ObjectNode envelope = objectMapper.createObjectNode();
         envelope.put("serviceType", serviceType);
-        envelope.put("requestRef", UUID.randomUUID().toString().replace("-", "").substring(0, 12));
+        // Kuda prefers short request refs for money-movement calls.
+        envelope.put("requestRef", shortRequestRef());
         envelope.set("data", objectMapper.valueToTree(data == null ? Map.of() : data));
 
         try {
@@ -64,10 +70,14 @@ public class KudaClient {
                         .body(String.class);
                 root = objectMapper.readTree(raw == null ? "{}" : raw);
             }
+            requireSuccessful(root, serviceType);
             return unwrap(root);
         } catch (RestClientResponseException ex) {
             log.error("Kuda {} failed: {} {}", serviceType, ex.getStatusCode(), ex.getResponseBodyAsString());
-            throw new BusinessException("KUDA_ERROR", "Kuda request failed: " + ex.getStatusCode().value(), HttpStatus.BAD_GATEWAY);
+            throw new BusinessException(
+                    "KUDA_ERROR",
+                    "Kuda request failed: " + ex.getStatusCode().value(),
+                    HttpStatus.BAD_GATEWAY);
         } catch (BusinessException ex) {
             throw ex;
         } catch (Exception ex) {
@@ -77,6 +87,44 @@ public class KudaClient {
 
     public long toKobo(BigDecimal amount) {
         return amount.movePointRight(2).setScale(0, RoundingMode.HALF_EVEN).longValueExact();
+    }
+
+    public static BigDecimal fromKobo(long kobo) {
+        return BigDecimal.valueOf(kobo).movePointLeft(2);
+    }
+
+    /**
+     * Full NIP bank directory for the active Kuda environment ({@code BANK_LIST}).
+     * Returns the banks array node, or an empty array when none are present.
+     */
+    public JsonNode listBanks() {
+        JsonNode root = invoke("BANK_LIST", Map.of());
+        JsonNode banks = firstArray(root, "banks", "Banks");
+        if (banks != null) {
+            return banks;
+        }
+        JsonNode data = root.path("data");
+        if (data.isMissingNode() || data.isNull()) {
+            data = root.path("Data");
+        }
+        banks = firstArray(data.isMissingNode() ? root : data, "banks", "Banks");
+        return banks != null ? banks : objectMapper.createArrayNode();
+    }
+
+    private static JsonNode firstArray(JsonNode node, String... fields) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        if (node.isArray()) {
+            return node;
+        }
+        for (String field : fields) {
+            JsonNode child = node.path(field);
+            if (child.isArray()) {
+                return child;
+            }
+        }
+        return null;
     }
 
     /**
@@ -106,7 +154,7 @@ public class KudaClient {
             log.warn("Kuda balance response did not include a recognised balance field: {}", root);
             return null;
         }
-        return BigDecimal.valueOf(kobo).movePointLeft(2);
+        return fromKobo(kobo);
     }
 
     private static Long firstLong(JsonNode node, String... fields) {
@@ -153,7 +201,8 @@ public class KudaClient {
                     .body(String.class);
             String token = raw == null ? "" : raw.replace("\"", "").trim();
             if (!notBlank(token)) {
-                throw new BusinessException("KUDA_AUTH_FAILED", "Kuda token response empty", HttpStatus.BAD_GATEWAY);
+                throw new BusinessException(
+                        "KUDA_AUTH_FAILED", "Kuda token response empty", HttpStatus.BAD_GATEWAY);
             }
             cachedToken.set(token);
             return token;
@@ -174,8 +223,8 @@ public class KudaClient {
             return trimSlash(properties.getBaseUrl());
         }
         return properties.isSandbox()
-                ? "https://kuda-openapi-uat.kudabank.com/v2"
-                : "https://kuda-openapi.kuda.com/v2";
+                ? "https://kuda-openapi-uat.kudabank.com/v2.1"
+                : "https://kuda-openapi.kuda.com/v2.1";
     }
 
     private void requireConfigured() {
@@ -187,11 +236,59 @@ public class KudaClient {
         }
     }
 
+    private void requireSuccessful(JsonNode root, String serviceType) {
+        if (root == null) {
+            return;
+        }
+        if (root.has("RequestSuccessful") && root.get("RequestSuccessful").isBoolean()
+                && !root.get("RequestSuccessful").asBoolean(true)) {
+            throw kudaBusinessError(root, serviceType);
+        }
+        if (root.has("requestSuccessful") && root.get("requestSuccessful").isBoolean()
+                && !root.get("requestSuccessful").asBoolean(true)) {
+            throw kudaBusinessError(root, serviceType);
+        }
+        JsonNode status = root.get("status");
+        if (status != null && status.isBoolean() && !status.asBoolean(true)) {
+            throw kudaBusinessError(root, serviceType);
+        }
+        String statusCode = firstText(root, "statusCode", "StatusCode", "responseCode", "ResponseCode");
+        if (statusCode != null
+                && !statusCode.equals("00")
+                && !statusCode.equals("0")
+                && !statusCode.equalsIgnoreCase("success")) {
+            // Some successful calls omit statusCode; only fail on an explicit non-success code.
+            if (statusCode.matches("\\d+") && !"00".equals(statusCode) && !"0".equals(statusCode)) {
+                throw kudaBusinessError(root, serviceType);
+            }
+        }
+    }
+
+    private static BusinessException kudaBusinessError(JsonNode root, String serviceType) {
+        String message = firstText(root, "message", "Message", "statusMessage", "StatusMessage");
+        if (message == null || message.isBlank()) {
+            message = "Kuda " + serviceType + " failed";
+        }
+        return new BusinessException("KUDA_ERROR", message, HttpStatus.BAD_GATEWAY);
+    }
+
+    private static String firstText(JsonNode node, String... fields) {
+        if (node == null) {
+            return null;
+        }
+        for (String field : fields) {
+            JsonNode child = node.path(field);
+            if (!child.isMissingNode() && !child.isNull() && notBlank(child.asText())) {
+                return child.asText();
+            }
+        }
+        return null;
+    }
+
     private JsonNode unwrap(JsonNode root) {
         if (root == null) {
             return objectMapper.createObjectNode();
         }
-        // Some responses nest payload under data/Data
         if (root.has("data") && root.get("data").isTextual()) {
             try {
                 return objectMapper.readTree(root.get("data").asText());
@@ -208,7 +305,11 @@ public class KudaClient {
         }
         String message = root.path("message").asText("");
         String status = root.path("status").asText("");
-        return message.toLowerCase().contains("unauthor") || status.equalsIgnoreCase("401");
+        return message.toLowerCase(Locale.ROOT).contains("unauthor") || status.equalsIgnoreCase("401");
+    }
+
+    private static String shortRequestRef() {
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase(Locale.ROOT);
     }
 
     private static boolean notBlank(String value) {

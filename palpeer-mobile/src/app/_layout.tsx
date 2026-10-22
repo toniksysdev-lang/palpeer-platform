@@ -4,6 +4,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { Platform, View } from 'react-native';
 
 import { OfflineBanner } from '@/components/feedback/OfflineBanner';
 import { BrandSplash } from '@/features/auth/components/BrandSplash';
@@ -19,6 +20,7 @@ import { useSignedOutWelcomeLanding } from '@/hooks/useSignedOutWelcomeLanding';
 import { AppProviders } from '@/providers/AppProviders';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAppSelector } from '@/store';
+import { palette } from '@/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -26,6 +28,25 @@ SplashScreen.preventAutoHideAsync().catch(() => undefined);
 export const unstable_settings = {
   initialRouteName: 'index',
 };
+
+/** True when the app is embedded in the phone-frame preview (parent already shows splash). */
+function isWebPreviewFrame(): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
+  try {
+    return window.parent != null && window.parent !== window;
+  } catch {
+    return true;
+  }
+}
+
+function notifyPreviewSplashDone() {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  try {
+    window.parent?.postMessage({ type: 'palpeer-brand-splash-ready' }, '*');
+  } catch {
+    // Ignore cross-origin / missing parent.
+  }
+}
 
 function RootNavigator() {
   const { ready } = useAppBootstrap();
@@ -38,12 +59,24 @@ function RootNavigator() {
   useApplyPendingReferral();
 
   useEffect(() => {
-    // Hand off from the native splash to the in-app BrandSplash (logo + loading bar).
+    if (!ready) return;
+    // One splash only: dismiss native / preview overlay when the app is actually ready.
     SplashScreen.hideAsync().catch(() => undefined);
-  }, []);
+    notifyPreviewSplashDone();
+  }, [ready]);
 
-  // BrandSplash runs on every cold open until bootstrap + minimum splash time complete.
-  if (!ready) return <BrandSplash />;
+  if (!ready) {
+    // Native: keep the OS/expo splash (do not mount a second BrandSplash).
+    if (Platform.OS !== 'web') {
+      return null;
+    }
+    // Preview iframe: parent overlay is the splash — avoid a second in-app splash.
+    if (isWebPreviewFrame()) {
+      return <View style={{ flex: 1, backgroundColor: palette.neutral0 }} testID="boot-placeholder" />;
+    }
+    // Standalone web: single BrandSplash for the bootstrap window.
+    return <BrandSplash />;
+  }
 
   return (
     <>

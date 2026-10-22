@@ -480,7 +480,7 @@ No wallet status enum exists. One wallet per user per currency. Balances change 
 | `amount` | BigDecimal | `@NotNull @DecimalMin(value = "0", inclusive = false)` |
 | `providerReference` | string | optional; overwritten when a rail is enabled |
 
-- Response `data` `FundingTransactionResponse`: `id` UUID, `walletId` UUID, `amount` BigDecimal, `currencyCode` string, `status` `MoneyMovementStatus`, `idempotencyKey` string, `ledgerEntryId` UUID|null, `reversalLedgerEntryId` UUID|null, `failureReason` string|null, `providerName` string|null (`APAYLO`/`KUDA`), `providerReference` string|null, `fundingInstructions` string|null (plain-text instructions to show the user), `createdAt` Instant.
+- Response `data` `FundingTransactionResponse`: `id` UUID, `walletId` UUID, `amount` BigDecimal, `currencyCode` string, `status` `MoneyMovementStatus`, `idempotencyKey` string, `ledgerEntryId` UUID|null, `reversalLedgerEntryId` UUID|null, `failureReason` string|null, `providerName` string|null (`APAYLO`/`KUDA`), `providerReference` string|null, `fundingInstructions` string|null (plain-text), `paymentDetails` object|null while `INITIATED`/`PENDING`/`PROCESSING` — Kuda `BANK_TRANSFER` (`accountNumber`, bank, …) or Apaylo `INTERAC_INSTANT` (`accountName` = searchable payee, `trackingReference`, `interacEmail`, `aplReference`, …), `createdAt` Instant.
 - Status after initiate: `PENDING` when a rail for the wallet currency is enabled (external settlement awaited), otherwise `INITIATED` with no instructions. See section 5.
 - Errors: 400 `IDEMPOTENCY_KEY_REQUIRED` (blank), 500 (header missing), 404 (`"Wallet not found"`), 409 `FUNDING_IDEMPOTENCY_CONFLICT`, 502 `APAYLO_ERROR` / `KUDA_ERROR` / `KUDA_AUTH_FAILED`, 503 `PAYMENT_RAIL_UNAVAILABLE`.
 
@@ -938,19 +938,19 @@ Source: `PaymentRailProvider`, `PaymentRailRouter`, `ApayloPaymentRail`, `KudaPa
 
 | Currency | Provider (`providerName`) | Funding method | Withdrawal method | Enable flags |
 |---|---|---|---|---|
-| `CAD` | `APAYLO` | Instant Interac deposit only — Request Money (`RequestInteracEtransferEmail`) | Interac e-Transfer send (e-mail/phone) or EFT (`institution:transit:account`) | `APAYLO_ENABLED` + `APAYLO_API_KEY` + `APAYLO_SHARED_KEY` |
-| `NGN` | `KUDA` | Transfer to a per-wallet Kuda virtual account (created on first funding) | `SINGLE_FUND_TRANSFER` after `NAME_ENQUIRY` (`bankCode:accountNumber`) | `KUDA_ENABLED` + `KUDA_EMAIL` + `KUDA_API_KEY` |
+| `CAD` | `APAYLO` | Instant Interac deposit only — checkout Link (`RequestInteracEtransferLink`); customer sends to account name (`APAYLO_ACCOUNT_ID`) | Interac e-Transfer send (e-mail/phone) or EFT (`institution:transit:account`) | `APAYLO_ENABLED` + `APAYLO_API_KEY` + `APAYLO_SHARED_KEY` |
+| `NGN` | `KUDA` | Create/reuse per-wallet VA → `PENDING` + `paymentDetails` (bank transfer). Wallet credits only after Kuda webhook (or optional sandbox `KUDA_DEMO_FUND_ENABLED` shortcut) | `SINGLE_FUND_TRANSFER` after `NAME_ENQUIRY` (`bankCode:accountNumber`) | `KUDA_ENABLED` + `KUDA_EMAIL` + `KUDA_API_KEY` |
 | other | none | — | — | — |
 
 `.env` / `.env.example` ship with `APAYLO_ENABLED=false` and `KUDA_ENABLED=false`, so in dev **no rail is active**.
 
 `POST /api/v1/funding` accepts only `{ walletId, amount, providerReference? }` — the client cannot choose a method; the rail is chosen by the wallet currency.
 
-- Rail enabled → `status: "PENDING"`, `providerName`, `providerReference`, and `fundingInstructions` (single plain-text string, no structured fields):
-  - Apaylo: `"Interac, Instant deposit via Interac. Reference=<ref>; amount=CAD <amount>; accept the Interac request in your email or banking app to complete the deposit."`
-  - Kuda: `"Transfer NGN <amount> to Kuda virtual account <accountNumber> (<accountName>); bank=<bankName>; tracking=<trackingReference>; ref=<fundingId>"`
+- Rail enabled → `status: "PENDING"`, `providerName`, `providerReference`, and `fundingInstructions` (plain-text):
+  - Apaylo: Instant Interac deposit instructions (customer sends to searchable account name; no request email).
+  - Kuda: `"Transfer NGN <amount> to Kuda virtual account <accountNumber> (<accountName>); bank=<bankName>; tracking=<trackingReference>; ref=<fundingId>"` plus structured `paymentDetails` for the mobile VA payment step.
 - No rail → `status: "INITIATED"`, no provider fields, no instructions; nothing completes it except `POST /funding/{id}/process` or the webhook.
-- Completion: provider webhook (`/api/v1/webhooks/apaylo|kuda`) → `SUCCESS` (ledger `CREDIT`) or `FAILED`. Poll `GET /funding/{id}` or `GET /transactions/FUNDING/{id}`.
+- Completion: provider webhook (`/api/v1/webhooks/apaylo|kuda`) → `SUCCESS` (ledger `CREDIT`) or `FAILED`. Poll `GET /funding/{id}` or `GET /transactions/FUNDING/{id}`. NGN is not credited until that confirmation (unless sandbox demo fund is explicitly enabled).
 - `process` / `fail` / `reverse` on `/funding/{id}/*` and `/withdrawals/{id}/*` are operator-only (`ROLE_ADMIN` + `payments:operate`, V25); customers get 403. The mobile app must not call them.
 - No endpoint lists funding methods, banks, or saved beneficiaries; there is no NGN bank list or name-enquiry endpoint for the app.
 

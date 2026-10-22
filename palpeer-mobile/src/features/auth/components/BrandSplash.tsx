@@ -1,31 +1,38 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Image, Platform, StyleSheet, View } from 'react-native';
 
-import { PALPEER_LOGO_URI } from '@/components/brand/logo';
+import { PALPEER_LOGO } from '@/components/brand/logo';
 import { useTheme } from '@/providers/ThemeProvider';
 import { palette } from '@/theme';
 
 /** Indeterminate progress cycle length while bootstrap runs. */
-const PROGRESS_CYCLE_MS = 1600;
+const PROGRESS_CYCLE_MS = 1200;
 const PROGRESS_TRACK_WIDTH = 148;
 
+/** Dismiss any static HTML boot splash once React BrandSplash is painting (web only). */
+function hideWebBootSplash() {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+  const el = document.getElementById('palpeer-boot-splash');
+  if (!el) return;
+  el.classList.add('is-hidden');
+  window.setTimeout(() => el.remove(), 120);
+}
+
 /**
- * Branded splash shown on every cold app open while preferences and session restore.
+ * Branded splash while preferences and session restore.
  * Uses RN Animated (not Reanimated) so cold start cannot die on worklets/OEM quirks.
+ * Tagline lives in the logo artwork — do not add duplicate “Your rate, your way” text.
  */
 export function BrandSplash() {
   const theme = useTheme();
-  const scale = useRef(new Animated.Value(0.92)).current;
   const progress = useRef(new Animated.Value(0.08)).current;
   const [barWidth, setBarWidth] = useState(12);
 
   useEffect(() => {
-    const scaleAnim = Animated.timing(scale, {
-      toValue: 1,
-      duration: 560,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    });
+    hideWebBootSplash();
+  }, []);
+
+  useEffect(() => {
     const progressAnim = Animated.loop(
       Animated.sequence([
         Animated.timing(progress, {
@@ -42,17 +49,15 @@ export function BrandSplash() {
         }),
       ]),
     );
-    scaleAnim.start();
     progressAnim.start();
     const id = progress.addListener(({ value }) => {
       setBarWidth(Math.max(12, Math.min(PROGRESS_TRACK_WIDTH, value * PROGRESS_TRACK_WIDTH)));
     });
     return () => {
-      scaleAnim.stop();
       progressAnim.stop();
       progress.removeListener(id);
     };
-  }, [progress, scale]);
+  }, [progress]);
 
   return (
     <View
@@ -61,14 +66,12 @@ export function BrandSplash() {
       accessibilityRole="progressbar"
       testID="brand-splash"
     >
-      <Animated.View style={{ transform: [{ scale }] }}>
-        <Image
-          source={{ uri: PALPEER_LOGO_URI }}
-          style={styles.logo}
-          resizeMode="contain"
-          accessibilityIgnoresInvertColors
-        />
-      </Animated.View>
+      <Image
+        source={PALPEER_LOGO}
+        style={styles.logo}
+        resizeMode="contain"
+        accessibilityIgnoresInvertColors
+      />
 
       <View
         style={[styles.progressTrack, { backgroundColor: theme.colors.surfaceMuted }]}

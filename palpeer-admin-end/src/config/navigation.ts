@@ -32,6 +32,8 @@ export type NavItem = {
   icon: LucideIcon;
   /** Permission code when Phase 2+ wires RBAC. Phase 1 shows all. */
   permission?: string;
+  /** Show when the user has any of these permissions (instead of a single `permission`). */
+  permissionsAny?: string[];
   contractPending?: boolean;
   /** Nested sidebar items (e.g. Fee Management → P2P Fees). */
   children?: NavItem[];
@@ -78,7 +80,21 @@ export const primaryNav: NavItem[] = [
         icon: Scale,
         permission: 'fees:read',
       },
+      {
+        id: 'fees-instantex',
+        label: 'InstantEX Fees',
+        path: '/admin/fees/instantex',
+        icon: ArrowLeftRight,
+        permission: 'fees:read',
+      },
     ],
+  },
+  {
+    id: 'platform-fees',
+    label: 'Platform Revenue',
+    path: '/admin/platform-fees',
+    icon: Banknote,
+    permissionsAny: ['reports:read', 'fees:read'],
   },
   {
     id: 'negotiations',

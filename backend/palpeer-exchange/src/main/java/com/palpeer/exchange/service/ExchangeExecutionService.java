@@ -3,6 +3,7 @@ package com.palpeer.exchange.service;
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
 import com.palpeer.common.notify.UserNotifyEvent;
+import com.palpeer.common.notify.UserQualifyingTradeCompletedEvent;
 import com.palpeer.exchange.domain.ExchangeQuote;
 import com.palpeer.exchange.domain.ExchangeQuoteStatus;
 import com.palpeer.exchange.domain.ExchangeTransaction;
@@ -13,9 +14,13 @@ import com.palpeer.exchange.web.dto.ExecuteExchangeRequest;
 import com.palpeer.exchange.web.dto.ExchangeTransactionResponse;
 import com.palpeer.ledger.domain.LedgerEntry;
 import com.palpeer.ledger.domain.LedgerEntryType;
+import com.palpeer.currency.service.CurrencyService;
 import com.palpeer.ledger.service.LedgerPostingRequest;
 import com.palpeer.ledger.service.LedgerService;
+import com.palpeer.wallet.domain.PlatformFeeSourceType;
+import com.palpeer.wallet.service.PlatformFeeRevenueService;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +37,9 @@ public class ExchangeExecutionService {
     private final ExchangeQuoteRepository exchangeQuoteRepository;
     private final ExchangeTransactionRepository exchangeTransactionRepository;
     private final LedgerService ledgerService;
+    private final InstantExFeeTierService instantExFeeTierService;
+    private final CurrencyService currencyService;
+    private final PlatformFeeRevenueService platformFeeRevenueService;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
@@ -109,6 +117,30 @@ public class ExchangeExecutionService {
                     "Instant exchange credit"
             ));
 
+            BigDecimal fee = scaledInstantExFee(
+                    quote.getSourceCurrencyCode(),
+                    quote.getTargetCurrencyCode(),
+                    quote.getSourceAmount(),
+                    quote.getAppliedRate());
+            if (fee != null && fee.signum() > 0) {
+                ledgerService.post(new LedgerPostingRequest(
+                        quote.getSourceWalletId(),
+                        LedgerEntryType.DEBIT,
+                        fee,
+                        "exchange:" + tx.getId() + ":fee-debit",
+                        "EXCHANGE",
+                        tx.getId().toString(),
+                        "Instant exchange platform fee"));
+                platformFeeRevenueService.record(
+                        PlatformFeeSourceType.INSTANT_EX,
+                        "EXCHANGE",
+                        tx.getId(),
+                        userId,
+                        quote.getSourceCurrencyCode(),
+                        fee,
+                        "InstantEX platform fee");
+            }
+
             tx.setDebitLedgerEntryId(debit.getId());
             tx.setCreditLedgerEntryId(credit.getId());
             tx.setStatus(ExchangeTransactionStatus.SUCCESS);
@@ -116,6 +148,7 @@ public class ExchangeExecutionService {
 
             quote.setStatus(ExchangeQuoteStatus.EXECUTED);
             exchangeQuoteRepository.save(quote);
+            eventPublisher.publishEvent(new UserQualifyingTradeCompletedEvent(userId));
             eventPublisher.publishEvent(new UserNotifyEvent(
                     userId,
                     "Exchange successful",
@@ -177,6 +210,17 @@ public class ExchangeExecutionService {
                 tx.getFailureReason(),
                 tx.getCreatedAt()
         );
+    }
+
+    private BigDecimal scaledInstantExFee(
+            String sourceCode, String targetCode, BigDecimal sourceAmount, BigDecimal appliedRate) {
+        BigDecimal raw =
+                instantExFeeTierService.resolveFee(sourceCode, targetCode, sourceAmount, appliedRate);
+        if (raw == null || raw.signum() <= 0) {
+            return null;
+        }
+        int precision = currencyService.getByCode(sourceCode).precision();
+        return raw.setScale(precision, RoundingMode.HALF_EVEN);
     }
 
     private static String formatMoney(BigDecimal amount, String currency) {

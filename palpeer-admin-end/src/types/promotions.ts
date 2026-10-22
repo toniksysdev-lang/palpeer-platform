@@ -18,7 +18,30 @@ export type PromotionSummary = {
   endsAt?: string | null;
   bonusAmount?: number | string | null;
   bonusCurrencyCode?: string | null;
+  formulaJson?: string | null;
+  eligibilityJson?: string | null;
   createdAt: string;
+};
+
+export type PromotionFormula = {
+  type: 'FLAT' | 'PERCENT';
+  value: number;
+};
+
+export type PromotionEligibility = {
+  minKycLevel?: number;
+  minCompletedOrders?: number;
+  countries?: string;
+  /**
+   * When true on a REFERRAL promo, the inviter's bonus stays pending until the invitee
+   * completes InstantEx or a P2P trade.
+   */
+  referrerBonusRequiresInviteeTrade?: boolean;
+};
+
+export type UpdatePromotionCampaignInput = {
+  formulaJson?: string | null;
+  eligibilityJson?: string | null;
 };
 
 export type CreatePromotionInput = {
@@ -30,6 +53,11 @@ export type CreatePromotionInput = {
   endsAt?: string | null;
   bonusAmount?: string | null;
   bonusCurrencyCode?: string | null;
+  eligibilityJson?: string | null;
+};
+
+export type UpdatePromotionInput = CreatePromotionInput & {
+  active: boolean;
 };
 
 export type ReferralSummary = {

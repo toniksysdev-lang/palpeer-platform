@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.argThat;
 
+import com.palpeer.common.audit.AuditRecorder;
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
 import com.palpeer.common.notify.UserNotifyEvent;
@@ -51,6 +52,7 @@ class NegotiationServiceTest {
     @Mock private P2PRequestRepository p2PRequestRepository;
     @Mock private P2PService p2PService;
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
+    @Mock private AuditRecorder auditRecorder;
 
     @InjectMocks private NegotiationService negotiationService;
 
@@ -146,7 +148,7 @@ class NegotiationServiceTest {
             assertThat(negotiation.getStatus()).isEqualTo(NegotiationStatus.ACCEPTED);
             return new P2POrderResponse(
                     orderId, requestId, ownerId, counterpartyId,
-                    pending.getAmount(), pending.getRate(), P2PStatus.ACCEPTED, null);
+                    pending.getAmount(), pending.getRate(), P2PStatus.ACCEPTED, null, null, null);
         });
         when(negotiationOfferRepository.findByNegotiationIdOrderByCreatedAtAsc(negotiation.getId()))
                 .thenReturn(List.of(pending));

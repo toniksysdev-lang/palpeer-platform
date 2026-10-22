@@ -2,6 +2,7 @@ import {
   ArrowDownToLine,
   ArrowLeftRight,
   ArrowRightLeft,
+  Gift,
   Plus,
   Users,
   type LucideIcon,
@@ -22,6 +23,7 @@ const ICONS: Record<TransactionActivityType, LucideIcon> = {
   EXCHANGE: ArrowRightLeft,
   TRANSFER: ArrowLeftRight,
   P2P: Users,
+  BONUS: Gift,
 };
 
 type Props = {

@@ -16,11 +16,11 @@ import org.springframework.stereotype.Component;
  * Docs: https://developers.korapay.com/docs/bank-transfers
  *       https://developers.korapay.com/docs/payout-via-api
  *
- * <p>Preferred for NGN when enabled ({@link Order} 1). Kuda remains a fallback when Korapay is off.
+ * <p>NGN fallback when Kuda is disabled ({@link Order} 2). InstantEX NGN prefers Kuda.
  */
 @Slf4j
 @Component
-@Order(1)
+@Order(2)
 @RequiredArgsConstructor
 public class KorapayPaymentRail implements PaymentRailProvider {
 

@@ -106,6 +106,33 @@ describe('buildConfig', () => {
     ).toBe(true);
   });
 
+  it('defaults the support chat API to app.palpeer.com.ng on native', () => {
+    const { Platform } = require('react-native');
+    const original = Platform.OS;
+    Platform.OS = 'android';
+    try {
+      expect(buildConfig({}).supportChatApiBaseUrl).toBe('https://app.palpeer.com.ng/api');
+      expect(
+        buildConfig({
+          EXPO_PUBLIC_SUPPORT_CHAT_API_BASE_URL: 'https://app.palpeer.com.ng/api/',
+        }).supportChatApiBaseUrl,
+      ).toBe('https://app.palpeer.com.ng/api');
+    } finally {
+      Platform.OS = original;
+    }
+  });
+
+  it('uses the Metro same-origin proxy path on web to avoid CORS', () => {
+    const { Platform } = require('react-native');
+    const original = Platform.OS;
+    Platform.OS = 'web';
+    try {
+      expect(buildConfig({}).supportChatApiBaseUrl).toBe('/support-chat-api');
+    } finally {
+      Platform.OS = original;
+    }
+  });
+
   it('rewrites Android emulator loopback to localhost for web preview', () => {
     expect(rewriteEmulatorHostForWeb('http://10.0.2.2:8085/api/v1', 'web')).toBe(
       'http://localhost:8085/api/v1',

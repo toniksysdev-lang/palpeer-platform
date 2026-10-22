@@ -9,10 +9,12 @@ import { sessionStarted } from '@/store/slices/sessionSlice';
 import type { ChatMessageResponse, ChatRoomResponse } from '@/types/api/chat';
 import { fakeRealtime } from '@/tests/fakeRealtime';
 import { fail, installFetchMock, ok, type RecordedCall } from '@/tests/fetchMock';
+import { playReceiveSoundMock } from '@/tests/mocks/expoAudio';
 import { router, setSearchParams } from '@/tests/mocks/expoRouter';
 import { renderWithProviders } from '@/tests/render';
 
-import { created, CURRENCIES, ME, orderSummary, OTHER } from '../../p2p/__tests__/fixtures';
+import { negotiation, offer } from '../../negotiation/__tests__/fixtures';
+import { created, CURRENCIES, ME, orderSummary, OTHER, p2pRequest } from '../../p2p/__tests__/fixtures';
 import { ChatRoomScreen } from '../screens/ChatRoomScreen';
 import { ChatRoomsScreen } from '../screens/ChatRoomsScreen';
 
@@ -128,6 +130,23 @@ describe('ChatRoomScreen', () => {
     expect(screen.getAllByTestId('chat-message-m-2')).toHaveLength(1);
   });
 
+  it('plays a receive sound for inbound live messages, not own echoes', async () => {
+    installFetchMock({ ...baseRoutes, 'GET /chat/rooms/room-1/messages': page([msg('m-1')]) });
+    const { realtime } = await renderRoom();
+    await screen.findByTestId('chat-message-m-1');
+    playReceiveSoundMock.mockClear();
+
+    await realtime.receive(msg('m-in', { senderId: OTHER, content: 'Ping' }));
+    expect(await screen.findByTestId('chat-message-m-in')).toBeTruthy();
+    await waitFor(() => expect(playReceiveSoundMock).toHaveBeenCalled());
+
+    playReceiveSoundMock.mockClear();
+    await realtime.receive(msg('m-out', { senderId: ME, content: 'Pong' }));
+    expect(await screen.findByTestId('chat-message-m-out')).toBeTruthy();
+    await settle();
+    expect(playReceiveSoundMock).not.toHaveBeenCalled();
+  });
+
   it('sends over REST with a client id, and the socket echo does not duplicate it', async () => {
     let sent: ChatMessageResponse | null = null;
     const { calls } = installFetchMock({
@@ -179,6 +198,47 @@ describe('ChatRoomScreen', () => {
     expect(screen.queryByTestId('chat-input')).toBeNull();
     expect(screen.queryByTestId('chat-send')).toBeNull();
     expect(callsTo(calls, 'POST', '/chat/rooms/room-1/messages')).toHaveLength(0);
+  });
+
+  it('closes negotiation chat for the buyer once the offer is accepted', async () => {
+    const negotiationRoom: ChatRoomResponse = {
+      ...ROOM,
+      id: 'room-neg-closed',
+      p2pOrderId: null,
+      negotiationId: 'n-accepted',
+    };
+    installFetchMock({
+      'GET /currencies': CURRENCIES,
+      'GET /chat/rooms/room-neg-closed': ok({
+        ...negotiationRoom,
+        participantBLastReadAt: '2026-09-29T23:00:00Z',
+      }),
+      'GET /chat/rooms/room-neg-closed/messages': page([msg('m-1')]),
+      'GET /negotiations/n-accepted': ok(
+        negotiation({
+          id: 'n-accepted',
+          status: 'ACCEPTED',
+          p2pOrderId: 'o-1',
+          offers: [offer({ offeredBy: OTHER, status: 'ACCEPTED' })],
+        }),
+      ),
+      'GET /p2p/requests/r-1': ok(p2pRequest({ status: 'ACCEPTED' })),
+      'GET /p2p/me/orders': ok([orderSummary()]),
+    });
+    setSearchParams({ roomId: 'room-neg-closed' });
+    await renderWithProviders(
+      <RealtimeContext.Provider value={fakeRealtime().connection}>
+        <ChatRoomScreen />
+      </RealtimeContext.Provider>,
+      signedIn,
+    );
+
+    expect(await screen.findByTestId('chat-messaging-closed')).toHaveTextContent(
+      /This offer was accepted/,
+    );
+    expect(screen.queryByTestId('chat-negotiation-composer')).toBeNull();
+    expect(screen.queryByTestId('chat-prefill-picker')).toBeNull();
+    expect(screen.queryByTestId('chat-input')).toBeNull();
   });
 
   it('keeps a failed message with its text and retries it with the same client id', async () => {
@@ -422,6 +482,140 @@ describe('ChatRoomScreen', () => {
     });
     await renderRoom();
     expect(await screen.findByText('Chat room not found')).toBeTruthy();
+  });
+
+  it('unlocks amount when an amount-related suggested message is selected', async () => {
+    const negotiationRoom: ChatRoomResponse = {
+      ...ROOM,
+      id: 'room-neg',
+      p2pOrderId: null,
+      negotiationId: 'n-1',
+    };
+    const { calls } = installFetchMock({
+      'GET /currencies': CURRENCIES,
+      'GET /chat/rooms/room-neg': ok({
+        ...negotiationRoom,
+        participantBLastReadAt: '2026-09-29T23:00:00Z',
+      }),
+      'GET /chat/rooms/room-neg/messages': page([]),
+      'GET /negotiations/n-1': ok(negotiation({ offers: [offer({ offeredBy: ME })] })),
+      'GET /p2p/requests/r-1': ok(p2pRequest()),
+      'GET /p2p/me/orders': ok([]),
+      'POST /chat/rooms/room-neg/messages': created(
+        msg('m-prefill', {
+          senderId: ME,
+          content: 'How about 120.00 USD?',
+          clientMessageId: 'prefill-1',
+        }),
+      ),
+    });
+    setSearchParams({ roomId: 'room-neg' });
+    await renderWithProviders(
+      <RealtimeContext.Provider value={fakeRealtime().connection}>
+        <ChatRoomScreen />
+      </RealtimeContext.Provider>,
+      signedIn,
+    );
+
+    expect(await screen.findByTestId('chat-negotiation-waiting')).toBeTruthy();
+    expect(screen.getByTestId('chat-amount').props.accessibilityState?.disabled).toBe(true);
+    expect(screen.getByTestId('chat-rate').props.accessibilityState?.disabled).toBe(true);
+
+    await fireEvent.press(screen.getByTestId('chat-prefill-picker'));
+    await fireEvent.press(await screen.findByTestId('chat-prefill-sheet-option-propose-amount'));
+
+    expect(await screen.findByTestId('chat-prefill-edit-hint')).toHaveTextContent(
+      /Edit the amount/,
+    );
+    expect(screen.getByTestId('chat-amount').props.accessibilityState?.disabled).toBe(false);
+    expect(screen.getByTestId('chat-rate').props.accessibilityState?.disabled).toBe(true);
+
+    await fireEvent.changeText(screen.getByTestId('chat-amount'), '120');
+    await fireEvent.press(screen.getByTestId('chat-send-prefill'));
+
+    await waitFor(() =>
+      expect(callsTo(calls, 'POST', '/chat/rooms/room-neg/messages')).toHaveLength(1),
+    );
+    expect(callsTo(calls, 'POST', '/chat/rooms/room-neg/messages')[0]?.body).toMatchObject({
+      content: 'How about 120.00 USD?',
+    });
+  });
+
+  it('runs I Accept amount from suggested messages as a counter action', async () => {
+    const negotiationRoom: ChatRoomResponse = {
+      ...ROOM,
+      id: 'room-neg-2',
+      p2pOrderId: null,
+      negotiationId: 'n-2',
+      participantAId: ME,
+      participantBId: OTHER,
+    };
+    // SELL listing owned by ME → seller; other party's pending offer → my turn.
+    const { calls } = installFetchMock({
+      'GET /currencies': CURRENCIES,
+      'GET /chat/rooms/room-neg-2': ok({
+        ...negotiationRoom,
+        participantALastReadAt: '2026-09-29T23:00:00Z',
+      }),
+      'GET /chat/rooms/room-neg-2/messages': page([]),
+      'GET /negotiations/n-2': ok(
+        negotiation({
+          id: 'n-2',
+          requesterId: ME,
+          counterpartyId: OTHER,
+          offers: [offer({ id: 'o-other', offeredBy: OTHER, amount: '100.0000', rate: '1500' })],
+        }),
+      ),
+      'GET /p2p/requests/r-1': ok(p2pRequest({ userId: ME, side: 'SELL' })),
+      'GET /p2p/me/orders': ok([]),
+      'POST /negotiations/n-2/counter': ok(
+        negotiation({
+          id: 'n-2',
+          requesterId: ME,
+          counterpartyId: OTHER,
+          offers: [
+            offer({ id: 'o-other', offeredBy: OTHER, status: 'SUPERSEDED' }),
+            offer({ id: 'o-me', offeredBy: ME, amount: '100.0000', rate: '1480' }),
+          ],
+        }),
+      ),
+      'POST /chat/rooms/room-neg-2/messages': created(
+        msg('m-accept-amount', {
+          senderId: ME,
+          content: 'I Accept amount (100.00 USD). Sending a counter with my rate.',
+        }),
+      ),
+    });
+    setSearchParams({ roomId: 'room-neg-2' });
+    await renderWithProviders(
+      <RealtimeContext.Provider value={fakeRealtime().connection}>
+        <ChatRoomScreen />
+      </RealtimeContext.Provider>,
+      signedIn,
+    );
+
+    expect(await screen.findByTestId('chat-negotiation-composer')).toBeTruthy();
+    expect(screen.queryByTestId('chat-accept-amount')).toBeNull();
+    expect(screen.queryByTestId('chat-accept-offer')).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('chat-prefill-picker'));
+    expect(await screen.findByTestId('chat-prefill-sheet-option-seller-amount-ok')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('chat-prefill-sheet-option-accept-amount'));
+
+    expect(await screen.findByTestId('chat-prefill-edit-hint')).toHaveTextContent(/Keeps their amount/);
+    await fireEvent.changeText(screen.getByTestId('chat-rate'), '1480');
+    await fireEvent.press(screen.getByTestId('chat-send-prefill'));
+
+    await waitFor(() =>
+      expect(callsTo(calls, 'POST', '/negotiations/n-2/counter')).toHaveLength(1),
+    );
+    expect(callsTo(calls, 'POST', '/negotiations/n-2/counter')[0]?.body).toMatchObject({
+      amount: 100,
+      rate: 1480,
+    });
+    await waitFor(() =>
+      expect(callsTo(calls, 'POST', '/chat/rooms/room-neg-2/messages')).toHaveLength(1),
+    );
   });
 });
 

@@ -18,7 +18,9 @@ class PalpeerEmailTemplatesTest {
         assertTrue(email.html().contains(EmailBrand.PRIMARY));
         assertTrue(email.html().contains("517200"));
         assertTrue(email.html().contains(EmailBrand.LOGO_CID_SRC));
-        assertTrue(email.html().contains("alt=\"PALPEER\""));
+        assertTrue(email.html().contains("alt=\"Palpeer\""));
+        assertTrue(email.subject().contains("Palpeer"));
+        assertFalse(email.subject().equals(email.subject().toUpperCase()));
         assertTrue(email.text().contains("517200"));
         assertTrue(email.text().toLowerCase().contains("signing up"));
         assertFalse(email.html().contains("<script"));
@@ -60,11 +62,35 @@ class PalpeerEmailTemplatesTest {
     }
 
     @Test
+    void walletFundingTemplateUsesDedicatedSubjectAndEscapesBody() {
+        var email = PalpeerEmailTemplates.walletFunding(
+                "Funding successful", "Your funding of <b>50</b> CAD has been credited.");
+
+        assertTrue(email.subject().startsWith("Palpeer — "));
+        assertTrue(email.subject().contains("Funding successful"));
+        assertTrue(email.html().contains("Wallet funding"));
+        assertTrue(email.html().contains("&lt;b&gt;50&lt;/b&gt;"));
+        assertTrue(email.html().contains(EmailBrand.SUPPORT_EMAIL));
+        assertTrue(email.text().contains("Funding successful"));
+    }
+
+    @Test
+    void walletWithdrawalTemplateUsesDedicatedSubject() {
+        var email = PalpeerEmailTemplates.walletWithdrawal(
+                "Withdrawal initiated", "Your withdrawal of 100 NGN is pending.");
+
+        assertTrue(email.subject().contains("Withdrawal initiated"));
+        assertTrue(email.html().contains("Wallet withdrawal"));
+        assertTrue(email.html().contains("100 NGN"));
+        assertTrue(email.text().contains("pending"));
+    }
+
+    @Test
     void welcomeTemplateUsesBrandAndIncludesEmail() {
         var email = PalpeerEmailTemplates.welcome("new.user@example.com");
 
         assertTrue(email.subject().toLowerCase().contains("welcome"));
-        assertTrue(email.html().contains("Welcome to PALPEER"));
+        assertTrue(email.html().contains("Welcome to Palpeer"));
         assertTrue(email.html().contains("new.user@example.com"));
         assertTrue(email.html().contains(EmailBrand.PRIMARY));
         assertTrue(email.html().contains(EmailBrand.BG));

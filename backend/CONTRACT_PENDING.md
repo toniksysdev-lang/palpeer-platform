@@ -97,7 +97,7 @@
 
 | ID | Topic | Question | Current provisional behavior |
 |----|-------|----------|------------------------------|
-| P6-01 | Funding provider | PSP / bank / card rails + webhooks? | **CAD → Apaylo** Interac Request Money; **NGN → Kuda** virtual account; webhooks `/api/v1/webhooks/apaylo` & `/kuda` (HMAC-signed, fail-closed); manual `process`/`fail`/`reverse` restricted to operators with `payments:operate` (V25) |
+| P6-01 | Funding provider | PSP / bank / card rails + webhooks? | **CAD → Apaylo** Instant Interac Link; **NGN → Kuda** VA (`paymentDetails` while PENDING; credit on webhook — not demo auto-fund by default); webhooks `/api/v1/webhooks/apaylo` & `/kuda` (HMAC-signed, fail-closed); manual `process`/`fail`/`reverse` restricted to operators with `payments:operate` (V25) |
 | P6-02 | Withdrawal destination | Bank account / mobile money model? | **CAD:** Interac email/phone or `institution:transit:account` EFT; **NGN:** `bankCode:accountNumber` via Kuda; else opaque `destinationReference` |
 | P6-03 | State transition matrix | Who may process/fail/reverse? | Owner-authenticated; provider webhooks can complete by provider reference |
 | P6-04 | Withdrawal ledger model | Direct DEBIT vs HOLD then settle? | HOLD on initiate; SUCCESS = RELEASE + DEBIT; fail = RELEASE |

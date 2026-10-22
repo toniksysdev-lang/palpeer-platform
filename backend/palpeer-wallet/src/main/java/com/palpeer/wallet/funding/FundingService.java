@@ -14,16 +14,21 @@ import com.palpeer.profile.repository.ProfileRepository;
 import com.palpeer.user.domain.User;
 import com.palpeer.user.repository.UserRepository;
 import com.palpeer.wallet.domain.Wallet;
+import com.palpeer.wallet.domain.PaymentVirtualAccount;
 import com.palpeer.wallet.funding.dto.CreateFundingRequest;
+import com.palpeer.wallet.funding.dto.FundingPaymentDetails;
 import com.palpeer.wallet.funding.dto.FundingTransactionResponse;
 import com.palpeer.wallet.provider.PaymentRailProvider;
 import com.palpeer.wallet.provider.PaymentRailRouter;
 import com.palpeer.wallet.provider.apaylo.ApayloPaymentRail;
 import com.palpeer.wallet.provider.apaylo.ApayloProperties;
+import com.palpeer.wallet.provider.kuda.KudaPaymentRail;
+import com.palpeer.wallet.repository.PaymentVirtualAccountRepository;
 import com.palpeer.wallet.repository.WalletRepository;
 import com.palpeer.wallet.service.FundingUnverifiedLimitService;
 import java.math.BigDecimal;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -57,6 +62,7 @@ public class FundingService {
     private final AuditRecorder auditRecorder;
     private final PaymentRailRouter paymentRailRouter;
     private final ApayloProperties apayloProperties;
+    private final PaymentVirtualAccountRepository paymentVirtualAccountRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final FundingUnverifiedLimitService fundingUnverifiedLimitService;
 
@@ -96,18 +102,12 @@ public class FundingService {
         return response;
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public FundingTransactionResponse get(UUID userId, UUID fundingId) {
-        FundingTransaction tx = requireOwned(userId, fundingId);
-        // Local Apaylo sandbox cannot receive Interac webhooks — settle pending CAD on read.
-        if (tx.getStatus() == MoneyMovementStatus.PENDING
-                && ApayloPaymentRail.NAME.equals(tx.getProviderName())
-                && apayloProperties.isSandbox()
-                && apayloProperties.isAutoSandboxSettle()) {
-            return processInternal(fundingTransactionRepository.findByIdForUpdate(tx.getId())
-                    .orElse(tx));
-        }
-        return toResponse(tx);
+        // Never auto-settle on poll. Mobile polls this while the customer pays (Instant Interac /
+        // Kuda VA). Crediting here skipped the payment step whenever APAYLO_/KUDA_AUTO_SANDBOX_SETTLE
+        // was true. Settlement is webhook or operator process only.
+        return toResponse(requireOwned(userId, fundingId));
     }
 
     /** Manual operator completion. Callers must be authorised operators, never the funding owner. */
@@ -138,6 +138,42 @@ public class FundingService {
     public FundingTransactionResponse completeById(UUID fundingId, boolean success, String reason) {
         FundingTransaction locked = fundingTransactionRepository.findByIdForUpdate(fundingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Funding transaction not found"));
+        if (success) {
+            return processInternal(locked);
+        }
+        return failInternal(locked, reason);
+    }
+
+    /**
+     * Completes the newest pending Kuda funding for a virtual-account credit webhook.
+     * Matches wallet via VA account number and amount (naira).
+     */
+    @Transactional
+    public FundingTransactionResponse completePendingVirtualAccountCredit(
+            String providerName,
+            String accountNumber,
+            BigDecimal amountNaira,
+            String kudaTransactionReference,
+            boolean success,
+            String reason) {
+        var account = paymentVirtualAccountRepository
+                .findByProviderNameAndAccountNumber(providerName, accountNumber)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Virtual account not found for " + providerName + " account " + accountNumber));
+        List<FundingTransaction> candidates = fundingTransactionRepository.findPendingByWalletProviderAmount(
+                account.getWalletId(), providerName, MoneyMovementStatus.PENDING, amountNaira);
+        if (candidates.isEmpty()) {
+            throw new ResourceNotFoundException(
+                    "No pending " + providerName + " funding for wallet " + account.getWalletId()
+                            + " amount " + amountNaira);
+        }
+        FundingTransaction locked = fundingTransactionRepository
+                .findByIdForUpdate(candidates.get(0).getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Funding transaction not found"));
+        if (kudaTransactionReference != null && !kudaTransactionReference.isBlank()) {
+            locked.setProviderReference(kudaTransactionReference.trim());
+            fundingTransactionRepository.save(locked);
+        }
         if (success) {
             return processInternal(locked);
         }
@@ -176,8 +212,9 @@ public class FundingService {
         notifyFunding(
                 tx,
                 "Funding successful",
-                "Your funding of " + formatMoney(tx.getAmount(), tx.getCurrencyCode())
-                        + " has been credited to your wallet.");
+                "Your funding of "
+                        + formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                        + " has been credited to your wallet and is available to use.");
         return toResponse(tx);
     }
 
@@ -205,8 +242,10 @@ public class FundingService {
         notifyFunding(
                 tx,
                 "Funding failed",
-                "Your funding of " + formatMoney(tx.getAmount(), tx.getCurrencyCode())
-                        + " could not be completed." + detail);
+                "Your funding of "
+                        + formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                        + " could not be completed. Nothing was added to your wallet."
+                        + detail);
         return toResponse(tx);
     }
 
@@ -254,8 +293,9 @@ public class FundingService {
         notifyFunding(
                 tx,
                 "Funding reversed",
-                "Your funding of " + formatMoney(tx.getAmount(), tx.getCurrencyCode())
-                        + " was reversed and debited from your wallet.");
+                "Your funding of "
+                        + formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                        + " was reversed and removed from your wallet balance.");
         return toResponse(tx);
     }
 
@@ -294,7 +334,10 @@ public class FundingService {
                                 user.getPhone(),
                                 idempotencyKey,
                                 profile == null ? null : profile.getFirstName(),
-                                profile == null ? null : profile.getLastName()
+                                profile == null ? null : profile.getLastName(),
+                                request.interacEmail(),
+                                request.interacFirstName(),
+                                request.interacLastName()
                         ));
                 tx.setProviderName(rail.providerName());
                 tx.setProviderReference(initiation.providerReference());
@@ -329,9 +372,8 @@ public class FundingService {
                     .build());
             notifyFunding(
                     tx,
-                    "Funding initiated",
-                    "Your funding of " + formatMoney(tx.getAmount(), tx.getCurrencyCode())
-                            + " is " + tx.getStatus().name().toLowerCase() + ". Complete any payment instructions to finish.");
+                    fundingInitiatedTitle(tx),
+                    fundingInitiatedBody(tx));
             return toResponse(tx);
         } catch (DataIntegrityViolationException ex) {
             return fundingTransactionRepository.findByIdempotencyKey(idempotencyKey)
@@ -394,8 +436,76 @@ public class FundingService {
                 tx.getProviderName(),
                 tx.getProviderReference(),
                 tx.getFundingInstructions(),
+                paymentDetailsFor(tx),
                 tx.getCreatedAt()
         );
+    }
+
+    /**
+     * Structured payment step while funding awaits the customer's transfer (Kuda VA or Apaylo
+     * Instant Interac). Cleared once the movement leaves in-progress states.
+     */
+    private FundingPaymentDetails paymentDetailsFor(FundingTransaction tx) {
+        if (tx.getStatus() != MoneyMovementStatus.INITIATED
+                && tx.getStatus() != MoneyMovementStatus.PENDING
+                && tx.getStatus() != MoneyMovementStatus.PROCESSING) {
+            return null;
+        }
+        if (KudaPaymentRail.NAME.equals(tx.getProviderName())) {
+            return paymentVirtualAccountRepository
+                    .findByWalletIdAndProviderName(tx.getWalletId(), KudaPaymentRail.NAME)
+                    .filter(PaymentVirtualAccount::isActive)
+                    .filter(va -> va.getAccountNumber() != null && !va.getAccountNumber().isBlank())
+                    .map(va -> new FundingPaymentDetails(
+                            va.getAccountNumber(),
+                            va.getAccountName(),
+                            va.getBankName(),
+                            va.getBankCode(),
+                            va.getTrackingReference(),
+                            tx.getAmount(),
+                            tx.getCurrencyCode(),
+                            FundingPaymentDetails.METHOD_BANK_TRANSFER,
+                            null,
+                            null))
+                    .orElse(null);
+        }
+        if (ApayloPaymentRail.NAME.equals(tx.getProviderName())) {
+            String payee = blankToNull(apayloProperties.getAccountId());
+            if (payee == null) {
+                payee = "Palpeer Global Holding Inc";
+            }
+            return new FundingPaymentDetails(
+                    null,
+                    payee,
+                    "Interac",
+                    null,
+                    tx.getProviderReference(),
+                    tx.getAmount(),
+                    tx.getCurrencyCode(),
+                    FundingPaymentDetails.METHOD_INTERAC_INSTANT,
+                    extractInteracEmail(tx.getFundingInstructions()),
+                    blankToNull(apayloProperties.getAplReference()));
+        }
+        return null;
+    }
+
+    private static String extractInteracEmail(String instructions) {
+        if (instructions == null || instructions.isBlank()) {
+            return null;
+        }
+        String marker = "Your Interac email:";
+        int start = instructions.indexOf(marker);
+        if (start < 0) {
+            return null;
+        }
+        String rest = instructions.substring(start + marker.length()).trim();
+        int end = rest.indexOf('.');
+        String email = (end >= 0 ? rest.substring(0, end) : rest).trim();
+        return email.contains("@") ? email : null;
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private void auditStatus(FundingTransaction tx, String action, String newStatus) {
@@ -406,6 +516,40 @@ public class FundingService {
                 .build());
     }
 
+    private static String fundingInitiatedTitle(FundingTransaction tx) {
+        if (tx.getStatus() == MoneyMovementStatus.PENDING) {
+            return "Complete your funding payment";
+        }
+        return "Funding initiated";
+    }
+
+    private static String fundingInitiatedBody(FundingTransaction tx) {
+        String money = formatMoney(tx.getAmount(), tx.getCurrencyCode());
+        if (tx.getStatus() == MoneyMovementStatus.PENDING) {
+            if ("APAYLO".equals(tx.getProviderName())) {
+                return "Your CAD funding of "
+                        + money
+                        + " is waiting for Instant Interac. Open the app for payee details, then send"
+                        + " from your banking app. Your wallet updates when payment is confirmed.";
+            }
+            if ("KUDA".equals(tx.getProviderName())) {
+                return "Your NGN funding of "
+                        + money
+                        + " is waiting for a bank transfer to your Palpeer virtual account. Open the"
+                        + " app for account details. Your wallet updates when payment is confirmed.";
+            }
+            return "Your funding of "
+                    + money
+                    + " is pending. Complete the payment instructions in the app to finish.";
+        }
+        return "Your funding of "
+                + money
+                + " was started (status "
+                + tx.getStatus().name().toLowerCase()
+                + "). Open the app for details.";
+    }
+
+    /** In-app + push + email after commit ({@link UserNotifyEvent}). */
     private void notifyFunding(FundingTransaction tx, String title, String body) {
         eventPublisher.publishEvent(new UserNotifyEvent(
                 tx.getUserId(),

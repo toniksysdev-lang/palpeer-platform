@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { TextLink } from '@/components/ui/TextLink';
+import { FlippableRateLine } from '@/features/p2p/components/FlippableRateLine';
 import { usePinPrompt } from '@/features/security/PinPromptProvider';
 import { ReviewRow } from '@/features/wallets/components/ReviewRow';
 import { useMoneyFormat } from '@/features/wallets/useMoneyFormat';
@@ -30,7 +31,6 @@ import type {
 } from '@/types/api/exchange';
 
 import { executeErrorMessage, needsNewQuote, quoteErrorMessage } from '../errors';
-import { formatRateLine } from '../format';
 import { useQuoteCountdown } from '../useQuoteCountdown';
 import { useQuoteIdempotencyKey } from '../useQuoteIdempotencyKey';
 
@@ -180,15 +180,38 @@ export function ExchangeReviewScreen() {
       <Card variant="outlined" padding="md">
         <ReviewRow label="From" value={`${quote.sourceCurrencyCode} wallet`} />
         <ReviewRow label="To" value={`${quote.targetCurrencyCode} wallet`} />
-        <ReviewRow
-          label="Rate"
-          value={formatRateLine(
-            quote.appliedRate,
-            quote.sourceCurrencyCode,
-            quote.targetCurrencyCode,
-          )}
-          testID="exchange-review-rate"
-        />
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: theme.spacing.md,
+            paddingVertical: theme.spacing.sm,
+          }}
+        >
+          <AppText tone="secondary" style={{ flex: 1 }}>
+            Rate
+          </AppText>
+          <View style={{ flex: 2, alignItems: 'flex-end' }}>
+            <FlippableRateLine
+              rate={quote.appliedRate}
+              base={quote.sourceCurrencyCode}
+              quote={quote.targetCurrencyCode}
+              variant="bodyStrong"
+              align="right"
+              testID="exchange-review-rate"
+            />
+          </View>
+        </View>
+        {quote.estimatedFeeAmount != null && Number(quote.estimatedFeeAmount) > 0 ? (
+          <ReviewRow
+            label="Platform fee"
+            value={format(
+              quote.estimatedFeeAmount,
+              quote.estimatedFeeCurrency ?? quote.sourceCurrencyCode,
+            )}
+            testID="exchange-review-fee"
+          />
+        ) : null}
       </Card>
 
       {unusable ? (

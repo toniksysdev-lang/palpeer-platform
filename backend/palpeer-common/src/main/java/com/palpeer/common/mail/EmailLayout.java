@@ -9,7 +9,7 @@ public final class EmailLayout {
 
     public static String wrap(String preheader, String title, String innerHtml) {
         String safePreheader = escape(preheader == null ? "" : preheader);
-        String safeTitle = escape(title == null ? "PALPEER" : title);
+        String safeTitle = escape(title == null ? "Palpeer" : title);
 
         return """
                 <!DOCTYPE html>
@@ -39,7 +39,7 @@ public final class EmailLayout {
                                 <tr>
                                   <td valign="middle" style="line-height:0;">
                                     <a href="%s" style="text-decoration:none;border:0;outline:none;">
-                                      <img src="%s" width="%d" alt="PALPEER" style="display:block;border:0;outline:none;text-decoration:none;height:auto;max-width:100%%;width:%dpx;"/>
+                                      <img src="%s" width="%d" alt="Palpeer" style="display:block;border:0;outline:none;text-decoration:none;height:auto;max-width:100%%;width:%dpx;"/>
                                     </a>
                                   </td>
                                   <td align="right" valign="middle" style="font-size:11px;color:%s;letter-spacing:0.08em;text-transform:uppercase;padding-left:12px;">
@@ -60,7 +60,7 @@ public final class EmailLayout {
                                 Need help? <a href="mailto:%s" style="color:%s;text-decoration:none;">%s</a>
                               </p>
                               <p style="margin:0;font-size:12px;line-height:1.5;color:%s;">
-                                © PALPEER · <a href="%s" style="color:%s;text-decoration:none;">palpeer.com</a>
+                                © Palpeer · <a href="%s" style="color:%s;text-decoration:none;">palpeer.com</a>
                                 · FINTRAC MSB #C100000342
                               </p>
                             </td>

@@ -15,4 +15,6 @@ public interface PromotionRepository extends JpaRepository<Promotion, UUID> {
     List<Promotion> findByActiveTrueOrderByCreatedAtDesc();
 
     boolean existsByCodeIgnoreCase(String code);
+
+    boolean existsByCodeIgnoreCaseAndIdNot(String code, UUID id);
 }

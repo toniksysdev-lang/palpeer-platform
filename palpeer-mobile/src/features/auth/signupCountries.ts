@@ -54,6 +54,34 @@ export function toE164(dialCode: string, national: string): string {
   return `${code}${digitsOnly(national)}`;
 }
 
+/**
+ * Best-effort ISO2 from an E.164 phone. Prefers corridor countries when dial
+ * codes collide (e.g. +1 → CA over US). Explicit signup country storage should
+ * win over this when available.
+ */
+export function iso2FromE164(e164: string | null | undefined): string | null {
+  const digits = digitsOnly(e164 ?? '');
+  if (digits.length < 8) return null;
+
+  const withPlus = `+${digits}`;
+  const prefer = new Set(SIGNUP_COUNTRIES.map((c) => c.iso2));
+
+  let best: WorldCountry | null = null;
+  for (const country of WORLD_COUNTRIES) {
+    if (!withPlus.startsWith(country.dialCode)) continue;
+    if (
+      !best ||
+      country.dialCode.length > best.dialCode.length ||
+      (country.dialCode.length === best.dialCode.length &&
+        prefer.has(country.iso2) &&
+        !prefer.has(best.iso2))
+    ) {
+      best = country;
+    }
+  }
+  return best?.iso2 ?? null;
+}
+
 /** Mask for OTP copy, e.g. `+1 (506) ***-***1`. */
 export function maskPhone(e164: string): string {
   const digits = digitsOnly(e164);

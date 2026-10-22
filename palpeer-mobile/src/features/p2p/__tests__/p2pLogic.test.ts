@@ -5,6 +5,10 @@ import type { Money } from '@/utils/money';
 import { p2pErrorMessage, requestActionErrorMessage } from '../errors';
 import {
   acceptConfirmMessage,
+  acceptFundingIssue,
+  acceptorFundingRequirement,
+  netBaseAfterFee,
+  viewerIsP2PBuyer,
   activeFilterCount,
   apiAmountFromSell,
   apiRateFromAnchor,
@@ -55,6 +59,21 @@ describe('acceptConfirmMessage', () => {
     );
   });
 
+  it('includes platform fee and net receive for the buyer on a SELL listing', () => {
+    expect(
+      acceptConfirmMessage({
+        side: 'SELL',
+        formattedBaseAmount: '100.00 CAD',
+        rateLine: '1 CAD = 1,500 NGN',
+        posterName: 'Ada',
+        formattedDebitAmount: '150,000.00 NGN',
+        debitCurrencyCode: 'NGN',
+        formattedFeeAmount: '1.50 CAD',
+        formattedNetBaseAmount: '98.50 CAD',
+      }),
+    ).toContain('A platform fee of 1.50 CAD applies, so you receive 98.50 CAD.');
+  });
+
   it('describes selling base and debiting the base wallet on a BUY listing', () => {
     expect(
       acceptConfirmMessage({
@@ -70,6 +89,32 @@ describe('acceptConfirmMessage', () => {
 
   it('computes quote totals with half-even rounding', () => {
     expect(quoteTotal('103.09', '970', 2)).toBe('99997.30');
+  });
+});
+
+describe('viewerIsP2PBuyer / netBaseAfterFee', () => {
+  it('treats the acceptor as buyer on SELL and the poster as buyer on BUY', () => {
+    expect(viewerIsP2PBuyer('SELL', false)).toBe(true);
+    expect(viewerIsP2PBuyer('SELL', true)).toBe(false);
+    expect(viewerIsP2PBuyer('BUY', true)).toBe(true);
+    expect(viewerIsP2PBuyer('BUY', false)).toBe(false);
+  });
+
+  it('subtracts the platform fee from the base amount', () => {
+    expect(netBaseAfterFee('100', '1.5', 2)).toBe('98.50');
+    expect(netBaseAfterFee('100', null, 2)).toBeNull();
+  });
+});
+
+describe('acceptFundingIssue', () => {
+  it('requires the buyer quote wallet on a SELL accept', () => {
+    const requirement = acceptorFundingRequirement('SELL', 'USD', 'NGN', '100', '1500', 2);
+    expect(requirement).toEqual({ currencyCode: 'NGN', amount: '150000.00' });
+    expect(acceptFundingIssue(requirement, null)?.kind).toBe('missing_wallet');
+    expect(
+      acceptFundingIssue(requirement, { availableBalance: '1000.00' })?.kind,
+    ).toBe('insufficient');
+    expect(acceptFundingIssue(requirement, { availableBalance: '150000.00' })).toBeNull();
   });
 });
 

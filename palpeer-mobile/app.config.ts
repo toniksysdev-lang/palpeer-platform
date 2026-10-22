@@ -134,6 +134,8 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
     'expo-font',
     'expo-secure-store',
     'expo-web-browser',
+    'expo-sharing',
+    'expo-audio',
     [
       'expo-build-properties',
       {

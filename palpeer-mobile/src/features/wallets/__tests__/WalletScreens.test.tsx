@@ -162,12 +162,47 @@ describe('HomeScreen', () => {
 
 const REGISTRATION_COUNTRIES = ok(['CA', 'US', 'NG']);
 
+const COMPLETE_PROFILE = ok({
+  id: 'p-1',
+  userId: 'u-1',
+  firstName: 'Ada',
+  lastName: 'Lovelace',
+  dateOfBirth: '1990-01-01',
+  countryOfResidence: 'NG',
+  stateTerritory: 'Lagos',
+  addressLine1: '1 Broad St',
+  addressLine2: null,
+  city: 'Lagos',
+  postalCode: '100001',
+  sourceOfIncome: 'Employment',
+  monthlyTransactionEstimate: '100000',
+  complete: true,
+});
+
+const INCOMPLETE_PROFILE = ok({
+  id: 'p-1',
+  userId: 'u-1',
+  firstName: null,
+  lastName: null,
+  dateOfBirth: null,
+  countryOfResidence: null,
+  stateTerritory: null,
+  addressLine1: null,
+  addressLine2: null,
+  city: null,
+  postalCode: null,
+  sourceOfIncome: null,
+  monthlyTransactionEstimate: null,
+  complete: false,
+});
+
 describe('CreateWalletScreen', () => {
   it('offers only registration-country currencies the user does not hold, asks for PIN, then opens the new wallet', async () => {
     const { calls } = installFetchMock({
       'GET /currencies': CURRENCIES,
       'GET /public/registration-countries': REGISTRATION_COUNTRIES,
       'GET /wallets': ok([wallet('w-cad', 'CAD')]),
+      'GET /profiles/me': COMPLETE_PROFILE,
       'GET /security/pin': ok({ pinSet: true, lockedUntil: null }),
       'POST /security/pin/verify': { status: 200, body: undefined },
       'POST /wallets': {
@@ -207,6 +242,7 @@ describe('CreateWalletScreen', () => {
       'GET /currencies': CURRENCIES,
       'GET /public/registration-countries': ok(['CA', 'GH', 'KE']),
       'GET /wallets': ok([]),
+      'GET /profiles/me': COMPLETE_PROFILE,
       'GET /security/pin': ok({ pinSet: true, lockedUntil: null }),
     });
     await renderWithProviders(<CreateWalletScreen />);
@@ -219,11 +255,33 @@ describe('CreateWalletScreen', () => {
     expect(screen.getByText(/GHS · not available yet/)).toBeTruthy();
   });
 
+  it('blocks wallet creation until the profile is complete', async () => {
+    const { calls } = installFetchMock({
+      'GET /currencies': CURRENCIES,
+      'GET /public/registration-countries': REGISTRATION_COUNTRIES,
+      'GET /wallets': ok([]),
+      'GET /profiles/me': INCOMPLETE_PROFILE,
+      'GET /security/pin': ok({ pinSet: true, lockedUntil: null }),
+    });
+    await renderWithProviders(<CreateWalletScreen />);
+
+    expect(await screen.findByTestId('create-wallet-profile-incomplete')).toBeTruthy();
+    await fireEvent.press(await screen.findByTestId('create-wallet-option-NG'));
+    expect(screen.getByTestId('create-wallet-submit').props.accessibilityState?.disabled).toBe(
+      true,
+    );
+
+    await fireEvent.press(screen.getByTestId('create-wallet-complete-profile'));
+    expect(router.push).toHaveBeenCalledWith('/profile/personal');
+    expect(calls.some((call) => call.path === '/wallets' && call.method === 'POST')).toBe(false);
+  });
+
   it('explains a duplicate wallet after PIN confirmation', async () => {
     installFetchMock({
       'GET /currencies': CURRENCIES,
       'GET /public/registration-countries': REGISTRATION_COUNTRIES,
       'GET /wallets': ok([]),
+      'GET /profiles/me': COMPLETE_PROFILE,
       'GET /security/pin': ok({ pinSet: true, lockedUntil: null }),
       'POST /security/pin/verify': { status: 200, body: undefined },
       'POST /wallets': fail(409, 'WALLET_EXISTS'),

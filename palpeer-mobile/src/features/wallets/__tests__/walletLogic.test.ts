@@ -61,7 +61,7 @@ describe('money from the backend', () => {
 describe('payment rails', () => {
   it('only CAD and NGN have a funding/withdrawal rail', () => {
     expect(railFor('CAD')).toBe('APAYLO');
-    expect(railFor('ngn')).toBe('KORAPAY');
+    expect(railFor('ngn')).toBe('KUDA');
     expect(hasPaymentRail('USD')).toBe(false);
     expect(hasPaymentRail('GBP')).toBe(false);
   });

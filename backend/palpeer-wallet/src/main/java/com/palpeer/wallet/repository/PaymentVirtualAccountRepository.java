@@ -10,4 +10,6 @@ public interface PaymentVirtualAccountRepository extends JpaRepository<PaymentVi
     Optional<PaymentVirtualAccount> findByWalletIdAndProviderName(UUID walletId, String providerName);
 
     Optional<PaymentVirtualAccount> findByProviderNameAndTrackingReference(String providerName, String trackingReference);
+
+    Optional<PaymentVirtualAccount> findByProviderNameAndAccountNumber(String providerName, String accountNumber);
 }

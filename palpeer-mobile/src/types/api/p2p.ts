@@ -27,6 +27,11 @@ export type P2PRequestResponse = {
   expiresAt: IsoInstant | null;
   notes: string | null;
   createdAt: IsoInstant;
+  /** Present when a fee tier matches the request amount (base currency). */
+  estimatedFeeAmount?: Money | null;
+  estimatedFeeCurrency?: string | null;
+  /** Buyer opted in to apply PENDING bonus credit toward the platform fee. */
+  applyBonusCredit?: boolean;
 };
 
 /** VERIFIED: `P2PRateBoundsResponse` from `GET /p2p/rate-bounds` (null when none configured). */
@@ -47,6 +52,7 @@ export type CreateP2PRequest = {
   rate: Money;
   expiresAt?: IsoInstant;
   notes?: string;
+  applyBonusCredit?: boolean;
 };
 
 /**
@@ -58,6 +64,7 @@ export type UpdateP2PRequest = {
   rate?: Money;
   expiresAt?: IsoInstant;
   notes?: string;
+  applyBonusCredit?: boolean;
 };
 
 /** VERIFIED: `P2POrderResponse` (accept result and `GET /p2p/orders/{id}`); no currency codes. */
@@ -70,6 +77,25 @@ export type P2POrderResponse = {
   rate: Money;
   status: P2PStatus;
   createdAt: IsoInstant;
+  /** Platform fee charged to the buyer at settle (base currency). */
+  feeAmount?: Money | null;
+  feeCurrencyCode?: string | null;
+};
+
+/** `GET /p2p/fee-estimate` — buyer platform fee for a pair/amount. */
+export type P2PFeeEstimateResponse = {
+  baseCurrencyCode: string;
+  quoteCurrencyCode: string;
+  amount: Money;
+  /** Gross platform fee before promotions / bonus credit. */
+  estimatedFeeAmount: Money | null;
+  estimatedFeeCurrency: string | null;
+  /** Amount waived via promotion + PENDING bonus credit. */
+  feeDiscountAmount?: Money | null;
+  /** Net fee after discount (what the buyer is charged). */
+  feeAfterDiscount?: Money | null;
+  appliedPromotionCode?: string | null;
+  pendingBonusCredit?: Money | null;
 };
 
 /** VERIFIED: `P2POrderSummaryResponse` from `GET /p2p/me/orders` (order + the request's pair). */

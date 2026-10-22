@@ -8,7 +8,6 @@ import com.palpeer.wallet.repository.PaymentVirtualAccountRepository;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.Order;
@@ -18,11 +17,17 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Kuda NGN rails — virtual account collections for funding, SINGLE_FUND_TRANSFER for withdrawals.
- * Kept alongside Korapay; used when Korapay is disabled ({@link Order} 2).
+ * Preferred InstantEX NGN rail ({@link Order} 1). Korapay remains available when enabled as Order 2.
+ *
+ * <p>Default funding path (sandbox and live): create/reuse a per-wallet VA, return transfer
+ * instructions, leave the funding {@code PENDING} until an inbound credit webhook settles the
+ * wallet. Optional sandbox shortcut {@code KUDA_DEMO_FUND_ENABLED} calls
+ * {@code FUND_VIRTUAL_ACCOUNT} and may settle immediately for eng demos.
+ * Docs: https://kuda.com/business/open-api/
  */
 @Slf4j
 @Component
-@Order(2)
+@Order(1)
 @RequiredArgsConstructor
 public class KudaPaymentRail implements PaymentRailProvider {
 
@@ -51,22 +56,109 @@ public class KudaPaymentRail implements PaymentRailProvider {
     @Transactional
     public FundingInitiation initiateFunding(FundingInitiationRequest request) {
         requireEnabled();
-        PaymentVirtualAccount account = virtualAccountRepository
-                .findByWalletIdAndProviderName(request.walletId(), NAME)
-                .orElseGet(() -> createVirtualAccount(request));
+        try {
+            PaymentVirtualAccount account = virtualAccountRepository
+                    .findByWalletIdAndProviderName(request.walletId(), NAME)
+                    .orElseGet(() -> createVirtualAccount(request));
 
-        String instructions = "Transfer NGN " + request.amount()
+            if (!notBlank(account.getAccountNumber())) {
+                throw new BusinessException(
+                        "KUDA_ERROR",
+                        "Kuda virtual account has no account number",
+                        HttpStatus.BAD_GATEWAY);
+            }
+
+            // Optional sandbox shortcut: credit the VA via Kuda FUND_VIRTUAL_ACCOUNT (eng demos).
+            // Default path is customer bank transfer → webhook settle (live and sandbox alike).
+            if (kudaClient.isSandboxMode() && properties.isDemoFundEnabled()) {
+                return demoFundVirtualAccount(request, account);
+            }
+
+            // Real payment process: return VA details and stay PENDING until inbound credit + webhook.
+            String instructions = transferInstructions(
+                    request, account, request.fundingTransactionId().toString());
+            return new FundingInitiation(
+                    request.fundingTransactionId().toString(), instructions, true);
+        } catch (BusinessException ex) {
+            if (kudaClient.isSandboxMode() && properties.isOfflineSandboxSettle()) {
+                // Keep the funding pending with whatever VA we already have — never silent-credit.
+                return virtualAccountRepository
+                        .findByWalletIdAndProviderName(request.walletId(), NAME)
+                        .map(account -> {
+                            log.warn(
+                                    "Kuda unreachable in sandbox — leaving NGN funding PENDING with VA. cause={}",
+                                    ex.getMessage());
+                            String ref = request.fundingTransactionId().toString();
+                            return new FundingInitiation(
+                                    ref, transferInstructions(request, account, ref), true);
+                        })
+                        .orElseThrow(() -> ex);
+            }
+            throw ex;
+        }
+    }
+
+    /**
+     * Official Kuda demo/test funding: move funds from the business main account into the VA
+     * ({@code FUND_VIRTUAL_ACCOUNT}). Amount is in kobo.
+     */
+    private FundingInitiation demoFundVirtualAccount(
+            FundingInitiationRequest request, PaymentVirtualAccount account) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("trackingReference", account.getTrackingReference());
+        payload.put("amount", kudaClient.toKobo(request.amount()));
+        payload.put(
+                "narration",
+                "PALPEER demo funding " + request.fundingTransactionId().toString().replace("-", "").substring(0, 12));
+
+        JsonNode response = kudaClient.invoke("FUND_VIRTUAL_ACCOUNT", payload);
+        String reference = firstText(
+                response,
+                "transactionReference",
+                "TransactionReference",
+                "reference",
+                "Reference",
+                "requestReference",
+                "RequestReference");
+        if (reference == null) {
+            reference = request.fundingTransactionId().toString();
+        }
+
+        // Demo fund credits the VA on Kuda's side for eng tests, but the Palpeer wallet must still
+        // wait for webhook/operator settle — never return pendingExternalSettlement=false here.
+        String instructions = "Kuda demo funding submitted (FUND_VIRTUAL_ACCOUNT). NGN "
+                + request.amount()
+                + " to VA "
+                + account.getAccountNumber()
+                + "; tracking="
+                + account.getTrackingReference()
+                + "; ref="
+                + reference
+                + ". Waiting for confirmation.";
+        log.info(
+                "Kuda demo FUND_VIRTUAL_ACCOUNT submitted (wallet stays PENDING). va={} amount={} ref={}",
+                account.getAccountNumber(),
+                request.amount(),
+                reference);
+        return new FundingInitiation(reference, instructions, true);
+    }
+
+    private static String transferInstructions(
+            FundingInitiationRequest request, PaymentVirtualAccount account, String reference) {
+        return "Transfer NGN "
+                + request.amount()
                 + " to Kuda virtual account "
                 + nullToEmpty(account.getAccountNumber())
-                + " (" + nullToEmpty(account.getAccountName()) + ")"
-                + "; bank=" + nullToEmpty(account.getBankName())
-                + "; tracking=" + account.getTrackingReference()
-                + "; ref=" + request.fundingTransactionId();
-
-        return new FundingInitiation(
-                request.fundingTransactionId().toString(),
-                instructions,
-                true);
+                + " ("
+                + nullToEmpty(account.getAccountName())
+                + ")"
+                + "; bank="
+                + nullToEmpty(account.getBankName())
+                + "; tracking="
+                + account.getTrackingReference()
+                + "; ref="
+                + reference
+                + ". Your balance updates once Kuda confirms the credit.";
     }
 
     @Override
@@ -74,10 +166,11 @@ public class KudaPaymentRail implements PaymentRailProvider {
         requireEnabled();
         ParsedDestination destination = parseDestination(request.destinationReference());
 
-        JsonNode enquiry = kudaClient.invoke("NAME_ENQUIRY", Map.of(
-                "beneficiaryAccountNumber", destination.accountNumber(),
-                "beneficiaryBankCode", destination.bankCode()
-        ));
+        JsonNode enquiry = kudaClient.invoke(
+                "NAME_ENQUIRY",
+                Map.of(
+                        "beneficiaryAccountNumber", destination.accountNumber(),
+                        "beneficiaryBankCode", destination.bankCode()));
         String sessionId = firstText(enquiry, "SessionID", "sessionID", "NameEnquirySessionID");
         String beneficiaryName = firstText(enquiry, "BeneficiaryName", "beneficiaryName", "AccountName");
         if (sessionId == null || beneficiaryName == null) {
@@ -98,10 +191,14 @@ public class KudaPaymentRail implements PaymentRailProvider {
         transfer.put("senderName", properties.getSenderName());
 
         JsonNode response = kudaClient.invoke("SINGLE_FUND_TRANSFER", transfer);
-        String reference = firstText(response, "transactionReference", "TransactionReference", "requestRef");
+        String reference = firstText(
+                response, "transactionReference", "TransactionReference", "requestRef", "RequestRef");
         if (reference == null) {
             reference = request.withdrawalTransactionId().toString();
         }
+
+        // Real payout process: SINGLE_FUND_TRANSFER submitted; wallet stays PENDING until webhook.
+        log.info("Kuda NGN withdrawal submitted. ref={}", reference);
         return new WithdrawalInitiation(reference, true);
     }
 
@@ -111,20 +208,28 @@ public class KudaPaymentRail implements PaymentRailProvider {
         String lastName = blankTo(request.customerLastName(), "USER");
 
         Map<String, Object> payload = new HashMap<>();
-        payload.put("email", request.userEmail());
-        payload.put("phoneNumber", blankTo(request.userPhone(), "00000000000"));
+        payload.put("email", blankTo(request.userEmail(), "funding@palpeer.local"));
+        payload.put("phoneNumber", blankTo(request.userPhone(), "08000000000"));
         payload.put("firstName", firstName);
         payload.put("lastName", lastName);
         payload.put("trackingReference", tracking);
 
         JsonNode response = kudaClient.invoke("ADMIN_CREATE_VIRTUAL_ACCOUNT", payload);
+        String accountNumber = firstText(response, "accountNumber", "AccountNumber", "number");
+        if (!notBlank(accountNumber)) {
+            throw new BusinessException(
+                    "KUDA_ERROR",
+                    "Kuda did not return a virtual account number",
+                    HttpStatus.BAD_GATEWAY);
+        }
+
         PaymentVirtualAccount account = new PaymentVirtualAccount();
         account.setUserId(request.userId());
         account.setWalletId(request.walletId());
         account.setCurrencyCode("NGN");
         account.setProviderName(NAME);
         account.setTrackingReference(tracking);
-        account.setAccountNumber(firstText(response, "accountNumber", "AccountNumber", "number"));
+        account.setAccountNumber(accountNumber);
         account.setAccountName(firstText(response, "accountName", "AccountName", "fullname"));
         account.setBankCode(firstText(response, "bankCode", "BankCode"));
         account.setBankName(firstNonNull(firstText(response, "bankName", "BankName"), "Kuda"));
@@ -195,6 +300,5 @@ public class KudaPaymentRail implements PaymentRailProvider {
         return value != null && !value.isBlank();
     }
 
-    private record ParsedDestination(String bankCode, String accountNumber) {
-    }
+    private record ParsedDestination(String bankCode, String accountNumber) {}
 }

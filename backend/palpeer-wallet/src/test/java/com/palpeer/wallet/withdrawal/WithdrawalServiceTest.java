@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.palpeer.common.exception.BusinessException;
+import com.palpeer.common.notify.UserNotifyEvent;
 import com.palpeer.ledger.domain.LedgerEntry;
 import com.palpeer.ledger.domain.LedgerEntryType;
 import com.palpeer.ledger.service.LedgerPostingRequest;
@@ -18,8 +19,6 @@ import com.palpeer.user.repository.UserRepository;
 import com.palpeer.wallet.domain.Wallet;
 import com.palpeer.wallet.funding.MoneyMovementStatus;
 import com.palpeer.wallet.provider.PaymentRailRouter;
-import com.palpeer.wallet.provider.apaylo.ApayloProperties;
-import com.palpeer.wallet.provider.korapay.KorapayProperties;
 import com.palpeer.wallet.repository.WalletRepository;
 import com.palpeer.wallet.withdrawal.dto.CreateWithdrawalRequest;
 import com.palpeer.wallet.withdrawal.dto.WithdrawalTransactionResponse;
@@ -45,8 +44,6 @@ class WithdrawalServiceTest {
     @Mock private LedgerService ledgerService;
     @Mock private com.palpeer.common.audit.AuditRecorder auditRecorder;
     @Mock private PaymentRailRouter paymentRailRouter;
-    @Mock private KorapayProperties korapayProperties;
-    @Mock private ApayloProperties apayloProperties;
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
     @Mock private com.palpeer.wallet.service.PoolLiquidityGuard poolLiquidityGuard;
     @Mock private com.palpeer.wallet.service.PoolFundThresholdService poolFundThresholdService;
@@ -100,6 +97,13 @@ class WithdrawalServiceTest {
         ArgumentCaptor<LedgerPostingRequest> captor = ArgumentCaptor.forClass(LedgerPostingRequest.class);
         verify(ledgerService).post(captor.capture());
         assertThat(captor.getValue().entryType()).isEqualTo(LedgerEntryType.HOLD);
+
+        ArgumentCaptor<UserNotifyEvent> notify = ArgumentCaptor.forClass(UserNotifyEvent.class);
+        verify(eventPublisher).publishEvent(notify.capture());
+        assertThat(notify.getValue().referenceType()).isEqualTo("WITHDRAWAL");
+        assertThat(notify.getValue().title()).isEqualTo("Withdrawal initiated");
+        assertThat(notify.getValue().sendEmail()).isTrue();
+        assertThat(notify.getValue().sendPush()).isTrue();
     }
 
     @Test
@@ -125,6 +129,13 @@ class WithdrawalServiceTest {
         verify(ledgerService, times(2)).post(captor.capture());
         List<LedgerEntryType> types = captor.getAllValues().stream().map(LedgerPostingRequest::entryType).toList();
         assertThat(types).containsExactly(LedgerEntryType.RELEASE, LedgerEntryType.DEBIT);
+
+        ArgumentCaptor<UserNotifyEvent> notify = ArgumentCaptor.forClass(UserNotifyEvent.class);
+        verify(eventPublisher).publishEvent(notify.capture());
+        assertThat(notify.getValue().referenceType()).isEqualTo("WITHDRAWAL");
+        assertThat(notify.getValue().title()).isEqualTo("Withdrawal successful");
+        assertThat(notify.getValue().sendEmail()).isTrue();
+        assertThat(notify.getValue().sendPush()).isTrue();
     }
 
     @Test

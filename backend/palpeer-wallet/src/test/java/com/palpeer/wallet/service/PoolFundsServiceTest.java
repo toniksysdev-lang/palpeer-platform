@@ -38,7 +38,7 @@ class PoolFundsServiceTest {
     @Test
     void balances_booksFundingWithdrawalsAndInstantEx() {
         when(apayloClient.isConfigured()).thenReturn(true);
-        when(kudaClient.isConfigured()).thenReturn(false);
+        when(kudaClient.isConfigured()).thenReturn(true);
         when(korapayClient.isConfigured()).thenReturn(true);
         when(apayloClient.getAccountBalance()).thenReturn(new BigDecimal("999.00"));
         ObjectNode data = objectMapper.createObjectNode();
@@ -71,18 +71,13 @@ class PoolFundsServiceTest {
         // live: 999 + 300 − 50 + 100 − 0
         assertThat(response.apaylo().liveBalance()).isEqualByComparingTo("1349.00");
 
-        assertThat(response.korapay().fundedTotal()).isEqualByComparingTo("15000.00");
+        assertThat(response.korapay().fundedTotal()).isEqualByComparingTo("5000.00");
         assertThat(response.korapay().withdrawnTotal()).isEqualByComparingTo("2000.00");
-        assertThat(response.korapay().instantExReceivedTotal()).isEqualByComparingTo("0");
-        assertThat(response.korapay().instantExPaidTotal()).isEqualByComparingTo("120000.00");
-        // booked: 15000 − 2000 + 0 − 120000
-        assertThat(response.korapay().balance()).isEqualByComparingTo("-107000.00");
-        // live: 50 + 15000 − 2000 + 0 − 120000
-        assertThat(response.korapay().liveBalance()).isEqualByComparingTo("-106950.00");
+        assertThat(response.korapay().balance()).isEqualByComparingTo("3000.00");
 
-        // InstantEX NGN is attributed to Korapay, not Kuda
-        assertThat(response.kuda().instantExPaidTotal()).isEqualByComparingTo("0");
-        assertThat(response.kuda().balance()).isEqualByComparingTo("0");
-        assertThat(response.kuda().configured()).isFalse();
+        // InstantEX NGN is attributed to Kuda (active NGN rail)
+        assertThat(response.kuda().instantExPaidTotal()).isEqualByComparingTo("120000.00");
+        assertThat(response.kuda().fundedTotal()).isEqualByComparingTo("10000.00");
+        assertThat(response.kuda().configured()).isTrue();
     }
 }

@@ -12,9 +12,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.palpeer.wallet.funding.FundingService;
 import com.palpeer.wallet.provider.apaylo.ApayloProperties;
 import com.palpeer.wallet.provider.korapay.KorapayProperties;
+import com.palpeer.wallet.provider.kuda.KudaPaymentRail;
 import com.palpeer.wallet.provider.kuda.KudaProperties;
 import com.palpeer.wallet.withdrawal.WithdrawalService;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.UUID;
 import javax.crypto.Mac;
@@ -32,6 +35,8 @@ class PaymentWebhookControllerTest {
 
     private static final String SECRET = "test-kuda-secret";
     private static final String HEADER = "X-Webhook-Signature";
+    private static final String WEBHOOK_USER = "kuda-hook-user";
+    private static final String WEBHOOK_PASS = "kuda-hook-pass";
 
     @Mock private FundingService fundingService;
     @Mock private WithdrawalService withdrawalService;
@@ -91,6 +96,60 @@ class PaymentWebhookControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         verify(fundingService).completeById(eq(fundingId), eq(true), any());
+    }
+
+    @Test
+    void acceptsKudaUsernamePasswordHeaders() {
+        kudaProperties.setWebhookSecret("");
+        kudaProperties.setWebhookUsername(WEBHOOK_USER);
+        kudaProperties.setWebhookPassword(WEBHOOK_PASS);
+
+        UUID fundingId = UUID.randomUUID();
+        String body = fundingBody(fundingId, "SUCCESS");
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("username", WEBHOOK_USER);
+        request.addHeader(
+                "password",
+                Base64.getEncoder().encodeToString(WEBHOOK_PASS.getBytes(StandardCharsets.UTF_8)));
+
+        var response = controller.kuda(body, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(fundingService).completeById(eq(fundingId), eq(true), any());
+    }
+
+    @Test
+    void creditsVirtualAccountFromTransactionNotification() {
+        kudaProperties.setWebhookSecret("");
+        kudaProperties.setWebhookUsername(WEBHOOK_USER);
+        kudaProperties.setWebhookPassword(WEBHOOK_PASS);
+
+        String body = """
+                {
+                  "eventType":"Transaction.Notification",
+                  "amount":36000,
+                  "transactionReference":"231208609730",
+                  "accountNumber":"2050000000",
+                  "transactionType":"Credit"
+                }
+                """;
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("username", WEBHOOK_USER);
+        request.addHeader(
+                "password",
+                Base64.getEncoder().encodeToString(WEBHOOK_PASS.getBytes(StandardCharsets.UTF_8)));
+
+        var response = controller.kuda(body, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(fundingService)
+                .completePendingVirtualAccountCredit(
+                        eq(KudaPaymentRail.NAME),
+                        eq("2050000000"),
+                        eq(new BigDecimal("360.00")),
+                        eq("231208609730"),
+                        eq(true),
+                        eq(null));
     }
 
     @Test

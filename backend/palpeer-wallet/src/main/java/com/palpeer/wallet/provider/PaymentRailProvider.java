@@ -7,7 +7,7 @@ import java.util.UUID;
 
 /**
  * Currency-scoped funding / withdrawal rail.
- * CAD → Apaylo; NGN → Korapay (preferred) or Kuda.
+ * CAD → Apaylo; NGN → Kuda (preferred) or Korapay.
  */
 public interface PaymentRailProvider {
 
@@ -31,8 +31,37 @@ public interface PaymentRailProvider {
             String userPhone,
             String idempotencyKey,
             String customerFirstName,
-            String customerLastName
+            String customerLastName,
+            String interacEmail,
+            String interacFirstName,
+            String interacLastName
     ) {
+        public FundingInitiationRequest(
+                UUID userId,
+                UUID walletId,
+                UUID fundingTransactionId,
+                String currencyCode,
+                BigDecimal amount,
+                String userEmail,
+                String userPhone,
+                String idempotencyKey,
+                String customerFirstName,
+                String customerLastName) {
+            this(
+                    userId,
+                    walletId,
+                    fundingTransactionId,
+                    currencyCode,
+                    amount,
+                    userEmail,
+                    userPhone,
+                    idempotencyKey,
+                    customerFirstName,
+                    customerLastName,
+                    null,
+                    null,
+                    null);
+        }
     }
 
     record FundingInitiation(

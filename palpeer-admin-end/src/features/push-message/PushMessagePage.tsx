@@ -12,6 +12,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { mockBroadcastPushMessage } from '@/mocks/notifications';
 import { broadcastAdminNotification } from '@/services/api/notifications';
 import { ApiClientError } from '@/types/api';
+import type { BroadcastPushResult } from '@/types/notifications';
 
 const schema = z.object({
   title: z.string().trim().min(1, 'Title is required').max(200),
@@ -29,7 +30,7 @@ export function PushMessagePage() {
   const [category, setCategory] = useState('ADMIN');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [lastSent, setLastSent] = useState<{ title: string; recipientCount: number } | null>(null);
+  const [lastSent, setLastSent] = useState<BroadcastPushResult | null>(null);
 
   const sendMutation = useMutation({
     mutationFn: async () => {
@@ -60,11 +61,11 @@ export function PushMessagePage() {
     },
     onSuccess: (result) => {
       setConfirmOpen(false);
-      setLastSent({ title: result.title, recipientCount: result.recipientCount });
+      setLastSent(result);
       push({
         tone: 'success',
         title: 'Push message sent',
-        description: `Delivered to ${result.recipientCount} user${result.recipientCount === 1 ? '' : 's'}.`,
+        description: `${result.recipientCount} notification${result.recipientCount === 1 ? '' : 's'}, ${result.devicePushCount} device push${result.devicePushCount === 1 ? '' : 'es'}${result.failedCount > 0 ? ` (${result.failedCount} failed)` : ''}.`,
       });
       setTitle('');
       setBody('');
@@ -178,10 +179,18 @@ export function PushMessagePage() {
         </form>
 
         {lastSent ? (
-          <p className="mt-5 rounded-[0.6rem] border border-border bg-surface-secondary/40 px-3 py-2 text-sm text-text-secondary">
-            Last send: “{lastSent.title}” → {lastSent.recipientCount} recipient
-            {lastSent.recipientCount === 1 ? '' : 's'}.
-          </p>
+          <div className="mt-5 space-y-1 rounded-[0.6rem] border border-border bg-surface-secondary/40 px-3 py-2 text-sm text-text-secondary">
+            <p>
+              Last send: “{lastSent.title}” → {lastSent.recipientCount} recipient
+              {lastSent.recipientCount === 1 ? '' : 's'}.
+            </p>
+            <p>
+              Device pushes: {lastSent.devicePushCount}
+              {lastSent.failedCount > 0 ? ` (${lastSent.failedCount} failed)` : ''}
+              {' · '}
+              FCM: {lastSent.fcmEnabled ? 'enabled' : 'stub/logging'}
+            </p>
+          </div>
         ) : null}
       </section>
 

@@ -58,9 +58,9 @@ public class PoolFundsService {
 
     @Transactional(readOnly = true)
     public PoolFundsBalanceResponse balances() {
-        Map<String, BigDecimal> funded = aggregate(
+        Map<String, BigDecimal> funded = aggregateFunding(
                 fundingTransactionRepository.sumAmountByProviderAndCurrency(MoneyMovementStatus.SUCCESS));
-        Map<String, BigDecimal> withdrawn = aggregate(
+        Map<String, BigDecimal> withdrawn = aggregateFunding(
                 withdrawalTransactionRepository.sumAmountByProviderAndCurrency(MoneyMovementStatus.SUCCESS));
         Map<String, BigDecimal> instantExIn = aggregateByCurrency(
                 instantExPoolContributionRepository.sumReceivedByCurrency());
@@ -124,8 +124,7 @@ public class PoolFundsService {
             BigDecimal pendingBalance) {
         BigDecimal in = funded.getOrDefault(key(provider, currencyCode), BigDecimal.ZERO);
         BigDecimal out = withdrawn.getOrDefault(key(provider, currencyCode), BigDecimal.ZERO);
-        // InstantEX attributed to the default rail for the currency (CAD→Apaylo, NGN→Korapay).
-        // Kuda does not absorb InstantEX NGN (same rule as null-provider funding).
+        // InstantEX attributed to the default rail for the currency (CAD→Apaylo, NGN→Kuda).
         BigDecimal received = BigDecimal.ZERO;
         BigDecimal paid = BigDecimal.ZERO;
         if (provider.equals(defaultProvider(currencyCode))) {
@@ -151,9 +150,9 @@ public class PoolFundsService {
 
     /**
      * Attribute activity to a provider rail. Null provider_name falls back by currency
-     * (CAD→Apaylo, NGN→Korapay) so historical/sandbox rows still land in a pool.
+     * (CAD→Apaylo, NGN→Kuda) so historical/sandbox rows still land in a pool.
      */
-    private static Map<String, BigDecimal> aggregate(List<Object[]> rows) {
+    private Map<String, BigDecimal> aggregateFunding(List<Object[]> rows) {
         Map<String, BigDecimal> totals = new HashMap<>();
         for (Object[] row : rows) {
             String provider = row[0] == null ? null : row[0].toString().trim().toUpperCase(Locale.ROOT);
@@ -188,10 +187,18 @@ public class PoolFundsService {
         return totals;
     }
 
-    private static String defaultProvider(String currency) {
+    private String defaultProvider(String currency) {
         return switch (currency) {
             case "CAD" -> ApayloPaymentRail.NAME;
-            case "NGN" -> KorapayPaymentRail.NAME;
+            case "NGN" -> {
+                if (kudaClient.isConfigured()) {
+                    yield KudaPaymentRail.NAME;
+                }
+                if (korapayClient.isConfigured()) {
+                    yield KorapayPaymentRail.NAME;
+                }
+                yield KudaPaymentRail.NAME;
+            }
             default -> null;
         };
     }

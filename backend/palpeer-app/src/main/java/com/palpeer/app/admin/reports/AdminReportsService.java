@@ -82,7 +82,7 @@ public class AdminReportsService {
      */
     private Fees fees(Instant from, Instant to) {
         List<Object[]> rows = em.createQuery("""
-                        select r.baseCurrencyCode, r.quoteCurrencyCode, o.amount, o.feeAmount, o.feeCurrencyCode
+                        select r.baseCurrencyCode, r.quoteCurrencyCode, o.amount, o.feeAmount, o.feeCurrencyCode, o.rate
                         from P2POrder o, P2PRequest r
                         where o.requestId = r.id
                           and o.status = com.palpeer.p2p.domain.P2PStatus.COMPLETED
@@ -101,7 +101,9 @@ public class AdminReportsService {
             BigDecimal amount = decimal(row[2]);
             BigDecimal storedFee = row[3] == null ? null : decimal(row[3]);
             String storedCurrency = (String) row[4];
-            BigDecimal fee = storedFee != null ? storedFee : p2PFeeTierService.resolveFee(base, quote, amount);
+            BigDecimal rate = row[5] == null ? null : decimal(row[5]);
+            BigDecimal fee =
+                    storedFee != null ? storedFee : p2PFeeTierService.resolveFee(base, quote, amount, rate);
             if (fee == null || fee.signum() <= 0) {
                 continue;
             }

@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { ChevronRight, Plus, Zap } from 'lucide-react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pressable, View } from 'react-native';
 
 import { Screen } from '@/components/layout/Screen';
 import { StackHeader } from '@/components/layout/StackHeader';
@@ -10,8 +11,8 @@ import { AmountInput } from '@/components/ui/AmountInput';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Input';
-import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TextLink } from '@/components/ui/TextLink';
 import { PickerField, PickerSheet } from '@/features/exchange/components/PickerSheet';
@@ -25,17 +26,20 @@ import {
   useGetWalletQuery,
   useGetWithdrawalBanksQuery,
 } from '@/services/api/walletApi';
+import {
+  interacAddressesStorage,
+  type InteracAddress,
+} from '@/services/storage/interacAddressesStorage';
+import { useAppSelector } from '@/store';
 import { compareMoney, isPositiveMoney, toMoney } from '@/utils/money';
 
 import { ReviewRow } from '../components/ReviewRow';
 import {
   cadReference,
-  describeDestination,
   describeNgnDestination,
   ngnReference,
   validateCad,
   validateNgn,
-  type CadMethod,
   type DestinationErrors,
 } from '../destination';
 import { isIdempotencyConflict, walletErrorMessage } from '../errors';
@@ -43,22 +47,27 @@ import { railFor } from '../rails';
 import { useIdempotencyKey } from '../useIdempotencyKey';
 import { useMoneyFormat } from '../useMoneyFormat';
 
-const CAD_METHODS = [
-  { value: 'email', label: 'Interac e-mail' },
-  { value: 'phone', label: 'Interac phone' },
-  { value: 'eft', label: 'Bank (EFT)' },
-] as const satisfies readonly { value: CadMethod; label: string }[];
-
 const digitsOnly = (text: string) => text.replace(/\D/g, '');
+
+function isValidEmail(value: string): boolean {
+  const email = value.trim();
+  return email.length >= 5 && email.includes('@') && !email.includes(' ');
+}
+
+function displayName(address: InteracAddress): string {
+  return `${address.firstName} ${address.lastName}`.trim() || address.email;
+}
 
 /**
  * Amount + destination → review → PIN (if set) → `POST /withdrawals`. The PIN step is a client
  * safeguard only; the backend doesn't require a PIN (R-SEC-2, contract-pending S-1).
+ * CAD Interac email reuses addresses saved during CAD funding (`interacAddressesStorage`).
  */
 export function WithdrawScreen() {
   const theme = useTheme();
   const toast = useToast();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const userId = useAppSelector((state) => state.session.userId) ?? '';
   const wallet = useGetWalletQuery(id);
   const pinStatus = useGetPinStatusQuery();
   const { requestPin } = usePinPrompt();
@@ -66,16 +75,11 @@ export function WithdrawScreen() {
   const [createWithdrawal, createState] = useCreateWithdrawalMutation();
   const idempotency = useIdempotencyKey();
 
-  const [step, setStep] = useState<'form' | 'review'>('form');
+  const [step, setStep] = useState<'form' | 'addInterac' | 'review'>('form');
   const [amount, setAmount] = useState('');
   const [amountError, setAmountError] = useState<string | null>(null);
-  const [cadMethod, setCadMethod] = useState<CadMethod>('email');
   const [fields, setFields] = useState({
     email: '',
-    phone: '',
-    institution: '',
-    transit: '',
-    account: '',
     bankCode: '',
     bankName: '',
     accountNumber: '',
@@ -84,9 +88,40 @@ export function WithdrawScreen() {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [bankPickerOpen, setBankPickerOpen] = useState(false);
+  const [addresses, setAddresses] = useState<InteracAddress[]>([]);
+  const [selectedInterac, setSelectedInterac] = useState<InteracAddress | null>(null);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [interacEmail, setInteracEmail] = useState('');
 
   const isNgn = wallet.data?.currencyCode?.toUpperCase() === 'NGN';
   const banksQuery = useGetWithdrawalBanksQuery('NG', { skip: !isNgn });
+
+  const reloadAddresses = useCallback(async () => {
+    if (!userId) return;
+    const list = await interacAddressesStorage.list(userId);
+    setAddresses(list);
+    setSelectedInterac((current) => {
+      if (current) {
+        const match = list.find((item) => item.id === current.id);
+        if (match) return match;
+      }
+      return list[0] ?? null;
+    });
+  }, [userId]);
+
+  useEffect(() => {
+    void reloadAddresses();
+  }, [reloadAddresses]);
+
+  useEffect(() => {
+    if (!selectedInterac) return;
+    setFields((current) =>
+      current.email === selectedInterac.email
+        ? current
+        : { ...current, email: selectedInterac.email },
+    );
+  }, [selectedInterac]);
 
   const bankOptions = useMemo(
     () =>
@@ -138,27 +173,36 @@ export function WithdrawScreen() {
     setFieldErrors((current) => ({ ...current, [name]: '' }));
   };
 
-  const cadDestination = () => {
-    switch (cadMethod) {
-      case 'email':
-        return { method: 'email' as const, email: fields.email };
-      case 'phone':
-        return { method: 'phone' as const, phone: fields.phone };
-      case 'eft':
-        return {
-          method: 'eft' as const,
-          institution: fields.institution,
-          transit: fields.transit,
-          account: fields.account,
-        };
-    }
+  const selectInterac = (address: InteracAddress) => {
+    setSelectedInterac(address);
+    setFields((current) => ({ ...current, email: address.email }));
+    setFieldErrors((current) => ({ ...current, email: '' }));
   };
+
+  const addFormValid =
+    firstName.trim().length > 0 && lastName.trim().length > 0 && isValidEmail(interacEmail);
+
+  const saveAndSelectAddress = async () => {
+    if (!userId || !addFormValid) return;
+    const saved = await interacAddressesStorage.save(userId, {
+      firstName,
+      lastName,
+      email: interacEmail,
+    });
+    selectInterac(saved);
+    await reloadAddresses();
+    setStep('form');
+  };
+
+  const cadDestination = () => ({ method: 'email' as const, email: fields.email });
   const ngnDestination = () => ({ bankCode: fields.bankCode, accountNumber: fields.accountNumber });
   const reference =
     rail === 'APAYLO' ? cadReference(cadDestination()) : ngnReference(ngnDestination());
   const reviewDestination =
     rail === 'APAYLO'
-      ? (describeDestination(code, reference) ?? reference)
+      ? selectedInterac
+        ? `${displayName(selectedInterac)} · ${selectedInterac.email}`
+        : fields.email
       : describeNgnDestination(fields.bankName, fields.bankCode, fields.accountNumber);
 
   const toReview = () => {
@@ -172,6 +216,9 @@ export function WithdrawScreen() {
     }
     const nextFieldErrors =
       rail === 'APAYLO' ? validateCad(cadDestination()) : validateNgn(ngnDestination());
+    if (rail === 'APAYLO' && !fields.email.trim()) {
+      nextFieldErrors.email = 'Select or add an Interac email.';
+    }
     setAmountError(nextAmountError);
     setFieldErrors(nextFieldErrors);
     if (nextAmountError || Object.keys(nextFieldErrors).length > 0) return;
@@ -217,6 +264,61 @@ export function WithdrawScreen() {
       params: { withdrawalId: result.data.id },
     });
   };
+
+  if (step === 'addInterac') {
+    return (
+      <Screen
+        scroll
+        keyboardAware
+        footer={
+          <Button
+            label="Continue"
+            onPress={() => void saveAndSelectAddress()}
+            disabled={!addFormValid}
+            testID="withdraw-interac-continue"
+          />
+        }
+      >
+        <StackHeader title="Enter Interac email" onBack={() => setStep('form')} />
+        <AppText variant="body" tone="secondary">
+          We are verifying your Interac email address. We will not have access to your Interac
+          account. Addresses saved here are also available when you fund CAD.
+        </AppText>
+        <Input
+          appearance="elevated"
+          label="First name"
+          placeholder="First name"
+          value={firstName}
+          onChangeText={setFirstName}
+          autoCapitalize="words"
+          textContentType="givenName"
+          testID="withdraw-interac-first"
+        />
+        <Input
+          appearance="elevated"
+          label="Last name"
+          placeholder="Last name"
+          value={lastName}
+          onChangeText={setLastName}
+          autoCapitalize="words"
+          textContentType="familyName"
+          testID="withdraw-interac-last"
+        />
+        <Input
+          appearance="elevated"
+          label="Interac email"
+          placeholder="Enter your Interac email"
+          value={interacEmail}
+          onChangeText={setInteracEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          textContentType="emailAddress"
+          autoComplete="email"
+          testID="withdraw-interac-email"
+        />
+      </Screen>
+    );
+  }
 
   if (step === 'review') {
     return (
@@ -296,68 +398,96 @@ export function WithdrawScreen() {
       />
 
       {rail === 'APAYLO' ? (
-        <View style={{ gap: theme.spacing.md }}>
-          <SegmentedControl
-            options={CAD_METHODS}
-            value={cadMethod}
-            onChange={(value) => {
-              setCadMethod(value);
-              setFieldErrors({});
+        <View style={{ gap: theme.spacing.sm }} testID="withdraw-interac-picker">
+          <AppText variant="bodyStrong">Pay to Interac email</AppText>
+          <AppText variant="caption" tone="secondary">
+            Choose an Interac email saved from CAD funding, or add a new one.
+          </AppText>
+          {fieldErrors.email ? (
+            <FormAlert tone="danger" message={fieldErrors.email} testID="withdraw-email-error" />
+          ) : null}
+          <Pressable
+            onPress={() => {
+              setFirstName('');
+              setLastName('');
+              setInteracEmail('');
+              setStep('addInterac');
             }}
-            accessibilityLabel="Withdrawal method"
-          />
-          {cadMethod === 'email' ? (
-            <Input
-              label="Interac e-mail"
-              value={fields.email}
-              onChangeText={(text) => setField('email', text)}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              error={fieldErrors.email}
-              testID="withdraw-email"
-            />
-          ) : cadMethod === 'phone' ? (
-            <Input
-              label="Interac phone number"
-              value={fields.phone}
-              onChangeText={(text) => setField('phone', text)}
-              numberPad="phone"
-              numberPadMaxLength={20}
-              error={fieldErrors.phone}
-              testID="withdraw-phone"
-            />
-          ) : (
-            <>
-              <Input
-                label="Institution number"
-                value={fields.institution}
-                onChangeText={(text) => setField('institution', digitsOnly(text).slice(0, 3))}
-                numberPad="digits"
-                numberPadMaxLength={3}
-                error={fieldErrors.institution}
-                testID="withdraw-institution"
-              />
-              <Input
-                label="Transit number"
-                value={fields.transit}
-                onChangeText={(text) => setField('transit', digitsOnly(text).slice(0, 5))}
-                numberPad="digits"
-                numberPadMaxLength={5}
-                error={fieldErrors.transit}
-                testID="withdraw-transit"
-              />
-              <Input
-                label="Account number"
-                value={fields.account}
-                onChangeText={(text) => setField('account', digitsOnly(text))}
-                numberPad="digits"
-                numberPadMaxLength={20}
-                error={fieldErrors.account}
-                testID="withdraw-account"
-              />
-            </>
-          )}
+            accessibilityRole="button"
+            accessibilityLabel="Add Interac address"
+            testID="withdraw-add-interac"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: theme.spacing.md,
+              padding: theme.spacing.md,
+              borderRadius: theme.radius.lg,
+              backgroundColor: theme.colors.surface,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+            }}
+          >
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: theme.radius.md,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: theme.colors.primarySoft,
+              }}
+            >
+              <Icon icon={Plus} color={theme.colors.primary} />
+            </View>
+            <AppText variant="bodyStrong" style={{ flex: 1 }}>
+              Add Interac address
+            </AppText>
+            <Icon icon={ChevronRight} color={theme.colors.textMuted} size="sm" />
+          </Pressable>
+
+          {addresses.map((address) => {
+            const selected = selectedInterac?.id === address.id;
+            return (
+              <Pressable
+                key={address.id}
+                onPress={() => selectInterac(address)}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`${displayName(address)}, ${address.email}`}
+                testID={`withdraw-interac-${address.id}`}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: theme.spacing.md,
+                  padding: theme.spacing.md,
+                  borderRadius: theme.radius.lg,
+                  backgroundColor: theme.colors.surface,
+                  borderWidth: selected ? 2 : 1,
+                  borderColor: selected ? theme.colors.primary : theme.colors.border,
+                }}
+              >
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: theme.radius.md,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: theme.colors.warningSoft,
+                  }}
+                >
+                  <Icon icon={Zap} color={theme.colors.warning} />
+                </View>
+                <View style={{ flex: 1, gap: theme.spacing.xxs }}>
+                  <AppText variant="bodyStrong">{displayName(address)}</AppText>
+                  <AppText variant="caption" tone="secondary">
+                    {address.email}
+                  </AppText>
+                </View>
+                <Icon icon={ChevronRight} color={theme.colors.textMuted} size="sm" />
+              </Pressable>
+            );
+          })}
         </View>
       ) : (
         <View style={{ gap: theme.spacing.md }}>
@@ -395,12 +525,12 @@ export function WithdrawScreen() {
             selectedKey={fields.bankCode || null}
             searchable
             searchPlaceholder="Search banks"
-            onSelect={(code) => {
-              const bank = banksQuery.data?.find((item) => item.code === code);
+            onSelect={(bankCode) => {
+              const bank = banksQuery.data?.find((item) => item.code === bankCode);
               setFields((current) => ({
                 ...current,
-                bankCode: code,
-                bankName: bank?.name ?? code,
+                bankCode,
+                bankName: bank?.name ?? bankCode,
               }));
               setFieldErrors((current) => ({ ...current, bankCode: '' }));
             }}

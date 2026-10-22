@@ -19,11 +19,13 @@ import { useToast } from '@/providers/ToastProvider';
 import { toAppError } from '@/services/api/errors';
 import { useUpdateMyProfileMutation } from '@/services/api/profileApi';
 
+import { iso2FromE164 } from '@/features/auth/signupCountries';
+import { preferencesStorage } from '@/services/storage/preferencesStorage';
+import { signupDraftStorage } from '@/services/storage/signupDraftStorage';
+
 import { AddressAutocomplete } from '../AddressAutocomplete';
 import type { StructuredAddress } from '../addressLookup';
 import { DateOfBirthField } from '../DateOfBirthField';
-import { preferencesStorage } from '@/services/storage/preferencesStorage';
-
 import {
   MONTHLY_TX_OPTIONS,
   SOURCE_OF_INCOME_OPTIONS,
@@ -39,6 +41,26 @@ import {
   type PersonalInfoForm,
 } from '../schemas';
 import { useEnsureProfile } from '../useEnsureProfile';
+
+/** Phone-signup country used to seed Country of residence when profile has none. */
+async function resolvePhoneSignupCountryIso2(): Promise<string | null> {
+  const fromPref = await preferencesStorage.getSignupCountryIso2();
+  if (fromPref) return fromPref;
+
+  const draft = await signupDraftStorage.load();
+  const fromDraft = draft?.countryIso2?.trim().toUpperCase() ?? '';
+  if (fromDraft.length === 2) {
+    await preferencesStorage.setSignupCountryIso2(fromDraft);
+    return fromDraft;
+  }
+
+  const inferred = iso2FromE164(draft?.phone);
+  if (inferred) {
+    await preferencesStorage.setSignupCountryIso2(inferred);
+    return inferred;
+  }
+  return null;
+}
 
 type SheetKey =
   | 'country'
@@ -64,13 +86,13 @@ export function PersonalInformationScreen() {
   const [signupCountryIso2, setSignupCountryIso2] = useState<string | null>(null);
 
   useEffect(() => {
-    void preferencesStorage.getSignupCountryIso2().then(setSignupCountryIso2);
+    void resolvePhoneSignupCountryIso2().then(setSignupCountryIso2);
   }, []);
 
   useEffect(() => {
     if (!profile) return;
     const defaults = profileToFormDefaults(profile);
-    // Phone-verification country seeds Country when the profile has none yet.
+    // Phone-number country seeds Country of residence when the profile has none yet.
     if (!defaults.countryOfResidence && signupCountryIso2) {
       defaults.countryOfResidence = signupCountryIso2;
     }

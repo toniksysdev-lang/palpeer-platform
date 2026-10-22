@@ -11,6 +11,7 @@ export const TRANSACTION_TYPES: readonly TransactionActivityType[] = [
   'EXCHANGE',
   'TRANSFER',
   'P2P',
+  'BONUS',
 ];
 
 export function isTransactionType(value: unknown): value is TransactionActivityType {
@@ -29,6 +30,8 @@ export function typeLabel(type: TransactionActivityType): string {
       return 'Transfer';
     case 'P2P':
       return 'P2P';
+    case 'BONUS':
+      return 'Bonus';
   }
 }
 
@@ -41,6 +44,7 @@ export const TYPE_OPTIONS: readonly { key: TypeFilter; title: string }[] = [
   { key: 'EXCHANGE', title: 'Exchanges' },
   { key: 'TRANSFER', title: 'Transfers' },
   { key: 'P2P', title: 'P2P' },
+  { key: 'BONUS', title: 'Bonuses' },
 ];
 
 export type Period = 'ALL' | '7D' | '30D' | '90D';
@@ -192,6 +196,18 @@ export function describeTransaction(item: TransactionItemResponse): {
               item.secondaryCurrencyCode ? ` (${item.currencyCode} ↔ ${item.secondaryCurrencyCode})` : ''
             }.`,
       };
+    case 'BONUS:GRANTED':
+      return {
+        title: 'Bonus credited',
+        message: item.failureReason
+          ? item.failureReason
+          : `Added to your ${item.currencyCode} wallet.`,
+      };
+    case 'BONUS:PENDING':
+      return {
+        title: 'Bonus pending',
+        message: item.failureReason ?? 'This bonus is not in your wallet yet.',
+      };
     default:
       return {
         title: typeLabel(item.type),
@@ -223,6 +239,8 @@ export function recordedSteps(item: TransactionItemResponse): string[] {
     if (item.secondaryCurrencyCode) {
       steps.push(`Quote amount settled in ${item.secondaryCurrencyCode}`);
     }
+  } else if (item.type === 'BONUS') {
+    if (has('credit')) steps.push(`Credited to your ${item.currencyCode} wallet`);
   } else {
     if (has('debit')) steps.push(`Taken from your ${item.currencyCode} wallet`);
     if (has('credit'))

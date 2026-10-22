@@ -50,7 +50,29 @@ export type MoneyMovementStatus =
   'INITIATED' | 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'REVERSED';
 
 /** VERIFIED: `CreateFundingRequest`. `amount` > 0; sent as an exact JSON number. */
-export type CreateFundingRequest = { walletId: Uuid; amount: Money };
+export type CreateFundingRequest = {
+  walletId: Uuid;
+  amount: Money;
+  /** CAD Instant Interac — payer name/email for Apaylo RequestInteracEtransferLink. */
+  interacEmail?: string;
+  interacFirstName?: string;
+  interacLastName?: string;
+};
+
+/** VERIFIED: `FundingPaymentDetails` — payment step while funding is in progress. */
+export type FundingPaymentDetails = {
+  accountNumber: string | null;
+  accountName: string | null;
+  bankName: string | null;
+  bankCode: string | null;
+  trackingReference: string | null;
+  amount: Money;
+  currencyCode: string;
+  /** `BANK_TRANSFER` (Kuda VA) or `INTERAC_INSTANT` (Apaylo). */
+  method: 'BANK_TRANSFER' | 'INTERAC_INSTANT' | string | null;
+  interacEmail: string | null;
+  aplReference: string | null;
+};
 
 /** VERIFIED: `FundingTransactionResponse`. */
 export type FundingTransactionResponse = {
@@ -68,6 +90,11 @@ export type FundingTransactionResponse = {
   providerReference: string | null;
   /** Plain text from the provider, shown verbatim. */
   fundingInstructions: string | null;
+  /**
+   * Structured virtual-account / bank-transfer details while awaiting payment (NGN Kuda).
+   * Null once settled or for rails that do not use a VA (e.g. Apaylo).
+   */
+  paymentDetails: FundingPaymentDetails | null;
   createdAt: IsoInstant;
 };
 
@@ -136,9 +163,15 @@ export type WalletTransferResponse = {
 };
 
 /** VERIFIED: `TransactionActivityType` (unified feed). */
-export type TransactionActivityType = 'FUNDING' | 'WITHDRAWAL' | 'EXCHANGE' | 'TRANSFER' | 'P2P';
+export type TransactionActivityType =
+  | 'FUNDING'
+  | 'WITHDRAWAL'
+  | 'EXCHANGE'
+  | 'TRANSFER'
+  | 'P2P'
+  | 'BONUS';
 
-/** VERIFIED: `TransactionItemResponse` (unified feed over funding, withdrawal, exchange, transfer, P2P). */
+/** VERIFIED: `TransactionItemResponse` (unified feed over funding, withdrawal, exchange, transfer, P2P, bonus). */
 export type TransactionItemResponse = {
   type: TransactionActivityType;
   id: Uuid;

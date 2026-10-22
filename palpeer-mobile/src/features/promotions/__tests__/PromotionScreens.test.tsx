@@ -130,12 +130,23 @@ describe('BonusesScreen', () => {
   it('shows exact amounts with their status and never as spendable', async () => {
     installFetchMock({
       'GET /currencies': CURRENCIES,
+      'GET /promotions/bonuses/mine/summary': ok([
+        {
+          currencyCode: 'NGN',
+          totalAmount: '1234567.891234567891',
+          unusedAmount: '1234567.891234567891',
+          usedAmount: '0',
+        },
+      ]),
       'GET /promotions/bonuses/mine': rawOk(
         '{"content":[{"id":"b-1","userId":"u-1","promotionId":"p-1","referralId":"r-1","amount":1234567.891234567891,"currencyCode":"NGN","status":"PENDING","reason":"Referral bonus","ledgerEntryId":null,"createdAt":"2026-09-29T10:00:00Z"}],"totalElements":1,"totalPages":1,"number":0,"size":20,"first":true,"last":true,"empty":false}',
       ),
     });
     const { store } = await renderWithProviders(<BonusesScreen />);
 
+    expect(await screen.findByTestId('bonus-stat-NGN-total')).toHaveTextContent('1,234,567.89 NGN');
+    expect(screen.getByTestId('bonus-stat-NGN-unused')).toHaveTextContent('1,234,567.89 NGN');
+    expect(screen.getByTestId('bonus-stat-NGN-used')).toHaveTextContent('0.00 NGN');
     expect(await screen.findByTestId('bonus-b-1-amount')).toHaveTextContent('1,234,567.89 NGN');
     expect(screen.getByTestId('bonus-b-1')).toHaveTextContent(/Pending/);
     expect(screen.getByTestId('bonuses-pending-note')).toBeTruthy();
@@ -145,6 +156,7 @@ describe('BonusesScreen', () => {
   it('shows an empty state', async () => {
     installFetchMock({
       'GET /currencies': CURRENCIES,
+      'GET /promotions/bonuses/mine/summary': ok([]),
       'GET /promotions/bonuses/mine': ok({
         content: [],
         totalElements: 0,
@@ -158,6 +170,53 @@ describe('BonusesScreen', () => {
     });
     await renderWithProviders(<BonusesScreen />);
     expect(await screen.findByText('No bonuses yet')).toBeTruthy();
+  });
+
+  it('derives wallet stats from history when summary is unavailable', async () => {
+    installFetchMock({
+      'GET /currencies': CURRENCIES,
+      'GET /promotions/bonuses/mine/summary': fail(404, 'NOT_FOUND'),
+      'GET /promotions/bonuses/mine': ok({
+        content: [
+          {
+            id: 'b-1',
+            userId: 'u-1',
+            promotionId: 'p-1',
+            referralId: 'r-1',
+            amount: '100.50',
+            currencyCode: 'NGN',
+            status: 'PENDING',
+            reason: 'Referral bonus',
+            createdAt: '2026-09-29T10:00:00Z',
+          },
+          {
+            id: 'b-2',
+            userId: 'u-1',
+            promotionId: 'p-1',
+            referralId: 'r-2',
+            amount: '25.00',
+            currencyCode: 'NGN',
+            status: 'GRANTED',
+            reason: 'Referral bonus',
+            createdAt: '2026-09-28T10:00:00Z',
+          },
+        ],
+        totalElements: 2,
+        totalPages: 1,
+        number: 0,
+        size: 20,
+        first: true,
+        last: true,
+        empty: false,
+      }),
+    });
+    await renderWithProviders(<BonusesScreen />);
+
+    expect(await screen.findByTestId('bonus-stat-NGN-total')).toHaveTextContent('125.50 NGN');
+    expect(screen.getByTestId('bonus-stat-NGN-unused')).toHaveTextContent('100.50 NGN');
+    expect(screen.getByTestId('bonus-stat-NGN-used')).toHaveTextContent('25.00 NGN');
+    expect(screen.getByTestId('bonuses-pending-note')).toBeTruthy();
+    expect(screen.getByText('History')).toBeTruthy();
   });
 });
 

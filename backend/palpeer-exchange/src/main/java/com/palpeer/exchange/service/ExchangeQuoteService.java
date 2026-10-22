@@ -17,6 +17,7 @@ import com.palpeer.exchange.web.dto.ExchangeQuoteResponse;
 import com.palpeer.wallet.domain.Wallet;
 import com.palpeer.wallet.repository.WalletRepository;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -34,6 +35,7 @@ public class ExchangeQuoteService {
     private final CurrencyService currencyService;
     private final ExchangeRateService exchangeRateService;
     private final ExchangeQuoteRepository exchangeQuoteRepository;
+    private final InstantExFeeTierService instantExFeeTierService;
 
     @Value("${palpeer.exchange.quote-ttl:60s}")
     private Duration quoteTtl;
@@ -41,6 +43,7 @@ public class ExchangeQuoteService {
     @Transactional(readOnly = true)
     public ExchangeCalculationResponse calculate(UUID userId, ExchangeCalculateRequest request) {
         CalculatedQuote calculated = calculateInternal(userId, request);
+        FeeEstimate fee = estimateFee(calculated);
         return new ExchangeCalculationResponse(
                 calculated.sourceWallet().getId(),
                 calculated.targetWallet().getId(),
@@ -49,8 +52,9 @@ public class ExchangeQuoteService {
                 calculated.sourceAmount(),
                 calculated.targetAmount(),
                 calculated.appliedRate(),
-                calculated.rateSide()
-        );
+                calculated.rateSide(),
+                fee.amount(),
+                fee.currencyCode());
     }
 
     @Transactional
@@ -145,6 +149,11 @@ public class ExchangeQuoteService {
     }
 
     private ExchangeQuoteResponse toQuoteResponse(ExchangeQuote quote) {
+        FeeEstimate fee = scaledInstantExFee(
+                quote.getSourceCurrencyCode(),
+                quote.getTargetCurrencyCode(),
+                quote.getSourceAmount(),
+                quote.getAppliedRate());
         return new ExchangeQuoteResponse(
                 quote.getId(),
                 quote.getSourceWalletId(),
@@ -156,8 +165,32 @@ public class ExchangeQuoteService {
                 quote.getAppliedRate(),
                 quote.getRateSide(),
                 quote.getExpiresAt(),
-                quote.getStatus().name()
-        );
+                quote.getStatus().name(),
+                fee.amount(),
+                fee.currencyCode());
+    }
+
+    private FeeEstimate estimateFee(CalculatedQuote calculated) {
+        return scaledInstantExFee(
+                calculated.sourceWallet().getCurrencyCode(),
+                calculated.targetWallet().getCurrencyCode(),
+                calculated.sourceAmount(),
+                calculated.appliedRate());
+    }
+
+    private FeeEstimate scaledInstantExFee(
+            String sourceCode, String targetCode, BigDecimal sourceAmount, BigDecimal appliedRate) {
+        BigDecimal raw =
+                instantExFeeTierService.resolveFee(sourceCode, targetCode, sourceAmount, appliedRate);
+        if (raw == null || raw.signum() <= 0) {
+            return new FeeEstimate(null, null);
+        }
+        int precision = currencyService.getByCode(sourceCode).precision();
+        BigDecimal scaled = raw.setScale(precision, RoundingMode.HALF_EVEN);
+        return new FeeEstimate(scaled, sourceCode);
+    }
+
+    private record FeeEstimate(BigDecimal amount, String currencyCode) {
     }
 
     private record CalculatedQuote(

@@ -13,18 +13,25 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useMoneyFormat } from '@/features/wallets/useMoneyFormat';
 import { useTheme } from '@/providers/ThemeProvider';
 import { toAppError } from '@/services/api/errors';
-import { useGetMyBonusesInfiniteQuery } from '@/services/api/promotionApi';
+import {
+  useGetMyBonusSummaryQuery,
+  useGetMyBonusesInfiniteQuery,
+} from '@/services/api/promotionApi';
 import { formatDateTime } from '@/utils/datetime';
 
-import { bonusStatusLabel, bonusStatusTone } from '../logic';
+import { bonusStatusLabel, bonusStatusTone, summarizeBonuses } from '../logic';
 
-/** Bonuses aren't credited to wallets yet, so pending ones are never shown as spendable (R-RF-2). */
+/** Referral bonuses credited to wallets; pending ones may await invitee trade or P2P fee apply. */
 export function BonusesScreen() {
   const theme = useTheme();
   const { format } = useMoneyFormat();
   const bonuses = useGetMyBonusesInfiniteQuery();
+  const summary = useGetMyBonusSummaryQuery();
   const header = <StackHeader title="My bonuses" />;
   const items = bonuses.data?.pages.flatMap((page) => page.content) ?? [];
+  // Prefer the summary API (all pages). Fall back to loaded history when it fails or is empty.
+  const apiSummary = Array.isArray(summary.data) ? summary.data : [];
+  const summaryRows = apiSummary.length > 0 ? apiSummary : summarizeBonuses(items);
 
   if (!bonuses.data) {
     return (
@@ -39,13 +46,21 @@ export function BonusesScreen() {
     );
   }
 
+  const refresh = () => {
+    void bonuses.refetch();
+    void summary.refetch();
+  };
+
   return (
     <Screen
       scroll
       refreshControl={
         <RefreshControl
-          refreshing={bonuses.isFetching && !bonuses.isLoading && !bonuses.isFetchingNextPage}
-          onRefresh={() => void bonuses.refetch()}
+          refreshing={
+            (bonuses.isFetching && !bonuses.isLoading && !bonuses.isFetchingNextPage) ||
+            (summary.isFetching && !summary.isLoading)
+          }
+          onRefresh={refresh}
           tintColor={theme.colors.primary}
         />
       }
@@ -53,17 +68,61 @@ export function BonusesScreen() {
       {header}
       <FormAlert
         tone="info"
-        message="Pending bonuses haven't been added to your wallet and can't be spent yet."
+        message="Unused is still pending. Used includes bonuses already credited to your wallet or applied to a P2P fee."
         testID="bonuses-pending-note"
       />
+
+      {summaryRows.length > 0 ? (
+        <View style={{ gap: theme.spacing.sm }} testID="bonuses-summary">
+          <AppText variant="h3">By wallet</AppText>
+          {summaryRows.map((row) => (
+            <Card
+              key={row.currencyCode}
+              variant="elevated"
+              padding="md"
+              testID={`bonus-stat-${row.currencyCode}`}
+            >
+              <AppText variant="overline" tone="muted">
+                {row.currencyCode} wallet
+              </AppText>
+              <AppText variant="h2" testID={`bonus-stat-${row.currencyCode}-total`}>
+                {format(row.totalAmount, row.currencyCode)}
+              </AppText>
+              <AppText variant="caption" tone="secondary" style={{ marginBottom: theme.spacing.sm }}>
+                Total bonus
+              </AppText>
+              <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
+                <View style={{ flex: 1, gap: theme.spacing.xxs }}>
+                  <AppText variant="caption" tone="muted">
+                    Unused
+                  </AppText>
+                  <AppText variant="bodyStrong" testID={`bonus-stat-${row.currencyCode}-unused`}>
+                    {format(row.unusedAmount, row.currencyCode)}
+                  </AppText>
+                </View>
+                <View style={{ flex: 1, gap: theme.spacing.xxs }}>
+                  <AppText variant="caption" tone="muted">
+                    Used
+                  </AppText>
+                  <AppText variant="bodyStrong" testID={`bonus-stat-${row.currencyCode}-used`}>
+                    {format(row.usedAmount, row.currencyCode)}
+                  </AppText>
+                </View>
+              </View>
+            </Card>
+          ))}
+        </View>
+      ) : null}
+
       {items.length === 0 ? (
         <EmptyState
           icon={Gift}
           title="No bonuses yet"
-          message="Bonuses from referral promotions show here."
+          message="Bonuses from referral promotions show here. Apply a friend's code under Invite friends."
         />
       ) : (
         <View style={{ gap: theme.spacing.sm }}>
+          <AppText variant="h3">History</AppText>
           {items.map((bonus) => (
             <Card key={bonus.id} variant="outlined" padding="md" testID={`bonus-${bonus.id}`}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>

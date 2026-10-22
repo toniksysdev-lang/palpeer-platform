@@ -15,11 +15,14 @@ import { useGetFundingQuery } from '@/services/api/walletApi';
 import type { FundingTransactionResponse } from '@/types/api/wallet';
 import { formatDateTime } from '@/utils/datetime';
 
+import { FundingPaymentDetailsCard } from '../components/FundingPaymentDetailsCard';
 import { MovementStatusHeader } from '../components/MovementStatusHeader';
 import { ReviewRow } from '../components/ReviewRow';
 import { pollingIntervalFor } from '../movementStatus';
 import { useFinalStatusRefresh } from '../useFinalStatusRefresh';
 import { useMoneyFormat } from '../useMoneyFormat';
+
+const IN_PROGRESS = new Set(['INITIATED', 'PENDING', 'PROCESSING']);
 
 /** Status copy per VERIFIED `MoneyMovementStatus`. Success is only claimed on `SUCCESS` (R-G-4). */
 function describe(funding: FundingTransactionResponse): { title: string; message: string } {
@@ -33,17 +36,24 @@ function describe(funding: FundingTransactionResponse): { title: string; message
               'No payment method is active for this currency right now, so this request can’t be completed. Nothing has been added to your wallet.',
           };
     case 'PENDING':
-      return funding.providerName === 'APAYLO' && funding.currencyCode === 'CAD'
-        ? {
-            title: 'Waiting for Instant Interac',
-            message:
-              'Interac, Instant deposit via Interac — check your email or banking app to accept the deposit request.',
-          }
-        : {
-            title: 'Waiting for your payment',
-            message:
-              'Follow the instructions below. Your balance updates once the payment arrives.',
-          };
+      if (funding.providerName === 'APAYLO' && funding.currencyCode === 'CAD') {
+        return {
+          title: 'Waiting for Instant Interac',
+          message:
+            'Send Interac e-Transfer from your banking app to Palpeer’s account using the instructions below. We do not email you a request to accept.',
+        };
+      }
+      if (funding.providerName === 'KUDA' || funding.paymentDetails) {
+        return {
+          title: 'Transfer to your virtual account',
+          message:
+            'Use the account details below in your banking app. Your balance updates once the transfer is confirmed.',
+        };
+      }
+      return {
+        title: 'Waiting for your payment',
+        message: 'Follow the instructions below. Your balance updates once the payment arrives.',
+      };
     case 'PROCESSING':
       return { title: 'Processing your payment', message: 'This usually takes a few moments.' };
     case 'SUCCESS':
@@ -93,6 +103,11 @@ export function FundingStatusScreen() {
 
   const data = funding.data;
   const { title, message } = describe(data);
+  const awaitingPayment = IN_PROGRESS.has(data.status);
+  const showPaymentDetails = awaitingPayment && !!data.paymentDetails;
+  // Structured card is primary; keep plain instructions only when we have no paymentDetails.
+  const showInstructions =
+    awaitingPayment && !!data.fundingInstructions && !showPaymentDetails;
 
   return (
     <Screen
@@ -125,7 +140,10 @@ export function FundingStatusScreen() {
       {funding.error ? (
         <FormAlert tone="warning" message="Couldn't refresh the status. Pull down to try again." />
       ) : null}
-      {data.fundingInstructions && data.status === 'PENDING' ? (
+      {showPaymentDetails && data.paymentDetails ? (
+        <FundingPaymentDetailsCard details={data.paymentDetails} />
+      ) : null}
+      {showInstructions ? (
         <Card variant="outlined" padding="md" testID="funding-instructions">
           <AppText variant="overline" tone="muted">
             Payment instructions

@@ -10,10 +10,10 @@ import { Button } from '@/components/ui/Button';
 import { OtpInput } from '@/components/ui/OtpInput';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { TextLink } from '@/components/ui/TextLink';
+import { useSecretCommand } from '@/hooks/useSecretCommand';
 import { useSensitiveScreen } from '@/hooks/useSensitiveScreen';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
-import { useSecretCommand } from '@/hooks/useSecretCommand';
 import { useResendOtpMutation } from '@/services/api/authApi';
 import { toAppError } from '@/services/api/errors';
 import { accountCommands } from '@/services/auth/accountCommands';
@@ -27,8 +27,11 @@ export function ResetPasswordScreen() {
   useSensitiveScreen();
   const theme = useTheme();
   const toast = useToast();
-  const params = useLocalSearchParams<{ email?: string }>();
+  const params = useLocalSearchParams<{ email?: string; debugOtp?: string }>();
   const email = typeof params.email === 'string' ? params.email : '';
+  const initialDebugOtp =
+    typeof params.debugOtp === 'string' && params.debugOtp.length > 0 ? params.debugOtp : null;
+  const [debugOtp, setDebugOtp] = useState<string | null>(initialDebugOtp);
   const [confirmReset] = useSecretCommand(accountCommands.confirmPasswordReset);
   const [resendOtp, { isLoading: resending }] = useResendOtpMutation();
   const [formError, setFormError] = useState<string | null>(null);
@@ -60,8 +63,17 @@ export function ResetPasswordScreen() {
   const resend = async () => {
     setFormError(null);
     try {
-      await resendOtp({ email, purpose: 'PASSWORD_RESET', channel: 'EMAIL' }).unwrap();
+      const result = await resendOtp({
+        email,
+        purpose: 'PASSWORD_RESET',
+        channel: 'EMAIL',
+      }).unwrap();
       setValue('code', '');
+      const nextDebug =
+        typeof result?.debugOtp === 'string' && result.debugOtp.length > 0
+          ? result.debugOtp
+          : null;
+      setDebugOtp(nextDebug);
       cooldown.restart();
       toast.show({ type: 'success', title: 'New code sent' });
     } catch (raw) {
@@ -80,13 +92,20 @@ export function ResetPasswordScreen() {
 
   return (
     <AuthLayout
-      title="Enter your reset code"
+      title="Reset your password"
       subtitle="Use the 6-digit code from your email, then choose a new password."
     >
       <FormAlert
         tone="info"
         message={`If an account exists for ${email}, a reset code is on its way. It expires in 10 minutes.`}
       />
+      {__DEV__ && debugOtp ? (
+        <FormAlert
+          tone="info"
+          message={`Dev reset code: ${debugOtp}`}
+          testID="reset-debug-otp"
+        />
+      ) : null}
       <FormAlert message={formError} testID="reset-error" />
 
       <Controller

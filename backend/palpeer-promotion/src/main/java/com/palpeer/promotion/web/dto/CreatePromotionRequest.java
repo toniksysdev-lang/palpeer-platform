@@ -16,6 +16,9 @@ public record CreatePromotionRequest(
         Instant startsAt,
         Instant endsAt,
         @DecimalMin("0.000000000001") BigDecimal bonusAmount,
-        @Size(max = 10) String bonusCurrencyCode
+        /** One or more ISO currency codes (comma-separated). */
+        @Size(max = 200) String bonusCurrencyCode,
+        /** Optional eligibility rules JSON (merged into {@code promotions.eligibility_json}). */
+        @Size(max = 8000) String eligibilityJson
 ) {
 }

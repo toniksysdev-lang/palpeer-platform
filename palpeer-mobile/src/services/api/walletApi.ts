@@ -68,10 +68,23 @@ export const walletApi = baseApi.injectEndpoints({
     }),
 
     createFunding: build.mutation<FundingTransactionResponse, WithKey<CreateFundingRequest>>({
-      query: ({ walletId, amount, idempotencyKey }) => ({
+      query: ({
+        walletId,
+        amount,
+        interacEmail,
+        interacFirstName,
+        interacLastName,
+        idempotencyKey,
+      }) => ({
         path: '/funding',
         method: 'POST',
-        body: { walletId, amount: jsonDecimal(amount) },
+        body: {
+          walletId,
+          amount: jsonDecimal(amount),
+          ...(interacEmail ? { interacEmail } : null),
+          ...(interacFirstName ? { interacFirstName } : null),
+          ...(interacLastName ? { interacLastName } : null),
+        },
         idempotencyKey,
       }),
       // Pending funding only needs activity lists; SUCCESS (e.g. sandbox auto-settle) updates balances now.

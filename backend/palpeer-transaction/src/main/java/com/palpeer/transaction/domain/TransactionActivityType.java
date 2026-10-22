@@ -14,5 +14,7 @@ public enum TransactionActivityType {
      * Settled P2P order (ACCEPTED or COMPLETED). Base amount + quote amount via applied rate;
      * currencies come from the linked request.
      */
-    P2P
+    P2P,
+    /** Granted promotion / referral bonus credited to a wallet. */
+    BONUS
 }

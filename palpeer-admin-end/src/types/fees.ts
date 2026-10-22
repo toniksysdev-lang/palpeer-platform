@@ -20,3 +20,33 @@ export type UpsertP2PFeeTierInput = {
   maxAmount?: string;
   active: boolean;
 };
+
+export type InstantExFeeTier = P2PFeeTier;
+export type UpsertInstantExFeeTierInput = UpsertP2PFeeTierInput;
+
+export type PlatformFeeSourceType = 'P2P' | 'INSTANT_EX';
+
+export type PlatformFeeRevenue = {
+  id: string;
+  sourceType: PlatformFeeSourceType;
+  referenceType: string;
+  referenceId: string;
+  userId: string;
+  userEmail?: string | null;
+  currencyCode: string;
+  amount: string | number;
+  description?: string | null;
+  createdAt: string;
+};
+
+export type PlatformFeeCurrencyTotal = {
+  currencyCode: string;
+  amount: string | number;
+  count: number;
+};
+
+export type PlatformFeeSummary = {
+  grandTotal: PlatformFeeCurrencyTotal[];
+  p2pTotal: PlatformFeeCurrencyTotal[];
+  instantExTotal: PlatformFeeCurrencyTotal[];
+};

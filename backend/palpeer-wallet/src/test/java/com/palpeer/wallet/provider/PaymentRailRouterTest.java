@@ -19,25 +19,25 @@ class PaymentRailRouterTest {
     @Mock private PaymentRailProvider kuda;
 
     @Test
-    void requireForWithdrawal_prefersKorapayWhenEnabled() {
-        when(korapay.isEnabled()).thenReturn(true);
-        when(korapay.providerName()).thenReturn(KorapayPaymentRail.NAME);
-        when(korapay.supportedCurrencies()).thenReturn(Set.of("NGN"));
-
-        PaymentRailRouter router = new PaymentRailRouter(List.of(korapay, kuda));
-
-        assertThat(router.requireForWithdrawal("NGN").providerName()).isEqualTo(KorapayPaymentRail.NAME);
-    }
-
-    @Test
-    void requireForWithdrawal_fallsBackToKudaWhenKorapayDisabled() {
-        when(korapay.isEnabled()).thenReturn(false);
+    void requireForWithdrawal_prefersKudaWhenEnabled() {
         when(kuda.isEnabled()).thenReturn(true);
         when(kuda.providerName()).thenReturn(KudaPaymentRail.NAME);
         when(kuda.supportedCurrencies()).thenReturn(Set.of("NGN"));
 
-        PaymentRailRouter router = new PaymentRailRouter(List.of(korapay, kuda));
+        PaymentRailRouter router = new PaymentRailRouter(List.of(kuda, korapay));
 
         assertThat(router.requireForWithdrawal("NGN").providerName()).isEqualTo(KudaPaymentRail.NAME);
+    }
+
+    @Test
+    void requireForWithdrawal_fallsBackToKorapayWhenKudaDisabled() {
+        when(kuda.isEnabled()).thenReturn(false);
+        when(korapay.isEnabled()).thenReturn(true);
+        when(korapay.providerName()).thenReturn(KorapayPaymentRail.NAME);
+        when(korapay.supportedCurrencies()).thenReturn(Set.of("NGN"));
+
+        PaymentRailRouter router = new PaymentRailRouter(List.of(kuda, korapay));
+
+        assertThat(router.requireForWithdrawal("NGN").providerName()).isEqualTo(KorapayPaymentRail.NAME);
     }
 }

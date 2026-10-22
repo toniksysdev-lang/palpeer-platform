@@ -13,8 +13,12 @@ import org.springframework.stereotype.Component;
 
 /**
  * Apaylo CAD rails — Instant Interac deposit for funding; Interac send / EFT for withdrawals.
- * Funding uses Request Money ({@code RequestInteracEtransferEmail}) only — no other CAD fund methods.
- * Docs: https://docs.apaylo.com/
+ *
+ * <p>Funding uses {@code RequestInteracEtransferLink} (checkout Instant deposit — no request email
+ * is sent). Returns {@code PENDING} with payee/amount/reference instructions; the CAD wallet is
+ * credited only after webhook (or operator) settlement. Customers send Interac to the searchable
+ * merchant account name ({@link ApayloProperties#getAccountId()}).
+ * Docs: https://docs.apaylo.com/apaylo-api-reference/ref
  */
 @Slf4j
 @Component
@@ -44,39 +48,65 @@ public class ApayloPaymentRail implements PaymentRailProvider {
     @Override
     public FundingInitiation initiateFunding(FundingInitiationRequest request) {
         requireEnabled();
+        String customerEmail = firstNonBlank(request.interacEmail(), request.userEmail());
+        if (!notBlank(customerEmail) || !customerEmail.contains("@")) {
+            throw new BusinessException(
+                    "APAYLO_INTERAC_EMAIL_REQUIRED",
+                    "Interac email is required for Instant Interac deposit",
+                    HttpStatus.BAD_REQUEST);
+        }
+        String name = customerName(
+                firstNonBlank(request.interacFirstName(), request.customerFirstName()),
+                firstNonBlank(request.interacLastName(), request.customerLastName()));
+
         Map<String, Object> body = new HashMap<>();
-        body.put(
-                "CustomerName",
-                customerName(request.customerFirstName(), request.customerLastName()));
-        body.put("CustomerEmail", request.userEmail());
+        body.put("CustomerName", name);
+        body.put("CustomerEmail", customerEmail.trim());
         body.put("Amount", request.amount());
-        // Description: 5–200 chars; only space and symbols .#,$@' (no UUID hyphens).
-        body.put("Description", sanitizeDescription("PALPEER wallet funding"));
-        body.put("MerchantReferenceNumber", request.idempotencyKey());
-        body.put("TransactionNumber", request.fundingTransactionId().toString());
+        body.put("Description", fundingDescription(request));
+        // Link API idempotency; Email API used MerchantReferenceNumber historically.
+        body.put("UniqueId", request.idempotencyKey());
 
         JsonNode response = apayloClient.post(properties.getCreateSearchableEtransferPath(), body);
         String reference = firstNonBlank(
-                text(response, "TransactionNumber"),
                 text(response, "ReferenceNumber"),
+                text(response, "TransactionNumber"),
                 text(response, "InteracReference"),
                 request.fundingTransactionId().toString());
-        boolean settleNow = properties.isSandbox() && properties.isAutoSandboxSettle();
-        String instructions;
-        if (settleNow) {
-            instructions = "Sandbox funding completed. CAD "
-                    + request.amount()
-                    + " will be credited to your wallet. Reference="
-                    + reference;
-        } else {
-            instructions = "Interac, Instant deposit via Interac. Reference="
-                    + reference
-                    + "; amount=CAD "
-                    + request.amount()
-                    + "; accept the Interac request in your email or banking app to complete the deposit.";
+        // Real payment process: Instant Interac instructions + PENDING until webhook settles.
+        // Sandbox auto-settle must not skip the customer send step (same as Kuda VA funding).
+        String instructions = buildInstantDepositInstructions(request.amount(), reference, customerEmail);
+        return new FundingInitiation(reference, instructions, true);
+    }
+
+    private String fundingDescription(FundingInitiationRequest request) {
+        String apl = blankTo(properties.getAplReference(), "");
+        String account = blankTo(properties.getAccountId(), "PALPEER");
+        String raw = notBlank(apl)
+                ? "PALPEER funding " + apl + " " + account
+                : "PALPEER Instant Interac " + account;
+        return sanitizeDescription(raw);
+    }
+
+    private String buildInstantDepositInstructions(
+            java.math.BigDecimal amount, String reference, String customerEmail) {
+        String accountName = blankTo(properties.getAccountId(), "Palpeer Global Holding Inc");
+        String apl = properties.getAplReference() == null ? "" : properties.getAplReference().trim();
+        StringBuilder sb = new StringBuilder();
+        sb.append("Instant deposit via Interac. Send CAD ")
+                .append(amount)
+                .append(" with Interac e-Transfer to \"")
+                .append(accountName)
+                .append("\". Reference=")
+                .append(reference)
+                .append(". Open your banking app → Send → Interac → search for \"")
+                .append(accountName)
+                .append("\" → enter the amount and reference. You initiate the transfer — we do not send an Interac request to your email.");
+        if (notBlank(apl)) {
+            sb.append(" Include ").append(apl).append(" in the memo if asked.");
         }
-        // false → FundingService CREDITS the CAD wallet immediately (sandbox demo settle).
-        return new FundingInitiation(reference, instructions, !settleNow);
+        sb.append(" Your Interac email: ").append(customerEmail.trim()).append('.');
+        return sb.toString();
     }
 
     @Override
@@ -106,33 +136,22 @@ public class ApayloPaymentRail implements PaymentRailProvider {
         String customerName = sanitizeCustomerName(
                 notBlank(request.customerName()) ? request.customerName() : "PALPEER Customer");
 
-        try {
-            JsonNode response;
-            if (looksLikeEft(destination)) {
-                response = sendEft(request, destination, customerName);
-            } else {
-                response = sendInterac(request, destination, customerName);
-            }
-            String reference = firstNonBlank(
-                    text(response, "TransactionNumber"),
-                    text(response, "ReferenceNumber"),
-                    request.withdrawalTransactionId().toString());
-            boolean settleNow = properties.isSandbox() && properties.isAutoSandboxSettle();
-            if (settleNow) {
-                log.info("Apaylo CAD withdrawal settled in sandbox. ref={}", reference);
-            }
-            return new WithdrawalInitiation(reference, !settleNow);
-        } catch (BusinessException ex) {
-            if (properties.isSandbox() && properties.isOfflineSandboxSettle()) {
-                log.warn(
-                        "Apaylo unreachable in sandbox — settling CAD withdrawal locally. cause={}",
-                        ex.getMessage());
-                String offlineRef = "offline-"
-                        + request.withdrawalTransactionId().toString().replace("-", "");
-                return new WithdrawalInitiation(offlineRef, false);
-            }
-            throw ex;
+        JsonNode response;
+        if (looksLikeEft(destination)) {
+            response = sendEft(request, destination, customerName);
+        } else {
+            response = sendInterac(request, destination, customerName);
         }
+        String reference = firstNonBlank(
+                text(response, "TransactionNumber"),
+                text(response, "ReferenceNumber"),
+                request.withdrawalTransactionId().toString());
+        // Real payout process: Interac/EFT submitted to Apaylo; wallet stays PENDING until webhook.
+        log.info(
+                "Apaylo CAD withdrawal submitted. ref={} destinationType={}",
+                reference,
+                looksLikeEft(destination) ? "EFT" : "INTERAC");
+        return new WithdrawalInitiation(reference, true);
     }
 
     private JsonNode sendEft(

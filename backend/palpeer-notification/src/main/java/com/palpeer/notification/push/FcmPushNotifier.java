@@ -11,19 +11,13 @@ import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Conditional;
-import org.springframework.stereotype.Component;
 
 /**
  * Delivers pushes via Firebase Cloud Messaging HTTP v1.
  * Data payload matches mobile {@code pushTarget}: notificationId, referenceType, referenceId.
  */
 @Slf4j
-@Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "palpeer.fcm", name = "enabled", havingValue = "true")
-@Conditional(FcmCredentialsPresentCondition.class)
 public class FcmPushNotifier implements PushNotifier {
 
     private final FirebaseMessaging firebaseMessaging;

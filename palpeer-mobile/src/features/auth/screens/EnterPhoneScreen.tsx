@@ -11,12 +11,17 @@ import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { useNumberPadField, useOptionalNumberPad } from '@/components/ui/NumberPadContext';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useToast } from '@/providers/ToastProvider';
 import {
   useGetRegistrationCountriesQuery,
+  useGetSignupStatusMutation,
   useRequestPhoneOtpMutation,
+  useResendSignupEmailOtpMutation,
 } from '@/services/api/authApi';
 import { toAppError } from '@/services/api/errors';
 import { preferencesStorage } from '@/services/storage/preferencesStorage';
+import { signupDraftStorage } from '@/services/storage/signupDraftStorage';
+import type { SignupStatusResponse } from '@/types/api/auth';
 
 import { AuthLayout } from '../components/AuthLayout';
 import { LegalAgreement } from '../components/LegalAgreement';
@@ -33,11 +38,14 @@ import {
 
 const PHONE_MAX_DIGITS = 10;
 
-/** Phone signup step — sends SMS OTP via the configured SMS provider, then opens verify. */
+/** Phone signup step — resumes incomplete registration or sends a fresh SMS OTP. */
 export function EnterPhoneScreen() {
   const theme = useTheme();
+  const toast = useToast();
   const countriesQuery = useGetRegistrationCountriesQuery();
+  const [getSignupStatus, statusState] = useGetSignupStatusMutation();
   const [requestPhoneOtp, requestState] = useRequestPhoneOtpMutation();
+  const [resendSignupEmailOtp, resendEmailState] = useResendSignupEmailOtpMutation();
   const [country, setCountry] = useState<SignupCountry>(DEFAULT_SIGNUP_COUNTRY);
   const [national, setNational] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +80,107 @@ export function EnterPhoneScreen() {
   });
   const pad = useOptionalNumberPad();
 
+  const busy =
+    statusState.isLoading || requestState.isLoading || resendEmailState.isLoading;
+
+  const seedCountry = async () => {
+    await preferencesStorage.setSignupCountryIso2(activeCountry.iso2);
+  };
+
+  const startFreshPhoneOtp = async (phone: string) => {
+    await seedCountry();
+    await requestPhoneOtp({ phone }).unwrap();
+    await signupDraftStorage.save({
+      phone,
+      countryIso2: activeCountry.iso2,
+      step: 'PHONE_OTP',
+    });
+    router.push({
+      pathname: '/verify-phone',
+      params: { phone, signup: '1', countryIso2: activeCountry.iso2 },
+    });
+  };
+
+  const resumeFromStatus = async (status: SignupStatusResponse, phone: string) => {
+    switch (status.nextStep) {
+      case 'PHONE_OTP_REQUIRED': {
+        await startFreshPhoneOtp(phone);
+        return;
+      }
+      case 'REGISTER_REQUIRED': {
+        await seedCountry();
+        await signupDraftStorage.save({
+          phone,
+          countryIso2: activeCountry.iso2,
+          step: 'REGISTER',
+        });
+        toast.show({ type: 'info', title: 'Continue creating your account' });
+        router.push({
+          pathname: '/register',
+          params: { phone, countryIso2: activeCountry.iso2 },
+        });
+        return;
+      }
+      case 'EMAIL_OTP_REQUIRED': {
+        await seedCountry();
+        if (!status.email) {
+          setError('We found your account, but email verification could not be resumed.');
+          return;
+        }
+        try {
+          await resendSignupEmailOtp({ phone }).unwrap();
+        } catch {
+          // Still open verify — user can tap Resend on that screen.
+        }
+        await signupDraftStorage.save({
+          phone,
+          email: status.email,
+          maskedEmail: status.maskedEmail,
+          countryIso2: activeCountry.iso2,
+          step: 'EMAIL_OTP',
+        });
+        toast.show({
+          type: 'info',
+          title: status.maskedEmail
+            ? `Continue verifying ${status.maskedEmail}`
+            : 'Continue email verification',
+        });
+        router.push({
+          pathname: '/verify-email',
+          params: { email: status.email, phone, resume: '1' },
+        });
+        return;
+      }
+      case 'LOGIN_READY': {
+        await seedCountry();
+        await signupDraftStorage.save({
+          phone,
+          email: status.email,
+          maskedEmail: status.maskedEmail,
+          countryIso2: activeCountry.iso2,
+          step: 'LOGIN',
+        });
+        toast.show({
+          type: 'info',
+          title: status.hasLoggedIn ? 'Account already exists — sign in' : 'Sign in to finish',
+        });
+        router.push({
+          pathname: '/login',
+          params: {
+            email: status.email ?? phone,
+            notice: status.hasLoggedIn ? 'exists' : 'verified',
+          },
+        });
+        return;
+      }
+      case 'BLOCKED':
+        setError('This account has been disabled. Please contact support.');
+        return;
+      default:
+        setError('Could not continue with this phone number. Try again.');
+    }
+  };
+
   const continueSignup = async () => {
     const local = digitsOnly(national);
     if (local.length < 7) {
@@ -82,13 +191,26 @@ export function EnterPhoneScreen() {
     pad?.close();
     const phone = toE164(activeCountry.dialCode, local);
     try {
-      await requestPhoneOtp({ phone }).unwrap();
-      // Seed Complete profile Country with the corridor chosen for SMS verification.
-      await preferencesStorage.setSignupCountryIso2(activeCountry.iso2);
-      router.push({
-        pathname: '/verify-phone',
-        params: { phone, signup: '1', countryIso2: activeCountry.iso2 },
-      });
+      let status: SignupStatusResponse;
+      try {
+        status = await getSignupStatus({ phone }).unwrap();
+      } catch (statusError) {
+        // Live APIs without the signup/status permit (or older builds) return empty 403 —
+        // still send the SMS OTP so registration is not blocked.
+        const err = toAppError(statusError);
+        if (
+          err.kind === 'forbidden' ||
+          err.kind === 'unauthorized' ||
+          err.kind === 'notFound' ||
+          err.status === 403 ||
+          err.status === 404
+        ) {
+          await startFreshPhoneOtp(phone);
+          return;
+        }
+        throw statusError;
+      }
+      await resumeFromStatus(status, phone);
     } catch (raw) {
       setError(authErrorMessage(toAppError(raw)));
     }
@@ -176,8 +298,8 @@ export function EnterPhoneScreen() {
         label="Continue"
         shape="pill"
         onPress={() => void continueSignup()}
-        loading={requestState.isLoading}
-        loadingLabel="Sending code…"
+        loading={busy}
+        loadingLabel="Checking…"
         testID="enter-phone-continue"
       />
 

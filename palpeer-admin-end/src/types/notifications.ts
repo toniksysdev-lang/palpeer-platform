@@ -22,4 +22,7 @@ export type BroadcastPushInput = {
 export type BroadcastPushResult = {
   recipientCount: number;
   title: string;
+  devicePushCount: number;
+  failedCount: number;
+  fcmEnabled: boolean;
 };

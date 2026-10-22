@@ -83,7 +83,11 @@ export function ReferralsScreen() {
       return;
     }
     setCode('');
-    toast.show({ type: 'success', title: 'Referral code applied' });
+    toast.show({
+      type: 'success',
+      title: 'Referral applied',
+      message: 'Any bonus was credited to the wallet for your phone-number country.',
+    });
   };
 
   const used = (referrals.data ?? []).filter((item) => item.refereeUserId !== null);
@@ -106,8 +110,8 @@ export function ReferralsScreen() {
       <StackHeader title="Invite friends" />
 
       <AppText tone="secondary">
-        Share your code so friends can join PALPEER. When they apply it, you both earn a referral
-        bonus when a promotion is active.
+        Share your code so friends can join PALPEER. When they apply it and a referral promotion is
+        active, you both get a bonus credited to the wallet that matches your phone-number country.
       </AppText>
 
       <Card variant="elevated" padding="lg" testID="referral-my-code">
@@ -176,7 +180,8 @@ export function ReferralsScreen() {
               2. They enter it under Invite friends (or during sign-up).
             </AppText>
             <AppText tone="secondary">
-              3. When an active referral promotion exists, bonuses show under My bonuses.
+              3. The bonus is added to your wallet for your phone-number country (for example +234 →
+              NGN). You can also see it under My bonuses.
             </AppText>
           </View>
         </Card>

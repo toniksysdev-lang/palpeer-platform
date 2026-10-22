@@ -83,5 +83,11 @@ export function mockBroadcastPushMessage(input: BroadcastPushInput): BroadcastPu
     failureReason: null,
     createdAt: now,
   });
-  return { recipientCount: 42, title: input.title.trim() };
+  return {
+    recipientCount: 42,
+    title: input.title.trim(),
+    devicePushCount: 38,
+    failedCount: 2,
+    fcmEnabled: true,
+  };
 }

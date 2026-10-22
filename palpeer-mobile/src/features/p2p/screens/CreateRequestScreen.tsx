@@ -1,6 +1,6 @@
 import { Decimal } from 'decimal.js-light';
 import { router } from 'expo-router';
-import { ArrowRight, Coins } from 'lucide-react-native';
+import { ArrowLeftRight, Coins } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
@@ -13,6 +13,7 @@ import { AppModal } from '@/components/ui/AppModal';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
+import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { useOptionalNumberPad } from '@/components/ui/NumberPadContext';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -41,6 +42,7 @@ import {
   expiresAtFor,
   isApiRateWithinBounds,
   otherOfPair,
+  p2pRateLine,
   rateBoundsMessage,
   rateEntryHint,
   receiveAmountForSell,
@@ -51,7 +53,7 @@ import {
 
 type Picker = 'sell' | 'receive' | 'expiry' | 'rateUnit';
 
-/** Fields map to `CreateP2PRequestDto`; rate row lets you pick which pair currency stays at 1. */
+/** Fields map to `CreateP2PRequestDto`; rate dropdown sets entry unit; Switch only flips the preview label. */
 export function CreateRequestScreen() {
   const theme = useTheme();
   const { format } = useMoneyFormat();
@@ -68,6 +70,8 @@ export function CreateRequestScreen() {
   /** Exact typed rate + unit — flipping the dropdown re-derives display without losing precision. */
   const [rateAnchor, setRateAnchor] = useState<RateEntryAnchor | null>(null);
   const [rateUnitCode, setRateUnitCode] = useState<string | null>(null);
+  /** Display-only unit for the Switch label — does not change rate entry fields. */
+  const [viewRateUnitCode, setViewRateUnitCode] = useState<string | null>(null);
   const [minOrder, setMinOrder] = useState('');
   const [expiry, setExpiry] = useState<ExpiryKey>('1H');
   const [notes, setNotes] = useState('');
@@ -189,6 +193,17 @@ export function CreateRequestScreen() {
   const apiRatePreview = isPositiveMoney(mathRate)
     ? apiRateFromUnit(pair.baseCurrencyCode, pair.quoteCurrencyCode, mathUnit, mathRate)
     : '';
+  const viewRateUnit =
+    viewRateUnitCode &&
+    (viewRateUnitCode.toUpperCase() === sell.code.toUpperCase() ||
+      viewRateUnitCode.toUpperCase() === receive.code.toUpperCase())
+      ? viewRateUnitCode.toUpperCase() === sell.code.toUpperCase()
+        ? sell.code
+        : receive.code
+      : rateUnit;
+  const rateSwitchLabel = isPositiveMoney(apiRatePreview)
+    ? p2pRateLine(apiRatePreview, pair.baseCurrencyCode, pair.quoteCurrencyCode, viewRateUnit)
+    : `1 ${viewRateUnit} = ${otherOfPair(viewRateUnit, sell.code, receive.code)}`;
   const rateBounds = rateBoundsQuery.data ?? null;
   const rateOutOfBounds =
     !!rateBounds &&
@@ -293,12 +308,26 @@ export function CreateRequestScreen() {
     }
   };
 
+  const swapCurrencies = () => {
+    const nextSell = receive.code;
+    const nextReceive = sell.code;
+    setSellCode(nextSell);
+    setReceiveCode(nextReceive);
+    setRateUnitCode(nextSell);
+    setAmount('');
+    setMinOrder('');
+  };
+
   const chooseRateUnit = (code: string) => {
     if (code.toUpperCase() === rateUnit.toUpperCase()) return;
     // Keep the typed anchor; displayRateForUnit derives the other side. Close the pad so a
     // stale keypress cannot adopt the truncated reciprocal as a new anchor.
     numberPad?.close();
     setRateUnitCode(code);
+  };
+
+  const flipViewRateUnit = () => {
+    setViewRateUnitCode(otherOfPair(viewRateUnit, sell.code, receive.code));
   };
 
   const onDisplayRateChange = (value: string) => {
@@ -419,25 +448,24 @@ export function CreateRequestScreen() {
       accessibilityLabel={`${label}: ${code}`}
       style={{
         flex: 1,
+        minWidth: 0,
         borderWidth: 1,
         borderColor: theme.colors.border,
         borderRadius: theme.radius.lg,
-        padding: theme.spacing.md,
+        paddingHorizontal: theme.spacing.sm,
+        paddingVertical: theme.spacing.sm,
         backgroundColor: theme.colors.surface,
-        gap: 4,
+        gap: 2,
       }}
     >
-      <AppText variant="caption" tone="secondary">
+      <AppText variant="caption" tone="secondary" numberOfLines={1}>
         {label}
       </AppText>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <AppText variant="h3">{currencyFlag(code)}</AppText>
-        <View style={{ flex: 1 }}>
-          <AppText variant="bodyStrong">{code}</AppText>
-          <AppText variant="caption" tone="muted" numberOfLines={1}>
-            {currencyDisplayName(code)}
-          </AppText>
-        </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <AppText variant="bodyStrong">{currencyFlag(code)}</AppText>
+        <AppText variant="bodyStrong" style={{ flexShrink: 1 }} numberOfLines={1}>
+          {code}
+        </AppText>
         <AppText tone="muted">▾</AppText>
       </View>
     </Pressable>
@@ -458,24 +486,27 @@ export function CreateRequestScreen() {
     >
       {header}
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: theme.spacing.sm,
+        }}
+      >
         <CurrencyTile
           label="You sell"
           code={sell.code}
           onPress={() => setPicker('sell')}
           testID="p2p-create-base"
         />
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            backgroundColor: theme.colors.primary,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Icon icon={ArrowRight} color="#FFFFFF" size={18} />
+        <View style={{ flexShrink: 0 }}>
+          <IconButton
+            icon={ArrowLeftRight}
+            variant="filled"
+            accessibilityLabel="Switch sell and receive currencies"
+            onPress={swapCurrencies}
+            testID="p2p-create-currency-switch"
+          />
         </View>
         <CurrencyTile
           label="You receive"
@@ -549,6 +580,32 @@ export function CreateRequestScreen() {
             />
           </View>
         </View>
+        <Pressable
+          onPress={flipViewRateUnit}
+          accessibilityRole="button"
+          accessibilityLabel={`Exchange rate ${rateSwitchLabel}. Tap to flip direction.`}
+          testID="p2p-create-rate-switch"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            alignSelf: 'flex-start',
+            gap: 6,
+            flexShrink: 1,
+          }}
+        >
+          <AppText tone="secondary" variant="body" style={{ flexShrink: 1 }}>
+            {rateSwitchLabel}
+          </AppText>
+          <Icon
+            icon={ArrowLeftRight}
+            size={16}
+            color={theme.colors.primary}
+            accessibilityLabel="Switch rate direction"
+          />
+          <AppText variant="caption" tone="muted">
+            Switch
+          </AppText>
+        </Pressable>
         <AppText variant="caption" tone="muted" testID="p2p-create-rate-hint">
           {rateEntryHint(rateUnit, rateOther)}
         </AppText>
@@ -588,12 +645,7 @@ export function CreateRequestScreen() {
         }}
         testID="p2p-create-receive-preview"
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <AppText tone="secondary">You receive</AppText>
-          <AppText variant="caption" tone="muted">
-            Before fees
-          </AppText>
-        </View>
+        <AppText tone="secondary">You receive</AppText>
         <AppText variant="h2" tone="brand" testID="p2p-create-receive-amount">
           {receivePreview ? format(receivePreview, receive.code) : `— ${receive.code}`}
         </AppText>
@@ -723,8 +775,8 @@ export function CreateRequestScreen() {
             {notes.trim() ? <SummaryRow label="Notes" value={notes.trim()} /> : null}
           </View>
           <AppText variant="caption" tone="muted">
-            Before fees. Selling holds the amount from your wallet until the request is accepted,
-            cancelled, or expires.
+            Selling holds the amount from your wallet until the request is accepted, cancelled, or
+            expires. Any platform fee is shown to the buyer when they accept.
           </AppText>
           <View style={{ gap: theme.spacing.sm, marginTop: theme.spacing.sm }}>
             <Button

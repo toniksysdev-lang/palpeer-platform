@@ -12,6 +12,7 @@ import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { FlippableRateLine } from '@/features/p2p/components/FlippableRateLine';
 import { useMoneyFormat } from '@/features/wallets/useMoneyFormat';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -28,7 +29,7 @@ import { compareMoney, isPositiveMoney, toMoney } from '@/utils/money';
 
 import { PickerField, PickerSheet } from '../components/PickerSheet';
 import { NEED_TWO_WALLETS_MESSAGE, quoteErrorMessage } from '../errors';
-import { canExchange, formatRateLine } from '../format';
+import { canExchange } from '../format';
 
 const CALCULATE_DEBOUNCE_MS = 400;
 
@@ -262,9 +263,13 @@ export function ExchangeScreen() {
       </View>
 
       {quote && !calculating ? (
-        <AppText tone="secondary" align="center" testID="exchange-rate">
-          {formatRateLine(quote.appliedRate, quote.sourceCurrencyCode, quote.targetCurrencyCode)}
-        </AppText>
+        <FlippableRateLine
+          rate={quote.appliedRate}
+          base={quote.sourceCurrencyCode}
+          quote={quote.targetCurrencyCode}
+          align="center"
+          testID="exchange-rate"
+        />
       ) : calculating ? (
         <AppText tone="muted" align="center" testID="exchange-calculating">
           Getting the latest rate…

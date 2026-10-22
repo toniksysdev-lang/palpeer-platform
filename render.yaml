@@ -151,13 +151,25 @@ services:
         sync: false
       - key: KUDA_SANDBOX
         sync: false
+      - key: KUDA_AUTO_SANDBOX_SETTLE
+        sync: false
+      - key: KUDA_OFFLINE_SANDBOX_SETTLE
+        sync: false
       - key: KUDA_EMAIL
         sync: false
       - key: KUDA_API_KEY
         sync: false
       - key: KUDA_BASE_URL
         sync: false
+      - key: KUDA_SENDER_NAME
+        sync: false
+      - key: KUDA_WEBHOOK_USERNAME
+        sync: false
+      - key: KUDA_WEBHOOK_PASSWORD
+        sync: false
       - key: KUDA_WEBHOOK_SECRET
+        sync: false
+      - key: KUDA_WEBHOOK_SIGNATURE_HEADER
         sync: false
       # SMS — enable exactly one of Telnyx / Twilio / BulkSMS for phone OTP + pool alerts
       - key: TELNYX_ENABLED

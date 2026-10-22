@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.palpeer.common.exception.ResourceNotFoundException;
@@ -17,6 +18,8 @@ import com.palpeer.p2p.domain.P2PSide;
 import com.palpeer.p2p.domain.P2PStatus;
 import com.palpeer.p2p.repository.P2POrderRepository;
 import com.palpeer.p2p.repository.P2PRequestRepository;
+import com.palpeer.promotion.domain.BonusStatus;
+import com.palpeer.promotion.repository.BonusRepository;
 import com.palpeer.transaction.domain.TransactionActivityType;
 import com.palpeer.transaction.web.dto.TransactionItemResponse;
 import com.palpeer.transaction.web.dto.TransactionPageResponse;
@@ -36,6 +39,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -52,10 +56,26 @@ class TransactionQueryServiceTest {
     @Mock private WalletTransferRepository transferRepository;
     @Mock private P2POrderRepository p2pOrderRepository;
     @Mock private P2PRequestRepository p2pRequestRepository;
+    @Mock private BonusRepository bonusRepository;
     @Mock private WalletRepository walletRepository;
     @Mock private UserRepository userRepository;
 
     @InjectMocks private TransactionQueryService service;
+
+    @BeforeEach
+    void stubBonusesEmpty() {
+        lenient()
+                .when(bonusRepository.findByUserIdAndStatusOrderByCreatedAtDesc(any(), eq(BonusStatus.GRANTED)))
+                .thenReturn(List.of());
+        lenient()
+                .when(bonusRepository.findByUserIdAndStatusAndCreatedAtBetween(any(), eq(BonusStatus.GRANTED), any(), any()))
+                .thenReturn(List.of());
+        lenient()
+                .when(bonusRepository
+                        .findByUserIdAndStatusAndCreatedAtGreaterThanEqualAndCreatedAtLessThanEqualOrderByCreatedAtDesc(
+                                any(), eq(BonusStatus.GRANTED), any(), any(), any(Pageable.class)))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+    }
 
     @Test
     void recent_mergesAndOrdersByCreatedAt() {

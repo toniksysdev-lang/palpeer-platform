@@ -1,9 +1,13 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import type { RefreshControlProps } from 'react-native';
 
 import { enterPin, PIN_STATUS } from '@/features/security/__tests__/helpers';
 import { sessionManager } from '@/services/auth/session';
+import { interacAddressesStorage } from '@/services/storage/interacAddressesStorage';
 import { secureStorage } from '@/services/storage/secureStorage';
+import type { AppStore } from '@/store';
+import { sessionStarted } from '@/store/slices/sessionSlice';
 import { fail, installFetchMock, ok, type RecordedCall } from '@/tests/fetchMock';
 import { router, setSearchParams } from '@/tests/mocks/expoRouter';
 import { typeIntoNumberField } from '@/tests/numberPad';
@@ -13,7 +17,7 @@ import { FundingStatusScreen } from '../screens/FundingStatusScreen';
 import { FundWalletScreen } from '../screens/FundWalletScreen';
 import { WithdrawalStatusScreen } from '../screens/WithdrawalStatusScreen';
 import { WithdrawScreen } from '../screens/WithdrawScreen';
-import { CURRENCIES, funding, wallet, withdrawal } from './fixtures';
+import { CURRENCIES, funding, ngnFunding, wallet, withdrawal } from './fixtures';
 
 jest.mock('expo-router', () => require('../../../tests/mocks/expoRouter'));
 
@@ -42,6 +46,7 @@ async function pullToRefresh() {
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  await AsyncStorage.clear();
   await secureStorage.clearAll();
   await sessionManager.start(
     { userId: 'u-1', accessToken: 'access-0', refreshToken: 'refresh-0', tokenType: 'Bearer' },
@@ -50,7 +55,7 @@ beforeEach(async () => {
 });
 
 describe('FundWalletScreen', () => {
-  it('sends the exact amount with one idempotency key, reused when retried', async () => {
+  it('sends CAD Instant Interac with payer details and one idempotency key', async () => {
     setSearchParams({ id: 'w-cad' });
     let attempt = 0;
     const { calls } = installFetchMock({
@@ -62,13 +67,26 @@ describe('FundWalletScreen', () => {
         return { status: 201, body: { success: true, data: funding(), timestamp: '' } };
       },
     });
-    await renderWithProviders(<FundWalletScreen />);
+    await renderWithProviders(<FundWalletScreen />, {
+      prepareStore: (store) => {
+        store.dispatch(sessionStarted({ userId: 'u-1', email: 'ada@example.com' }));
+      },
+    });
 
     await typeIntoNumberField('fund-amount', '12345678901234567.89');
     await fireEvent.press(screen.getByTestId('fund-continue'));
+    expect(await screen.findByTestId('fund-pay-with')).toBeTruthy();
+
+    await fireEvent.press(screen.getByTestId('fund-add-interac'));
+    await fireEvent.changeText(screen.getByTestId('fund-interac-first'), 'Oluwasesan');
+    await fireEvent.changeText(screen.getByTestId('fund-interac-last'), 'Afolabi');
+    await fireEvent.changeText(screen.getByTestId('fund-interac-email'), 'sesanelect@yahoo.com');
+    await fireEvent.press(screen.getByTestId('fund-interac-continue'));
+
     expect(await screen.findByTestId('fund-review-amount')).toHaveTextContent(
       /12,345,678,901,234,567\.89 CAD/,
     );
+    expect(screen.getByTestId('fund-review-interac')).toHaveTextContent(/sesanelect@yahoo.com/);
 
     await fireEvent.press(screen.getByTestId('fund-confirm'));
     expect(await screen.findByTestId('fund-error')).toBeTruthy();
@@ -83,7 +101,11 @@ describe('FundWalletScreen', () => {
     );
 
     const [first, second] = posts(calls, '/funding');
-    expect(first?.rawBody).toBe('{"walletId":"w-cad","amount":12345678901234567.89}');
+    expect(first?.rawBody).toContain('"walletId":"w-cad"');
+    expect(first?.rawBody).toContain('"amount":12345678901234567.89');
+    expect(first?.rawBody).toContain('"interacEmail":"sesanelect@yahoo.com"');
+    expect(first?.rawBody).toContain('"interacFirstName":"Oluwasesan"');
+    expect(first?.rawBody).toContain('"interacLastName":"Afolabi"');
     expect(first?.headers['Idempotency-Key']).toEqual(expect.any(String));
     expect(second?.headers['Idempotency-Key']).toBe(first?.headers['Idempotency-Key']);
   });
@@ -102,29 +124,37 @@ describe('FundWalletScreen', () => {
 });
 
 describe('FundingStatusScreen', () => {
-  it('shows instructions while pending and only reports success once the backend does', async () => {
+  it('shows Instant Interac payment details while pending and only reports success once settled', async () => {
     setSearchParams({ fundingId: 'f-1' });
     const { calls } = installFetchMock({
       'GET /funding/f-1': [
         ok(funding()),
-        ok(funding({ status: 'SUCCESS', fundingInstructions: null, ledgerEntryId: 'l-9' })),
+        ok(
+          funding({
+            status: 'SUCCESS',
+            fundingInstructions: null,
+            paymentDetails: null,
+            ledgerEntryId: 'l-9',
+          }),
+        ),
       ],
       'GET /currencies': CURRENCIES,
     });
     await renderWithProviders(<FundingStatusScreen />);
 
-    expect(await screen.findByTestId('funding-instructions')).toBeTruthy();
-    expect(
-      screen.getByText(
-        /Interac, Instant deposit via Interac — check your email or banking app to accept the deposit request/,
-      ),
-    ).toBeTruthy();
+    expect(await screen.findByText('Waiting for Instant Interac')).toBeTruthy();
+    expect(screen.getByTestId('funding-payment-details')).toBeTruthy();
+    expect(screen.getByTestId('funding-interac-payee')).toHaveTextContent(
+      'Palpeer Global Holding Inc',
+    );
+    expect(screen.getByTestId('funding-interac-ref')).toHaveTextContent('APY-1');
+    expect(screen.queryByTestId('funding-instructions')).toBeNull();
     expect(screen.getByTestId('movement-amount')).toHaveTextContent('250.00 CAD');
     expect(screen.queryByText('Funds added')).toBeNull();
 
     await pullToRefresh();
     expect(await screen.findByText('Funds added')).toBeTruthy();
-    expect(screen.queryByTestId('funding-instructions')).toBeNull();
+    expect(screen.queryByTestId('funding-payment-details')).toBeNull();
     expect(calls.filter((call) => call.path === '/funding/f-1').length).toBe(2);
   });
 
@@ -152,6 +182,23 @@ describe('FundingStatusScreen', () => {
       params: { id: 'w-cad' },
     });
   });
+
+  it('shows Kuda virtual-account payment details while NGN funding is pending', async () => {
+    setSearchParams({ fundingId: 'f-ngn-1' });
+    installFetchMock({
+      'GET /funding/f-ngn-1': ok(ngnFunding()),
+      'GET /currencies': CURRENCIES,
+    });
+    await renderWithProviders(<FundingStatusScreen />);
+
+    expect(await screen.findByText('Transfer to your virtual account')).toBeTruthy();
+    expect(screen.getByTestId('funding-payment-details')).toBeTruthy();
+    expect(screen.getByTestId('funding-va-number')).toHaveTextContent('3001234567');
+    expect(screen.getByTestId('funding-va-name')).toHaveTextContent('PALPEER USER');
+    expect(screen.getByTestId('funding-va-bank')).toHaveTextContent('Kuda');
+    expect(screen.queryByTestId('funding-instructions')).toBeNull();
+    expect(screen.queryByText('Funds added')).toBeNull();
+  });
 });
 
 describe('WithdrawScreen', () => {
@@ -162,32 +209,44 @@ describe('WithdrawScreen', () => {
     ...extra,
   });
 
-  async function fillEft(amount: string) {
+  const withSession = {
+    prepareStore: (store: AppStore) => {
+      store.dispatch(sessionStarted({ userId: 'u-1', email: 'ada@example.com' }));
+    },
+  };
+
+  async function fillInterac(amount: string) {
     await typeIntoNumberField('withdraw-amount', amount);
-    await fireEvent.press(screen.getByText('Bank (EFT)'));
-    await typeIntoNumberField('withdraw-institution', '001');
-    await typeIntoNumberField('withdraw-transit', '12345');
-    await typeIntoNumberField('withdraw-account', '9876543');
     await fireEvent.press(screen.getByTestId('withdraw-continue'));
   }
 
   it('stops amounts above the available balance before calling the API', async () => {
     setSearchParams({ id: 'w-cad' });
+    await interacAddressesStorage.save('u-1', {
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      email: 'ada@example.com',
+    });
     const { calls } = installFetchMock(routes(false));
-    await renderWithProviders(<WithdrawScreen />);
+    await renderWithProviders(<WithdrawScreen />, withSession);
 
     expect(await screen.findByTestId('withdraw-available')).toHaveTextContent(
       'Available 500.00 CAD',
     );
-    await fillEft('500.01');
+    await fillInterac('500.01');
 
     expect(await screen.findByText('You can withdraw up to 500.00 CAD.')).toBeTruthy();
     expect(screen.queryByTestId('withdraw-review-amount')).toBeNull();
     expect(posts(calls, '/withdrawals')).toHaveLength(0);
   });
 
-  it('asks for the PIN, then sends the EFT reference and opens the status', async () => {
+  it('asks for the PIN, then sends the Interac email and opens the status', async () => {
     setSearchParams({ id: 'w-cad' });
+    await interacAddressesStorage.save('u-1', {
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      email: 'ada@example.com',
+    });
     const { calls } = installFetchMock(
       routes(true, {
         'POST /security/pin/verify': ok(),
@@ -197,11 +256,11 @@ describe('WithdrawScreen', () => {
         },
       }),
     );
-    await renderWithProviders(<WithdrawScreen />);
+    await renderWithProviders(<WithdrawScreen />, withSession);
 
-    await fillEft('100');
+    await fillInterac('100');
     expect(await screen.findByTestId('withdraw-review-destination')).toHaveTextContent(
-      /account ending 6543/,
+      /ada@example.com/,
     );
     await fireEvent.press(screen.getByTestId('withdraw-confirm'));
     await enterPin('pin-prompt-entry', '1234');
@@ -214,18 +273,82 @@ describe('WithdrawScreen', () => {
     );
     const [post] = posts(calls, '/withdrawals');
     expect(post?.rawBody).toBe(
-      '{"walletId":"w-cad","amount":100,"destinationReference":"001:12345:9876543"}',
+      '{"walletId":"w-cad","amount":100,"destinationReference":"ada@example.com"}',
     );
     expect(post?.headers['Idempotency-Key']).toEqual(expect.any(String));
     expect(posts(calls, '/security/pin/verify')).toHaveLength(1);
   });
 
+  it('loads Interac emails saved from CAD funding and sends that destination', async () => {
+    setSearchParams({ id: 'w-cad' });
+    const saved = await interacAddressesStorage.save('u-1', {
+      firstName: 'Oluwasesan',
+      lastName: 'Afolabi',
+      email: 'sesanelect@yahoo.com',
+    });
+    const { calls } = installFetchMock(
+      routes(true, {
+        'POST /security/pin/verify': ok(),
+        'POST /withdrawals': {
+          status: 201,
+          body: { success: true, data: withdrawal(), timestamp: '' },
+        },
+      }),
+    );
+    await renderWithProviders(<WithdrawScreen />, withSession);
+
+    expect(await screen.findByTestId(`withdraw-interac-${saved.id}`)).toHaveTextContent(
+      /sesanelect@yahoo.com/,
+    );
+    await typeIntoNumberField('withdraw-amount', '50');
+    await fireEvent.press(screen.getByTestId('withdraw-continue'));
+    expect(await screen.findByTestId('withdraw-review-destination')).toHaveTextContent(
+      /sesanelect@yahoo.com/,
+    );
+    await fireEvent.press(screen.getByTestId('withdraw-confirm'));
+    await enterPin('pin-prompt-entry', '1234');
+
+    await waitFor(() =>
+      expect(router.replace).toHaveBeenCalledWith({
+        pathname: '/wallet/withdrawal/[withdrawalId]',
+        params: { withdrawalId: 'wd-1' },
+      }),
+    );
+    expect(posts(calls, '/withdrawals')[0]?.rawBody).toBe(
+      '{"walletId":"w-cad","amount":50,"destinationReference":"sesanelect@yahoo.com"}',
+    );
+  });
+
+  it('adds a new Interac address on withdraw and reuses the shared store', async () => {
+    setSearchParams({ id: 'w-cad' });
+    installFetchMock(routes(false));
+    await renderWithProviders(<WithdrawScreen />, withSession);
+
+    await fireEvent.press(await screen.findByTestId('withdraw-add-interac'));
+    await fireEvent.changeText(screen.getByTestId('withdraw-interac-first'), 'Ada');
+    await fireEvent.changeText(screen.getByTestId('withdraw-interac-last'), 'Lovelace');
+    await fireEvent.changeText(
+      screen.getByTestId('withdraw-interac-email'),
+      'ada@example.com',
+    );
+    await fireEvent.press(screen.getByTestId('withdraw-interac-continue'));
+
+    expect(await screen.findByTestId('withdraw-interac-picker')).toHaveTextContent(/ada@example.com/);
+    const listed = await interacAddressesStorage.list('u-1');
+    expect(listed.some((item) => item.email === 'ada@example.com')).toBe(true);
+  });
+
   it('sends nothing when the PIN prompt is cancelled', async () => {
     setSearchParams({ id: 'w-cad' });
+    await interacAddressesStorage.save('u-1', {
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      email: 'ada@example.com',
+    });
     const { calls } = installFetchMock(routes(true));
-    await renderWithProviders(<WithdrawScreen />);
+    await renderWithProviders(<WithdrawScreen />, withSession);
 
-    await fillEft('100');
+    await fillInterac('100');
     await fireEvent.press(await screen.findByTestId('withdraw-confirm'));
     await fireEvent.press(await screen.findByTestId('pin-prompt-cancel'));
 
@@ -236,15 +359,20 @@ describe('WithdrawScreen', () => {
 
   it('shows the backend decision when the balance changed in the meantime', async () => {
     setSearchParams({ id: 'w-cad' });
+    await interacAddressesStorage.save('u-1', {
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      email: 'ada@example.com',
+    });
     installFetchMock(
       routes(true, {
         'POST /security/pin/verify': ok(),
         'POST /withdrawals': fail(422, 'INSUFFICIENT_AVAILABLE_BALANCE'),
       }),
     );
-    await renderWithProviders(<WithdrawScreen />);
+    await renderWithProviders(<WithdrawScreen />, withSession);
 
-    await fillEft('100');
+    await fillInterac('100');
     await fireEvent.press(screen.getByTestId('withdraw-confirm'));
     await enterPin('pin-prompt-entry', '1234');
 

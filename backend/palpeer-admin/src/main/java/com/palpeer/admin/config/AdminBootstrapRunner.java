@@ -39,10 +39,19 @@ public class AdminBootstrapRunner implements ApplicationRunner {
         if (bootstrapEmail == null || bootstrapEmail.isBlank()) {
             return;
         }
+        String email = bootstrapEmail.trim();
+        // Admin console accounts must be able to sign in without a mobile email-OTP flow.
+        userRepository.findByEmailIgnoreCase(email).ifPresent(user -> {
+            if (!user.isEmailVerified()) {
+                user.setEmailVerified(true);
+                userRepository.save(user);
+                log.info("Marked bootstrap admin email as verified: {}", email);
+            }
+        });
         if (adminUserRepository.countByEnabledTrue() > 0) {
             return;
         }
-        userRepository.findByEmailIgnoreCase(bootstrapEmail.trim()).ifPresentOrElse(user -> {
+        userRepository.findByEmailIgnoreCase(email).ifPresentOrElse(user -> {
             Role superAdmin = roleRepository.findByCode("SUPER_ADMIN")
                     .orElseThrow(() -> new IllegalStateException("SUPER_ADMIN role missing — run Flyway V19"));
             AdminUser adminUser = new AdminUser();
@@ -53,9 +62,9 @@ public class AdminBootstrapRunner implements ApplicationRunner {
             auditRecorder.record(AuditRecord.builder("ADMIN_BOOTSTRAP")
                     .entity("AdminUser:" + adminUser.getId())
                     .userRef(user.getId())
-                    .newValue("role=SUPER_ADMIN;email=" + bootstrapEmail)
+                    .newValue("role=SUPER_ADMIN;email=" + email)
                     .build());
-            log.warn("Bootstrapped SUPER_ADMIN for email={}", bootstrapEmail);
-        }, () -> log.warn("Admin bootstrap email not found as user: {}", bootstrapEmail));
+            log.warn("Bootstrapped SUPER_ADMIN for email={}", email);
+        }, () -> log.warn("Admin bootstrap email not found as user: {}", email));
     }
 }

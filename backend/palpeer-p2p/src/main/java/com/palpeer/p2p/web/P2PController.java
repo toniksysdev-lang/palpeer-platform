@@ -5,12 +5,14 @@ import com.palpeer.common.api.ApiResponse;
 import com.palpeer.p2p.service.P2PRateBoundsService;
 import com.palpeer.p2p.service.P2PService;
 import com.palpeer.p2p.web.dto.CreateP2PRequestDto;
+import com.palpeer.p2p.web.dto.P2PFeeEstimateResponse;
 import com.palpeer.p2p.web.dto.P2POrderResponse;
 import com.palpeer.p2p.web.dto.P2POrderSummaryResponse;
 import com.palpeer.p2p.web.dto.P2PRateBoundsResponse;
 import com.palpeer.p2p.web.dto.P2PRequestResponse;
 import com.palpeer.p2p.web.dto.PublicP2PRateResponse;
 import com.palpeer.p2p.web.dto.UpdateP2PRequestDto;
+import java.math.BigDecimal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -82,8 +84,12 @@ public class P2PController {
     @Operation(summary = "Accept P2P request and create order")
     public ApiResponse<P2POrderResponse> accept(
             @AuthenticationPrincipal UserPrincipal principal,
-            @PathVariable UUID requestId) {
-        return ApiResponse.ok("P2P request accepted", p2PService.accept(principal.getId(), requestId));
+            @PathVariable UUID requestId,
+            @RequestParam(required = false) Boolean applyBonusCredit,
+            @RequestParam(required = false) String promotionCode) {
+        return ApiResponse.ok(
+                "P2P request accepted",
+                p2PService.accept(principal.getId(), requestId, applyBonusCredit, promotionCode));
     }
 
     @GetMapping("/me/requests")
@@ -115,6 +121,26 @@ public class P2PController {
     public ApiResponse<P2PRateBoundsResponse> getRateBounds(
             @RequestParam String baseCurrencyCode, @RequestParam String quoteCurrencyCode) {
         return ApiResponse.ok(p2PRateBoundsService.findByPair(baseCurrencyCode, quoteCurrencyCode));
+    }
+
+    @GetMapping("/fee-estimate")
+    @Operation(summary = "Estimate platform fee the buyer would pay for a P2P amount")
+    public ApiResponse<P2PFeeEstimateResponse> estimateFee(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam String baseCurrencyCode,
+            @RequestParam String quoteCurrencyCode,
+            @RequestParam BigDecimal amount,
+            @RequestParam(required = false) BigDecimal rate,
+            @RequestParam(required = false, defaultValue = "false") boolean applyBonusCredit,
+            @RequestParam(required = false) String promotionCode) {
+        return ApiResponse.ok(p2PService.estimateFee(
+                principal != null ? principal.getId() : null,
+                baseCurrencyCode,
+                quoteCurrencyCode,
+                amount,
+                rate,
+                applyBonusCredit,
+                promotionCode));
     }
 
     @GetMapping("/orders/{orderId}")

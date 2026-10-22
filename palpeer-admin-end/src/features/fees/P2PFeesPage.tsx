@@ -13,13 +13,13 @@ import { Select } from '@/components/ui/Select';
 import { appConfig } from '@/config/env';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { formatDecimal } from '@/lib/format';
-import { listCurrencies } from '@/services/api/currencies';
 import {
   createP2PFeeTier,
   deleteP2PFeeTier,
   listP2PFeeTiers,
   updateP2PFeeTier,
 } from '@/services/api/p2pFees';
+import { listP2PRateBounds } from '@/services/api/p2pRateBounds';
 import { ApiClientError } from '@/types/api';
 import type { P2PFeeTier, P2PFeeType } from '@/types/fees';
 
@@ -84,9 +84,9 @@ export function P2PFeesPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [removing, setRemoving] = useState<P2PFeeTier | null>(null);
 
-  const currenciesQuery = useQuery({
-    queryKey: ['currencies', appConfig.useMockApi],
-    queryFn: () => listCurrencies(),
+  const boundsQuery = useQuery({
+    queryKey: ['p2p-rate-bounds', appConfig.useMockApi],
+    queryFn: () => listP2PRateBounds(),
   });
 
   const tiersQuery = useQuery({
@@ -94,10 +94,24 @@ export function P2PFeesPage() {
     queryFn: () => listP2PFeeTiers(),
   });
 
-  const currencyOptions = useMemo(
-    () => [...(currenciesQuery.data ?? [])].sort((a, b) => a.code.localeCompare(b.code)),
-    [currenciesQuery.data],
-  );
+  /** P2P pairs from Rates → Configured P2P bounds. */
+  const p2pPairOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const pairs: { key: string; base: string; quote: string }[] = [];
+    for (const row of boundsQuery.data ?? []) {
+      const base = (row.baseCurrencyCode ?? '').trim().toUpperCase();
+      const quote = (row.quoteCurrencyCode ?? '').trim().toUpperCase();
+      if (!base || !quote || base === quote) continue;
+      const key = `${base}/${quote}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      pairs.push({ key, base, quote });
+    }
+    return pairs.sort((a, b) => a.key.localeCompare(b.key));
+  }, [boundsQuery.data]);
+
+  const selectedPairKey =
+    form.base && form.quote ? `${form.base.toUpperCase()}/${form.quote.toUpperCase()}` : '';
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -265,8 +279,10 @@ export function P2PFeesPage() {
               <h1 className="text-xl font-semibold text-text-primary">P2P Fees</h1>
             </div>
             <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-              Configure P2P exchange fees as a fixed amount or percentage, each scoped to an amount
-              range on the base currency.
+              Configure P2P fees as a fixed amount or percentage for pairs from Rates → Configured
+              P2P bounds. Amount ranges use the pair base currency (e.g. CAD for CAD/NGN). The same
+              tier applies when a sell posts the opposite orientation (NGN/CAD). Settled orders debit
+              the buyer and record P2P revenue under Platform fees.
             </p>
           </div>
         </div>
@@ -301,29 +317,37 @@ export function P2PFeesPage() {
         ) : (
           <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             <Select
-              label="Base"
-              value={form.base}
-              onChange={(e) => setForm((prev) => ({ ...prev, base: e.target.value }))}
+              label="P2P pair (base / quote)"
+              value={selectedPairKey}
+              onChange={(e) => {
+                const pair = p2pPairOptions.find((item) => item.key === e.target.value);
+                if (pair) {
+                  setForm((prev) => ({ ...prev, base: pair.base, quote: pair.quote }));
+                  return;
+                }
+                if (!e.target.value) {
+                  setForm((prev) => ({ ...prev, base: '', quote: '' }));
+                }
+              }}
+              error={errors.baseCurrencyCode || errors.quoteCurrencyCode}
+              disabled={boundsQuery.isLoading}
             >
-              <option value="">Select base</option>
-              {currencyOptions.map((currency) => (
-                <option key={currency.id} value={currency.code}>
-                  {currency.code}
+              <option value="">
+                {boundsQuery.isLoading
+                  ? 'Loading P2P pairs…'
+                  : p2pPairOptions.length === 0
+                    ? 'No P2P bounds yet — configure on Rates'
+                    : 'Select P2P pair'}
+              </option>
+              {p2pPairOptions.map((pair) => (
+                <option key={pair.key} value={pair.key}>
+                  {pair.key}
                 </option>
               ))}
-            </Select>
-            <Select
-              label="Quote"
-              value={form.quote}
-              onChange={(e) => setForm((prev) => ({ ...prev, quote: e.target.value }))}
-              error={errors.quoteCurrencyCode}
-            >
-              <option value="">Select quote</option>
-              {currencyOptions.map((currency) => (
-                <option key={currency.id} value={currency.code}>
-                  {currency.code}
-                </option>
-              ))}
+              {selectedPairKey &&
+              !p2pPairOptions.some((pair) => pair.key === selectedPairKey) ? (
+                <option value={selectedPairKey}>{selectedPairKey} (not in bounds)</option>
+              ) : null}
             </Select>
             <Select
               label="Fee type"

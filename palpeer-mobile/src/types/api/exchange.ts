@@ -70,6 +70,8 @@ export type ExchangeCalculationResponse = {
   /** Target units per one source unit. */
   appliedRate: Money;
   rateSide: ExchangeRateSide | string;
+  estimatedFeeAmount?: Money | null;
+  estimatedFeeCurrency?: string | null;
 };
 
 /** VERIFIED: `ExchangeQuoteStatus`. */

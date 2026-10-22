@@ -52,3 +52,11 @@ export type BonusResponse = {
   reason: string | null;
   createdAt: IsoInstant;
 };
+
+/** VERIFIED: `BonusCurrencySummary` from `GET /promotions/bonuses/mine/summary`. */
+export type BonusCurrencySummary = {
+  currencyCode: string;
+  totalAmount: Money;
+  unusedAmount: Money;
+  usedAmount: Money;
+};

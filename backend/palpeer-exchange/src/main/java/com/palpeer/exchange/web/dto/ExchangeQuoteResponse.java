@@ -15,6 +15,8 @@ public record ExchangeQuoteResponse(
         BigDecimal appliedRate,
         String rateSide,
         Instant expiresAt,
-        String status
+        String status,
+        BigDecimal estimatedFeeAmount,
+        String estimatedFeeCurrency
 ) {
 }

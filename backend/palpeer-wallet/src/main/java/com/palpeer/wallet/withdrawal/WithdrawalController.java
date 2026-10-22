@@ -51,7 +51,7 @@ public class WithdrawalController {
     }
 
     @GetMapping("/banks")
-    @Operation(summary = "List banks available for NGN withdrawals")
+    @Operation(summary = "List banks available for NGN withdrawals (Kuda BANK_LIST when configured)")
     public ApiResponse<List<BankOptionResponse>> listBanks(
             @RequestParam(defaultValue = "NG") String country) {
         return ApiResponse.ok(bankDirectoryService.listBanks(country));
