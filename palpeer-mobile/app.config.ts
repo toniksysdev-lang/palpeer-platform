@@ -40,6 +40,11 @@ if (APP_ENV !== 'development') {
 }
 
 const APP_ID = 'com.palpeer.app';
+/**
+ * New App Store Connect listing (not the legacy "Palpeer" ASC app 6753612161, which is bound to
+ * com.covenantcodes.palpeer). iOS keeps com.palpeer.app; Android package stays the same.
+ */
+const IOS_BUNDLE_ID = 'com.palpeer.app';
 
 /**
  * Development builds talk to a local backend over http (emulator host 10.0.2.2 or the LAN), which
@@ -68,7 +73,7 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
   icon: './assets/icon.png',
   userInterfaceStyle: 'light',
   ios: {
-    bundleIdentifier: APP_ID,
+    bundleIdentifier: IOS_BUNDLE_ID,
     supportsTablet: false,
     ...(iosGoogleServices ? { googleServicesFile: iosGoogleServices } : {}),
     associatedDomains: ['applinks:app.palpeer.com'],

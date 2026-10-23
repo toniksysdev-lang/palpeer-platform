@@ -41,7 +41,11 @@
     "production": {
       "ios": {
         "appleTeamId": "GXZ92PPYUW",
-        "ascAppId": "6753612161"
+        "ascAppId": "6826088742",
+        "appleId": "palpeerglobal@gmail.com",
+        "sku": "palpeer-app-ios",
+        "language": "en-US",
+        "companyName": "Palpeer Global Holdings Inc."
       }
     }
   }
