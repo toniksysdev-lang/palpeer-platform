@@ -29,9 +29,6 @@
     "production": {
       "environment": "production",
       "autoIncrement": true,
-      "ios": {
-        "resourceClass": "m-medium"
-      },
       "env": {
         "EXPO_PUBLIC_ENV": "production",
         "EXPO_PUBLIC_API_BASE_URL": "https://palpeer-api.onrender.com/api/v1",
@@ -41,6 +38,11 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleTeamId": "GXZ92PPYUW",
+        "ascAppId": "6753612161"
+      }
+    }
   }
 }
