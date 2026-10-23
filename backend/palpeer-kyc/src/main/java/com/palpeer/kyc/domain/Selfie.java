@@ -5,11 +5,12 @@ import jakarta.persistence.Basic;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Getter
 @Setter
@@ -33,7 +34,7 @@ public class Selfie extends BaseEntity {
     private long sizeBytes;
 
     /** Durable copy for environments where local disk is ephemeral (e.g. Render). */
-    @Lob
+    @JdbcTypeCode(SqlTypes.BINARY)
     @Basic(fetch = FetchType.LAZY)
     @Column(name = "payload")
     private byte[] payload;
