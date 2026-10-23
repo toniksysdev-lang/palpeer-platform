@@ -59,8 +59,19 @@ function RootNavigator() {
   useApplyPendingReferral();
 
   useEffect(() => {
-    if (ready) notifyPreviewSplashDone();
+    if (ready) {
+      notifyPreviewSplashDone();
+      SplashScreen.hideAsync().catch(() => undefined);
+    }
   }, [ready]);
+
+  // Never leave the native splash covering a hung JS bootstrap.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => undefined);
+    }, 4_000);
+    return () => clearTimeout(timer);
+  }, []);
 
   if (!ready) {
     // Preview iframe: parent overlay is the splash — avoid a second in-app splash.

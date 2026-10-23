@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Animated, Easing, Image, Platform, StyleSheet, View } from 'react-native';
 
 import { PALPEER_LOGO } from '@/components/brand/logo';
@@ -21,12 +21,12 @@ function hideWebBootSplash() {
 /**
  * Branded splash while preferences and session restore.
  * Uses RN Animated (not Reanimated) so cold start cannot die on worklets/OEM quirks.
+ * Width is driven by Animated values only — no per-frame setState (that starved JS on APK).
  * Tagline lives in the logo artwork — do not add duplicate “Your rate, your way” text.
  */
 export function BrandSplash() {
   const theme = useTheme();
   const progress = useRef(new Animated.Value(0.08)).current;
-  const [barWidth, setBarWidth] = useState(12);
 
   useEffect(() => {
     hideWebBootSplash();
@@ -50,14 +50,16 @@ export function BrandSplash() {
       ]),
     );
     progressAnim.start();
-    const id = progress.addListener(({ value }) => {
-      setBarWidth(Math.max(12, Math.min(PROGRESS_TRACK_WIDTH, value * PROGRESS_TRACK_WIDTH)));
-    });
     return () => {
       progressAnim.stop();
-      progress.removeListener(id);
     };
   }, [progress]);
+
+  const barWidth = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, PROGRESS_TRACK_WIDTH],
+    extrapolate: 'clamp',
+  });
 
   return (
     <View
@@ -77,7 +79,9 @@ export function BrandSplash() {
         style={[styles.progressTrack, { backgroundColor: theme.colors.surfaceMuted }]}
         testID="brand-splash-progress"
       >
-        <View style={[styles.progressFill, { backgroundColor: theme.colors.primary, width: barWidth }]} />
+        <Animated.View
+          style={[styles.progressFill, { backgroundColor: theme.colors.primary, width: barWidth }]}
+        />
       </View>
     </View>
   );
