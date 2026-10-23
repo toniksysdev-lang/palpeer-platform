@@ -16,14 +16,11 @@ export function sellOrderAcceptPath(requestId: string): string {
 }
 
 /**
- * Link recipients open. Prefer HTTPS (store / App Links fallback); otherwise the custom scheme
- * so devices with the app installed can open it from WhatsApp, email, etc.
+ * App deep link for share messages (opens PALPEER when installed).
+ * Prefer the custom scheme so recipients open the native app, not a web URL.
  */
 export function sellOrderShareUrl(requestId: string): string {
-  const path = sellOrderSharePath(requestId);
-  const base = appConfig.share.baseUrl;
-  if (base) return `${base}${path}`;
-  return `palpeer:/${path}`;
+  return `palpeer:/${sellOrderSharePath(requestId)}`;
 }
 
 export function sellOrderShareMessage(
@@ -46,10 +43,12 @@ export async function shareSellOrder(
   >,
   formattedAmount: string,
 ): Promise<'shared' | 'cancelled'> {
-  const url = sellOrderShareUrl(request.id);
   const message = sellOrderShareMessage(request, formattedAmount);
+  // App deep link lives in the message (palpeer://…), not a separate HTTPS url field.
   const result = await Share.share(
-    Platform.OS === 'ios' ? { message, url } : { message, title: 'Share Your Sell Order' },
+    Platform.OS === 'ios'
+      ? { message }
+      : { message, title: 'Share Your Sell Order' },
   );
   if (result.action === Share.sharedAction) return 'shared';
   return 'cancelled';

@@ -12,10 +12,10 @@ describe('shareSellOrder helpers', () => {
   it('builds share and accept paths', () => {
     expect(sellOrderSharePath(ID)).toBe(`/p2p/share/${ID}`);
     expect(sellOrderAcceptPath(ID)).toBe(`/p2p/request/${ID}`);
-    expect(sellOrderShareUrl(ID)).toMatch(new RegExp(`${ID}$`));
+    expect(sellOrderShareUrl(ID)).toBe(`palpeer://p2p/share/${ID}`);
   });
 
-  it('includes amount, rate and link in the share message', () => {
+  it('includes amount, rate and app deep link in the share message', () => {
     const message = sellOrderShareMessage(
       {
         id: ID,
@@ -27,8 +27,9 @@ describe('shareSellOrder helpers', () => {
       '100.00 CAD',
     );
     expect(message).toContain('100.00 CAD');
-    expect(message).toContain(ID);
+    expect(message).toContain(`palpeer://p2p/share/${ID}`);
     expect(message).toContain('PALPEER');
+    expect(message).not.toContain('app.palpeer.com');
   });
 
   it('only allows sharing own open sell requests', () => {

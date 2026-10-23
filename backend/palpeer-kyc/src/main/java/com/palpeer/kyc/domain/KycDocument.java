@@ -1,8 +1,11 @@
 package com.palpeer.kyc.domain;
 
 import com.palpeer.common.domain.BaseEntity;
+import jakarta.persistence.Basic;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import java.util.UUID;
 import lombok.Getter;
@@ -34,6 +37,12 @@ public class KycDocument extends BaseEntity {
 
     @Column(name = "size_bytes", nullable = false)
     private long sizeBytes;
+
+    /** Durable copy for environments where local disk is ephemeral (e.g. Render). */
+    @Lob
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "payload")
+    private byte[] payload;
 
     @Column(name = "provider_document_id", length = 120)
     private String providerDocumentId;

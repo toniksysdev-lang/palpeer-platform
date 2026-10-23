@@ -1,8 +1,16 @@
 import { MessageCircle, Send, Sparkles, UserRound } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Screen } from '@/components/layout/Screen';
 import { StackHeader } from '@/components/layout/StackHeader';
 import { FormAlert } from '@/components/feedback/FormAlert';
 import { AppText } from '@/components/ui/AppText';
@@ -68,6 +76,7 @@ export function LiveChatScreen() {
   const modeRef = useRef<Mode>('ai');
   const snapshotRef = useRef(snapshot);
   const seenRemoteIds = useRef<Set<string>>(new Set());
+  const bootedRef = useRef(false);
 
   useEffect(() => {
     sessionRef.current = sessionId;
@@ -82,8 +91,6 @@ export function LiveChatScreen() {
   const push = useCallback((message: ChatMessage) => {
     setMessages((prev) => [...prev, message]);
   }, []);
-
-  const bootedRef = useRef(false);
 
   const boot = useCallback(async () => {
     setBooting(true);
@@ -108,7 +115,6 @@ export function LiveChatScreen() {
       sender: 'ai',
       createdAt: new Date().toISOString(),
     });
-    // Show the composer immediately; account link + snapshot refresh can finish in the background.
     setBooting(false);
 
     void (async () => {
@@ -129,7 +135,6 @@ export function LiveChatScreen() {
     void boot();
   }, [ready, boot]);
 
-  // Poll agent messages while in live-agent mode (no SignalR dependency in RN).
   useEffect(() => {
     if (mode !== 'agent' || !sessionId) return;
     let cancelled = false;
@@ -210,9 +215,9 @@ export function LiveChatScreen() {
     if (!text || sending || booting || !sessionId || awaitingEscalation) return;
 
     setDraft('');
-    const userId = `user-${Date.now()}`;
+    const userMsgId = `user-${Date.now()}`;
     push({
-      id: userId,
+      id: userMsgId,
       text,
       sender: 'user',
       createdAt: new Date().toISOString(),
@@ -244,7 +249,6 @@ export function LiveChatScreen() {
         return;
       }
 
-      // Personal/account questions: answer from live Palpeer API data (not support email directory).
       const freshSnapshot = await refreshAccount();
       snapshotRef.current = freshSnapshot;
       const accountKind = matchAccountQuestion(text);
@@ -285,7 +289,6 @@ export function LiveChatScreen() {
 
       let reply = result.text;
       if (isMissingAccountAiReply(reply) && (email || freshSnapshot.userId)) {
-        // Support AI email lookup failed; fall back to app backend snapshot.
         const fallbackKind = matchAccountQuestion(text) ?? 'profile';
         reply = answerAccountQuestion(fallbackKind, freshSnapshot);
       }
@@ -315,187 +318,197 @@ export function LiveChatScreen() {
   const headerDetail =
     mode === 'agent' ? 'Live agent' : awaitingEscalation ? 'Choose how to continue' : 'AI assistant';
 
-  const composer = bootError ? null : (
-    <View
-      style={{
-        borderTopWidth: 1,
-        borderTopColor: theme.colors.border,
-        paddingHorizontal: theme.spacing.xl,
-        paddingTop: theme.spacing.sm,
-        gap: theme.spacing.xs,
-        backgroundColor: theme.colors.background,
-      }}
-    >
-      {awaitingEscalation ? (
-        <AppText variant="caption" tone="secondary">
-          Choose an option above, or tap Talk to agent.
-        </AppText>
-      ) : null}
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: theme.spacing.sm }}>
-        <TextInput
-          value={draft}
-          onChangeText={setDraft}
-          placeholder={mode === 'agent' ? 'Message the agent…' : 'Ask the AI assistant…'}
-          placeholderTextColor={theme.colors.textMuted}
-          editable={!sending && !booting && !!sessionId && !awaitingEscalation}
-          multiline
-          style={{
-            flex: 1,
-            minHeight: 44,
-            maxHeight: 120,
-            borderWidth: 1,
-            borderColor: theme.colors.border,
-            borderRadius: theme.radius.lg,
-            paddingHorizontal: theme.spacing.md,
-            paddingVertical: theme.spacing.sm,
-            color: theme.colors.textPrimary,
-            backgroundColor: theme.colors.surface,
-          }}
-          testID="live-chat-input"
-        />
-        <Pressable
-          onPress={() => void send()}
-          disabled={sending || booting || !draft.trim() || !sessionId || awaitingEscalation}
-          accessibilityRole="button"
-          accessibilityLabel="Send"
-          style={({ pressed }) => ({
-            minWidth: 72,
-            height: 44,
-            paddingHorizontal: theme.spacing.md,
-            borderRadius: theme.radius.lg,
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexDirection: 'row',
-            gap: 6,
-            backgroundColor: theme.colors.primary,
-            opacity: pressed || sending || !draft.trim() || !sessionId ? 0.55 : 1,
-          })}
-          testID="live-chat-send"
-        >
-          {sending ? (
-            <ActivityIndicator color={theme.colors.onPrimary} />
-          ) : (
-            <>
-              <Icon icon={Send} color={theme.colors.onPrimary} size="sm" />
-              <AppText variant="bodyStrong" style={{ color: theme.colors.onPrimary }}>
-                Send
-              </AppText>
-            </>
-          )}
-        </Pressable>
-      </View>
-    </View>
-  );
+  const canSend = !sending && !booting && !!sessionId && !awaitingEscalation && !!draft.trim();
 
   return (
-    <Screen padded={false} edges={['top', 'bottom']} keyboardAware footer={composer}>
-      <View style={{ paddingHorizontal: theme.spacing.xl }}>
-        <StackHeader title="Live chat" />
-      </View>
-
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: theme.spacing.sm,
-          paddingHorizontal: theme.spacing.xl,
-          paddingBottom: theme.spacing.sm,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.colors.border,
-        }}
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: theme.colors.background }}
+      edges={['top', 'bottom']}
+      testID="live-chat-screen"
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
-        <Icon
-          icon={mode === 'agent' ? UserRound : Sparkles}
-          color={theme.colors.primary}
-          size="md"
-        />
-        <View style={{ flex: 1 }}>
-          <AppText variant="bodyStrong">{mode === 'agent' ? 'Live agent' : 'AI assistant'}</AppText>
-          <AppText variant="caption" tone="secondary">
-            {headerDetail}
-          </AppText>
+        <View style={{ paddingHorizontal: theme.spacing.xl }}>
+          <StackHeader title="Live chat" />
         </View>
-        {mode === 'ai' ? (
-          <Button
-            label="Talk to agent"
-            variant="outline"
-            size="md"
-            fullWidth={false}
-            onPress={() => void escalateToAgent()}
-            disabled={sending || booting || !sessionId}
-            testID="live-chat-escalate"
-          />
-        ) : null}
-      </View>
 
-      {bootError ? (
-        <View style={{ padding: theme.spacing.xl, gap: theme.spacing.md, flex: 1 }}>
-          <FormAlert tone="danger" message={bootError} testID="live-chat-boot-error" />
-          <Button
-            label="Try again"
-            onPress={() => {
-              bootedRef.current = true;
-              void boot();
-            }}
-            testID="live-chat-retry"
-          />
-        </View>
-      ) : booting ? (
         <View
-          style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: theme.spacing.md }}
-          testID="live-chat-booting"
-        >
-          <ActivityIndicator color={theme.colors.primary} />
-          <AppText tone="secondary">Starting chat…</AppText>
-        </View>
-      ) : (
-        <FlatList
-          ref={listRef}
-          testID="live-chat-messages"
-          style={{ flex: 1 }}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{
-            paddingHorizontal: theme.spacing.xl,
-            paddingVertical: theme.spacing.md,
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
             gap: theme.spacing.sm,
-            flexGrow: 1,
+            paddingHorizontal: theme.spacing.xl,
+            paddingBottom: theme.spacing.sm,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.colors.border,
           }}
-          keyboardShouldPersistTaps="handled"
-          ListEmptyComponent={
-            <View style={{ alignItems: 'center', marginTop: theme.spacing.xxl, gap: theme.spacing.sm }}>
-              <Icon icon={MessageCircle} color={theme.colors.textMuted} size="lg" />
-              <AppText tone="secondary">Start the conversation</AppText>
+        >
+          <Icon
+            icon={mode === 'agent' ? UserRound : Sparkles}
+            color={theme.colors.primary}
+            size="md"
+          />
+          <View style={{ flex: 1 }}>
+            <AppText variant="bodyStrong">
+              {mode === 'agent' ? 'Live agent' : 'AI assistant'}
+            </AppText>
+            <AppText variant="caption" tone="secondary">
+              {headerDetail}
+            </AppText>
+          </View>
+          {mode === 'ai' ? (
+            <Button
+              label="Talk to agent"
+              variant="outline"
+              size="md"
+              fullWidth={false}
+              onPress={() => void escalateToAgent()}
+              disabled={sending || booting || !sessionId}
+              testID="live-chat-escalate"
+            />
+          ) : null}
+        </View>
+
+        <View style={{ flex: 1, minHeight: 0 }}>
+          {bootError ? (
+            <View style={{ padding: theme.spacing.xl, gap: theme.spacing.md, flex: 1 }}>
+              <FormAlert tone="danger" message={bootError} testID="live-chat-boot-error" />
+              <Button
+                label="Try again"
+                onPress={() => {
+                  bootedRef.current = true;
+                  void boot();
+                }}
+                testID="live-chat-retry"
+              />
             </View>
-          }
-          renderItem={({ item }) => (
-            <LiveChatBubble
-              message={item}
-              ticketPrefill={{
-                fullName: [snapshot.profile?.firstName, snapshot.profile?.lastName]
-                  .filter(Boolean)
-                  .join(' ')
-                  .trim() || firstName,
-                email,
-                subject: 'Support request from chat',
+          ) : booting ? (
+            <View
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: theme.spacing.md,
               }}
-              onTalkToAgent={() => void escalateToAgent()}
-              onContinueAi={() => setAwaitingEscalation(false)}
-              onTicketSubmitted={(ticket) => {
-                push({
-                  id: `ticket-ok-${Date.now()}`,
-                  text: ticket.ticketNumber
-                    ? `Thanks — ticket ${ticket.ticketNumber} was submitted. Our team will follow up by email.`
-                    : 'Thanks — your support ticket was submitted. Our team will follow up by email.',
-                  sender: 'system',
-                  createdAt: new Date().toISOString(),
-                });
+              testID="live-chat-booting"
+            >
+              <ActivityIndicator color={theme.colors.primary} />
+              <AppText tone="secondary">Starting chat…</AppText>
+            </View>
+          ) : (
+            <FlatList
+              ref={listRef}
+              testID="live-chat-messages"
+              style={{ flex: 1 }}
+              data={messages}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{
+                paddingHorizontal: theme.spacing.xl,
+                paddingVertical: theme.spacing.md,
+                gap: theme.spacing.sm,
+                flexGrow: 1,
               }}
+              keyboardShouldPersistTaps="handled"
+              ListEmptyComponent={
+                <View
+                  style={{
+                    alignItems: 'center',
+                    marginTop: theme.spacing.xxl,
+                    gap: theme.spacing.sm,
+                  }}
+                >
+                  <Icon icon={MessageCircle} color={theme.colors.textMuted} size="lg" />
+                  <AppText tone="secondary">Start the conversation</AppText>
+                </View>
+              }
+              renderItem={({ item }) => (
+                <LiveChatBubble
+                  message={item}
+                  ticketPrefill={{
+                    fullName:
+                      [snapshot.profile?.firstName, snapshot.profile?.lastName]
+                        .filter(Boolean)
+                        .join(' ')
+                        .trim() || firstName,
+                    email,
+                    subject: 'Support request from chat',
+                  }}
+                  onTalkToAgent={() => void escalateToAgent()}
+                  onContinueAi={() => setAwaitingEscalation(false)}
+                  onTicketSubmitted={(ticket) => {
+                    push({
+                      id: `ticket-ok-${Date.now()}`,
+                      text: ticket.ticketNumber
+                        ? `Thanks — ticket ${ticket.ticketNumber} was submitted. Our team will follow up by email.`
+                        : 'Thanks — your support ticket was submitted. Our team will follow up by email.',
+                      sender: 'system',
+                      createdAt: new Date().toISOString(),
+                    });
+                  }}
+                />
+              )}
             />
           )}
-        />
-      )}
-    </Screen>
+        </View>
+
+        {!bootError ? (
+          <View
+            style={{
+              borderTopWidth: 1,
+              borderTopColor: theme.colors.border,
+              paddingHorizontal: theme.spacing.xl,
+              paddingTop: theme.spacing.sm,
+              paddingBottom: theme.spacing.sm,
+              gap: theme.spacing.xs,
+              backgroundColor: theme.colors.background,
+            }}
+            testID="live-chat-composer"
+          >
+            {awaitingEscalation ? (
+              <AppText variant="caption" tone="secondary">
+                Choose an option above, or tap Talk to agent.
+              </AppText>
+            ) : null}
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: theme.spacing.sm }}>
+              <TextInput
+                value={draft}
+                onChangeText={setDraft}
+                placeholder={mode === 'agent' ? 'Message the agent…' : 'Ask the AI assistant…'}
+                placeholderTextColor={theme.colors.textMuted}
+                editable={!sending && !booting && !!sessionId && !awaitingEscalation}
+                multiline
+                style={{
+                  flex: 1,
+                  minHeight: 44,
+                  maxHeight: 120,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  borderRadius: theme.radius.lg,
+                  paddingHorizontal: theme.spacing.md,
+                  paddingVertical: theme.spacing.sm,
+                  color: theme.colors.textPrimary,
+                  backgroundColor: theme.colors.surface,
+                }}
+                testID="live-chat-input"
+              />
+              <Button
+                label="Send"
+                leftIcon={Send}
+                size="md"
+                fullWidth={false}
+                onPress={() => void send()}
+                disabled={!canSend}
+                loading={sending}
+                testID="live-chat-send"
+              />
+            </View>
+          </View>
+        ) : null}
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

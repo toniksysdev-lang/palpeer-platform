@@ -59,8 +59,6 @@ function RootNavigator() {
   useApplyPendingReferral();
 
   useEffect(() => {
-    // Hide the static native splash ASAP so BrandSplash (logo + progress) is visible on device.
-    SplashScreen.hideAsync().catch(() => undefined);
     if (ready) notifyPreviewSplashDone();
   }, [ready]);
 
@@ -69,8 +67,17 @@ function RootNavigator() {
     if (isWebPreviewFrame()) {
       return <View style={{ flex: 1, backgroundColor: palette.neutral0 }} testID="boot-placeholder" />;
     }
-    // Native + standalone web: branded splash with loading progress.
-    return <BrandSplash />;
+    // One splash only (like localhost:3333): hide the static native splash once BrandSplash paints.
+    return (
+      <View
+        style={{ flex: 1, backgroundColor: palette.neutral0 }}
+        onLayout={() => {
+          SplashScreen.hideAsync().catch(() => undefined);
+        }}
+      >
+        <BrandSplash />
+      </View>
+    );
   }
 
   return (

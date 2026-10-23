@@ -116,7 +116,7 @@ export function LockScreen() {
       </View>
       <View style={{ padding: theme.spacing.xxl, gap: theme.spacing.sm }}>
         <Button
-          label={`Unlock with ${label}`}
+          label="Unlock with Face ID or Fingerprint"
           leftIcon={Fingerprint}
           onPress={() => void unlock()}
           loading={busy}

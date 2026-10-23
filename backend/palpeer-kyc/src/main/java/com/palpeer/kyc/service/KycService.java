@@ -86,6 +86,7 @@ public class KycService {
         document.setContentType(stored.contentType());
         document.setOriginalFilename(safeFilename(file));
         document.setSizeBytes(stored.sizeBytes());
+        document.setPayload(multipartBytes(file));
         kycDocumentRepository.save(document);
 
         markInProgress(kycCase);
@@ -105,6 +106,7 @@ public class KycService {
         selfie.setContentType(stored.contentType());
         selfie.setOriginalFilename(safeFilename(file));
         selfie.setSizeBytes(stored.sizeBytes());
+        selfie.setPayload(multipartBytes(file));
         selfieRepository.save(selfie);
 
         markInProgress(kycCase);
@@ -216,7 +218,7 @@ public class KycService {
                     clientId,
                     document.getDocumentType(),
                     request.issuingCountry());
-            byte[] bytes = readAll(document.getStorageKey());
+            byte[] bytes = readDocumentBytes(document);
             kycVerificationProvider.uploadDocumentImage(
                     providerDocumentId, "front", document.getOriginalFilename(), bytes);
             document.setProviderDocumentId(providerDocumentId);
@@ -228,7 +230,7 @@ public class KycService {
             String livePhotoId = selfie.getProviderLivePhotoId();
             if (livePhotoId == null || livePhotoId.isBlank()) {
                 livePhotoId = kycVerificationProvider.uploadLivePhoto(
-                        clientId, selfie.getOriginalFilename(), readAll(selfie.getStorageKey()));
+                        clientId, selfie.getOriginalFilename(), readSelfieBytes(selfie));
                 selfie.setProviderLivePhotoId(livePhotoId);
                 selfieRepository.save(selfie);
             }
@@ -309,11 +311,41 @@ public class KycService {
                 .build());
     }
 
-    private byte[] readAll(String storageKey) {
+    private byte[] readDocumentBytes(KycDocument document) {
+        if (document.getPayload() != null && document.getPayload().length > 0) {
+            return document.getPayload();
+        }
+        return readFromObjectStorage(document.getStorageKey());
+    }
+
+    private byte[] readSelfieBytes(Selfie selfie) {
+        if (selfie.getPayload() != null && selfie.getPayload().length > 0) {
+            return selfie.getPayload();
+        }
+        return readFromObjectStorage(selfie.getStorageKey());
+    }
+
+    private byte[] readFromObjectStorage(String storageKey) {
         try (InputStream in = objectStorage.open(storageKey)) {
             return in.readAllBytes();
         } catch (Exception ex) {
-            throw new BusinessException("KYC_STORAGE_READ_FAILED", "Failed to read uploaded KYC file", HttpStatus.INTERNAL_SERVER_ERROR);
+            throw new BusinessException(
+                    "KYC_STORAGE_READ_FAILED",
+                    "Failed to read uploaded KYC file",
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    ex);
+        }
+    }
+
+    private static byte[] multipartBytes(MultipartFile file) {
+        try {
+            return file.getBytes();
+        } catch (Exception ex) {
+            throw new BusinessException(
+                    "STORAGE_WRITE_FAILED",
+                    "Failed to read upload bytes",
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    ex);
         }
     }
 
@@ -380,7 +412,7 @@ public class KycService {
         KycCase kycCase = requireCase(caseId);
         KycDocument document = kycDocumentRepository.findByIdAndKycCaseId(documentId, caseId)
                 .orElseThrow(() -> new ResourceNotFoundException("KYC document not found"));
-        byte[] bytes = readAll(document.getStorageKey());
+        byte[] bytes = readDocumentBytes(document);
         auditRecorder.record(AuditRecord.builder("ADMIN_KYC_DOCUMENT_VIEW")
                 .entity("KycDocument:" + document.getId())
                 .userRef(kycCase.getUserId())
@@ -395,7 +427,7 @@ public class KycService {
         KycCase kycCase = requireCase(caseId);
         Selfie selfie = selfieRepository.findFirstByKycCaseIdOrderByCreatedAtDesc(caseId)
                 .orElseThrow(() -> new ResourceNotFoundException("KYC selfie not found"));
-        byte[] bytes = readAll(selfie.getStorageKey());
+        byte[] bytes = readSelfieBytes(selfie);
         auditRecorder.record(AuditRecord.builder("ADMIN_KYC_SELFIE_VIEW")
                 .entity("Selfie:" + selfie.getId())
                 .userRef(kycCase.getUserId())
