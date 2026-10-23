@@ -147,8 +147,8 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
         android: {
           // Extract .so files at install time — fixes SoLoader crashes on some OEM devices.
           useLegacyPackaging: true,
-          // Keep both 32-bit and 64-bit ARM (plus emulator ABIs via EAS defaults).
-          buildArchs: ['armeabi-v7a', 'arm64-v8a'],
+          // Fat/universal APK: phones (ARM) + x86 emulators / CI devices.
+          buildArchs: ['armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'],
           minSdkVersion: 24,
         },
       },
