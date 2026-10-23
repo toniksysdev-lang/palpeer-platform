@@ -1,14 +1,6 @@
 import { MessageCircle, Send, Sparkles, UserRound } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/layout/Screen';
 import { StackHeader } from '@/components/layout/StackHeader';
@@ -110,19 +102,25 @@ export function LiveChatScreen() {
     }
 
     setSessionId(started.sessionId);
-    // Best-effort link on the support platform; account answers use the app backend snapshot.
-    if (email) {
-      await verifyPalpeerAccount(email, started.sessionId);
-    }
-    await refreshAccount();
-
     push({
       id: `welcome-${Date.now()}`,
       text: greeting(firstName),
       sender: 'ai',
       createdAt: new Date().toISOString(),
     });
+    // Show the composer immediately; account link + snapshot refresh can finish in the background.
     setBooting(false);
+
+    void (async () => {
+      if (email) {
+        await verifyPalpeerAccount(email, started.sessionId);
+      }
+      try {
+        await refreshAccount();
+      } catch {
+        // Account snapshot is best-effort for AI context.
+      }
+    })();
   }, [email, firstName, push, refreshAccount]);
 
   useEffect(() => {
@@ -317,8 +315,80 @@ export function LiveChatScreen() {
   const headerDetail =
     mode === 'agent' ? 'Live agent' : awaitingEscalation ? 'Choose how to continue' : 'AI assistant';
 
+  const composer = bootError ? null : (
+    <View
+      style={{
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.border,
+        paddingHorizontal: theme.spacing.xl,
+        paddingTop: theme.spacing.sm,
+        gap: theme.spacing.xs,
+        backgroundColor: theme.colors.background,
+      }}
+    >
+      {awaitingEscalation ? (
+        <AppText variant="caption" tone="secondary">
+          Choose an option above, or tap Talk to agent.
+        </AppText>
+      ) : null}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: theme.spacing.sm }}>
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          placeholder={mode === 'agent' ? 'Message the agent…' : 'Ask the AI assistant…'}
+          placeholderTextColor={theme.colors.textMuted}
+          editable={!sending && !booting && !!sessionId && !awaitingEscalation}
+          multiline
+          style={{
+            flex: 1,
+            minHeight: 44,
+            maxHeight: 120,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            borderRadius: theme.radius.lg,
+            paddingHorizontal: theme.spacing.md,
+            paddingVertical: theme.spacing.sm,
+            color: theme.colors.textPrimary,
+            backgroundColor: theme.colors.surface,
+          }}
+          testID="live-chat-input"
+        />
+        <Pressable
+          onPress={() => void send()}
+          disabled={sending || booting || !draft.trim() || !sessionId || awaitingEscalation}
+          accessibilityRole="button"
+          accessibilityLabel="Send"
+          style={({ pressed }) => ({
+            minWidth: 72,
+            height: 44,
+            paddingHorizontal: theme.spacing.md,
+            borderRadius: theme.radius.lg,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'row',
+            gap: 6,
+            backgroundColor: theme.colors.primary,
+            opacity: pressed || sending || !draft.trim() || !sessionId ? 0.55 : 1,
+          })}
+          testID="live-chat-send"
+        >
+          {sending ? (
+            <ActivityIndicator color={theme.colors.onPrimary} />
+          ) : (
+            <>
+              <Icon icon={Send} color={theme.colors.onPrimary} size="sm" />
+              <AppText variant="bodyStrong" style={{ color: theme.colors.onPrimary }}>
+                Send
+              </AppText>
+            </>
+          )}
+        </Pressable>
+      </View>
+    </View>
+  );
+
   return (
-    <Screen padded={false} edges={['top', 'bottom']}>
+    <Screen padded={false} edges={['top', 'bottom']} keyboardAware footer={composer}>
       <View style={{ paddingHorizontal: theme.spacing.xl }}>
         <StackHeader title="Live chat" />
       </View>
@@ -359,7 +429,7 @@ export function LiveChatScreen() {
       </View>
 
       {bootError ? (
-        <View style={{ padding: theme.spacing.xl, gap: theme.spacing.md }}>
+        <View style={{ padding: theme.spacing.xl, gap: theme.spacing.md, flex: 1 }}>
           <FormAlert tone="danger" message={bootError} testID="live-chat-boot-error" />
           <Button
             label="Try again"
@@ -370,128 +440,60 @@ export function LiveChatScreen() {
             testID="live-chat-retry"
           />
         </View>
-      ) : (
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+      ) : booting ? (
+        <View
+          style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: theme.spacing.md }}
+          testID="live-chat-booting"
         >
-          {booting ? (
-            <View
-              style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: theme.spacing.md }}
-              testID="live-chat-booting"
-            >
-              <ActivityIndicator color={theme.colors.primary} />
-              <AppText tone="secondary">Starting chat…</AppText>
+          <ActivityIndicator color={theme.colors.primary} />
+          <AppText tone="secondary">Starting chat…</AppText>
+        </View>
+      ) : (
+        <FlatList
+          ref={listRef}
+          testID="live-chat-messages"
+          style={{ flex: 1 }}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{
+            paddingHorizontal: theme.spacing.xl,
+            paddingVertical: theme.spacing.md,
+            gap: theme.spacing.sm,
+            flexGrow: 1,
+          }}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', marginTop: theme.spacing.xxl, gap: theme.spacing.sm }}>
+              <Icon icon={MessageCircle} color={theme.colors.textMuted} size="lg" />
+              <AppText tone="secondary">Start the conversation</AppText>
             </View>
-          ) : (
-            <FlatList
-              ref={listRef}
-              testID="live-chat-messages"
-              style={{ flex: 1 }}
-              data={messages}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={{
-                paddingHorizontal: theme.spacing.xl,
-                paddingVertical: theme.spacing.md,
-                gap: theme.spacing.sm,
-                flexGrow: 1,
+          }
+          renderItem={({ item }) => (
+            <LiveChatBubble
+              message={item}
+              ticketPrefill={{
+                fullName: [snapshot.profile?.firstName, snapshot.profile?.lastName]
+                  .filter(Boolean)
+                  .join(' ')
+                  .trim() || firstName,
+                email,
+                subject: 'Support request from chat',
               }}
-              keyboardShouldPersistTaps="handled"
-              ListEmptyComponent={
-                <View style={{ alignItems: 'center', marginTop: theme.spacing.xxl, gap: theme.spacing.sm }}>
-                  <Icon icon={MessageCircle} color={theme.colors.textMuted} size="lg" />
-                  <AppText tone="secondary">Start the conversation</AppText>
-                </View>
-              }
-              renderItem={({ item }) => (
-                <LiveChatBubble
-                  message={item}
-                  ticketPrefill={{
-                    fullName: [snapshot.profile?.firstName, snapshot.profile?.lastName]
-                      .filter(Boolean)
-                      .join(' ')
-                      .trim() || firstName,
-                    email,
-                    subject: 'Support request from chat',
-                  }}
-                  onTalkToAgent={() => void escalateToAgent()}
-                  onContinueAi={() => setAwaitingEscalation(false)}
-                  onTicketSubmitted={(ticket) => {
-                    push({
-                      id: `ticket-ok-${Date.now()}`,
-                      text: ticket.ticketNumber
-                        ? `Thanks — ticket ${ticket.ticketNumber} was submitted. Our team will follow up by email.`
-                        : 'Thanks — your support ticket was submitted. Our team will follow up by email.',
-                      sender: 'system',
-                      createdAt: new Date().toISOString(),
-                    });
-                  }}
-                />
-              )}
+              onTalkToAgent={() => void escalateToAgent()}
+              onContinueAi={() => setAwaitingEscalation(false)}
+              onTicketSubmitted={(ticket) => {
+                push({
+                  id: `ticket-ok-${Date.now()}`,
+                  text: ticket.ticketNumber
+                    ? `Thanks — ticket ${ticket.ticketNumber} was submitted. Our team will follow up by email.`
+                    : 'Thanks — your support ticket was submitted. Our team will follow up by email.',
+                  sender: 'system',
+                  createdAt: new Date().toISOString(),
+                });
+              }}
             />
           )}
-
-          <View
-            style={{
-              borderTopWidth: 1,
-              borderTopColor: theme.colors.border,
-              paddingHorizontal: theme.spacing.xl,
-              paddingVertical: theme.spacing.sm,
-              gap: theme.spacing.xs,
-              backgroundColor: theme.colors.background,
-            }}
-          >
-            {awaitingEscalation ? (
-              <AppText variant="caption" tone="secondary">
-                Choose an option above, or tap Talk to agent.
-              </AppText>
-            ) : null}
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: theme.spacing.sm }}>
-              <TextInput
-                value={draft}
-                onChangeText={setDraft}
-                placeholder={mode === 'agent' ? 'Message the agent…' : 'Ask the AI assistant…'}
-                placeholderTextColor={theme.colors.textMuted}
-                editable={!sending && !booting && !!sessionId && !awaitingEscalation}
-                multiline
-                style={{
-                  flex: 1,
-                  minHeight: 44,
-                  maxHeight: 120,
-                  borderWidth: 1,
-                  borderColor: theme.colors.border,
-                  borderRadius: theme.radius.lg,
-                  paddingHorizontal: theme.spacing.md,
-                  paddingVertical: theme.spacing.sm,
-                  color: theme.colors.textPrimary,
-                  backgroundColor: theme.colors.surface,
-                }}
-                testID="live-chat-input"
-              />
-              <Pressable
-                onPress={() => void send()}
-                disabled={sending || booting || !draft.trim() || !sessionId || awaitingEscalation}
-                style={({ pressed }) => ({
-                  width: 44,
-                  height: 44,
-                  borderRadius: theme.radius.lg,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: theme.colors.primary,
-                  opacity: pressed || sending || !draft.trim() ? 0.6 : 1,
-                })}
-                testID="live-chat-send"
-              >
-                {sending ? (
-                  <ActivityIndicator color={theme.colors.onPrimary} />
-                ) : (
-                  <Icon icon={Send} color={theme.colors.onPrimary} size="md" />
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
+        />
       )}
     </Screen>
   );

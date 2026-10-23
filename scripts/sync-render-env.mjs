@@ -117,6 +117,7 @@ const prefixes = [
   'TELNYX_',
   'TWILIO_',
   'BULKSMS_',
+  'COMPLYCUBE_',
 ];
 for (const [k, v] of Object.entries(local)) {
   if (v && prefixes.some((p) => k.startsWith(p))) env[k] = v;

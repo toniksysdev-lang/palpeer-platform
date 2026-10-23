@@ -300,7 +300,7 @@ export function LoginScreen() {
       />
       {biometricLabel ? (
         <Button
-          label={`Login with ${biometricLabel}`}
+          label="Login with Face ID or Fingerprint"
           leftIcon={Fingerprint}
           variant="primaryOutline"
           shape="pill"

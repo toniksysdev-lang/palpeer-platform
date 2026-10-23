@@ -1,7 +1,7 @@
 import { skipToken } from '@reduxjs/toolkit/query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { RefreshControl, Switch, View } from 'react-native';
+import { Pressable, RefreshControl, Switch, View } from 'react-native';
 
 import { Screen } from '@/components/layout/Screen';
 import { StackHeader } from '@/components/layout/StackHeader';
@@ -61,7 +61,7 @@ import {
   sideLabel,
   viewerIsP2PBuyer,
 } from '../logic';
-import { canShareSellOrder, shareSellOrder } from '../shareSellOrder';
+import { canShareSellOrder, sellOrderShareUrl, shareSellOrder } from '../shareSellOrder';
 
 export function RequestDetailScreen() {
   const theme = useTheme();
@@ -384,23 +384,41 @@ export function RequestDetailScreen() {
     footer = (
       <View style={{ gap: theme.spacing.sm }}>
         {shareable ? (
-          <Button
-            label="Share Your Sell Order"
-            onPress={() => {
-              void (async () => {
-                setSharing(true);
-                try {
-                  await shareSellOrder(data, amount);
-                } catch {
-                  toast.show({ type: 'error', title: "Couldn't open the share sheet" });
-                } finally {
-                  setSharing(false);
-                }
-              })();
-            }}
-            loading={sharing}
-            testID="p2p-share-sell"
-          />
+          <View style={{ gap: theme.spacing.sm }}>
+            <Button
+              label="Share Your Sell Order"
+              onPress={() => {
+                void (async () => {
+                  setSharing(true);
+                  try {
+                    await shareSellOrder(data, amount);
+                  } catch {
+                    toast.show({ type: 'error', title: "Couldn't open the share sheet" });
+                  } finally {
+                    setSharing(false);
+                  }
+                })();
+              }}
+              loading={sharing}
+              testID="p2p-share-sell"
+            />
+            <Pressable
+              onPress={() =>
+                router.push({ pathname: '/p2p/request/[id]', params: { id: data.id } })
+              }
+              accessibilityRole="link"
+              accessibilityLabel="Open sell order detail"
+              testID="p2p-share-link"
+            >
+              <AppText
+                variant="caption"
+                tone="info"
+                style={{ textDecorationLine: 'underline' }}
+              >
+                {sellOrderShareUrl(data.id)}
+              </AppText>
+            </Pressable>
+          </View>
         ) : null}
         <Button
           label="Edit request"

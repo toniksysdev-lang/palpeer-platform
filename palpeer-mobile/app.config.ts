@@ -64,7 +64,7 @@ export default (context: ConfigContext): ExpoConfig => {
 
 const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: APP_ENV === 'production' ? 'PALPEER' : `PALPEER (${APP_ENV})`,
+  name: 'PALPEER',
   slug: 'palpeer',
   owner: 'toniksyslab',
   version: '0.1.4',

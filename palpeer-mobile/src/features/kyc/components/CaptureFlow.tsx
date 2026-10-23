@@ -141,7 +141,7 @@ export function CaptureFlow({
           testID="capture-processing"
         >
           <ActivityIndicator color={theme.colors.primary} size="large" />
-          <AppText tone="secondary">Checking your photoâ€¦</AppText>
+          <AppText tone="secondary">Checking your photo...</AppText>
         </View>
       </Screen>
     );
@@ -206,7 +206,7 @@ export function CaptureFlow({
               testID="upload-progress"
             />
             <AppText variant="caption" tone="secondary">
-              Uploadingâ€¦ {Math.round(upload.progress * 100)}%
+              Uploading {Math.round(upload.progress * 100)}%
             </AppText>
           </View>
         ) : null}

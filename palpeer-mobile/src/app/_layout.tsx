@@ -59,22 +59,17 @@ function RootNavigator() {
   useApplyPendingReferral();
 
   useEffect(() => {
-    if (!ready) return;
-    // One splash only: dismiss native / preview overlay when the app is actually ready.
+    // Hide the static native splash ASAP so BrandSplash (logo + progress) is visible on device.
     SplashScreen.hideAsync().catch(() => undefined);
-    notifyPreviewSplashDone();
+    if (ready) notifyPreviewSplashDone();
   }, [ready]);
 
   if (!ready) {
-    // Native: keep the OS/expo splash (do not mount a second BrandSplash).
-    if (Platform.OS !== 'web') {
-      return null;
-    }
     // Preview iframe: parent overlay is the splash — avoid a second in-app splash.
     if (isWebPreviewFrame()) {
       return <View style={{ flex: 1, backgroundColor: palette.neutral0 }} testID="boot-placeholder" />;
     }
-    // Standalone web: single BrandSplash for the bootstrap window.
+    // Native + standalone web: branded splash with loading progress.
     return <BrandSplash />;
   }
 

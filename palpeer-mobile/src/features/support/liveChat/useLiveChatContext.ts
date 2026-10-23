@@ -49,8 +49,8 @@ export function useLiveChatContext() {
   }, [email, userId, wallets, profile, recent, rates]);
 
   const firstName = profile.data?.firstName?.trim() || null;
-  const ready =
-    !profile.isLoading && !wallets.isLoading && !recent.isLoading && !rates.isLoading;
+  // Do not block chat boot on wallet/rates/history — those refresh in the background.
+  const ready = !profile.isLoading;
 
   return {
     email,

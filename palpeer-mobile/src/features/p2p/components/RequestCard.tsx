@@ -14,7 +14,7 @@ import { formatDateTime } from '@/utils/datetime';
 import { ExpiryCountdown } from './ExpiryCountdown';
 import { FlippableRateLine } from './FlippableRateLine';
 import { effectiveStatus, preferredRateUnit, p2pRateLine, sideLabel } from '../logic';
-import { canShareSellOrder, shareSellOrder } from '../shareSellOrder';
+import { canShareSellOrder, sellOrderShareUrl, shareSellOrder } from '../shareSellOrder';
 
 export function RequestCard({
   request,
@@ -105,24 +105,40 @@ export function RequestCard({
             </AppText>
           )}
           {shareable ? (
-            <Pressable
-              onPress={() => void onShare()}
-              accessibilityRole="button"
-              accessibilityLabel="Share Sell Link"
-              testID={`p2p-share-${request.id}`}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                alignSelf: 'flex-start',
-                gap: 6,
-                marginTop: theme.spacing.xxs,
-              }}
-            >
-              <Icon icon={Share2} size={16} color={theme.colors.primary} />
-              <AppText variant="caption" tone="brand">
-                Share Sell Link
-              </AppText>
-            </Pressable>
+            <View style={{ gap: 4, marginTop: theme.spacing.xxs }}>
+              <Pressable
+                onPress={() => void onShare()}
+                accessibilityRole="button"
+                accessibilityLabel="Share Sell Link"
+                testID={`p2p-share-${request.id}`}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  alignSelf: 'flex-start',
+                  gap: 6,
+                }}
+              >
+                <Icon icon={Share2} size={16} color={theme.colors.primary} />
+                <AppText variant="caption" tone="brand">
+                  Share Sell Link
+                </AppText>
+              </Pressable>
+              <Pressable
+                onPress={onPress}
+                accessibilityRole="link"
+                accessibilityLabel="Open sell order detail"
+                testID={`p2p-share-link-${request.id}`}
+              >
+                <AppText
+                  variant="caption"
+                  tone="info"
+                  numberOfLines={1}
+                  style={{ textDecorationLine: 'underline' }}
+                >
+                  {sellOrderShareUrl(request.id)}
+                </AppText>
+              </Pressable>
+            </View>
           ) : null}
         </View>
         {showStatus ? <StatusBadge status={status} /> : null}
