@@ -6,7 +6,9 @@ backend/
 palpeer-admin-end/
 docs/
 data/
-scripts/
+# Only the repo-root scripts/ folder — do NOT use a bare "scripts/" pattern
+# (that also strips palpeer-mobile/scripts/, which Metro needs on EAS).
+/scripts/
 render.yaml
 docker-compose*.yml
 Dockerfile*
