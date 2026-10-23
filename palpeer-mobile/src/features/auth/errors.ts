@@ -8,6 +8,7 @@ const MESSAGES: Record<string, string> = {
   USER_DISABLED: 'This account has been disabled. Please contact support.',
   EMAIL_NOT_VERIFIED: 'Verify your email before signing in.',
   PASSWORD_LOGIN_UNAVAILABLE: 'This account uses Google Sign-In. Continue with Google.',
+  PASSWORD_NOT_SET: 'No password is set for this account. Use Forgot password to create one.',
   INVALID_GOOGLE_TOKEN: 'Google sign-in failed. Try again.',
   GOOGLE_EMAIL_UNVERIFIED: 'Your Google email must be verified to continue.',
   GOOGLE_AUTH_DISABLED: 'Google Sign-In is not available in this build.',

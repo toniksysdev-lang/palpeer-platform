@@ -143,7 +143,7 @@ public class AdminUserService {
         String email = user.getEmail();
         List<String> storageKeys = collectKycStorageKeys(userId);
 
-        // Chat (rooms the user participates in, or rooms tied to their P2P orders)
+        // Chat (participant rooms, P2P-order rooms, or negotiation-scoped rooms for this user)
         exec(
                 """
                 DELETE FROM chat_messages
@@ -157,6 +157,16 @@ public class AdminUserService {
                                 WHERE requester_id = :userId OR acceptor_id = :userId
                                    OR request_id IN (SELECT id FROM p2p_requests WHERE user_id = :userId)
                            )
+                           OR negotiation_id IN (
+                                SELECT id FROM negotiations
+                                WHERE requester_id = :userId
+                                   OR counterparty_id = :userId
+                                   OR closed_by = :userId
+                                   OR p2p_request_id IN (SELECT id FROM p2p_requests WHERE user_id = :userId)
+                                   OR id IN (
+                                        SELECT negotiation_id FROM negotiation_offers WHERE offered_by = :userId
+                                   )
+                           )
                    )
                 """,
                 userId);
@@ -169,6 +179,16 @@ public class AdminUserService {
                         SELECT id FROM p2p_orders
                         WHERE requester_id = :userId OR acceptor_id = :userId
                            OR request_id IN (SELECT id FROM p2p_requests WHERE user_id = :userId)
+                   )
+                   OR negotiation_id IN (
+                        SELECT id FROM negotiations
+                        WHERE requester_id = :userId
+                           OR counterparty_id = :userId
+                           OR closed_by = :userId
+                           OR p2p_request_id IN (SELECT id FROM p2p_requests WHERE user_id = :userId)
+                           OR id IN (
+                                SELECT negotiation_id FROM negotiation_offers WHERE offered_by = :userId
+                           )
                    )
                 """,
                 userId);
@@ -265,11 +285,20 @@ public class AdminUserService {
                 userId);
         exec("DELETE FROM kyc_cases WHERE user_id = :userId", userId);
 
-        // Platform fee revenue rows reference users
-        execOptional("DELETE FROM platform_fee_revenues WHERE user_id = :userId", userId);
+        // Platform fee revenue rows reference users (required once V45 is applied)
+        exec("DELETE FROM platform_fee_revenues WHERE user_id = :userId", userId);
 
-        // Promotions / notifications / security / profile / auth / notes
-        exec("DELETE FROM bonuses WHERE user_id = :userId", userId);
+        // Promotions: bonuses may reference another party's referral row — purge those first
+        exec(
+                """
+                DELETE FROM bonuses
+                WHERE user_id = :userId
+                   OR referral_id IN (
+                        SELECT id FROM referrals
+                        WHERE referrer_user_id = :userId OR referee_user_id = :userId
+                   )
+                """,
+                userId);
         exec(
                 """
                 DELETE FROM referrals

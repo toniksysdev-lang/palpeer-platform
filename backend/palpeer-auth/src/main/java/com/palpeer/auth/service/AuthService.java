@@ -247,9 +247,16 @@ public class AuthService {
             throw new BusinessException("USER_DISABLED", "User account is disabled", HttpStatus.FORBIDDEN);
         }
         if (user.getPasswordHash() == null || user.getPasswordHash().isBlank()) {
+            if (user.getGoogleSub() != null && !user.getGoogleSub().isBlank()) {
+                throw new BusinessException(
+                        "PASSWORD_LOGIN_UNAVAILABLE",
+                        "This account uses Google Sign-In. Continue with Google.",
+                        HttpStatus.BAD_REQUEST);
+            }
+            // Blank hash with no Google link — usually a data issue; send user to reset.
             throw new BusinessException(
-                    "PASSWORD_LOGIN_UNAVAILABLE",
-                    "This account uses Google Sign-In. Continue with Google.",
+                    "PASSWORD_NOT_SET",
+                    "No password is set for this account. Use Forgot password to create one.",
                     HttpStatus.BAD_REQUEST);
         }
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
