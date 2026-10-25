@@ -5,8 +5,8 @@ import com.palpeer.notification.domain.Notification;
 
 /**
  * Push delivery adapter.
- * Active implementation: {@link RoutingPushNotifier} (Expo + FCM) when FCM is enabled with
- * credentials; otherwise {@link LoggingPushNotifier}.
+ * Active implementation: {@link RoutingPushNotifier} (Expo + FCM when credentials are present;
+ * Expo + logging stub for native tokens when FCM is off).
  */
 public interface PushNotifier {
 

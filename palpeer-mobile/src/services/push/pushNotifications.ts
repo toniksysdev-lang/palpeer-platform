@@ -91,9 +91,8 @@ export function resolveEasProjectId(): string | undefined {
 /**
  * Resolves a push token for backend registration.
  *
- * Prefer an Expo push token — the API routes `ExponentPushToken[…]` via Expo Push (works without
- * client-side Firebase). Fall back to the native FCM/APNs token when Expo is unavailable but the
- * binary has Google/Apple push credentials.
+ * On Android prefer the native FCM token — the API delivers it with Firebase Admin (no Expo FCM
+ * project credentials required). Fall back to an Expo push token (and on iOS prefer Expo/APNs).
  */
 async function resolvePushToken(): Promise<string> {
   if (Platform.OS === 'web') {
@@ -104,7 +103,22 @@ async function resolvePushToken(): Promise<string> {
   }
 
   const projectId = resolveEasProjectId();
-  let lastError: unknown;
+  const errors: string[] = [];
+
+  // Android: native FCM first (backend FcmPushNotifier). Needs google-services in the binary.
+  if (Platform.OS === 'android') {
+    try {
+      const token = await Notifications.getDevicePushTokenAsync();
+      if (typeof token.data === 'string' && token.data.trim()) {
+        return token.data.trim();
+      }
+      errors.push('Native device push token response was empty');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`Native: ${message}`);
+      logger.warn('Native FCM token unavailable; trying Expo push token', { error });
+    }
+  }
 
   if (projectId) {
     try {
@@ -112,31 +126,37 @@ async function resolvePushToken(): Promise<string> {
       if (typeof expo.data === 'string' && expo.data.trim()) {
         return expo.data.trim();
       }
+      errors.push('Expo push token response was empty');
     } catch (error) {
-      lastError = error;
-      logger.warn('Expo push token unavailable; trying native device token', { error });
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`Expo: ${message}`);
+      logger.warn('Expo push token unavailable', { error });
     }
   } else {
+    errors.push('EAS projectId missing from app config');
     logger.warn('EAS projectId missing from app config; Expo push tokens unavailable');
   }
 
-  try {
-    const token = await Notifications.getDevicePushTokenAsync();
-    if (typeof token.data === 'string' && token.data.trim()) {
-      return token.data.trim();
+  // iOS / last resort: native device token (APNs).
+  if (Platform.OS !== 'android') {
+    try {
+      const token = await Notifications.getDevicePushTokenAsync();
+      if (typeof token.data === 'string' && token.data.trim()) {
+        return token.data.trim();
+      }
+      errors.push('Native device push token response was empty');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`Native: ${message}`);
     }
-    throw new PushUnavailableError("Push notifications aren't available on this device.");
-  } catch (error) {
-    if (error instanceof PushUnavailableError) throw error;
-    lastError = error;
   }
 
-  const detail = lastError instanceof Error ? lastError.message : String(lastError ?? '');
+  const detail = errors.join(' | ');
   logger.warn('Push token resolution failed', { detail, projectId: projectId ?? null });
-  if (/FirebaseApp is not initialized|google.?services|FCM|APNs|aps-environment/i.test(detail)) {
+  if (/FirebaseApp is not initialized|google.?services|Default FirebaseApp|FCM|APNs|aps-environment/i.test(detail)) {
     throw new PushUnavailableError(
       projectId
-        ? "Couldn't enable push on this install. Try again, or reinstall a build that includes notification credentials."
+        ? "Couldn't enable push on this install. Update to a build that includes Firebase notification credentials, then try again."
         : "Push notifications aren't configured for this build.",
     );
   }

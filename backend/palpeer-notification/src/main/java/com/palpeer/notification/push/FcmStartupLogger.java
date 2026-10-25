@@ -17,7 +17,8 @@ public class FcmStartupLogger {
     @PostConstruct
     void logFcmStatus() {
         if (!properties.isEnabled()) {
-            log.info("FCM disabled (PALPEER_FCM_ENABLED=false) — push delivery uses logging stub");
+            log.info(
+                    "FCM disabled (PALPEER_FCM_ENABLED=false) — Expo tokens still deliver via Expo Push; native tokens are logged only");
             return;
         }
         boolean hasCreds =

@@ -123,11 +123,21 @@ for (const [k, v] of Object.entries(local)) {
   if (v && prefixes.some((p) => k.startsWith(p))) env[k] = v;
 }
 env.KUDA_ENABLED = 'true';
-// Do not copy local FCM onto Render: Windows file paths fail, and .env JSON often
-// corrupts the private key (BaseEncoding errors). Keep push on the logging stub.
-env.PALPEER_FCM_ENABLED = 'false';
+// Prefer the service-account file (stable newlines). Never upload a Windows file path to Render.
 delete env.PALPEER_FCM_CREDENTIALS_FILE;
-delete env.PALPEER_FCM_CREDENTIALS_JSON;
+const fcmFile =
+  (local.PALPEER_FCM_CREDENTIALS_FILE && path.isAbsolute(local.PALPEER_FCM_CREDENTIALS_FILE)
+    ? local.PALPEER_FCM_CREDENTIALS_FILE
+    : null) || path.join(ROOT, 'secrets', 'firebase-service-account.json');
+if (fs.existsSync(fcmFile)) {
+  const raw = fs.readFileSync(fcmFile, 'utf8').trim();
+  JSON.parse(raw); // fail fast if the file is corrupt
+  env.PALPEER_FCM_CREDENTIALS_JSON = raw;
+  env.PALPEER_FCM_ENABLED = 'true';
+} else {
+  env.PALPEER_FCM_ENABLED = 'false';
+  delete env.PALPEER_FCM_CREDENTIALS_JSON;
+}
 
 const payload = Object.keys(env)
   .sort()

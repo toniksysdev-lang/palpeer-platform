@@ -5,20 +5,20 @@ import com.palpeer.notification.domain.Notification;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Routes device tokens to Expo or FCM based on token format.
+ * Routes device tokens to Expo or a native fallback (FCM or logging) based on token format.
  */
 @RequiredArgsConstructor
 public class RoutingPushNotifier implements PushNotifier {
 
     private final ExpoPushNotifier expoPushNotifier;
-    private final FcmPushNotifier fcmPushNotifier;
+    private final PushNotifier nativeFallback;
 
     @Override
     public void send(DeviceToken deviceToken, Notification notification) {
         if (ExpoPushNotifier.isExpoToken(deviceToken.getToken())) {
             expoPushNotifier.send(deviceToken, notification);
         } else {
-            fcmPushNotifier.send(deviceToken, notification);
+            nativeFallback.send(deviceToken, notification);
         }
     }
 }

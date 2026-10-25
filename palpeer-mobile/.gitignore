@@ -48,6 +48,7 @@ e2e/results/
 
 # Firebase / FCM credentials (use *.example templates; set via EAS secrets for builds)
 google-services.json
+.google-services.eas.json
 GoogleService-Info.plist
 firebase-service-account.json
 

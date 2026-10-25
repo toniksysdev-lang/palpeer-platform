@@ -6,11 +6,22 @@ import { withAndroidManifest, type ConfigPlugin } from 'expo/config-plugins';
 
 const APP_ENV = process.env.EXPO_PUBLIC_ENV ?? 'development';
 
-/** Prefer env override, then a local file checked into the machine (gitignored). */
+/**
+ * Prefer EAS/file env override, then a local file on the machine (gitignored).
+ * EAS "file" env vars inject a filesystem path at build time.
+ */
 function resolveGoogleServicesFile(...candidates: Array<string | undefined>): string | undefined {
   for (const candidate of candidates) {
     if (!candidate) continue;
-    const resolved = path.isAbsolute(candidate) ? candidate : path.resolve(__dirname, candidate);
+    const trimmed = candidate.trim();
+    if (!trimmed) continue;
+    // Inline JSON accidentally passed as env — write a temp file so the Gradle plugin can read it.
+    if (trimmed.startsWith('{')) {
+      const out = path.resolve(__dirname, '.google-services.eas.json');
+      fs.writeFileSync(out, trimmed, 'utf8');
+      return out;
+    }
+    const resolved = path.isAbsolute(trimmed) ? trimmed : path.resolve(__dirname, trimmed);
     if (fs.existsSync(resolved)) return resolved;
   }
   return undefined;

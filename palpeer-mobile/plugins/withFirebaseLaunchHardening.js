@@ -27,9 +27,10 @@ function ensureMetaData(application, name, value) {
 const withFirebaseLaunchHardening = (config) =>
   withAndroidManifest(config, (mod) => {
     const application = AndroidConfig.Manifest.getMainApplicationOrThrow(mod.modResults);
-    // Defer FCM auto-init until Play Services / Firebase is usable — avoids native kill on
-    // Huawei and other devices without (or with broken) Google Play Services.
-    ensureMetaData(application, 'firebase_messaging_auto_init_enabled', 'false');
+    // Keep FCM auto-init ON — expo-notifications needs it to obtain Expo/device push tokens.
+    // Disabling this caused "Couldn't enable push… notification credentials" on physical installs.
+    ensureMetaData(application, 'firebase_messaging_auto_init_enabled', 'true');
+    // Analytics stays off (privacy / crash surface); push does not depend on it.
     ensureMetaData(application, 'firebase_analytics_collection_enabled', 'false');
     ensureMetaData(application, 'google_analytics_adid_collection_enabled', 'false');
     return mod;

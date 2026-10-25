@@ -29,8 +29,18 @@ GOOGLE_SERVICES_PLIST=/secure/GoogleService-Info.plist
 credentials still starts. Push registration on a device needs a **dev/preview build**
 that includes the Firebase files.
 
-For EAS, upload the files as secrets / file credentials and map them into the build
-environment (see Expo “googleServicesFile” docs).
+For EAS, upload the Android file as a **file** environment variable (preview + production):
+
+```bash
+cd palpeer-mobile
+npx eas-cli env:set --name GOOGLE_SERVICES_JSON --type file \
+  --value ./google-services.json --visibility secret \
+  --environment preview --environment production --non-interactive
+```
+
+Also upload an FCM HTTP v1 service-account key under EAS credentials (Android →
+Google Service Account) so Expo’s push service can deliver to Android devices.
+See Expo “FCM credentials” docs.
 
 ## 3. Backend
 

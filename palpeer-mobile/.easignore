@@ -24,8 +24,10 @@ docs/
 .env
 .env.*
 !.env.example
-# google-services.json is uploaded for preview/prod builds that need FCM (gitignored).
+# google-services.json is included in the EAS upload (gitignored) and/or via
+# GOOGLE_SERVICES_JSON file env. Do not ship Apple plist until iOS push is wired.
 GoogleService-Info.plist
+.google-services.eas.json
 
 # Logs / junk / local artifacts
 npm-debug.*
