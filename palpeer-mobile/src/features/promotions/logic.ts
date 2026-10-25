@@ -12,7 +12,9 @@ import type {
 import { formatDateTime } from '@/utils/datetime';
 import { toMoney } from '@/utils/money';
 
+/** New codes are 8 chars (REF + 5); keep headroom so older longer codes still apply. */
 export const REFERRAL_CODE_MAX = 40;
+export const REFERRAL_CODE_LENGTH = 8;
 
 export function normalizeReferralCode(input: string): string {
   return input.replace(/\s+/g, '').toUpperCase();

@@ -252,7 +252,7 @@ describe('CreateWalletScreen', () => {
     expect(screen.getByTestId('create-wallet-option-KE')).toBeTruthy();
     expect(screen.queryByTestId('create-wallet-option-NG')).toBeNull();
     expect(screen.queryByTestId('create-wallet-option-US')).toBeNull();
-    expect(screen.getByText(/GHS · not available yet/)).toBeTruthy();
+    expect(screen.getByText(/GHS · payment not available yet/)).toBeTruthy();
   });
 
   it('blocks wallet creation until the profile is complete', async () => {

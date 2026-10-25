@@ -39,6 +39,17 @@ export const authApi = baseApi.injectEndpoints({
         public: true,
       }),
     }),
+    changeSignupEmail: build.mutation<
+      OtpResendResponse,
+      { phone: string; email: string }
+    >({
+      query: (body) => ({
+        path: '/auth/signup/change-email',
+        method: 'POST',
+        body,
+        public: true,
+      }),
+    }),
     requestPhoneOtp: build.mutation<OtpResendResponse, { phone: string }>({
       query: (body) => ({
         path: '/auth/otp/phone/request',
@@ -95,6 +106,7 @@ export const {
   useResendOtpMutation,
   useGetSignupStatusMutation,
   useResendSignupEmailOtpMutation,
+  useChangeSignupEmailMutation,
   useRequestPhoneOtpMutation,
   useVerifyPhoneOtpMutation,
   useGetRegistrationCountriesQuery,

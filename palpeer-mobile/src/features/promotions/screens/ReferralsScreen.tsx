@@ -1,7 +1,16 @@
 import * as Clipboard from 'expo-clipboard';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Check, ChevronRight, Copy, Gift, Share2, Users } from 'lucide-react-native';
-import { useState } from 'react';
+import {
+  Check,
+  ChevronRight,
+  Copy,
+  FileDown,
+  Gift,
+  ImageDown,
+  Share2,
+  Users,
+} from 'lucide-react-native';
+import { useRef, useState } from 'react';
 import { RefreshControl, Share, View } from 'react-native';
 
 import { FormAlert } from '@/components/feedback/FormAlert';
@@ -16,6 +25,7 @@ import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { saveReceiptAsImage, saveReceiptAsPdf } from '@/features/transactions/saveReceipt';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { toAppError } from '@/services/api/errors';
@@ -47,6 +57,8 @@ export function ReferralsScreen() {
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [savingFormat, setSavingFormat] = useState<'image' | 'pdf' | null>(null);
+  const codeCardRef = useRef<View>(null);
 
   if (params.code !== linkedCode) {
     setLinkedCode(params.code);
@@ -71,6 +83,26 @@ export function ReferralsScreen() {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.show({ type: 'error', title: "Couldn't copy the code" });
+    }
+  };
+
+  const saveCode = async (kind: 'image' | 'pdf') => {
+    if (!myCode.data || savingFormat) return;
+    setSavingFormat(kind);
+    const fileName = `palpeer-referral-${myCode.data.referralCode}`;
+    try {
+      if (kind === 'image') {
+        await saveReceiptAsImage(codeCardRef, fileName);
+      } else {
+        await saveReceiptAsPdf(codeCardRef, fileName);
+      }
+    } catch {
+      toast.show({
+        type: 'error',
+        title: kind === 'image' ? "Couldn't save image" : "Couldn't save PDF",
+      });
+    } finally {
+      setSavingFormat(null);
     }
   };
 
@@ -116,21 +148,32 @@ export function ReferralsScreen() {
 
       <Card variant="elevated" padding="lg" testID="referral-my-code">
         <View style={{ gap: theme.spacing.sm }}>
-          <AppText variant="overline" tone="muted">
-            Your referral code
-          </AppText>
-          {myCode.data ? (
-            <AppText variant="h1" selectable testID="referral-code" style={{ letterSpacing: 1 }}>
-              {myCode.data.referralCode}
+          <View
+            ref={codeCardRef}
+            collapsable={false}
+            style={{
+              gap: theme.spacing.sm,
+              backgroundColor: theme.colors.surface,
+              padding: theme.spacing.md,
+              borderRadius: theme.radius.md,
+            }}
+          >
+            <AppText variant="overline" tone="muted">
+              Your referral code
             </AppText>
-          ) : myCode.error ? (
-            <ErrorState error={toAppError(myCode.error)} onRetry={() => void myCode.refetch()} />
-          ) : (
-            <Skeleton height={36} />
-          )}
-          <AppText variant="caption" tone="secondary">
-            Each code works once. After a friend uses it, you get a new one here.
-          </AppText>
+            {myCode.data ? (
+              <AppText variant="h1" selectable testID="referral-code" style={{ letterSpacing: 1 }}>
+                {myCode.data.referralCode}
+              </AppText>
+            ) : myCode.error ? (
+              <ErrorState error={toAppError(myCode.error)} onRetry={() => void myCode.refetch()} />
+            ) : (
+              <Skeleton height={36} />
+            )}
+            <AppText variant="caption" tone="secondary">
+              Each code works once. After a friend uses it, you get a new one here.
+            </AppText>
+          </View>
           <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
             <View style={{ flex: 1 }}>
               <Button
@@ -149,6 +192,30 @@ export function ReferralsScreen() {
                 onPress={() => void share()}
                 disabled={!myCode.data}
                 testID="referral-share"
+              />
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Save as Image"
+                variant="outline"
+                leftIcon={ImageDown}
+                loading={savingFormat === 'image'}
+                disabled={!myCode.data || savingFormat !== null}
+                onPress={() => void saveCode('image')}
+                testID="referral-save-image"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Save as PDF"
+                variant="outline"
+                leftIcon={FileDown}
+                loading={savingFormat === 'pdf'}
+                disabled={!myCode.data || savingFormat !== null}
+                onPress={() => void saveCode('pdf')}
+                testID="referral-save-pdf"
               />
             </View>
           </View>

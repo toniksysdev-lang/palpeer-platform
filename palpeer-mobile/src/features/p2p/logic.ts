@@ -135,11 +135,12 @@ export function p2pRateLine(
   base: string,
   quote: string,
   unitCode: string = preferredRateUnit(base, quote),
+  maxDecimals?: number,
 ): string {
   const unit = unitCode.toUpperCase();
   const other = otherOfPair(unit, base, quote).toUpperCase();
   const display = unit === base.toUpperCase() ? rate : invertRate(rate);
-  return `1 ${unit} = ${formatRateValue(display)} ${other}`;
+  return `1 ${unit} = ${formatRateValue(display, maxDecimals)} ${other}`;
 }
 
 export function rateEntryHint(unitCode: string, otherCode: string): string {

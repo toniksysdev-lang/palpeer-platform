@@ -59,7 +59,7 @@ export function ProfileScreen() {
       const label =
         capability.status === 'available' || capability.status === 'notEnrolled'
           ? capability.label
-          : 'Fingerprint';
+          : 'Face ID or Fingerprint';
       toast.show({
         type: 'info',
         title: `Signed out — use ${label} on Login`,
@@ -233,7 +233,7 @@ export function ProfileScreen() {
         title="Sign out?"
         message={
           biometricEnabled
-            ? 'You can sign back in with fingerprint or Face ID on the Login screen, or use your password.'
+            ? 'You can sign back in with Face ID or Fingerprint on the Login screen, or use your password.'
             : "You'll need your email and password to sign in again."
         }
         confirmLabel="Sign out"

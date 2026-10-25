@@ -20,6 +20,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/providers/ThemeProvider';
 import { logger } from '@/utils/logger';
 
+import { cropCapturedToOverlay } from '../cropToOverlay';
 import type { CapturedImage } from '../image';
 import {
   captureWebCameraFrame,
@@ -92,6 +93,7 @@ function WebCameraCapture({
   const theme = useTheme();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const viewSizeRef = useRef<{ width: number; height: number } | null>(null);
   const [phase, setPhase] = useState<'gate' | 'live' | 'error'>('gate');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
@@ -143,7 +145,8 @@ function WebCameraCapture({
     setCapturing(true);
     setCaptureFailed(false);
     try {
-      const image = await captureWebCameraFrame(video);
+      const full = await captureWebCameraFrame(video);
+      const image = await cropCapturedToOverlay(full, viewSizeRef.current, overlay);
       stopWebCameraStream(streamRef.current);
       streamRef.current = null;
       onCaptured(image);
@@ -190,7 +193,14 @@ function WebCameraCapture({
   }
 
   return (
-    <View style={styles.fill} testID="camera-view">
+    <View
+      style={styles.fill}
+      testID="camera-view"
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        viewSizeRef.current = { width, height };
+      }}
+    >
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {/* HTML video preview — RN View can't host a MediaStream. */}
         {createElement('video', {
@@ -303,6 +313,7 @@ function NativeCameraCapture({
   const theme = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
+  const viewSizeRef = useRef<{ width: number; height: number } | null>(null);
   const [ready, setReady] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [mountError, setMountError] = useState(false);
@@ -417,11 +428,14 @@ function NativeCameraCapture({
     setCaptureFailed(false);
     try {
       const picture = await cameraRef.current.takePictureAsync({ quality: 0.9, exif: false });
-      onCaptured({
+      const full: CapturedImage = {
         uri: picture.uri,
         width: picture.width ?? 0,
         height: picture.height ?? 0,
-      });
+      };
+      // Keep only what was inside the guide frame (not the full sensor image).
+      const image = await cropCapturedToOverlay(full, viewSizeRef.current, overlay);
+      onCaptured(image);
     } catch (error) {
       logger.warn('Camera capture failed', { error });
       setCaptureFailed(true);
@@ -431,7 +445,14 @@ function NativeCameraCapture({
   };
 
   return (
-    <View style={styles.fill} testID="camera-view">
+    <View
+      style={styles.fill}
+      testID="camera-view"
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        viewSizeRef.current = { width, height };
+      }}
+    >
       <CameraView
         ref={cameraRef}
         style={StyleSheet.absoluteFill}

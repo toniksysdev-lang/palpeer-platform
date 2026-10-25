@@ -38,6 +38,16 @@ public class BankDirectoryService {
                     return fromKuda;
                 }
             } catch (Exception ex) {
+                // UAT bank codes ≠ production NIP codes. Falling back to Access/GTBank "044"/"058"
+                // makes NAME_ENQUIRY fail with "Name Enquiry request not satisfied."
+                if (kudaClient.isSandboxMode()) {
+                    log.warn(
+                            "Kuda BANK_LIST failed in sandbox — using Kuda UAT catalog (not production NIP). cause={}",
+                            ex.getMessage());
+                    return KudaSandboxBanksCatalog.all().stream()
+                            .sorted(Comparator.comparing(BankOptionResponse::name, String.CASE_INSENSITIVE_ORDER))
+                            .toList();
+                }
                 log.warn("Kuda BANK_LIST failed — trying Korapay/static catalog. cause={}", ex.getMessage());
             }
         }

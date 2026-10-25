@@ -55,4 +55,16 @@ describe('registrationCurrencies', () => {
     expect(options.find((option) => option.countryIso2 === 'GH')?.creatable).toBe(false);
     expect(options.find((option) => option.countryIso2 === 'KE')?.creatable).toBe(false);
   });
+
+  it('only marks currencies with an implemented payment rail as creatable', () => {
+    const options = remainingRegistrationWalletOptions({
+      registrationIso2: ['CA', 'US', 'NG', 'GB'],
+      platformCurrencyCodes: ['CAD', 'USD', 'NGN', 'GBP'],
+      heldCurrencyCodes: [],
+    });
+    expect(options.find((option) => option.countryIso2 === 'CA')?.creatable).toBe(true);
+    expect(options.find((option) => option.countryIso2 === 'NG')?.creatable).toBe(true);
+    expect(options.find((option) => option.countryIso2 === 'US')?.creatable).toBe(false);
+    expect(options.find((option) => option.countryIso2 === 'GB')?.creatable).toBe(false);
+  });
 });

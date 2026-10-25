@@ -103,6 +103,8 @@ export function PersonalInformationScreen() {
   const stateTerritory = useWatch({ control, name: 'stateTerritory' });
   const sourceOfIncome = useWatch({ control, name: 'sourceOfIncome' });
   const monthlyEstimate = useWatch({ control, name: 'monthlyTransactionEstimate' });
+  /** Submitted profile is view-only — grey out fields so details cannot be edited in-app. */
+  const readOnly = profile?.complete === true;
   const countryOptions = useMemo(
     () => profileCountriesWith(country || signupCountryIso2),
     [country, signupCountryIso2],
@@ -182,14 +184,16 @@ export function PersonalInformationScreen() {
       scroll
       keyboardAware
       footer={
-        <Button
-          label="Continue"
-          shape="pill"
-          onPress={onSubmit}
-          loading={saving}
-          loadingLabel="Saving…"
-          testID="personal-info-continue"
-        />
+        readOnly ? undefined : (
+          <Button
+            label="Continue"
+            shape="pill"
+            onPress={onSubmit}
+            loading={saving}
+            loadingLabel="Saving…"
+            testID="personal-info-continue"
+          />
+        )
       }
     >
       <StackHeader title="Personal information" />
@@ -207,6 +211,7 @@ export function PersonalInformationScreen() {
             value={field.value}
             onChangeText={field.onChange}
             onBlur={field.onBlur}
+            editable={!readOnly}
             error={fieldState.error?.message}
             autoComplete="given-name"
             textContentType="givenName"
@@ -226,6 +231,7 @@ export function PersonalInformationScreen() {
             value={field.value}
             onChangeText={field.onChange}
             onBlur={field.onBlur}
+            editable={!readOnly}
             error={fieldState.error?.message}
             autoComplete="family-name"
             textContentType="familyName"
@@ -245,6 +251,7 @@ export function PersonalInformationScreen() {
             error={fieldState.error?.message}
             defaultPickerDate={defaultDobDate}
             maximumDate={today}
+            disabled={readOnly}
             testID="personal-dob"
           />
         )}
@@ -260,6 +267,7 @@ export function PersonalInformationScreen() {
             value={optionTitle(countryOptions, field.value)}
             placeholder="Select"
             error={fieldState.error?.message}
+            disabled={readOnly}
             onPress={() => setSheet('country')}
             testID="personal-country"
           />
@@ -275,6 +283,7 @@ export function PersonalInformationScreen() {
             value={optionTitle(stateOptions, field.value)}
             placeholder="State/territory"
             error={fieldState.error?.message}
+            disabled={readOnly}
             onPress={() => setSheet('state')}
             testID="personal-state"
           />
@@ -294,6 +303,7 @@ export function PersonalInformationScreen() {
             countryCode={country}
             onPick={applyStructuredAddress}
             onPickupMessage={(message, type) => toast.show({ type, title: message })}
+            editable={!readOnly}
             testID="personal-address1"
           />
         )}
@@ -309,6 +319,7 @@ export function PersonalInformationScreen() {
             value={field.value}
             onChangeText={field.onChange}
             onBlur={field.onBlur}
+            editable={!readOnly}
             error={fieldState.error?.message}
             autoComplete="address-line2"
             textContentType="streetAddressLine2"
@@ -327,6 +338,7 @@ export function PersonalInformationScreen() {
             value={field.value}
             onChangeText={field.onChange}
             onBlur={field.onBlur}
+            editable={!readOnly}
             error={fieldState.error?.message}
             autoComplete="postal-address"
             textContentType="addressCity"
@@ -346,6 +358,7 @@ export function PersonalInformationScreen() {
             value={field.value}
             onChangeText={field.onChange}
             onBlur={field.onBlur}
+            editable={!readOnly}
             error={fieldState.error?.message}
             autoComplete="postal-code"
             textContentType="postalCode"
@@ -365,6 +378,7 @@ export function PersonalInformationScreen() {
             value={optionTitle(SOURCE_OF_INCOME_OPTIONS, field.value)}
             placeholder="Source of income"
             error={fieldState.error?.message}
+            disabled={readOnly}
             onPress={() => setSheet('income')}
             testID="personal-income"
           />
@@ -380,61 +394,66 @@ export function PersonalInformationScreen() {
             value={optionTitle(MONTHLY_TX_OPTIONS, field.value)}
             placeholder="0 - 2000"
             error={fieldState.error?.message}
+            disabled={readOnly}
             onPress={() => setSheet('monthly')}
             testID="personal-monthly"
           />
         )}
       />
 
-      <PickerSheet
-        visible={sheet === 'country'}
-        title="Country of residence"
-        options={countryOptions}
-        selectedKey={country || null}
-        onSelect={(key) => {
-          setValue('countryOfResidence', key, { shouldValidate: true });
-          setValue('stateTerritory', '', { shouldValidate: false });
-          setSheet(null);
-        }}
-        onClose={() => setSheet(null)}
-        testID="personal-country-sheet"
-      />
-      <PickerSheet
-        visible={sheet === 'state'}
-        title="State / territory"
-        options={stateOptions}
-        selectedKey={stateTerritory || null}
-        onSelect={(key) => {
-          setValue('stateTerritory', key, { shouldValidate: true });
-          setSheet(null);
-        }}
-        onClose={() => setSheet(null)}
-        testID="personal-state-sheet"
-      />
-      <PickerSheet
-        visible={sheet === 'income'}
-        title="Source of income"
-        options={SOURCE_OF_INCOME_OPTIONS}
-        selectedKey={sourceOfIncome || null}
-        onSelect={(key) => {
-          setValue('sourceOfIncome', key, { shouldValidate: true });
-          setSheet(null);
-        }}
-        onClose={() => setSheet(null)}
-        testID="personal-income-sheet"
-      />
-      <PickerSheet
-        visible={sheet === 'monthly'}
-        title="Monthly transaction estimate"
-        options={MONTHLY_TX_OPTIONS}
-        selectedKey={monthlyEstimate || null}
-        onSelect={(key) => {
-          setValue('monthlyTransactionEstimate', key, { shouldValidate: true });
-          setSheet(null);
-        }}
-        onClose={() => setSheet(null)}
-        testID="personal-monthly-sheet"
-      />
+      {!readOnly ? (
+        <>
+          <PickerSheet
+            visible={sheet === 'country'}
+            title="Country of residence"
+            options={countryOptions}
+            selectedKey={country || null}
+            onSelect={(key) => {
+              setValue('countryOfResidence', key, { shouldValidate: true });
+              setValue('stateTerritory', '', { shouldValidate: false });
+              setSheet(null);
+            }}
+            onClose={() => setSheet(null)}
+            testID="personal-country-sheet"
+          />
+          <PickerSheet
+            visible={sheet === 'state'}
+            title="State / territory"
+            options={stateOptions}
+            selectedKey={stateTerritory || null}
+            onSelect={(key) => {
+              setValue('stateTerritory', key, { shouldValidate: true });
+              setSheet(null);
+            }}
+            onClose={() => setSheet(null)}
+            testID="personal-state-sheet"
+          />
+          <PickerSheet
+            visible={sheet === 'income'}
+            title="Source of income"
+            options={SOURCE_OF_INCOME_OPTIONS}
+            selectedKey={sourceOfIncome || null}
+            onSelect={(key) => {
+              setValue('sourceOfIncome', key, { shouldValidate: true });
+              setSheet(null);
+            }}
+            onClose={() => setSheet(null)}
+            testID="personal-income-sheet"
+          />
+          <PickerSheet
+            visible={sheet === 'monthly'}
+            title="Monthly transaction estimate"
+            options={MONTHLY_TX_OPTIONS}
+            selectedKey={monthlyEstimate || null}
+            onSelect={(key) => {
+              setValue('monthlyTransactionEstimate', key, { shouldValidate: true });
+              setSheet(null);
+            }}
+            onClose={() => setSheet(null)}
+            testID="personal-monthly-sheet"
+          />
+        </>
+      ) : null}
     </Screen>
   );
 }

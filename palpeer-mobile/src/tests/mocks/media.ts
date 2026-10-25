@@ -112,6 +112,10 @@ export const ImageManipulator = {
         size = { width: Math.round(size.width * ratio), height: Math.round(size.height * ratio) };
         return context;
       },
+      crop(rect: { originX: number; originY: number; width: number; height: number }) {
+        size = { width: Math.round(rect.width), height: Math.round(rect.height) };
+        return context;
+      },
       async renderAsync() {
         return {
           width: size.width,

@@ -152,6 +152,8 @@
 
       .screen-wrap {
         position: relative;
+        display: flex;
+        flex-direction: column;
         width: 100%;
         height: 100%;
         border-radius: 34px;
@@ -160,10 +162,12 @@
       }
 
       .screen {
+        flex: 1 1 auto;
         width: 100%;
-        height: 100%;
+        height: auto;
+        min-height: 0;
         border: 0;
-        border-radius: 34px;
+        border-radius: 0;
         background: transparent;
         overflow: hidden;
         display: block;
@@ -253,6 +257,96 @@
         height: 42px;
       }
 
+      .soft-keyboard {
+        flex: 0 0 auto;
+        display: none;
+        flex-direction: column;
+        gap: 6px;
+        padding: 8px 6px 10px;
+        background: linear-gradient(180deg, #d5d8dd 0%, #c5c9cf 100%);
+        border-top: 1px solid #aeb3bb;
+        user-select: none;
+        z-index: 5;
+      }
+
+      .soft-keyboard.is-open {
+        display: flex;
+      }
+
+      .soft-keyboard .kb-row {
+        display: flex;
+        justify-content: center;
+        gap: 5px;
+      }
+
+      .soft-keyboard button {
+        appearance: none;
+        border: 0;
+        margin: 0;
+        min-width: 28px;
+        height: 38px;
+        padding: 0 8px;
+        border-radius: 5px;
+        background: #fff;
+        color: #111;
+        font: 600 15px/1 'Segoe UI', system-ui, sans-serif;
+        box-shadow: 0 1px 0 #8e949c;
+        cursor: pointer;
+      }
+
+      .soft-keyboard button:active {
+        background: #e4e6ea;
+      }
+
+      .soft-keyboard button.wide {
+        min-width: 42px;
+        font-size: 13px;
+        background: #adb3bb;
+        color: #111;
+      }
+
+      .soft-keyboard button.space {
+        flex: 1;
+        max-width: 180px;
+        min-width: 96px;
+      }
+
+      .soft-keyboard button.enter {
+        min-width: 64px;
+        background: var(--brand);
+        color: #fff;
+        box-shadow: 0 1px 0 #0a7a54;
+      }
+
+      .soft-keyboard .kb-hint {
+        text-align: center;
+        font-size: 10px;
+        color: #5c646e;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        margin-bottom: 2px;
+      }
+
+      .panel .kb-toggle {
+        width: 100%;
+        margin-top: 12px;
+        appearance: none;
+        border: 1px solid #d2d9d5;
+        background: #fff;
+        border-radius: 12px;
+        padding: 10px 12px;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+        color: var(--ink);
+      }
+
+      .panel .kb-toggle.active {
+        border-color: var(--brand);
+        box-shadow: 0 0 0 2px rgba(14, 159, 110, 0.18);
+        color: var(--brand);
+      }
+
       @media (max-width: 900px) {
         .page {
           grid-template-columns: 1fr;
@@ -272,6 +366,12 @@
 
         <label>Device</label>
         <div class="devices" id="devices"></div>
+
+        <label>Keyboard</label>
+        <button type="button" class="kb-toggle" id="kb-toggle">Show phone keyboard</button>
+        <p style="margin-top: 8px; margin-bottom: 0">
+          Opens automatically when you tap a text field in the app. Use the on-screen keys to type into the preview.
+        </p>
 
         <div class="links">
           <a id="open-raw" href="http://localhost:8081" target="_blank" rel="noreferrer">Open raw Expo web</a>
@@ -299,6 +399,16 @@
               allow="camera *; microphone *; clipboard-read *; clipboard-write *"
               allowfullscreen
             ></iframe>
+            <div
+              class="soft-keyboard"
+              id="soft-keyboard"
+              role="group"
+              aria-label="Phone keyboard"
+              aria-hidden="true"
+            >
+              <div class="kb-hint" id="kb-hint">Mobile keyboard</div>
+              <div id="kb-rows"></div>
+            </div>
           </div>
         </div>
       </main>
@@ -318,7 +428,16 @@
       const boot = document.getElementById('screen-boot');
       const devicesEl = document.getElementById('devices');
       const openRaw = document.getElementById('open-raw');
+      const softKeyboard = document.getElementById('soft-keyboard');
+      const kbRows = document.getElementById('kb-rows');
+      const kbHint = document.getElementById('kb-hint');
+      const kbToggle = document.getElementById('kb-toggle');
       openRaw.href = APP_URL;
+
+      let keyboardOpen = false;
+      let shift = false;
+      let symbols = false;
+      let kbMode = 'default';
 
       function hideBoot() {
         if (!boot || boot.classList.contains('is-hidden')) return;
@@ -326,13 +445,211 @@
         window.setTimeout(() => boot.remove(), 180);
       }
 
+      function postKey(payload) {
+        try {
+          frame.contentWindow?.postMessage(
+            { type: 'palpeer-soft-keyboard-key', ...payload },
+            '*',
+          );
+        } catch {
+          // Ignore if iframe not ready.
+        }
+      }
+
+      function setKeyboardOpen(open) {
+        keyboardOpen = open;
+        softKeyboard.classList.toggle('is-open', open);
+        softKeyboard.setAttribute('aria-hidden', open ? 'false' : 'true');
+        kbToggle.classList.toggle('active', open);
+        kbToggle.textContent = open ? 'Hide phone keyboard' : 'Show phone keyboard';
+      }
+
+      function letterRows() {
+        const top = 'qwertyuiop'.split('');
+        const mid = 'asdfghjkl'.split('');
+        const bot = 'zxcvbnm'.split('');
+        if (shift) {
+          return [top.map((c) => c.toUpperCase()), mid.map((c) => c.toUpperCase()), bot.map((c) => c.toUpperCase())];
+        }
+        return [top, mid, bot];
+      }
+
+      function symbolRowsFixed() {
+        return [
+          '1234567890'.split(''),
+          ['-', '/', ':', ';', '(', ')', '$', '&', '@', '"'],
+          ['.', ',', '?', '!', "'"],
+        ];
+      }
+
+      function numericRows() {
+        return [
+          '123'.split(''),
+          '456'.split(''),
+          '789'.split(''),
+          ['.', '0', '⌫'],
+        ];
+      }
+
+      function wireKey(btn, handler) {
+        // Prevent stealing focus from the focused field inside the Expo iframe.
+        btn.addEventListener('mousedown', (event) => event.preventDefault());
+        btn.addEventListener('click', handler);
+      }
+
+      function renderKeyboard() {
+        kbRows.innerHTML = '';
+        const modeLabel =
+          kbMode === 'email' ? 'Email' : kbMode === 'phone' || kbMode === 'numeric' ? 'Numbers' : 'Letters';
+        kbHint.textContent = modeLabel + ' · preview keyboard';
+
+        if (kbMode === 'numeric' || kbMode === 'phone') {
+          numericRows().forEach((keys) => {
+            const row = document.createElement('div');
+            row.className = 'kb-row';
+            keys.forEach((key) => {
+              const btn = document.createElement('button');
+              btn.type = 'button';
+              btn.textContent = key;
+              if (key === '⌫') {
+                btn.className = 'wide';
+                wireKey(btn, () => postKey({ code: 'Backspace' }));
+              } else {
+                btn.style.minWidth = '56px';
+                btn.style.height = '46px';
+                btn.style.fontSize = '20px';
+                wireKey(btn, () => postKey({ key }));
+              }
+              row.appendChild(btn);
+            });
+            kbRows.appendChild(row);
+          });
+          const action = document.createElement('div');
+          action.className = 'kb-row';
+          const abc = document.createElement('button');
+          abc.type = 'button';
+          abc.className = 'wide';
+          abc.textContent = 'ABC';
+          wireKey(abc, () => {
+            kbMode = 'default';
+            symbols = false;
+            renderKeyboard();
+          });
+          const enter = document.createElement('button');
+          enter.type = 'button';
+          enter.className = 'enter';
+          enter.textContent = 'Done';
+          wireKey(enter, () => {
+            postKey({ code: 'Enter' });
+            setKeyboardOpen(false);
+          });
+          action.appendChild(abc);
+          action.appendChild(enter);
+          kbRows.appendChild(action);
+          return;
+        }
+
+        const rows = symbols ? symbolRowsFixed() : letterRows();
+        rows.forEach((keys, index) => {
+          const row = document.createElement('div');
+          row.className = 'kb-row';
+          if (index === 2 && !symbols) {
+            const shiftBtn = document.createElement('button');
+            shiftBtn.type = 'button';
+            shiftBtn.className = 'wide';
+            shiftBtn.textContent = '⇧';
+            wireKey(shiftBtn, () => {
+              shift = !shift;
+              renderKeyboard();
+            });
+            row.appendChild(shiftBtn);
+          }
+          keys.forEach((key) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = key;
+            wireKey(btn, () => {
+              postKey({ key });
+              if (shift) {
+                shift = false;
+                renderKeyboard();
+              }
+            });
+            row.appendChild(btn);
+          });
+          if (index === 2) {
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'wide';
+            del.textContent = '⌫';
+            wireKey(del, () => postKey({ code: 'Backspace' }));
+            row.appendChild(del);
+          }
+          kbRows.appendChild(row);
+        });
+
+        const bottom = document.createElement('div');
+        bottom.className = 'kb-row';
+        const sym = document.createElement('button');
+        sym.type = 'button';
+        sym.className = 'wide';
+        sym.textContent = symbols ? 'ABC' : '123';
+        wireKey(sym, () => {
+          symbols = !symbols;
+          shift = false;
+          renderKeyboard();
+        });
+        const space = document.createElement('button');
+        space.type = 'button';
+        space.className = 'space';
+        space.textContent = 'space';
+        wireKey(space, () => postKey({ code: 'Space' }));
+        const enter = document.createElement('button');
+        enter.type = 'button';
+        enter.className = 'enter';
+        enter.textContent = 'Done';
+        wireKey(enter, () => {
+          postKey({ code: 'Enter' });
+          setKeyboardOpen(false);
+        });
+        bottom.appendChild(sym);
+        bottom.appendChild(space);
+        bottom.appendChild(enter);
+        kbRows.appendChild(bottom);
+      }
+
+      softKeyboard.addEventListener('mousedown', (event) => {
+        // Keep iframe input focused while tapping keys.
+        event.preventDefault();
+      });
+
+      kbToggle.addEventListener('click', () => {
+        setKeyboardOpen(!keyboardOpen);
+        if (keyboardOpen) renderKeyboard();
+      });
+
       // Keep the branded overlay until Expo's BrandSplash mounts (avoids a white gap).
       window.addEventListener('message', (event) => {
-        if (event?.data?.type === 'palpeer-brand-splash-ready') hideBoot();
+        const data = event?.data;
+        if (!data || typeof data !== 'object') return;
+        if (data.type === 'palpeer-brand-splash-ready') hideBoot();
+        if (data.type === 'palpeer-soft-keyboard-open') {
+          kbMode = data.mode === 'email' || data.mode === 'phone' || data.mode === 'numeric'
+            ? data.mode
+            : 'default';
+          symbols = kbMode === 'numeric' || kbMode === 'phone';
+          shift = false;
+          renderKeyboard();
+          setKeyboardOpen(true);
+        }
+        if (data.type === 'palpeer-soft-keyboard-close') {
+          setKeyboardOpen(false);
+        }
       });
       // Fallback if postMessage never arrives (older build / blocked).
       window.setTimeout(hideBoot, 15_000);
       frame.src = APP_URL;
+      renderKeyboard();
 
       function applyDevice(device) {
         phone.style.setProperty('--w', device.w + 'px');

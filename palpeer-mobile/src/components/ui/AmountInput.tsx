@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { useFocusAnchor } from '@/components/layout/FocusScroll';
 import { useTheme } from '@/providers/ThemeProvider';
 
 import { AppText } from './AppText';
@@ -88,6 +89,7 @@ export function AmountInput({
 }: Props) {
   const theme = useTheme();
   const elevated = appearance === 'elevated';
+  const { ref: anchorRef, reveal } = useFocusAnchor();
 
   const handleChange = useCallback(
     (next: string) => onChangeText(sanitizeAmount(next, precision)),
@@ -114,8 +116,13 @@ export function AmountInput({
 
   const a11yLabel = label.trim() || (currencyCode ? `Amount in ${currencyCode}` : 'Amount');
 
+  const openPad = () => {
+    select();
+    reveal();
+  };
+
   return (
-    <View style={{ gap: theme.spacing.xs }}>
+    <View ref={anchorRef} collapsable={false} style={{ gap: theme.spacing.xs }}>
       {label.trim() ? (
         <AppText
           variant={elevated ? 'body' : 'caption'}
@@ -126,7 +133,7 @@ export function AmountInput({
         </AppText>
       ) : null}
       <Pressable
-        onPress={select}
+        onPress={openPad}
         disabled={!editable || !padAvailable}
         accessibilityRole="button"
         accessibilityLabel={a11yLabel}

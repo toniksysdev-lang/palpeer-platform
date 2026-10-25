@@ -18,6 +18,7 @@ export function PickerField({
   onPress,
   appearance = 'outlined',
   error,
+  disabled = false,
   testID,
 }: {
   label: string;
@@ -29,12 +30,15 @@ export function PickerField({
   /** `elevated`: label above a white shadowed field (matches Input elevated). */
   appearance?: 'outlined' | 'elevated';
   error?: string | null;
+  /** Greys out the field and blocks opening the sheet. */
+  disabled?: boolean;
   testID?: string;
 }) {
   const theme = useTheme();
   const elevated = appearance === 'elevated';
   const empty = !value.trim();
   const display = empty ? (placeholder ?? value) : value;
+  const fieldBg = disabled ? theme.colors.surfaceMuted : theme.colors.surface;
 
   if (elevated) {
     return (
@@ -44,9 +48,11 @@ export function PickerField({
         </AppText>
         <Pressable
           onPress={onPress}
+          disabled={disabled}
           accessibilityRole="button"
           accessibilityLabel={`${label}: ${display}`}
           accessibilityHint="Opens a list to choose from"
+          accessibilityState={{ disabled }}
           testID={testID}
           style={[
             theme.shadows.card,
@@ -59,17 +65,17 @@ export function PickerField({
               borderRadius: theme.radius.lg,
               borderWidth: 1,
               borderColor: error ? theme.colors.danger : 'transparent',
-              backgroundColor: theme.colors.surface,
+              backgroundColor: fieldBg,
             },
           ]}
         >
           <AppText
-            tone={empty ? 'muted' : 'primary'}
+            tone={empty || disabled ? 'muted' : 'primary'}
             style={[theme.typography.body, { flex: 1, paddingVertical: 12 }]}
           >
             {display}
           </AppText>
-          <Icon icon={ChevronDown} color={theme.colors.textMuted} />
+          {!disabled ? <Icon icon={ChevronDown} color={theme.colors.textMuted} /> : null}
         </Pressable>
         {error ? (
           <AppText variant="caption" tone="danger" accessibilityLiveRegion="polite">
@@ -87,9 +93,11 @@ export function PickerField({
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${value}`}
       accessibilityHint="Opens a list to choose from"
+      accessibilityState={{ disabled }}
       testID={testID}
       style={{
         flexDirection: 'row',
@@ -99,14 +107,14 @@ export function PickerField({
         borderRadius: theme.radius.md,
         borderWidth: 1,
         borderColor: error ? theme.colors.danger : theme.colors.border,
-        backgroundColor: theme.colors.surface,
+        backgroundColor: fieldBg,
       }}
     >
       <View style={{ flex: 1, gap: theme.spacing.xxs }}>
         <AppText variant="caption" tone="secondary">
           {label}
         </AppText>
-        <AppText variant="h3" tone={empty ? 'muted' : 'primary'}>
+        <AppText variant="h3" tone={empty || disabled ? 'muted' : 'primary'}>
           {display}
         </AppText>
         {caption ? (
@@ -115,7 +123,7 @@ export function PickerField({
           </AppText>
         ) : null}
       </View>
-      <Icon icon={ChevronDown} color={theme.colors.textMuted} />
+      {!disabled ? <Icon icon={ChevronDown} color={theme.colors.textMuted} /> : null}
     </Pressable>
   );
 }

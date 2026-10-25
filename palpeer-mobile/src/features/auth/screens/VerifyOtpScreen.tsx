@@ -1,10 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { FormAlert } from '@/components/feedback/FormAlert';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { useOptionalNumberPad } from '@/components/ui/NumberPadContext';
 import { OtpInput } from '@/components/ui/OtpInput';
 import { TextLink } from '@/components/ui/TextLink';
@@ -12,6 +13,7 @@ import { useSensitiveScreen } from '@/hooks/useSensitiveScreen';
 import { useToast } from '@/providers/ToastProvider';
 import { useSecretCommand } from '@/hooks/useSecretCommand';
 import {
+  useChangeSignupEmailMutation,
   useRequestPhoneOtpMutation,
   useResendOtpMutation,
   useVerifyPhoneOtpMutation,
@@ -39,6 +41,8 @@ const CODE_ERRORS = new Set([
   'OTP_CHANNEL_MISMATCH',
 ]);
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /**
  * Signup order: phone entry → SMS OTP → create account → email OTP.
  * The code field is never autofilled — users enter the code from SMS/email.
@@ -52,23 +56,55 @@ export function VerifyOtpScreen({ purpose }: Props) {
     phone?: string;
     signup?: string;
     countryIso2?: string;
+    resume?: string;
   }>();
-  const email = typeof params.email === 'string' ? params.email : '';
-  const phone = typeof params.phone === 'string' ? params.phone : '';
+  const paramEmail = typeof params.email === 'string' ? params.email : '';
+  const paramPhone = typeof params.phone === 'string' ? params.phone : '';
   const countryIso2 = typeof params.countryIso2 === 'string' ? params.countryIso2 : '';
   const isPhone = purpose === 'PHONE_VERIFICATION';
-  const preRegisterPhone = isPhone && params.signup === '1' && phone.length > 0;
+  const preRegisterPhone = isPhone && params.signup === '1' && paramPhone.length > 0;
   const channel = isPhone ? 'SMS' : 'EMAIL';
 
+  const [email, setEmail] = useState(paramEmail);
+  const [phone, setPhone] = useState(paramPhone);
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [emailDraft, setEmailDraft] = useState(paramEmail);
+  const [emailFieldError, setEmailFieldError] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [codeError, setCodeError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [verifyOtp] = useSecretCommand(accountCommands.verifyOtp);
   const [resendOtp, { isLoading: resending }] = useResendOtpMutation();
+  const [changeSignupEmail, changeEmailState] = useChangeSignupEmailMutation();
   const [requestPhoneOtp, requestPhoneState] = useRequestPhoneOtpMutation();
   const [verifyPhoneOtp] = useVerifyPhoneOtpMutation();
   const cooldown = useResendCooldown(60);
+
+  useEffect(() => {
+    if (paramEmail) {
+      setEmail(paramEmail);
+      if (!editingEmail) setEmailDraft(paramEmail);
+    }
+    if (paramPhone) setPhone(paramPhone);
+  }, [paramEmail, paramPhone, editingEmail]);
+
+  useEffect(() => {
+    if (isPhone || (paramPhone && paramEmail)) return;
+    let cancelled = false;
+    void (async () => {
+      const draft = await signupDraftStorage.load();
+      if (cancelled || !draft) return;
+      if (!paramPhone && draft.phone) setPhone(draft.phone);
+      if (!paramEmail && draft.email) {
+        setEmail(draft.email);
+        setEmailDraft(draft.email);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isPhone, paramPhone, paramEmail]);
 
   const goToLogin = () =>
     router.replace({ pathname: '/login', params: { email, notice: 'verified' } });
@@ -164,6 +200,49 @@ export function VerifyOtpScreen({ purpose }: Props) {
     }
   };
 
+  const saveChangedEmail = async () => {
+    setEmailFieldError(null);
+    setFormError(null);
+    const next = emailDraft.trim().toLowerCase();
+    if (!EMAIL_RE.test(next)) {
+      setEmailFieldError('Enter a valid email address');
+      return;
+    }
+    if (!phone) {
+      setFormError('We need your phone number to update this email. Go back and continue registration.');
+      return;
+    }
+    if (next === email.trim().toLowerCase()) {
+      setEditingEmail(false);
+      return;
+    }
+
+    try {
+      await changeSignupEmail({ phone, email: next }).unwrap();
+      setEmail(next);
+      setEmailDraft(next);
+      setEditingEmail(false);
+      setCode('');
+      setCodeError(null);
+      cooldown.restart();
+      const draft = await signupDraftStorage.load();
+      await signupDraftStorage.save({
+        phone,
+        email: next,
+        countryIso2: draft?.countryIso2 ?? (countryIso2.length === 2 ? countryIso2 : null),
+        step: 'EMAIL_OTP',
+      });
+      toast.show({ type: 'success', title: 'Email updated', message: 'We sent a new code to your new address.' });
+    } catch (raw) {
+      const error = toAppError(raw);
+      if (error.code === 'EMAIL_ALREADY_REGISTERED') {
+        setEmailFieldError(authErrorMessage(error));
+      } else {
+        setFormError(authErrorMessage(error));
+      }
+    }
+  };
+
   if (preRegisterPhone) {
     return (
       <AuthLayout title="Verify phone" subtitle="Enter the SMS code we sent you" centered>
@@ -243,45 +322,103 @@ export function VerifyOtpScreen({ purpose }: Props) {
       </AppText>
       <FormAlert message={formError} testID="verify-error" />
 
-      <OtpInput
-        value={code}
-        onChangeText={(value) => {
-          setCode(value);
-          if (codeError) setCodeError(null);
-        }}
-        onComplete={submit}
-        error={codeError}
-        editable={!busy}
-        testID="verify-code"
-      />
-
-      <View style={{ alignItems: 'center' }}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
-          <AppText tone="secondary">Didn&apos;t get the code? </AppText>
-          <TextLink
-            label={
-              cooldown.canResend ? 'Resend code' : `Resend code (${cooldown.remaining}s)`
-            }
-            tone="info"
-            onPress={resend}
-            disabled={!cooldown.canResend || resending}
-            testID="verify-resend"
+      {!isPhone && editingEmail ? (
+        <View style={{ gap: 12, width: '100%' }}>
+          <Input
+            label="Email address"
+            value={emailDraft}
+            onChangeText={(value) => {
+              setEmailDraft(value);
+              if (emailFieldError) setEmailFieldError(null);
+            }}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            autoComplete="email"
+            textContentType="emailAddress"
+            error={emailFieldError}
+            testID="verify-change-email"
+          />
+          <Button
+            label="Update email"
+            shape="pill"
+            onPress={() => void saveChangedEmail()}
+            loading={changeEmailState.isLoading}
+            loadingLabel="Updating…"
+            testID="verify-change-email-submit"
+          />
+          <Button
+            label="Cancel"
+            variant="ghost"
+            onPress={() => {
+              setEditingEmail(false);
+              setEmailDraft(email);
+              setEmailFieldError(null);
+            }}
+            disabled={changeEmailState.isLoading}
+            testID="verify-change-email-cancel"
           />
         </View>
-      </View>
+      ) : null}
 
-      <Button
-        label="Submit"
-        loadingLabel="Verifying…"
-        shape="pill"
-        onPress={() => submit(code)}
-        loading={busy}
-        disabled={code.length !== OTP_LENGTH}
-        testID="verify-submit"
-      />
+      {!isPhone && !editingEmail ? (
+        <View style={{ alignItems: 'center' }}>
+          <TextLink
+            label="Wrong email? Change it"
+            tone="info"
+            onPress={() => {
+              setEmailDraft(email);
+              setEmailFieldError(null);
+              setEditingEmail(true);
+            }}
+            testID="verify-change-email-start"
+          />
+        </View>
+      ) : null}
 
-      {isPhone ? (
-        <Button label="Skip for now" variant="ghost" onPress={goToLogin} testID="verify-skip" />
+      {!editingEmail ? (
+        <>
+          <OtpInput
+            value={code}
+            onChangeText={(value) => {
+              setCode(value);
+              if (codeError) setCodeError(null);
+            }}
+            onComplete={submit}
+            error={codeError}
+            editable={!busy}
+            testID="verify-code"
+          />
+
+          <View style={{ alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <AppText tone="secondary">Didn&apos;t get the code? </AppText>
+              <TextLink
+                label={
+                  cooldown.canResend ? 'Resend code' : `Resend code (${cooldown.remaining}s)`
+                }
+                tone="info"
+                onPress={resend}
+                disabled={!cooldown.canResend || resending}
+                testID="verify-resend"
+              />
+            </View>
+          </View>
+
+          <Button
+            label="Submit"
+            loadingLabel="Verifying…"
+            shape="pill"
+            onPress={() => submit(code)}
+            loading={busy}
+            disabled={code.length !== OTP_LENGTH}
+            testID="verify-submit"
+          />
+
+          {isPhone ? (
+            <Button label="Skip for now" variant="ghost" onPress={goToLogin} testID="verify-skip" />
+          ) : null}
+        </>
       ) : null}
     </AuthLayout>
   );

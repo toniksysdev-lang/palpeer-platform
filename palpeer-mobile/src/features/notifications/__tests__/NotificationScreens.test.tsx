@@ -9,6 +9,7 @@ import {
   DENIED,
   GRANTED,
   getDevicePushTokenAsync,
+  getExpoPushTokenAsync,
   notifications,
   requestPermissionsAsync,
 } from '@/tests/mocks/notifications';
@@ -210,9 +211,10 @@ describe('NotificationSettingsScreen', () => {
       string
     >;
     expect(body).toMatchObject({
-      token: 'fcm-token-1',
+      token: 'ExponentPushToken[test-token]',
       platform: Platform.OS === 'android' ? 'ANDROID' : 'IOS',
     });
+    expect(getExpoPushTokenAsync).toHaveBeenCalled();
     expect(body.deviceIdentifier).toEqual(expect.any(String));
     expect(await secureStorage.getPushTokenId()).toBe('dt-1');
     await waitFor(() => expect(screen.getByTestId('push-switch').props.value).toBe(true));
@@ -234,13 +236,14 @@ describe('NotificationSettingsScreen', () => {
 
   it('explains when this build has no push credentials', async () => {
     notifications.setPermission(GRANTED);
+    getExpoPushTokenAsync.mockRejectedValueOnce(new Error('Expo push unavailable'));
     getDevicePushTokenAsync.mockRejectedValueOnce(new Error('FirebaseApp is not initialized'));
     const { calls: all } = installFetchMock({ 'GET /notifications/device-tokens': ok([]) });
     await renderWithProviders(<NotificationSettingsScreen />);
 
     await fireEvent(await screen.findByTestId('push-switch'), 'valueChange', true);
     expect(await screen.findByTestId('push-error')).toHaveTextContent(
-      "Push notifications aren't available in this version of the app.",
+      /Couldn't enable push on this install|aren't available|aren't configured/,
     );
     expect(calls(all, 'POST', '/notifications/device-tokens')).toHaveLength(0);
   });

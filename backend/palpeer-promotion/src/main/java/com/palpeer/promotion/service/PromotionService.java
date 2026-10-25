@@ -778,8 +778,9 @@ public class PromotionService {
         return p.isActive();
     }
 
+    /** 8-character codes: {@code REF} + 5 hex chars (e.g. {@code REF1A2B3}). */
     private static String generateCode() {
-        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase(Locale.ROOT);
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 5).toUpperCase(Locale.ROOT);
         return "REF" + suffix;
     }
 

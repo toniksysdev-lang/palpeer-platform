@@ -93,6 +93,8 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: APP_ID,
     allowBackup: false,
+    // Resize the window when the soft keyboard opens so Screen can scroll the focused field above it.
+    softwareKeyboardLayoutMode: 'resize',
     ...(androidGoogleServices ? { googleServicesFile: androidGoogleServices } : {}),
     adaptiveIcon: {
       backgroundColor: '#FFFFFF',

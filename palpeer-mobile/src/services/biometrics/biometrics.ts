@@ -10,8 +10,13 @@ export type BiometricCapability =
 export type BiometricResult = 'success' | 'cancelled' | 'lockout' | 'unavailable' | 'failed';
 
 function labelFor(types: LocalAuthentication.AuthenticationType[]): string {
-  if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) return 'Face ID';
-  if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) return 'Fingerprint';
+  // Product copy matches Login / lock screen: one label covering Face ID and fingerprint.
+  if (
+    types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION) ||
+    types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)
+  ) {
+    return 'Face ID or Fingerprint';
+  }
   return 'Biometrics';
 }
 

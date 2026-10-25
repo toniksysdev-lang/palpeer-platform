@@ -16,6 +16,7 @@ function unitInPair(unitCode: string, base: string, quote: string): boolean {
 /**
  * "1 CAD = 970 NGN" with a switch icon — tap to flip which currency stays at 1.
  * Safe inside pressable cards: the flip press does not bubble to the parent.
+ * Pass `full` on review screens so long rates are not ellipsized.
  */
 export function FlippableRateLine({
   rate,
@@ -24,6 +25,8 @@ export function FlippableRateLine({
   tone = 'secondary',
   variant = 'body',
   align = 'left',
+  full = false,
+  maxDecimals,
   testID,
 }: {
   rate: string;
@@ -32,6 +35,9 @@ export function FlippableRateLine({
   tone?: TextTone;
   variant?: TextVariant;
   align?: 'left' | 'right' | 'center';
+  /** Show the complete rate (wrap + optional full precision); no single-line ellipsis. */
+  full?: boolean;
+  maxDecimals?: number;
   testID?: string;
 }) {
   const theme = useTheme();
@@ -39,7 +45,7 @@ export function FlippableRateLine({
   const effectiveUnit = unitInPair(rateUnit, base, quote)
     ? rateUnit
     : preferredRateUnit(base, quote);
-  const rateLine = p2pRateLine(rate, base, quote, effectiveUnit);
+  const rateLine = p2pRateLine(rate, base, quote, effectiveUnit, maxDecimals);
 
   const flip = (event?: GestureResponderEvent) => {
     event?.stopPropagation?.();
@@ -54,15 +60,22 @@ export function FlippableRateLine({
       testID={testID}
       style={{
         flexDirection: align === 'right' ? 'row-reverse' : 'row',
-        alignItems: 'center',
+        alignItems: full ? 'flex-start' : 'center',
         alignSelf:
           align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start',
         gap: 6,
-        flexShrink: 1,
-        flexWrap: 'nowrap',
+        flexShrink: full ? 0 : 1,
+        flexWrap: full ? 'wrap' : 'nowrap',
+        maxWidth: '100%',
       }}
     >
-      <AppText tone={tone} variant={variant} numberOfLines={1} style={{ flexShrink: 1 }}>
+      <AppText
+        tone={tone}
+        variant={variant}
+        numberOfLines={full ? undefined : 1}
+        selectable={full}
+        style={full ? { flexGrow: 1, flexShrink: 1 } : { flexShrink: 1 }}
+      >
         {rateLine}
       </AppText>
       <Icon

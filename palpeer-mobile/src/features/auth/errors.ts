@@ -25,6 +25,8 @@ const MESSAGES: Record<string, string> = {
   OTP_EMAIL_FAILED: 'We could not send the email. Check your address and try again.',
   USER_NOT_FOUND: "We couldn't find an account for this email.",
   INVALID_CURRENT_PASSWORD: 'Your current password is incorrect.',
+  SESSION_ALREADY_ACTIVE:
+    'This account is already signed in on another device. Sign out there first, then try again.',
 };
 
 /** Codes that belong to a single form field rather than the whole form. */

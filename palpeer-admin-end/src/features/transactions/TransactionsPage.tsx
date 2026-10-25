@@ -17,6 +17,7 @@ import { transactionDetailPath } from '@/features/transactions/transactionPaths'
 import { formatDateTime, formatDecimal } from '@/lib/format';
 import { mockExportTransactions, mockSearchTransactions } from '@/mocks/transactions';
 import { saveBlob } from '@/services/api/client';
+import { listCurrencies } from '@/services/api/currencies';
 import {
   exportAdminTransactions,
   searchAdminTransactions,
@@ -92,6 +93,31 @@ export function TransactionsPage() {
     }),
     [type, status, currencyCode, userId, from, to],
   );
+
+  const currenciesQuery = useQuery({
+    queryKey: ['admin-transaction-currencies', appConfig.useMockApi],
+    enabled: allowed,
+    queryFn: async () => {
+      if (appConfig.useMockApi) {
+        return [
+          { id: 'cad', code: 'CAD', symbol: '$', precision: 2 },
+          { id: 'ngn', code: 'NGN', symbol: '₦', precision: 2 },
+        ];
+      }
+      return listCurrencies();
+    },
+  });
+
+  const currencyOptions = useMemo(() => {
+    const codes = (currenciesQuery.data ?? [])
+      .map((currency) => currency.code?.trim().toUpperCase())
+      .filter((code): code is string => Boolean(code));
+    const unique = [...new Set(codes)].sort((a, b) => a.localeCompare(b));
+    if (currencyDraft && !unique.includes(currencyDraft.toUpperCase())) {
+      unique.unshift(currencyDraft.toUpperCase());
+    }
+    return unique;
+  }, [currenciesQuery.data, currencyDraft]);
 
   const query = useQuery({
     queryKey: ['admin-transactions', filters, page, size, appConfig.useMockApi],
@@ -310,13 +336,21 @@ export function TransactionsPage() {
                 </option>
               ))}
             </Select>
-            <Input
+            <Select
               label="Currency"
               value={currencyDraft}
               onChange={(event) => setCurrencyDraft(event.target.value)}
-              placeholder="CAD"
-              maxLength={10}
-            />
+              disabled={currenciesQuery.isLoading}
+            >
+              <option value="">
+                {currenciesQuery.isLoading ? 'Loading currencies…' : 'All currencies'}
+              </option>
+              {currencyOptions.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </Select>
             <Input
               label="User ID"
               value={userIdDraft}

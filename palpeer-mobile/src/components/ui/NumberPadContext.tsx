@@ -146,7 +146,7 @@ export function useNumberPadField({
     pad.open(field);
   }, [disabled, field, pad]);
 
-  return { select, active, padAvailable: !!pad };
+  return { select, active, padAvailable: !!pad, fieldId: id };
 }
 
 /** Renders the active field's keypad above the system navigation bar. Hidden until a field is tapped. */

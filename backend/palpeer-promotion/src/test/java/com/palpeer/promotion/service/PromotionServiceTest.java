@@ -91,6 +91,7 @@ class PromotionServiceTest {
         ReferralResponse response = promotionService.myReferralCode(userId);
 
         assertThat(response.referralCode()).startsWith("REF");
+        assertThat(response.referralCode()).hasSize(8);
         assertThat(response.status()).isEqualTo(ReferralStatus.OPEN);
     }
 

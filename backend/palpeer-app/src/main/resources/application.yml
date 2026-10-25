@@ -215,6 +215,7 @@ palpeer:
     api-key: ${KUDA_API_KEY:}
     base-url: ${KUDA_BASE_URL:}
     sender-name: ${KUDA_SENDER_NAME:PALPEER}
+    client-account-number: ${KUDA_CLIENT_ACCOUNT_NUMBER:}
     webhook-username: ${KUDA_WEBHOOK_USERNAME:}
     webhook-password: ${KUDA_WEBHOOK_PASSWORD:}
     webhook-secret: ${KUDA_WEBHOOK_SECRET:}

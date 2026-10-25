@@ -51,21 +51,23 @@ function unwrapAi(data: AiChatResponse): {
   };
 }
 
-/** Start a guest AI chat session. */
+/** Start a guest AI chat session (fast path: one quick retry, short timeout). */
 export async function startGuestAiSession(): Promise<
   { ok: true; sessionId: string } | { ok: false; error: string }
 > {
   let lastError = 'Could not start chat session.';
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 2; attempt++) {
     const result = await supportChatRequest<StartSessionResponse>('/ai/start-session/guest', {
       method: 'POST',
       body: {},
+      // Keep boot snappy — don't wait the full app request timeout on a hung start.
+      timeoutMs: 8_000,
     });
     if (result.ok && result.data?.sessionId) {
       return { ok: true, sessionId: result.data.sessionId };
     }
     lastError = result.ok ? lastError : result.error.message;
-    if (attempt < 2) await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    if (attempt < 1) await new Promise((r) => setTimeout(r, 250));
   }
   return { ok: false, error: lastError };
 }

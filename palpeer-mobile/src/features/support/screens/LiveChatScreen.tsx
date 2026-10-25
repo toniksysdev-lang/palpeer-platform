@@ -3,13 +3,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
-  Pressable,
   TextInput,
   View,
+  type KeyboardEvent,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StackHeader } from '@/components/layout/StackHeader';
 import { FormAlert } from '@/components/feedback/FormAlert';
@@ -62,6 +62,7 @@ function greeting(firstName: string | null): string {
 
 export function LiveChatScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { email, firstName, snapshot, refreshAccount, ready } = useLiveChatContext();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -71,7 +72,9 @@ export function LiveChatScreen() {
   const [sending, setSending] = useState(false);
   const [awaitingEscalation, setAwaitingEscalation] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const listRef = useRef<FlatList<ChatMessage>>(null);
+  const inputRef = useRef<TextInput>(null);
   const sessionRef = useRef<string | null>(null);
   const modeRef = useRef<Mode>('ai');
   const snapshotRef = useRef(snapshot);
@@ -92,23 +95,37 @@ export function LiveChatScreen() {
     setMessages((prev) => [...prev, message]);
   }, []);
 
+  const scrollToComposer = useCallback(() => {
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToEnd({ animated: true });
+    });
+  }, []);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const onShow = (event: KeyboardEvent) => {
+      setKeyboardHeight(event.endCoordinates.height);
+      scrollToComposer();
+    };
+    const onHide = () => setKeyboardHeight(0);
+    const showSub = Keyboard.addListener(showEvent, onShow);
+    const hideSub = Keyboard.addListener(hideEvent, onHide);
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [scrollToComposer]);
+
   const boot = useCallback(async () => {
-    setBooting(true);
     setBootError(null);
     setMessages([]);
     setMode('ai');
     setAwaitingEscalation(false);
+    setSessionId(null);
     seenRemoteIds.current = new Set();
 
-    const started = await startGuestAiSession();
-    if (!started.ok) {
-      bootedRef.current = false;
-      setBootError(started.error);
-      setBooting(false);
-      return;
-    }
-
-    setSessionId(started.sessionId);
+    // Show the greeting immediately — don't wait on the support API round-trip.
     push({
       id: `welcome-${Date.now()}`,
       text: greeting(firstName),
@@ -117,6 +134,16 @@ export function LiveChatScreen() {
     });
     setBooting(false);
 
+    const started = await startGuestAiSession();
+    if (!started.ok) {
+      bootedRef.current = false;
+      setBootError(started.error);
+      return;
+    }
+
+    setSessionId(started.sessionId);
+
+    // Link account + refresh wallets in the background (do not block the composer).
     void (async () => {
       if (email) {
         await verifyPalpeerAccount(email, started.sessionId);
@@ -249,11 +276,17 @@ export function LiveChatScreen() {
         return;
       }
 
-      const freshSnapshot = await refreshAccount();
-      snapshotRef.current = freshSnapshot;
+      // Answer account questions from cached snapshot first; refresh only when needed.
       const accountKind = matchAccountQuestion(text);
-      if (accountKind && (email || freshSnapshot.userId)) {
-        const localAnswer = answerAccountQuestion(accountKind, freshSnapshot);
+      let activeSnapshot = snapshotRef.current;
+      if (accountKind && (email || activeSnapshot.userId)) {
+        try {
+          activeSnapshot = await refreshAccount();
+          snapshotRef.current = activeSnapshot;
+        } catch {
+          // Keep cached snapshot.
+        }
+        const localAnswer = answerAccountQuestion(accountKind, activeSnapshot);
         setMessages((prev) => prev.filter((m) => m.id !== loadingId));
         push({
           id: `ai-local-${Date.now()}`,
@@ -268,7 +301,7 @@ export function LiveChatScreen() {
         message: text,
         sessionId,
         userEmail: email,
-        context: buildLiveChatContext(freshSnapshot),
+        context: buildLiveChatContext(activeSnapshot),
       });
 
       setMessages((prev) => prev.filter((m) => m.id !== loadingId));
@@ -288,9 +321,9 @@ export function LiveChatScreen() {
       }
 
       let reply = result.text;
-      if (isMissingAccountAiReply(reply) && (email || freshSnapshot.userId)) {
+      if (isMissingAccountAiReply(reply) && (email || activeSnapshot.userId)) {
         const fallbackKind = matchAccountQuestion(text) ?? 'profile';
-        reply = answerAccountQuestion(fallbackKind, freshSnapshot);
+        reply = answerAccountQuestion(fallbackKind, activeSnapshot);
       }
 
       push({
@@ -315,22 +348,28 @@ export function LiveChatScreen() {
     }
   };
 
-  const headerDetail =
-    mode === 'agent' ? 'Live agent' : awaitingEscalation ? 'Choose how to continue' : 'AI assistant';
+  const connecting = !sessionId && !bootError && !booting;
+  const headerDetail = mode === 'agent'
+    ? 'Live agent'
+    : awaitingEscalation
+      ? 'Choose how to continue'
+      : connecting
+        ? 'Connecting…'
+        : 'AI assistant';
 
   const canSend = !sending && !booting && !!sessionId && !awaitingEscalation && !!draft.trim();
+  // Lift the composer above the system keyboard. Edge-to-edge Android often ignores window
+  // resize, so we pad from keyboard height instead of relying on KeyboardAvoidingView.
+  const composerBottomPad =
+    theme.spacing.sm + (keyboardHeight > 0 ? 0 : insets.bottom);
 
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: theme.colors.background }}
-      edges={['top', 'bottom']}
+      edges={['top']}
       testID="live-chat-screen"
     >
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
-      >
+      <View style={{ flex: 1, paddingBottom: keyboardHeight }}>
         <View style={{ paddingHorizontal: theme.spacing.xl }}>
           <StackHeader title="Live chat" />
         </View>
@@ -380,6 +419,7 @@ export function LiveChatScreen() {
                 label="Try again"
                 onPress={() => {
                   bootedRef.current = true;
+                  setBooting(true);
                   void boot();
                 }}
                 testID="live-chat-retry"
@@ -412,6 +452,8 @@ export function LiveChatScreen() {
                 flexGrow: 1,
               }}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              onContentSizeChange={scrollToComposer}
               ListEmptyComponent={
                 <View
                   style={{
@@ -461,7 +503,7 @@ export function LiveChatScreen() {
               borderTopColor: theme.colors.border,
               paddingHorizontal: theme.spacing.xl,
               paddingTop: theme.spacing.sm,
-              paddingBottom: theme.spacing.sm,
+              paddingBottom: composerBottomPad,
               gap: theme.spacing.xs,
               backgroundColor: theme.colors.background,
             }}
@@ -471,15 +513,27 @@ export function LiveChatScreen() {
               <AppText variant="caption" tone="secondary">
                 Choose an option above, or tap Talk to agent.
               </AppText>
+            ) : connecting ? (
+              <AppText variant="caption" tone="secondary" testID="live-chat-connecting">
+                Connecting to the AI assistant…
+              </AppText>
             ) : null}
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: theme.spacing.sm }}>
               <TextInput
+                ref={inputRef}
                 value={draft}
                 onChangeText={setDraft}
                 placeholder={mode === 'agent' ? 'Message the agent…' : 'Ask the AI assistant…'}
                 placeholderTextColor={theme.colors.textMuted}
                 editable={!sending && !booting && !!sessionId && !awaitingEscalation}
                 multiline
+                onFocus={() => {
+                  scrollToComposer();
+                  // Android can report keyboard height a frame after focus — re-scroll once laid out.
+                  if (Platform.OS === 'android') {
+                    setTimeout(scrollToComposer, 80);
+                  }
+                }}
                 style={{
                   flex: 1,
                   minHeight: 44,
@@ -507,7 +561,7 @@ export function LiveChatScreen() {
             </View>
           </View>
         ) : null}
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }

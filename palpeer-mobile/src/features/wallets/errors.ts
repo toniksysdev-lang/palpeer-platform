@@ -29,10 +29,34 @@ const MESSAGES: Record<string, string> = {
   KORAPAY_WITHDRAWAL_UNSUPPORTED: 'NGN withdrawals aren’t available with this payment method yet.',
   KUDA_ERROR: "The payment provider couldn't process this. Try again later.",
   KUDA_AUTH_FAILED: "The payment provider couldn't process this. Try again later.",
+  KUDA_PERMISSION_DENIED:
+    "Naira funding isn't enabled for this payment account yet. Contact support.",
 };
 
+const GENERIC_SERVER_FALLBACK = 'Something went wrong on our side. Please try again.';
+
 export function walletErrorMessage(error: AppError): string {
-  return (error.code && MESSAGES[error.code]) || error.message;
+  if (
+    error.code === 'KUDA_ERROR' &&
+    /do not have permission|contact the api team/i.test(error.message ?? '')
+  ) {
+    return MESSAGES.KUDA_PERMISSION_DENIED;
+  }
+  const mapped = error.code ? MESSAGES[error.code] : undefined;
+  // Prefer a specific Kuda/Korapay message when the API returned one (e.g. invalid phone).
+  // Skip the generic 5xx fallback — that is not a provider message.
+  if (
+    (error.code === 'KUDA_ERROR' || error.code === 'KORAPAY_ERROR') &&
+    error.message &&
+    error.message !== GENERIC_SERVER_FALLBACK &&
+    error.message.length > 0 &&
+    error.message.length <= 160 &&
+    !/^Kuda request failed/i.test(error.message) &&
+    !/^Korapay request failed/i.test(error.message)
+  ) {
+    return error.message;
+  }
+  return mapped || error.message;
 }
 
 export function isIdempotencyConflict(error: AppError): boolean {

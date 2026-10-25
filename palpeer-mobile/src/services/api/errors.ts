@@ -93,8 +93,13 @@ export function errorFromResponse(
   }
   const kind = kindForStatus(status);
   const code = envelope?.error?.code ?? null;
+  // Keep business-error copy on 5xx (e.g. 502 KUDA_NAME_ENQUIRY_FAILED). Hide only opaque
+  // INTERNAL_ERROR / uncoded 500 bodies so stack traces never reach the UI.
+  const hasBusinessCode = Boolean(code) && code !== 'INTERNAL_ERROR';
   const message =
-    kind === 'server' ? FALLBACK_MESSAGES.server : envelope?.message || FALLBACK_MESSAGES[kind];
+    kind === 'server' && !hasBusinessCode
+      ? FALLBACK_MESSAGES.server
+      : envelope?.message || FALLBACK_MESSAGES[kind];
   return createAppError(kind, {
     status,
     code,

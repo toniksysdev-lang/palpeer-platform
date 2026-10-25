@@ -1,9 +1,12 @@
 import { WORLD_COUNTRIES } from '@/features/auth/worldCountries';
 
+import { hasPaymentRail } from './rails';
+
 /**
  * Primary wallet currency for each registration country (ISO 3166-1 alpha-2 → ISO 4217).
  * Mirrors the admin Registration countries corridor; New wallet lists every enabled country
- * that maps here. Create is allowed only when that currency also exists in `GET /currencies`.
+ * that maps here. Create is allowed only when that currency exists in `GET /currencies` and
+ * has a payment processor implemented on the backend (CAD/Apaylo, NGN/Kuda).
  */
 export const REGISTRATION_COUNTRY_CURRENCY: Readonly<Record<string, string>> = {
   CA: 'CAD',
@@ -49,7 +52,7 @@ export type RegistrationWalletOption = {
   countryIso2: string;
   countryName: string;
   flagEmoji: string;
-  /** True when the currency exists on the platform (create will succeed). */
+  /** True when the currency is on the platform and a payment rail is implemented. */
   creatable: boolean;
 };
 
@@ -92,9 +95,9 @@ function countryMeta(iso2: string): { name: string; flag: string } {
 
 /**
  * Enabled registration countries for New wallet: one row per country from admin settings.
- * Hides countries whose currency the user already holds. Countries whose currency is not
- * yet on the platform still appear (creatable=false) so the list matches Registration
- * countries — same source as signup.
+ * Hides countries whose currency the user already holds. Countries without a platform
+ * currency or without an implemented payment processor still appear (creatable=false) so
+ * the list matches Registration countries — same source as signup.
  */
 export function remainingRegistrationWalletOptions(args: {
   registrationIso2: readonly string[] | undefined | null;
@@ -121,7 +124,7 @@ export function remainingRegistrationWalletOptions(args: {
       countryIso2,
       countryName: meta.name,
       flagEmoji: meta.flag,
-      creatable: platform.has(currencyCode),
+      creatable: platform.has(currencyCode) && hasPaymentRail(currencyCode),
     });
   }
   return options;

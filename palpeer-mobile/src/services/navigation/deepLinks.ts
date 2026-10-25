@@ -1,5 +1,6 @@
 const UUID = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
-const REFERRAL_CODE = /^REF[0-9A-F]{10}$/;
+/** New codes are REF + 5 hex (8 chars); older codes used a longer hex suffix. */
+const REFERRAL_CODE = /^REF[0-9A-F]{5,20}$/;
 /** Longer than any allowed path; anything bigger is rejected before decoding. */
 const MAX_LINK_LENGTH = 512;
 
@@ -96,6 +97,8 @@ export function notificationTarget(notification: {
     case 'NEGOTIATION':
       return id && UUID_ONLY.test(id) ? `/negotiation/${id}` : null;
     case 'ADMIN_BROADCAST':
+      // Open the notification detail screen (title + body from admin).
+      return null;
     case 'P2P':
       return '/notifications';
     default:

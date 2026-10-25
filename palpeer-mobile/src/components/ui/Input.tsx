@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
+import { useFocusAnchor } from '@/components/layout/FocusScroll';
 import { useTheme } from '@/providers/ThemeProvider';
 
 import { AppText } from './AppText';
@@ -63,6 +64,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   const theme = useTheme();
   const [focused, setFocused] = useState(false);
   const elevated = appearance === 'elevated';
+  const { ref: anchorRef, reveal } = useFocusAnchor();
   const stringValue = typeof value === 'string' ? value : value != null ? String(value) : '';
 
   const handlePadChange = useCallback(
@@ -105,8 +107,13 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
     },
   ];
 
+  const openPad = () => {
+    pad.select();
+    reveal();
+  };
+
   return (
-    <View style={{ gap: theme.spacing.xs }}>
+    <View ref={anchorRef} collapsable={false} style={{ gap: theme.spacing.xs }}>
       <AppText
         variant={elevated ? 'body' : 'caption'}
         tone={elevated ? 'primary' : 'secondary'}
@@ -116,7 +123,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
       </AppText>
       {usePad ? (
         <Pressable
-          onPress={pad.select}
+          onPress={openPad}
           disabled={!editable}
           accessibilityRole="button"
           accessibilityLabel={label}
@@ -151,6 +158,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
             keyboardType={numberPad ? keyboardTypeFor(numberPad) : rest.keyboardType}
             onFocus={(event) => {
               setFocused(true);
+              reveal();
               onFocus?.(event);
             }}
             onBlur={(event) => {

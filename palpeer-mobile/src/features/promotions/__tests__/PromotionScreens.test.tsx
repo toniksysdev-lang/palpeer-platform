@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { Share } from 'react-native';
 
 import { HomeScreen } from '@/features/home/HomeScreen';
+import * as saveReceipt from '@/features/transactions/saveReceipt';
 import { sessionManager } from '@/services/auth/session';
 import { secureStorage } from '@/services/storage/secureStorage';
 import { fail, installFetchMock, ok, type RecordedCall } from '@/tests/fetchMock';
@@ -19,7 +20,7 @@ const referral = (overrides: Record<string, unknown> = {}) => ({
   id: 'r-1',
   referrerUserId: 'u-1',
   refereeUserId: null,
-  referralCode: 'REF0A1B2C3D4E',
+  referralCode: 'REF0A1B2',
   status: 'OPEN',
   promotionId: null,
   createdAt: '2026-09-29T10:00:00Z',
@@ -63,17 +64,17 @@ describe('ReferralsScreen', () => {
     installFetchMock(routes());
     await renderWithProviders(<ReferralsScreen />);
 
-    expect(await screen.findByTestId('referral-code')).toHaveTextContent('REF0A1B2C3D4E');
+    expect(await screen.findByTestId('referral-code')).toHaveTextContent('REF0A1B2');
     expect(await screen.findByTestId('referral-stats')).toHaveTextContent(/1 friend joined/);
     expect(await screen.findByTestId('referral-r-0')).toHaveTextContent(/Used/);
     expect(screen.queryByTestId('referral-r-1')).toBeNull();
 
     await fireEvent.press(screen.getByTestId('referral-copy'));
-    expect(setStringAsync).toHaveBeenCalledWith('REF0A1B2C3D4E');
+    expect(setStringAsync).toHaveBeenCalledWith('REF0A1B2');
 
     await fireEvent.press(screen.getByTestId('referral-share'));
     expect(share).toHaveBeenCalledWith({
-      message: expect.stringContaining('REF0A1B2C3D4E'),
+      message: expect.stringContaining('REF0A1B2'),
     });
   });
 
@@ -85,18 +86,27 @@ describe('ReferralsScreen', () => {
     );
     await renderWithProviders(<ReferralsScreen />);
 
-    await fireEvent.changeText(
-      await screen.findByTestId('referral-apply-code'),
-      ' ref 1234567890 ',
-    );
+    await fireEvent.changeText(await screen.findByTestId('referral-apply-code'), ' ref 1a2b3 ');
     await fireEvent.press(screen.getByTestId('referral-apply'));
     expect(posts(calls, '/promotions/referrals/apply')).toHaveLength(0);
     await fireEvent.press(await screen.findByTestId('confirm-dialog-confirm'));
 
     await waitFor(() => expect(posts(calls, '/promotions/referrals/apply')).toHaveLength(1));
     expect(posts(calls, '/promotions/referrals/apply')[0]?.body).toEqual({
-      referralCode: 'REF1234567890',
+      referralCode: 'REF1A2B3',
     });
+  });
+
+  it('saves the referral code as image or PDF', async () => {
+    const saveImage = jest.spyOn(saveReceipt, 'saveReceiptAsImage').mockResolvedValue(undefined);
+    const savePdf = jest.spyOn(saveReceipt, 'saveReceiptAsPdf').mockResolvedValue(undefined);
+    installFetchMock(routes());
+    await renderWithProviders(<ReferralsScreen />);
+
+    await fireEvent.press(await screen.findByTestId('referral-save-image'));
+    await waitFor(() => expect(saveImage).toHaveBeenCalled());
+    await fireEvent.press(screen.getByTestId('referral-save-pdf'));
+    await waitFor(() => expect(savePdf).toHaveBeenCalled());
   });
 
   it.each([

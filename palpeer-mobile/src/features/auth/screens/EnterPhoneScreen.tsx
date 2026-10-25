@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { CountryFlag } from '@/components/brand/CountryFlag';
 import { FormAlert } from '@/components/feedback/FormAlert';
+import { useFocusAnchor } from '@/components/layout/FocusScroll';
 import { AppText } from '@/components/ui/AppText';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
@@ -79,6 +80,7 @@ export function EnterPhoneScreen() {
     autoFocus: false,
   });
   const pad = useOptionalNumberPad();
+  const { ref: phoneAnchorRef, reveal: revealPhone } = useFocusAnchor();
 
   const busy =
     statusState.isLoading || requestState.isLoading || resendEmailState.isLoading;
@@ -232,7 +234,11 @@ export function EnterPhoneScreen() {
     >
       <FormAlert message={error} testID="enter-phone-error" />
 
-      <View style={[styles.row, { gap: theme.spacing.sm }]}>
+      <View
+        ref={phoneAnchorRef}
+        collapsable={false}
+        style={[styles.row, { gap: theme.spacing.sm }]}
+      >
         <Pressable
           onPress={() => {
             pad?.close();
@@ -266,7 +272,10 @@ export function EnterPhoneScreen() {
         </Pressable>
 
         <Pressable
-          onPress={select}
+          onPress={() => {
+            select();
+            revealPhone();
+          }}
           accessibilityRole="button"
           accessibilityLabel="Phone number"
           accessibilityState={{ selected: active }}

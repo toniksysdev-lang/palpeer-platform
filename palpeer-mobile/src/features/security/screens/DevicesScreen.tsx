@@ -25,11 +25,14 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { biometricChanged } from '@/store/slices/appLockSlice';
 import type { DeviceResponse } from '@/types/api/security';
 
+import { usePinPrompt } from '../PinPromptProvider';
+
 /** Devices registered for biometric unlock. Disabling or removing one revokes its unlock. */
 export function DevicesScreen() {
   const theme = useTheme();
   const toast = useToast();
   const dispatch = useAppDispatch();
+  const { requestPin } = usePinPrompt();
   const biometricEnabled = useAppSelector((state) => state.appLock.biometricEnabled);
   const devices = useGetDevicesQuery();
   const [setEnabled, toggleState] = useSetDeviceEnabledMutation();
@@ -55,19 +58,35 @@ export function DevicesScreen() {
   };
 
   const toggle = async (device: DeviceResponse) => {
+    const disabling = device.enabled;
+    if (disabling) {
+      const confirmed = await requestPin({
+        title: 'Confirm with your PIN',
+        message: 'Enter your PIN to disable biometric unlock on this device.',
+      });
+      if (!confirmed) return;
+    }
     const result = await setEnabled({ deviceId: device.id, enabled: !device.enabled });
     if ('error' in result) {
       toast.show({ type: 'error', title: toAppError(result.error).message });
       return;
     }
-    if (device.enabled) await revokeLocalUnlock(device);
+    if (disabling) await revokeLocalUnlock(device);
   };
 
   const remove = async () => {
     if (!removing) return;
     const device = removing;
-    const result = await deleteDevice(device.id);
     setRemoving(null);
+    const confirmed = await requestPin({
+      title: 'Confirm with your PIN',
+      message:
+        device.deviceIdentifier === thisDevice
+          ? 'Enter your PIN to remove this phone and turn off biometric unlock.'
+          : 'Enter your PIN to remove biometric unlock on that device.',
+    });
+    if (!confirmed) return;
+    const result = await deleteDevice(device.id);
     if ('error' in result && toAppError(result.error).kind !== 'notFound') {
       toast.show({ type: 'error', title: toAppError(result.error).message });
       return;

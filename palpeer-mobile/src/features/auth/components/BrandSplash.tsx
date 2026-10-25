@@ -2,12 +2,14 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, Image, Platform, StyleSheet, View } from 'react-native';
 
 import { PALPEER_LOGO } from '@/components/brand/logo';
-import { useTheme } from '@/providers/ThemeProvider';
 import { palette } from '@/theme';
 
 /** Indeterminate progress cycle length while bootstrap runs. */
 const PROGRESS_CYCLE_MS = 1200;
 const PROGRESS_TRACK_WIDTH = 148;
+/** Hardcoded so BrandSplash works as SuspenseFallback before ThemeProvider mounts. */
+const PROGRESS_TRACK = palette.neutral50;
+const PROGRESS_FILL = palette.emerald500;
 
 /** Dismiss any static HTML boot splash once React BrandSplash is painting (web only). */
 function hideWebBootSplash() {
@@ -25,7 +27,6 @@ function hideWebBootSplash() {
  * Tagline lives in the logo artwork — do not add duplicate “Your rate, your way” text.
  */
 export function BrandSplash() {
-  const theme = useTheme();
   const progress = useRef(new Animated.Value(0.08)).current;
 
   useEffect(() => {
@@ -76,11 +77,11 @@ export function BrandSplash() {
       />
 
       <View
-        style={[styles.progressTrack, { backgroundColor: theme.colors.surfaceMuted }]}
+        style={[styles.progressTrack, { backgroundColor: PROGRESS_TRACK }]}
         testID="brand-splash-progress"
       >
         <Animated.View
-          style={[styles.progressFill, { backgroundColor: theme.colors.primary, width: barWidth }]}
+          style={[styles.progressFill, { backgroundColor: PROGRESS_FILL, width: barWidth }]}
         />
       </View>
     </View>

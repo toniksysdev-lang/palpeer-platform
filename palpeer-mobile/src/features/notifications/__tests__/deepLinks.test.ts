@@ -44,10 +44,11 @@ describe('resolveDeepLink', () => {
   });
 
   it('keeps only a well-formed referral code', () => {
-    expect(resolveDeepLink('palpeer://referrals?code=ref0123456789')).toBe(
-      '/referrals?code=REF0123456789',
+    expect(resolveDeepLink('palpeer://referrals?code=ref0a1b2')).toBe('/referrals?code=REF0A1B2');
+    expect(resolveDeepLink('palpeer://referrals?code=REF0A1B2&x=1')).toBe(
+      '/referrals?code=REF0A1B2',
     );
-    expect(resolveDeepLink('palpeer://referrals?code=REF0123456789&x=1')).toBe(
+    expect(resolveDeepLink('palpeer://referrals?code=ref0123456789')).toBe(
       '/referrals?code=REF0123456789',
     );
     expect(resolveDeepLink('palpeer://referrals?code=<script>')).toBe('/referrals');
@@ -74,6 +75,7 @@ describe('notification and push targets', () => {
     expect(notificationTarget({ referenceType: 'NEGOTIATION', referenceId: ID })).toBe(
       `/negotiation/${ID}`,
     );
+    expect(notificationTarget({ referenceType: 'ADMIN_BROADCAST', referenceId: null })).toBeNull();
     expect(notificationTarget({ referenceType: null, referenceId: null })).toBeNull();
   });
 

@@ -180,27 +180,17 @@ export function ExchangeReviewScreen() {
       <Card variant="outlined" padding="md">
         <ReviewRow label="From" value={`${quote.sourceCurrencyCode} wallet`} />
         <ReviewRow label="To" value={`${quote.targetCurrencyCode} wallet`} />
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: theme.spacing.md,
-            paddingVertical: theme.spacing.sm,
-          }}
-        >
-          <AppText tone="secondary" style={{ flex: 1 }}>
-            Rate
-          </AppText>
-          <View style={{ flex: 2, alignItems: 'flex-end' }}>
-            <FlippableRateLine
-              rate={quote.appliedRate}
-              base={quote.sourceCurrencyCode}
-              quote={quote.targetCurrencyCode}
-              variant="bodyStrong"
-              align="right"
-              testID="exchange-review-rate"
-            />
-          </View>
+        <View style={{ gap: theme.spacing.xs, paddingVertical: theme.spacing.sm }}>
+          <AppText tone="secondary">Rate</AppText>
+          <FlippableRateLine
+            rate={quote.appliedRate}
+            base={quote.sourceCurrencyCode}
+            quote={quote.targetCurrencyCode}
+            variant="bodyStrong"
+            full
+            maxDecimals={12}
+            testID="exchange-review-rate"
+          />
         </View>
         {quote.estimatedFeeAmount != null && Number(quote.estimatedFeeAmount) > 0 ? (
           <ReviewRow

@@ -26,6 +26,8 @@ type Props = {
   defaultPickerDate?: Date;
   maximumDate?: Date;
   minimumDate?: Date;
+  /** Greys out the field and blocks opening the calendar. */
+  disabled?: boolean;
   testID?: string;
 };
 
@@ -89,6 +91,7 @@ export function DateOfBirthField({
   defaultPickerDate = new Date(),
   maximumDate = new Date(),
   minimumDate,
+  disabled = false,
   testID = 'personal-dob',
 }: Props) {
   const theme = useTheme();
@@ -174,9 +177,11 @@ export function DateOfBirthField({
       </AppText>
       <Pressable
         onPress={openPicker}
+        disabled={disabled}
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${empty ? 'not set' : value}`}
         accessibilityHint="Opens a calendar to choose a date"
+        accessibilityState={{ disabled }}
         testID={testID}
         style={[
           theme.shadows.card,
@@ -189,13 +194,13 @@ export function DateOfBirthField({
             borderRadius: theme.radius.lg,
             borderWidth: 1,
             borderColor: error ? theme.colors.danger : 'transparent',
-            backgroundColor: theme.colors.surface,
+            backgroundColor: disabled ? theme.colors.surfaceMuted : theme.colors.surface,
           },
         ]}
       >
         <Icon icon={Calendar} color={theme.colors.textMuted} />
         <AppText
-          tone={empty ? 'muted' : 'primary'}
+          tone={empty || disabled ? 'muted' : 'primary'}
           style={[theme.typography.body, { flex: 1, paddingVertical: 12 }]}
         >
           {empty ? 'Select date of birth' : value}

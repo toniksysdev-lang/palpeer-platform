@@ -49,8 +49,8 @@ export function useLiveChatContext() {
   }, [email, userId, wallets, profile, recent, rates]);
 
   const firstName = profile.data?.firstName?.trim() || null;
-  // Do not block chat boot on wallet/rates/history — those refresh in the background.
-  const ready = !profile.isLoading;
+  // Never block the chat UI on profile/wallets/rates — boot the AI session immediately.
+  const ready = true;
 
   return {
     email,

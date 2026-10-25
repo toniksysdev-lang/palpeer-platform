@@ -603,25 +603,31 @@ public class P2PService {
     private void broadcastP2PPosted(P2PRequest entity) {
         String amount = formatAmount(entity.getAmount());
         String rate = formatAmount(entity.getRate());
-        String title = "New P2P " + entity.getSide().name() + " order";
-        String body = entity.getSide().name()
-                + " "
-                + amount
-                + " "
-                + entity.getBaseCurrencyCode()
-                + " for "
-                + entity.getQuoteCurrencyCode()
-                + " at rate "
-                + rate
-                + ". Order id: "
-                + entity.getId();
+        String pair = entity.getBaseCurrencyCode() + "/" + entity.getQuoteCurrencyCode();
+        String title = "New P2P " + entity.getSide().name() + " · " + pair;
+        StringBuilder body = new StringBuilder();
+        body.append(entity.getSide().name())
+                .append(' ')
+                .append(amount)
+                .append(' ')
+                .append(entity.getBaseCurrencyCode())
+                .append(" → ")
+                .append(entity.getQuoteCurrencyCode())
+                .append(" @ ")
+                .append(rate);
+        if (entity.getNotes() != null && !entity.getNotes().isBlank()) {
+            body.append(". Note: ").append(entity.getNotes().trim());
+        }
+        body.append('.');
+        String detail = body.toString();
+        // Push + in-app to everyone except the poster (marketplace alert with request details).
         eventPublisher.publishEvent(new BroadcastPushEvent(
-                entity.getUserId(), title, body, "P2P", "P2P_REQUEST", entity.getId()));
+                entity.getUserId(), title, detail, "P2P", "P2P_REQUEST", entity.getId()));
         // Poster also gets an email + push confirmation of their own listing
         eventPublisher.publishEvent(new UserNotifyEvent(
                 entity.getUserId(),
                 "P2P order posted",
-                body,
+                detail,
                 "P2P",
                 "P2P_REQUEST",
                 entity.getId(),

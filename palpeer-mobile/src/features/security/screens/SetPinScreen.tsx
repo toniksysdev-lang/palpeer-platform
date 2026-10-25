@@ -8,10 +8,12 @@ import { AppText } from '@/components/ui/AppText';
 import { useSensitiveScreen } from '@/hooks/useSensitiveScreen';
 import { useToast } from '@/providers/ToastProvider';
 import { baseApi } from '@/services/api/baseApi';
+import { buildRegistration } from '@/services/biometrics/deviceRegistration';
 import { securityCommands } from '@/services/security/securityCommands';
-import { useAppDispatch } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 
 import { PinEntry } from '../components/PinEntry';
+import { markDeviceVerifiedForSession } from '../deviceSession';
 import { securityErrorMessage } from '../errors';
 
 const PIN_COPY =
@@ -25,6 +27,7 @@ export function SetPinScreen() {
   useSensitiveScreen();
   const toast = useToast();
   const dispatch = useAppDispatch();
+  const userId = useAppSelector((state) => state.session.userId);
   const { required, returnTo } = useLocalSearchParams<{ required?: string; returnTo?: string }>();
   const mustSet = required === '1';
   const [step, setStep] = useState<Step>({ name: 'enter' });
@@ -49,6 +52,11 @@ export function SetPinScreen() {
     setSaving(false);
     dispatch(baseApi.util.invalidateTags([{ type: 'Security', id: 'PIN' }]));
     if (result.ok) {
+      // First-time PIN on this install counts as device confirmation for this session.
+      if (userId) markDeviceVerifiedForSession(userId);
+      void buildRegistration().then((registration) =>
+        securityCommands.registerDevice(registration),
+      );
       finish();
       return;
     }

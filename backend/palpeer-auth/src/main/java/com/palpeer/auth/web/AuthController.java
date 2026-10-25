@@ -4,6 +4,7 @@ import com.palpeer.auth.security.UserPrincipal;
 import com.palpeer.auth.service.AuthService;
 import com.palpeer.auth.web.dto.AuthTokensResponse;
 import com.palpeer.auth.web.dto.ChangePasswordRequest;
+import com.palpeer.auth.web.dto.ChangeSignupEmailRequest;
 import com.palpeer.auth.web.dto.GoogleAuthRequest;
 import com.palpeer.auth.web.dto.LoginRequest;
 import com.palpeer.auth.web.dto.LogoutRequest;
@@ -119,6 +120,13 @@ public class AuthController {
     public ApiResponse<OtpResendResponse> resendSignupEmailOtp(
             @Valid @RequestBody SignupStatusRequest request) {
         return ApiResponse.ok("OTP resent", authService.resendSignupEmailOtp(request));
+    }
+
+    @PostMapping("/signup/change-email")
+    @Operation(summary = "Change email during incomplete signup and send a new verification OTP")
+    public ApiResponse<OtpResendResponse> changeSignupEmail(
+            @Valid @RequestBody ChangeSignupEmailRequest request) {
+        return ApiResponse.ok("Email updated", authService.changeSignupEmail(request));
     }
 
     @PostMapping("/otp/phone/request")

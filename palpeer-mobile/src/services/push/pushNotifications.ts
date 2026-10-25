@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
@@ -10,6 +11,7 @@ import type {
   DeviceTokenResponse,
   RegisterDeviceTokenRequest,
 } from '@/types/api/notification';
+import { logger } from '@/utils/logger';
 
 export type PushPermission = 'granted' | 'denied' | 'undetermined';
 
@@ -77,31 +79,75 @@ function platform(): DeviceTokenPlatform {
   return 'OTHER';
 }
 
+/** EAS project id from the binary / Expo config (required for Expo push tokens). */
+export function resolveEasProjectId(): string | undefined {
+  const fromEas = Constants.easConfig?.projectId;
+  if (typeof fromEas === 'string' && fromEas.trim()) return fromEas.trim();
+  const fromExtra = Constants.expoConfig?.extra?.eas?.projectId;
+  if (typeof fromExtra === 'string' && fromExtra.trim()) return fromExtra.trim();
+  return undefined;
+}
+
 /**
- * The native FCM/APNs token (the backend's push provider isn't chosen yet, NT-1). Fails on
- * simulators and on builds without push credentials.
+ * Resolves a push token for backend registration.
+ *
+ * Prefer an Expo push token — the API routes `ExponentPushToken[…]` via Expo Push (works without
+ * client-side Firebase). Fall back to the native FCM/APNs token when Expo is unavailable but the
+ * binary has Google/Apple push credentials.
  */
-async function nativePushToken(): Promise<string> {
+async function resolvePushToken(): Promise<string> {
+  if (Platform.OS === 'web') {
+    throw new PushUnavailableError("Push notifications aren't available on web.");
+  }
   if (Device.isDevice === false) {
     throw new PushUnavailableError('Push notifications need a physical device.');
   }
+
+  const projectId = resolveEasProjectId();
+  let lastError: unknown;
+
+  if (projectId) {
+    try {
+      const expo = await Notifications.getExpoPushTokenAsync({ projectId });
+      if (typeof expo.data === 'string' && expo.data.trim()) {
+        return expo.data.trim();
+      }
+    } catch (error) {
+      lastError = error;
+      logger.warn('Expo push token unavailable; trying native device token', { error });
+    }
+  } else {
+    logger.warn('EAS projectId missing from app config; Expo push tokens unavailable');
+  }
+
   try {
     const token = await Notifications.getDevicePushTokenAsync();
-    if (typeof token.data !== 'string' || !token.data) {
-      throw new PushUnavailableError("Push notifications aren't available on this device.");
+    if (typeof token.data === 'string' && token.data.trim()) {
+      return token.data.trim();
     }
-    return token.data;
+    throw new PushUnavailableError("Push notifications aren't available on this device.");
   } catch (error) {
     if (error instanceof PushUnavailableError) throw error;
+    lastError = error;
+  }
+
+  const detail = lastError instanceof Error ? lastError.message : String(lastError ?? '');
+  logger.warn('Push token resolution failed', { detail, projectId: projectId ?? null });
+  if (/FirebaseApp is not initialized|google.?services|FCM|APNs|aps-environment/i.test(detail)) {
     throw new PushUnavailableError(
-      "Push notifications aren't available in this version of the app.",
+      projectId
+        ? "Couldn't enable push on this install. Try again, or reinstall a build that includes notification credentials."
+        : "Push notifications aren't configured for this build.",
     );
   }
+  throw new PushUnavailableError(
+    "Push notifications aren't available in this version of the app.",
+  );
 }
 
 export async function buildPushRegistration(token?: string): Promise<RegisterDeviceTokenRequest> {
   return {
-    token: token ?? (await nativePushToken()),
+    token: token ?? (await resolvePushToken()),
     platform: platform(),
     deviceIdentifier: await getDeviceIdentifier(),
   };

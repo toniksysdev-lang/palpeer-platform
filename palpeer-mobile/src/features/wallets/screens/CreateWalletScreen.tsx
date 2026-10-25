@@ -27,8 +27,9 @@ import { walletErrorMessage } from '../errors';
 import { remainingRegistrationWalletOptions } from '../registrationCurrencies';
 
 /**
- * Currencies from `GET /currencies`, limited to those for admin-enabled registration countries,
- * then hiding ones the user already holds (R-W-1).
+ * Currencies from `GET /currencies`, limited to admin-enabled registration countries, then
+ * hiding ones the user already holds (R-W-1). Create is enabled only for currencies with an
+ * implemented payment processor (CAD / NGN).
  */
 export function CreateWalletScreen() {
   const theme = useTheme();
@@ -178,7 +179,7 @@ export function CreateWalletScreen() {
             selectedOption
               ? selectedCreatable
                 ? `Create ${selectedOption.currencyCode} wallet`
-                : `${selectedOption.currencyCode} not available yet`
+                : `${selectedOption.currencyCode} payment not available yet`
               : 'Choose a country'
           }
           onPress={() => void submit()}
@@ -246,7 +247,7 @@ export function CreateWalletScreen() {
               accessibilityState={{ selected: active, disabled }}
               accessibilityLabel={
                 disabled
-                  ? `${option.countryName}, ${option.currencyCode} not available yet`
+                  ? `${option.countryName}, ${option.currencyCode} payment not available yet`
                   : `${option.countryName}, ${option.currencyCode} (${symbol})`
               }
               testID={`create-wallet-option-${option.countryIso2}`}
@@ -267,7 +268,7 @@ export function CreateWalletScreen() {
                 <AppText variant="bodyStrong">{option.countryName}</AppText>
                 <AppText variant="caption" tone="secondary">
                   {disabled
-                    ? `${option.currencyCode} · not available yet`
+                    ? `${option.currencyCode} · payment not available yet`
                     : `${option.currencyCode} · ${symbol}`}
                 </AppText>
               </View>

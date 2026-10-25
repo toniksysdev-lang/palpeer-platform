@@ -27,6 +27,81 @@ require('react-native-gesture-handler/jestSetup');
 
 jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'));
 
+// Reanimated 4.5 + worklets 0.10: package setUpTests / mock pull native worklets APIs
+// that are incomplete in Jest. Stub enough for UI that uses Animated / entering.
+jest.mock('react-native-reanimated', () => {
+  const ReactNative = require('react-native');
+  const NOOP = () => undefined;
+  const ID = (value: unknown) => value;
+  const Animated = {
+    View: ReactNative.View,
+    Text: ReactNative.Text,
+    Image: ReactNative.Image,
+    ScrollView: ReactNative.ScrollView,
+    FlatList: ReactNative.FlatList,
+    createAnimatedComponent: (Component: unknown) => Component,
+    addWhitelistedNativeProps: NOOP,
+    addWhitelistedUIProps: NOOP,
+  };
+  const entering = {
+    duration: () => entering,
+    delay: () => entering,
+    springify: () => entering,
+    damping: () => entering,
+    stiffness: () => entering,
+    build: () => NOOP,
+  };
+  return {
+    __esModule: true,
+    default: Animated,
+    ...Animated,
+    FadeIn: entering,
+    FadeInDown: entering,
+    FadeOut: entering,
+    ZoomIn: entering,
+    ZoomOut: entering,
+    SlideInDown: entering,
+    SlideOutDown: entering,
+    Easing: {
+      linear: ID,
+      ease: ID,
+      quad: ID,
+      cubic: ID,
+      poly: () => ID,
+      sin: ID,
+      circle: ID,
+      exp: ID,
+      elastic: () => ID,
+      back: () => ID,
+      bounce: ID,
+      bezier: () => ID,
+      in: ID,
+      out: ID,
+      inOut: ID,
+    },
+    Extrapolation: { IDENTITY: 'identity', CLAMP: 'clamp', EXTEND: 'extend' },
+    ReduceMotion: { System: 'system', Always: 'always', Never: 'never' },
+    useSharedValue: (value: unknown) => ({ value }),
+    useAnimatedStyle: (factory: () => unknown) => factory(),
+    useAnimatedProps: (factory: () => unknown) => factory(),
+    useDerivedValue: (factory: () => unknown) => ({ value: factory() }),
+    useAnimatedRef: () => ({ current: null }),
+    useAnimatedScrollHandler: () => NOOP,
+    withTiming: ID,
+    withSpring: ID,
+    withDelay: (_ms: number, value: unknown) => value,
+    withSequence: ID,
+    withRepeat: ID,
+    cancelAnimation: NOOP,
+    runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
+    runOnUI: (fn: (...args: unknown[]) => unknown) => fn,
+    interpolate: () => 0,
+    interpolateColor: () => '#000000',
+    measure: () => null,
+    setUpTests: NOOP,
+  };
+});
+
 jest.mock('lucide-react-native', () => require('./mocks/lucide'));
 
 jest.mock('nativewind', () => ({ colorScheme: { set: jest.fn(), get: jest.fn() } }));
@@ -43,7 +118,21 @@ jest.mock('expo-screen-capture', () => require('./mocks/media'));
 
 jest.mock('expo-local-authentication', () => require('./mocks/localAuthentication'));
 
-jest.mock('expo-device', () => ({ deviceName: 'Test Phone', modelName: 'Pixel Test' }));
+jest.mock('expo-device', () => ({
+  deviceName: 'Test Phone',
+  modelName: 'Pixel Test',
+  isDevice: true,
+}));
+
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: {
+    easConfig: { projectId: '17c6c982-5228-447d-b4f2-11aafef55874' },
+    expoConfig: {
+      extra: { eas: { projectId: '17c6c982-5228-447d-b4f2-11aafef55874' } },
+    },
+  },
+}));
 
 jest.mock('expo-notifications', () => require('./mocks/notifications'));
 jest.mock('expo-audio', () => require('./mocks/expoAudio'));

@@ -269,7 +269,10 @@ public class KudaClient {
         if (message == null || message.isBlank()) {
             message = "Kuda " + serviceType + " failed";
         }
-        return new BusinessException("KUDA_ERROR", message, HttpStatus.BAD_GATEWAY);
+        // Surface name-enquiry failures under a dedicated code so the app can show bank-detail copy
+        // instead of a generic payment-provider error.
+        String code = "NAME_ENQUIRY".equals(serviceType) ? "KUDA_NAME_ENQUIRY_FAILED" : "KUDA_ERROR";
+        return new BusinessException(code, message, HttpStatus.BAD_GATEWAY);
     }
 
     private static String firstText(JsonNode node, String... fields) {
@@ -289,11 +292,20 @@ public class KudaClient {
         if (root == null) {
             return objectMapper.createObjectNode();
         }
-        if (root.has("data") && root.get("data").isTextual()) {
-            try {
-                return objectMapper.readTree(root.get("data").asText());
-            } catch (Exception ignored) {
-                return root;
+        JsonNode data = root.get("data");
+        if (data == null || data.isNull() || data.isMissingNode()) {
+            data = root.get("Data");
+        }
+        if (data != null && !data.isNull() && !data.isMissingNode()) {
+            if (data.isTextual()) {
+                try {
+                    return objectMapper.readTree(data.asText());
+                } catch (Exception ignored) {
+                    return root;
+                }
+            }
+            if (data.isObject()) {
+                return data;
             }
         }
         return root;

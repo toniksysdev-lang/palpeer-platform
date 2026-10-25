@@ -24,9 +24,12 @@ export function NotificationDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const notification = useGetNotificationQuery(id);
   const [markRead] = useMarkNotificationReadMutation();
-  const header = <StackHeader title="Notification" />;
   const data = notification.data;
   const unread = data ? isUnread(data) : false;
+  const isAdminMessage =
+    data?.referenceType?.toUpperCase() === 'ADMIN_BROADCAST' ||
+    data?.category?.toUpperCase() === 'ADMIN';
+  const header = <StackHeader title={isAdminMessage ? 'Message' : 'Notification'} />;
 
   useEffect(() => {
     if (data && unread) void markRead(data.id);
@@ -59,6 +62,11 @@ export function NotificationDetailScreen() {
       {header}
       <Card variant="outlined" padding="lg">
         <View style={{ gap: 8 }}>
+          {isAdminMessage ? (
+            <AppText variant="caption" tone="muted">
+              From Palpeer
+            </AppText>
+          ) : null}
           <AppText variant="h2" testID="notification-title">
             {data.title}
           </AppText>

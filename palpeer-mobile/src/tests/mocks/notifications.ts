@@ -62,6 +62,10 @@ export const getDevicePushTokenAsync = jest.fn(async () => ({
   type: 'android',
   data: 'fcm-token-1',
 }));
+export const getExpoPushTokenAsync = jest.fn(async () => ({
+  type: 'expo',
+  data: 'ExponentPushToken[test-token]',
+}));
 export const setNotificationChannelAsync = jest.fn(async () => null);
 
 export const notifications = {
@@ -98,6 +102,10 @@ export const notifications = {
     getDevicePushTokenAsync.mockImplementation(async () => ({
       type: 'android',
       data: 'fcm-token-1',
+    }));
+    getExpoPushTokenAsync.mockImplementation(async () => ({
+      type: 'expo',
+      data: 'ExponentPushToken[test-token]',
     }));
   },
 };

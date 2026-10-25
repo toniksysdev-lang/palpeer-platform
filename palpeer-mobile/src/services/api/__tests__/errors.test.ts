@@ -53,6 +53,22 @@ describe('errorFromResponse', () => {
     expect(error.message).not.toContain('NullPointerException');
   });
 
+  it('preserves business error messages on 502', () => {
+    const error = errorFromResponse(
+      502,
+      {
+        success: false,
+        message: 'Name Enquiry request not satisfied.',
+        error: { code: 'KUDA_NAME_ENQUIRY_FAILED' },
+        timestamp: '',
+      },
+      null,
+    );
+    expect(error.kind).toBe('server');
+    expect(error.code).toBe('KUDA_NAME_ENQUIRY_FAILED');
+    expect(error.message).toBe('Name Enquiry request not satisfied.');
+  });
+
   it('maps statuses to kinds', () => {
     expect(kindForStatus(404)).toBe('notFound');
     expect(kindForStatus(409)).toBe('conflict');

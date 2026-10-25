@@ -22,8 +22,13 @@ public class KudaProperties {
     private boolean autoSandboxSettle = false;
 
     /**
-     * When sandbox mode cannot reach Kuda (auth/network), still settle <em>withdrawals</em> locally.
-     * Funding never silent-credits offline — it stays PENDING with VA transfer instructions.
+     * When sandbox mode cannot reach Kuda (auth/network/permission):
+     * <ul>
+     *   <li>Withdrawals settle locally immediately.</li>
+     *   <li>Funding with an existing VA stays PENDING with transfer instructions.</li>
+     *   <li>Funding with no provisionable VA (e.g. UAT key lacks virtual-account APIs) creates a
+     *       local sandbox VA and credits the wallet immediately — same idea as Korapay offline settle.</li>
+     * </ul>
      */
     private boolean offlineSandboxSettle = true;
 
@@ -49,6 +54,13 @@ public class KudaProperties {
      * Optional fixed sender name on outbound transfers.
      */
     private String senderName = "PALPEER";
+
+    /**
+     * Kuda Business main account number sent as {@code clientAccountNumber} on
+     * {@code SINGLE_FUND_TRANSFER}. Required by current Kuda transfer docs; leave blank only when
+     * the environment still accepts transfers without it.
+     */
+    private String clientAccountNumber = "";
 
     /**
      * Kuda dashboard webhook username (custom {@code username} header, plaintext).

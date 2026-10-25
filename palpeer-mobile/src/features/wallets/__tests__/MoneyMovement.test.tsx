@@ -121,6 +121,39 @@ describe('FundWalletScreen', () => {
     expect(await screen.findByTestId('fund-no-rail')).toBeTruthy();
     expect(screen.queryByTestId('fund-amount')).toBeNull();
   });
+
+  it('deletes a saved Interac address after PIN confirmation', async () => {
+    setSearchParams({ id: 'w-cad' });
+    const saved = await interacAddressesStorage.save('u-1', {
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      email: 'ada@example.com',
+    });
+    const { calls } = installFetchMock({
+      'GET /wallets/w-cad': ok(wallet('w-cad', 'CAD')),
+      'GET /currencies': CURRENCIES,
+      'GET /security/pin': ok(PIN_STATUS(true)),
+      'POST /security/pin/verify': ok(),
+    });
+    await renderWithProviders(<FundWalletScreen />, {
+      prepareStore: (store) => {
+        store.dispatch(sessionStarted({ userId: 'u-1', email: 'ada@example.com' }));
+      },
+    });
+
+    await typeIntoNumberField('fund-amount', '50');
+    await fireEvent.press(screen.getByTestId('fund-continue'));
+    expect(await screen.findByTestId(`fund-interac-${saved.id}`)).toBeTruthy();
+
+    await fireEvent.press(screen.getByTestId('fund-pay-with-delete-toggle'));
+    expect(screen.getByTestId('fund-pay-with-delete-hint')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId(`fund-interac-delete-${saved.id}`));
+    await enterPin('pin-prompt-entry', '1234');
+
+    await waitFor(() => expect(screen.queryByTestId(`fund-interac-${saved.id}`)).toBeNull());
+    expect(await interacAddressesStorage.list('u-1')).toEqual([]);
+    expect(posts(calls, '/security/pin/verify')).toHaveLength(1);
+  });
 });
 
 describe('FundingStatusScreen', () => {

@@ -187,28 +187,18 @@ export function OrderDetailScreen() {
       ) : null}
       <Card variant="outlined" padding="md">
         <ReviewRow label="Amount" value={format(data.amount, base)} testID="p2p-order-amount" />
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: theme.spacing.md,
-            paddingVertical: theme.spacing.sm,
-          }}
-        >
-          <AppText tone="secondary" style={{ flex: 1 }}>
-            Rate
-          </AppText>
-          <View style={{ flex: 2, alignItems: 'flex-end' }}>
-            <FlippableRateLine
-              rate={data.rate}
-              base={base}
-              quote={quote}
-              variant="bodyStrong"
-              tone="primary"
-              align="right"
-              testID="p2p-order-rate"
-            />
-          </View>
+        <View style={{ gap: theme.spacing.xs, paddingVertical: theme.spacing.sm }}>
+          <AppText tone="secondary">Rate</AppText>
+          <FlippableRateLine
+            rate={data.rate}
+            base={base}
+            quote={quote}
+            variant="bodyStrong"
+            tone="primary"
+            full
+            maxDecimals={12}
+            testID="p2p-order-rate"
+          />
         </View>
         <ReviewRow label="Created" value={formatDateTime(data.createdAt) ?? '—'} />
       </Card>

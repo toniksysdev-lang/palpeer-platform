@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { useFocusAnchor } from '@/components/layout/FocusScroll';
 import { useTheme } from '@/providers/ThemeProvider';
 
 import { AppText } from './AppText';
@@ -31,6 +32,7 @@ export function OtpInput({
   testID,
 }: Props) {
   const theme = useTheme();
+  const { ref: anchorRef, reveal } = useFocusAnchor();
 
   const handleChange = useCallback(
     (next: string) => {
@@ -51,10 +53,15 @@ export function OtpInput({
     disabled: !editable,
   });
 
+  const openPad = () => {
+    select();
+    reveal();
+  };
+
   return (
-    <View style={{ gap: theme.spacing.sm }}>
+    <View ref={anchorRef} collapsable={false} style={{ gap: theme.spacing.sm }}>
       <Pressable
-        onPress={select}
+        onPress={openPad}
         disabled={!editable}
         accessible={false}
         testID={testID ? `${testID}-cells` : undefined}

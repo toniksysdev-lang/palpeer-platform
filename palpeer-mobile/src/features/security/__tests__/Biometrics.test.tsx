@@ -19,7 +19,7 @@ import { LOCK_AFTER_BACKGROUND_MS, useAppLockLifecycle } from '../lock/useAppLoc
 import { LockScreen } from '../lock/LockScreen';
 import { DevicesScreen } from '../screens/DevicesScreen';
 import { SecurityHubScreen } from '../screens/SecurityHubScreen';
-import { PIN_STATUS, QUESTIONS } from './helpers';
+import { enterPin, PIN_STATUS, QUESTIONS } from './helpers';
 
 jest.mock('expo-router', () => require('../../../tests/mocks/expoRouter'));
 
@@ -92,7 +92,9 @@ describe('biometric toggle on the security hub', () => {
       result.store.dispatch(sessionStarted({ userId: 'u-1', email: 'ada@example.com' }));
       result.store.dispatch(biometricRestored(biometricOn));
     });
-    await screen.findByText('Unlock the app with Fingerprint instead of signing in each time');
+    await screen.findByText(
+      'Unlock the app with Face ID or Fingerprint instead of signing in each time',
+    );
     return result;
   }
 
@@ -167,7 +169,9 @@ describe('biometric toggle on the security hub', () => {
     installFetchMock({ ...HUB, 'GET /security/devices': ok([]) });
     await renderWithProviders(<SecurityHubScreen />);
 
-    expect(await screen.findByText('Set up Fingerprint in your phone settings first')).toBeTruthy();
+    expect(
+      await screen.findByText('Set up Face ID or Fingerprint in your phone settings first'),
+    ).toBeTruthy();
     expect(screen.getByTestId('hub-biometric-switch').props.disabled).toBe(true);
   });
 });
@@ -443,6 +447,7 @@ describe('DevicesScreen', () => {
         ok([device('d-1', THIS_DEVICE), device('d-2', 'other')]),
         ok([device('d-2', 'other')]),
       ],
+      'POST /security/pin/verify': ok(),
       'DELETE /security/devices/d-1': ok(),
     });
     const { store } = await renderWithProviders(<DevicesScreen />);
@@ -454,6 +459,7 @@ describe('DevicesScreen', () => {
     expect(await screen.findByText('android · This device')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('device-remove-d-1'));
     await fireEvent.press(await screen.findByTestId('confirm-dialog-confirm'));
+    await enterPin('pin-prompt-entry', '1234');
 
     await waitFor(() => expect(store.getState().appLock.biometricEnabled).toBe(false));
     expect(
@@ -471,6 +477,7 @@ describe('DevicesScreen', () => {
         ok([device('d-1', THIS_DEVICE), device('d-2', 'other')]),
         ok([device('d-1', THIS_DEVICE), device('d-2', 'other', false)]),
       ],
+      'POST /security/pin/verify': ok(),
       'POST /security/devices/d-2/disable': ok(device('d-2', 'other', false)),
     });
     const { store } = await renderWithProviders(<DevicesScreen />);
@@ -479,6 +486,7 @@ describe('DevicesScreen', () => {
     });
 
     await fireEvent.press(await screen.findByTestId('device-toggle-d-2'));
+    await enterPin('pin-prompt-entry', '1234');
 
     await waitFor(() =>
       expect(calls.some((call) => call.path === '/security/devices/d-2/disable')).toBe(true),

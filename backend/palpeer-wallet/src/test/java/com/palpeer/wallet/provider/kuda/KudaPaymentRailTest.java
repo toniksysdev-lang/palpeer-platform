@@ -126,8 +126,9 @@ class KudaPaymentRailTest {
 
     @Test
     void initiateWithdrawal_staysPendingUntilWebhook() {
-        properties.setAutoSandboxSettle(true);
+        properties.setAutoSandboxSettle(false);
         when(kudaClient.isConfigured()).thenReturn(true);
+        when(kudaClient.isSandboxMode()).thenReturn(true);
         when(kudaClient.toKobo(new BigDecimal("500.00"))).thenReturn(50_000L);
 
         ObjectNode enquiry = objectMapper.createObjectNode();
@@ -140,7 +141,7 @@ class KudaPaymentRailTest {
         when(kudaClient.invoke(eq("SINGLE_FUND_TRANSFER"), anyMap())).thenReturn(transfer);
 
         PaymentRailProvider.WithdrawalInitiation result =
-                rail.initiateWithdrawal(withdrawalRequest(new BigDecimal("500.00"), "044:0123456789"));
+                rail.initiateWithdrawal(withdrawalRequest(new BigDecimal("500.00"), "999129:0123456789"));
 
         assertThat(result.providerReference()).isEqualTo("kuda-wd-1");
         assertThat(result.pendingExternalSettlement()).isTrue();
@@ -148,24 +149,174 @@ class KudaPaymentRailTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> bodyCaptor = ArgumentCaptor.forClass(Map.class);
         verify(kudaClient).invoke(eq("SINGLE_FUND_TRANSFER"), bodyCaptor.capture());
-        assertThat(bodyCaptor.getValue()).containsEntry("beneficiarybankCode", "044");
+        assertThat(bodyCaptor.getValue()).containsEntry("beneficiaryBankCode", "999129");
         assertThat(bodyCaptor.getValue()).containsEntry("beneficiaryAccount", "0123456789");
-        assertThat(bodyCaptor.getValue()).containsEntry("amount", 50_000L);
+        assertThat(bodyCaptor.getValue()).containsEntry("amount", "50000");
         assertThat(bodyCaptor.getValue()).containsEntry("senderName", "PALPEER");
+        assertThat(bodyCaptor.getValue().get("trackingReference").toString()).doesNotContain("-");
     }
 
     @Test
-    void initiateWithdrawal_propagatesFailure_whenKudaFails() {
+    void initiateWithdrawal_autoSandboxSettle_settlesImmediately() {
+        properties.setAutoSandboxSettle(true);
+        when(kudaClient.isConfigured()).thenReturn(true);
+        when(kudaClient.isSandboxMode()).thenReturn(true);
+        when(kudaClient.toKobo(new BigDecimal("500.00"))).thenReturn(50_000L);
+
+        ObjectNode enquiry = objectMapper.createObjectNode();
+        enquiry.put("SessionID", "sess-1");
+        enquiry.put("BeneficiaryName", "ADA LOVELACE");
+        when(kudaClient.invoke(eq("NAME_ENQUIRY"), anyMap())).thenReturn(enquiry);
+
+        ObjectNode transfer = objectMapper.createObjectNode();
+        transfer.put("transactionReference", "kuda-wd-auto");
+        when(kudaClient.invoke(eq("SINGLE_FUND_TRANSFER"), anyMap())).thenReturn(transfer);
+
+        PaymentRailProvider.WithdrawalInitiation result =
+                rail.initiateWithdrawal(withdrawalRequest(new BigDecimal("500.00"), "999129:0123456789"));
+
+        assertThat(result.providerReference()).isEqualTo("kuda-wd-auto");
+        assertThat(result.pendingExternalSettlement()).isFalse();
+    }
+
+    @Test
+    void initiateWithdrawal_offlineSandboxSettle_whenKudaFails() {
         properties.setOfflineSandboxSettle(true);
         when(kudaClient.isConfigured()).thenReturn(true);
+        when(kudaClient.isSandboxMode()).thenReturn(true);
         when(kudaClient.invoke(eq("NAME_ENQUIRY"), anyMap()))
                 .thenThrow(new BusinessException(
-                        "KUDA_ERROR", "timeout", org.springframework.http.HttpStatus.BAD_GATEWAY));
+                        "KUDA_NAME_ENQUIRY_FAILED",
+                        "Name Enquiry request not satisfied.",
+                        org.springframework.http.HttpStatus.BAD_GATEWAY));
+
+        PaymentRailProvider.WithdrawalInitiation result = rail.initiateWithdrawal(withdrawalRequest(
+                new BigDecimal("100.00"), "044:0123456789"));
+
+        assertThat(result.providerReference()).startsWith("offline-");
+        assertThat(result.pendingExternalSettlement()).isFalse();
+    }
+
+    @Test
+    void initiateWithdrawal_propagatesFailure_whenOfflineSettleDisabled() {
+        properties.setOfflineSandboxSettle(false);
+        when(kudaClient.isConfigured()).thenReturn(true);
+        when(kudaClient.isSandboxMode()).thenReturn(true);
+        when(kudaClient.invoke(eq("NAME_ENQUIRY"), anyMap()))
+                .thenThrow(new BusinessException(
+                        "KUDA_NAME_ENQUIRY_FAILED",
+                        "Name Enquiry request not satisfied.",
+                        org.springframework.http.HttpStatus.BAD_GATEWAY));
 
         assertThatThrownBy(() -> rail.initiateWithdrawal(withdrawalRequest(
                         new BigDecimal("100.00"), "044:0123456789")))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("timeout");
+                .hasMessageContaining("Name Enquiry");
+    }
+
+    @Test
+    void toKudaNgPhone_normalizesE164AndLocalForms() {
+        assertThat(KudaPaymentRail.toKudaNgPhone("+2348012345678")).isEqualTo("08012345678");
+        assertThat(KudaPaymentRail.toKudaNgPhone("2348012345678")).isEqualTo("08012345678");
+        assertThat(KudaPaymentRail.toKudaNgPhone("08012345678")).isEqualTo("08012345678");
+        assertThat(KudaPaymentRail.toKudaNgPhone("8012345678")).isEqualTo("08012345678");
+        assertThat(KudaPaymentRail.toKudaNgPhone(null)).isEqualTo("08000000000");
+    }
+
+    @Test
+    void initiateFunding_offlineSandboxSettle_whenVaPermissionDenied() {
+        properties.setOfflineSandboxSettle(true);
+        when(kudaClient.isConfigured()).thenReturn(true);
+        when(kudaClient.isSandboxMode()).thenReturn(true);
+
+        UUID walletId = UUID.randomUUID();
+        when(virtualAccountRepository.findByWalletIdAndProviderName(walletId, KudaPaymentRail.NAME))
+                .thenReturn(Optional.empty());
+        when(virtualAccountRepository.save(any(PaymentVirtualAccount.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(kudaClient.invoke(eq("ADMIN_CREATE_VIRTUAL_ACCOUNT"), anyMap()))
+                .thenThrow(new BusinessException(
+                        "KUDA_ERROR",
+                        "You do not have permission to make use of this service. Contact the API team.",
+                        org.springframework.http.HttpStatus.BAD_GATEWAY));
+
+        PaymentRailProvider.FundingInitiation result = rail.initiateFunding(fundingRequest(walletId, "1500.00"));
+
+        assertThat(result.pendingExternalSettlement()).isFalse();
+        assertThat(result.providerReference()).startsWith("offline-");
+        assertThat(result.instructions()).contains("Sandbox offline settle");
+        verify(kudaClient, never()).invoke(eq("ADMIN_RETRIEVE_VIRTUAL_ACCOUNT"), anyMap());
+        verify(virtualAccountRepository).save(any(PaymentVirtualAccount.class));
+    }
+
+    @Test
+    void initiateFunding_createsVaWithLocalNgPhone_fromE164() {
+        when(kudaClient.isConfigured()).thenReturn(true);
+        when(kudaClient.isSandboxMode()).thenReturn(true);
+
+        UUID walletId = UUID.randomUUID();
+        when(virtualAccountRepository.findByWalletIdAndProviderName(walletId, KudaPaymentRail.NAME))
+                .thenReturn(Optional.empty());
+        when(virtualAccountRepository.save(any(PaymentVirtualAccount.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ObjectNode createResponse = objectMapper.createObjectNode();
+        createResponse.put("accountNumber", "3009876543");
+        createResponse.put("accountName", "PALPEER USER");
+        createResponse.put("bankName", "Kuda");
+        when(kudaClient.invoke(eq("ADMIN_CREATE_VIRTUAL_ACCOUNT"), anyMap())).thenReturn(createResponse);
+
+        PaymentRailProvider.FundingInitiation result = rail.initiateFunding(
+                new PaymentRailProvider.FundingInitiationRequest(
+                        UUID.randomUUID(),
+                        walletId,
+                        UUID.randomUUID(),
+                        "NGN",
+                        new BigDecimal("1000.00"),
+                        "ada@example.com",
+                        "+2348012345678",
+                        "idem-ngn-va-1",
+                        "Ada",
+                        "Lovelace"));
+
+        assertThat(result.pendingExternalSettlement()).isTrue();
+        assertThat(result.instructions()).contains("3009876543");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> bodyCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(kudaClient).invoke(eq("ADMIN_CREATE_VIRTUAL_ACCOUNT"), bodyCaptor.capture());
+        assertThat(bodyCaptor.getValue()).containsEntry("phoneNumber", "08012345678");
+        assertThat(bodyCaptor.getValue()).containsEntry("email", "ada@example.com");
+    }
+
+    @Test
+    void initiateFunding_retrievesExistingVa_whenCreateFails() {
+        when(kudaClient.isConfigured()).thenReturn(true);
+        when(kudaClient.isSandboxMode()).thenReturn(true);
+
+        UUID walletId = UUID.randomUUID();
+        when(virtualAccountRepository.findByWalletIdAndProviderName(walletId, KudaPaymentRail.NAME))
+                .thenReturn(Optional.empty());
+        when(virtualAccountRepository.save(any(PaymentVirtualAccount.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        when(kudaClient.invoke(eq("ADMIN_CREATE_VIRTUAL_ACCOUNT"), anyMap()))
+                .thenThrow(new BusinessException(
+                        "KUDA_ERROR",
+                        "Duplicate tracking reference",
+                        org.springframework.http.HttpStatus.BAD_GATEWAY));
+
+        ObjectNode retrieveResponse = objectMapper.createObjectNode();
+        retrieveResponse.put("AccountNumber", "3005551212");
+        retrieveResponse.put("AccountName", "ADA LOVELACE");
+        when(kudaClient.invoke(eq("ADMIN_RETRIEVE_VIRTUAL_ACCOUNT"), anyMap()))
+                .thenReturn(retrieveResponse);
+
+        PaymentRailProvider.FundingInitiation result = rail.initiateFunding(fundingRequest(walletId, "500.00"));
+
+        assertThat(result.pendingExternalSettlement()).isTrue();
+        assertThat(result.instructions()).contains("3005551212");
+        verify(kudaClient).invoke(eq("ADMIN_RETRIEVE_VIRTUAL_ACCOUNT"), anyMap());
     }
 
     private static PaymentVirtualAccount existingVa(UUID walletId) {

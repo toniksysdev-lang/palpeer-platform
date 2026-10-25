@@ -335,4 +335,35 @@ describe('VerifyOtpScreen', () => {
       disabled: true,
     });
   });
+
+  it('lets the user change email during signup OTP and rejects a taken address', async () => {
+    setSearchParams({ email: 'ada@example.com', phone: '+15062100661' });
+    const { calls } = installFetchMock({
+      'POST /auth/signup/change-email': fail(409, 'EMAIL_ALREADY_REGISTERED'),
+    });
+    await renderWithProviders(<VerifyOtpScreen purpose="EMAIL_VERIFICATION" />);
+
+    await fireEvent.press(screen.getByTestId('verify-change-email-start'));
+    await fireEvent.changeText(screen.getByTestId('verify-change-email'), 'taken@example.com');
+    await fireEvent.press(screen.getByTestId('verify-change-email-submit'));
+
+    expect(await screen.findByText('An account with this email already exists.')).toBeTruthy();
+    expect(calls[0]?.body).toEqual({ phone: '+15062100661', email: 'taken@example.com' });
+  });
+
+  it('updates the email and sends a new OTP when change-email succeeds', async () => {
+    setSearchParams({ email: 'ada@example.com', phone: '+15062100661' });
+    const { calls } = installFetchMock({
+      'POST /auth/signup/change-email': ok({ code: null }, 'Email updated'),
+    });
+    await renderWithProviders(<VerifyOtpScreen purpose="EMAIL_VERIFICATION" />);
+
+    await fireEvent.press(screen.getByTestId('verify-change-email-start'));
+    await fireEvent.changeText(screen.getByTestId('verify-change-email'), 'new@example.com');
+    await fireEvent.press(screen.getByTestId('verify-change-email-submit'));
+
+    await waitFor(() => expect(screen.getByTestId('verify-change-email-start')).toBeTruthy());
+    expect(screen.getByText(/ne\*\*\*e\*+@example\.com/)).toBeTruthy();
+    expect(calls[0]?.body).toEqual({ phone: '+15062100661', email: 'new@example.com' });
+  });
 });

@@ -32,7 +32,10 @@ export const registerSchema = z
   .object({
     email,
     username: z.string().trim().max(64, 'Username must be 64 characters or fewer'),
-    referralCode: z.string().trim().max(40, 'Referral code must be 40 characters or fewer'),
+    referralCode: z
+      .string()
+      .trim()
+      .max(40, 'Referral code must be 40 characters or fewer'),
     password: newPassword,
     confirmPassword: z.string().min(1, 'Confirm your password'),
   })

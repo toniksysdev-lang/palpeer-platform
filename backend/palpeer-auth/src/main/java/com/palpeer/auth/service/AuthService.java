@@ -16,6 +16,7 @@ import com.palpeer.auth.spi.TransactionPinMatcher;
 import com.palpeer.auth.util.TokenHashing;
 import com.palpeer.auth.web.dto.AuthTokensResponse;
 import com.palpeer.auth.web.dto.ChangePasswordRequest;
+import com.palpeer.auth.web.dto.ChangeSignupEmailRequest;
 import com.palpeer.auth.web.dto.DeviceLoginInfo;
 import com.palpeer.auth.web.dto.LoginRequest;
 import com.palpeer.auth.web.dto.OtpResendRequest;
@@ -186,6 +187,37 @@ public class AuthService {
     @Transactional
     public OtpResendResponse resendSignupEmailOtp(SignupStatusRequest request) {
         String phone = normalizePhone(request.phone());
+        User user = requireIncompleteSignupUser(phone);
+        String code = issueOtp(user, OtpPurpose.EMAIL_VERIFICATION, OtpChannel.EMAIL);
+        return new OtpResendResponse(authProperties.getOtp().isLogCode() ? code : null);
+    }
+
+    /**
+     * Updates the email on an incomplete signup (email not yet verified), ensuring the new address
+     * is not already registered, then issues a fresh email OTP.
+     */
+    @Transactional
+    public OtpResendResponse changeSignupEmail(ChangeSignupEmailRequest request) {
+        String phone = normalizePhone(request.phone());
+        User user = requireIncompleteSignupUser(phone);
+        String email = request.email().trim().toLowerCase();
+        if (email.equalsIgnoreCase(user.getEmail())) {
+            String code = issueOtp(user, OtpPurpose.EMAIL_VERIFICATION, OtpChannel.EMAIL);
+            return new OtpResendResponse(authProperties.getOtp().isLogCode() ? code : null);
+        }
+        Optional<User> other = userRepository.findByEmailIgnoreCase(email);
+        if (other.isPresent() && !other.get().getId().equals(user.getId())) {
+            throw new BusinessException(
+                    "EMAIL_ALREADY_REGISTERED", "Email already registered", HttpStatus.CONFLICT);
+        }
+        user.setEmail(email);
+        user.setEmailVerified(false);
+        userRepository.save(user);
+        String code = issueOtp(user, OtpPurpose.EMAIL_VERIFICATION, OtpChannel.EMAIL);
+        return new OtpResendResponse(authProperties.getOtp().isLogCode() ? code : null);
+    }
+
+    private User requireIncompleteSignupUser(String phone) {
         User user = userRepository
                 .findByPhone(phone)
                 .orElseThrow(() -> new BusinessException(
@@ -202,8 +234,7 @@ public class AuthService {
                     "Email is already verified. Sign in to continue.",
                     HttpStatus.CONFLICT);
         }
-        String code = issueOtp(user, OtpPurpose.EMAIL_VERIFICATION, OtpChannel.EMAIL);
-        return new OtpResendResponse(authProperties.getOtp().isLogCode() ? code : null);
+        return user;
     }
 
     /**
@@ -553,10 +584,27 @@ public class AuthService {
     }
 
     /**
-     * Enforces one active device: revokes every other refresh token, issues a new pair bound to
-     * {@code device}, and emails a suspend link when this install has never signed in before.
+     * Enforces one active session: rejects login when another device already holds a live refresh
+     * token. Re-login on the <em>same</em> {@code deviceIdentifier} is allowed (revokes that
+     * device's chain and issues a new pair). Emails a suspend link when this install is new.
      */
     private AuthTokensResponse completeLogin(User user, boolean rememberMe, DeviceLoginInfo device) {
+        Instant now = Instant.now();
+        List<RefreshToken> active = refreshTokenRepository
+                .findByUserIdAndRevokedFalseAndExpiresAtAfterOrderByCreatedAtDesc(user.getId(), now);
+        if (!active.isEmpty()) {
+            String deviceId = device == null ? null : device.deviceIdentifier();
+            boolean sameDeviceOnly = deviceId != null
+                    && !deviceId.isBlank()
+                    && active.stream().allMatch(t -> deviceId.equals(t.getDeviceIdentifier()));
+            if (!sameDeviceOnly) {
+                throw new BusinessException(
+                        "SESSION_ALREADY_ACTIVE",
+                        "This account is already signed in on another device. Sign out there first, then try again.",
+                        HttpStatus.CONFLICT);
+            }
+        }
+
         boolean newDevice = device != null
                 && !refreshTokenRepository.existsByUserIdAndDeviceIdentifier(
                         user.getId(), device.deviceIdentifier());
@@ -571,7 +619,7 @@ public class AuthService {
         auditRecorder.record(AuditRecord.builder("SECURITY_LOGIN")
                 .entity("User:" + user.getId())
                 .userRef(user.getId())
-                .newValue("singleDevice=true;newDevice="
+                .newValue("singleDevice=true;rejectConcurrent=true;newDevice="
                         + newDevice
                         + (device == null ? "" : ";device=" + device.deviceIdentifier()))
                 .build());

@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Building2, ChevronRight, Plus, UserRound, Zap } from 'lucide-react-native';
+import { Building2, ChevronRight, Plus, Trash2, UserRound, Zap } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
@@ -12,12 +12,16 @@ import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
+import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { TextLink } from '@/components/ui/TextLink';
+import { usePinPrompt } from '@/features/security/PinPromptProvider';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAppSelector } from '@/store';
 import { useToast } from '@/providers/ToastProvider';
 import { toAppError } from '@/services/api/errors';
+import { useGetPinStatusQuery } from '@/services/api/securityApi';
 import { useCreateFundingMutation, useGetWalletQuery } from '@/services/api/walletApi';
 import {
   interacAddressesStorage,
@@ -60,6 +64,8 @@ export function FundWalletScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const toast = useToast();
+  const { requestPin } = usePinPrompt();
+  const pinStatus = useGetPinStatusQuery();
   const userId = useAppSelector((state) => state.session.userId) ?? '';
   const wallet = useGetWalletQuery(id);
   const { format, precision } = useMoneyFormat();
@@ -73,16 +79,52 @@ export function FundWalletScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [interacEmail, setInteracEmail] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const reloadAddresses = useCallback(async () => {
     if (!userId) return;
     const list = await interacAddressesStorage.list(userId);
     setAddresses(list);
+    if (list.length === 0) setDeleting(false);
   }, [userId]);
 
   useEffect(() => {
     void reloadAddresses();
   }, [reloadAddresses]);
+
+  const deleteAddress = async (address: InteracAddress) => {
+    if (!userId || deletingId) return;
+    setError(null);
+    if (!pinStatus.data) {
+      setError("We couldn't check your PIN status. Try again.");
+      void pinStatus.refetch();
+      return;
+    }
+    if (!pinStatus.data.pinSet) {
+      setError('Set up a transaction PIN before deleting a saved Interac address.');
+      return;
+    }
+    setDeletingId(address.id);
+    const confirmed = await requestPin({
+      title: 'Delete Interac address',
+      message: `Enter your PIN to delete ${displayName(address)} (${address.email}).`,
+    });
+    if (!confirmed) {
+      setDeletingId(null);
+      return;
+    }
+    try {
+      await interacAddressesStorage.remove(userId, address.id);
+      if (selected?.id === address.id) setSelected(null);
+      await reloadAddresses();
+      toast.show({ type: 'success', title: 'Interac address deleted' });
+    } catch {
+      setError("Couldn't delete this Interac address. Try again.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   if (wallet.error && !wallet.data) {
     return (
@@ -181,57 +223,45 @@ export function FundWalletScreen() {
   if (isCadApaylo && step === 'payWith') {
     return (
       <Screen scroll>
-        <StackHeader title="Pay with" onBack={() => setStep('amount')} />
+        <StackHeader
+          title="Pay with"
+          onBack={() => {
+            setDeleting(false);
+            setError(null);
+            setStep('amount');
+          }}
+          right={
+            addresses.length > 0 ? (
+              <TextLink
+                label={deleting ? 'Done' : 'Delete'}
+                tone="info"
+                onPress={() => {
+                  setError(null);
+                  setDeleting((value) => !value);
+                }}
+                testID="fund-pay-with-delete-toggle"
+              />
+            ) : undefined
+          }
+        />
+        <FormAlert message={error} testID="fund-pay-with-error" />
+        {deleting ? (
+          <AppText tone="secondary" testID="fund-pay-with-delete-hint">
+            Tap the trash icon, then enter your PIN to remove a saved Interac address.
+          </AppText>
+        ) : null}
         <View style={{ gap: theme.spacing.sm }} testID="fund-pay-with">
-          <Pressable
-            onPress={() => {
-              setFirstName('');
-              setLastName('');
-              setInteracEmail('');
-              setStep('addAddress');
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Add Interac address"
-            testID="fund-add-interac"
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: theme.spacing.md,
-              padding: theme.spacing.md,
-              borderRadius: theme.radius.lg,
-              backgroundColor: theme.colors.surface,
-              borderWidth: 1,
-              borderColor: theme.colors.border,
-            }}
-          >
-            <View
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: theme.radius.md,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: theme.colors.primarySoft,
-              }}
-            >
-              <Icon icon={Plus} color={theme.colors.primary} />
-            </View>
-            <AppText variant="bodyStrong" style={{ flex: 1 }}>
-              Add Interac address
-            </AppText>
-            <Icon icon={ChevronRight} color={theme.colors.textMuted} size="sm" />
-          </Pressable>
-
-          {addresses.map((address) => (
+          {!deleting ? (
             <Pressable
-              key={address.id}
               onPress={() => {
-                setSelected(address);
-                setStep('review');
+                setFirstName('');
+                setLastName('');
+                setInteracEmail('');
+                setStep('addAddress');
               }}
               accessibilityRole="button"
-              accessibilityLabel={`${displayName(address)}, ${address.email}`}
-              testID={`fund-interac-${address.id}`}
+              accessibilityLabel="Add Interac address"
+              testID="fund-add-interac"
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -250,20 +280,86 @@ export function FundWalletScreen() {
                   borderRadius: theme.radius.md,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: theme.colors.warningSoft,
+                  backgroundColor: theme.colors.primarySoft,
                 }}
               >
-                <Icon icon={Zap} color={theme.colors.warning} />
+                <Icon icon={Plus} color={theme.colors.primary} />
               </View>
-              <View style={{ flex: 1, gap: theme.spacing.xxs }}>
-                <AppText variant="bodyStrong">{displayName(address)}</AppText>
-                <AppText variant="caption" tone="secondary">
-                  {address.email}
-                </AppText>
-              </View>
+              <AppText variant="bodyStrong" style={{ flex: 1 }}>
+                Add Interac address
+              </AppText>
               <Icon icon={ChevronRight} color={theme.colors.textMuted} size="sm" />
             </Pressable>
-          ))}
+          ) : null}
+
+          {addresses.map((address) => {
+            const rowStyle = {
+              flexDirection: 'row' as const,
+              alignItems: 'center' as const,
+              gap: theme.spacing.md,
+              padding: theme.spacing.md,
+              borderRadius: theme.radius.lg,
+              backgroundColor: theme.colors.surface,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              opacity: deletingId === address.id ? 0.6 : 1,
+            };
+            const body = (
+              <>
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: theme.radius.md,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: theme.colors.warningSoft,
+                  }}
+                >
+                  <Icon icon={Zap} color={theme.colors.warning} />
+                </View>
+                <View style={{ flex: 1, gap: theme.spacing.xxs }}>
+                  <AppText variant="bodyStrong">{displayName(address)}</AppText>
+                  <AppText variant="caption" tone="secondary">
+                    {address.email}
+                  </AppText>
+                </View>
+                {deleting ? (
+                  <IconButton
+                    icon={Trash2}
+                    accessibilityLabel={`Delete ${displayName(address)}`}
+                    onPress={() => void deleteAddress(address)}
+                    disabled={deletingId !== null}
+                    testID={`fund-interac-delete-${address.id}`}
+                  />
+                ) : (
+                  <Icon icon={ChevronRight} color={theme.colors.textMuted} size="sm" />
+                )}
+              </>
+            );
+            if (deleting) {
+              return (
+                <View key={address.id} style={rowStyle} testID={`fund-interac-${address.id}`}>
+                  {body}
+                </View>
+              );
+            }
+            return (
+              <Pressable
+                key={address.id}
+                onPress={() => {
+                  setSelected(address);
+                  setStep('review');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`${displayName(address)}, ${address.email}`}
+                testID={`fund-interac-${address.id}`}
+                style={rowStyle}
+              >
+                {body}
+              </Pressable>
+            );
+          })}
         </View>
       </Screen>
     );

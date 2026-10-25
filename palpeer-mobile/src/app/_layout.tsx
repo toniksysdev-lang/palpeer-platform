@@ -1,6 +1,7 @@
 import '../../global.css';
+import '@/boot/previewSoftKeyboard';
 
-import { Stack } from 'expo-router';
+import { Stack, type SuspenseFallbackProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -9,6 +10,7 @@ import { Platform, View } from 'react-native';
 import { OfflineBanner } from '@/components/feedback/OfflineBanner';
 import { BrandSplash } from '@/features/auth/components/BrandSplash';
 import { OfferBiometricUnlock } from '@/features/security/OfferBiometricUnlock';
+import { RequireNewDevicePin } from '@/features/security/RequireNewDevicePin';
 import { RequirePinSetup } from '@/features/security/RequirePinSetup';
 import { RequireSecurityQuestions } from '@/features/security/RequireSecurityQuestions';
 import { LockScreen } from '@/features/security/lock/LockScreen';
@@ -22,12 +24,21 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useAppSelector } from '@/store';
 import { palette } from '@/theme';
 
+// Belt-and-suspenders with src/boot/preventSplashAutoHide (runs even earlier).
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 /** Prefer `/` (Welcome content) over any signed-out stack sibling. */
 export const unstable_settings = {
   initialRouteName: 'index',
 };
+
+/**
+ * While a route module is still loading, keep BrandSplash (logo + progress) instead of
+ * Expo Router's default DEV "Bundling…" toast / blank production fallback.
+ */
+export function SuspenseFallback(_props: SuspenseFallbackProps) {
+  return <BrandSplash />;
+}
 
 /** True when the app is embedded in the phone-frame preview (parent already shows splash). */
 function isWebPreviewFrame(): boolean {
@@ -48,6 +59,10 @@ function notifyPreviewSplashDone() {
   }
 }
 
+function hideNativeSplash() {
+  SplashScreen.hideAsync().catch(() => undefined);
+}
+
 function RootNavigator() {
   const { ready } = useAppBootstrap();
   const theme = useTheme();
@@ -61,15 +76,16 @@ function RootNavigator() {
   useEffect(() => {
     if (ready) {
       notifyPreviewSplashDone();
-      SplashScreen.hideAsync().catch(() => undefined);
+      // BrandSplash already requested hide onLayout; this covers the ready path if paint raced.
+      hideNativeSplash();
     }
   }, [ready]);
 
-  // Never leave the native splash covering a hung JS bootstrap.
+  // Absolute cap only — normal path hides on BrandSplash onLayout (not a blind early timer).
   useEffect(() => {
     const timer = setTimeout(() => {
-      SplashScreen.hideAsync().catch(() => undefined);
-    }, 4_000);
+      hideNativeSplash();
+    }, 12_000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -78,12 +94,12 @@ function RootNavigator() {
     if (isWebPreviewFrame()) {
       return <View style={{ flex: 1, backgroundColor: palette.neutral0 }} testID="boot-placeholder" />;
     }
-    // One splash only (like localhost:3333): hide the static native splash once BrandSplash paints.
+    // One splash only: keep native splash until BrandSplash (logo + progress) has laid out.
     return (
       <View
         style={{ flex: 1, backgroundColor: palette.neutral0 }}
         onLayout={() => {
-          SplashScreen.hideAsync().catch(() => undefined);
+          hideNativeSplash();
         }}
       >
         <BrandSplash />
@@ -130,6 +146,7 @@ function RootNavigator() {
       </Stack>
       <OfflineBanner />
       {isAuthenticated ? <RequirePinSetup /> : null}
+      {isAuthenticated ? <RequireNewDevicePin /> : null}
       {isAuthenticated ? <RequireSecurityQuestions /> : null}
       {isAuthenticated ? <OfferBiometricUnlock /> : null}
       {isAuthenticated && locked ? <LockScreen /> : null}

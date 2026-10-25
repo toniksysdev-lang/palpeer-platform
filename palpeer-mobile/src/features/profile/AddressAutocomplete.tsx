@@ -31,6 +31,8 @@ type Props = {
   countryCode?: string | null;
   onPick: (address: StructuredAddress) => void;
   onPickupMessage?: (message: string, type: 'success' | 'error') => void;
+  /** Greys out the field and disables search / location pickup. */
+  editable?: boolean;
   testID?: string;
 };
 
@@ -46,6 +48,7 @@ export function AddressAutocomplete({
   countryCode,
   onPick,
   onPickupMessage,
+  editable = true,
   testID = 'personal-address1',
 }: Props) {
   const theme = useTheme();
@@ -66,7 +69,7 @@ export function AddressAutocomplete({
   }, []);
 
   useEffect(() => {
-    if (suppressSuggestions) {
+    if (!editable || suppressSuggestions) {
       setSuggestions([]);
       setSearching(false);
       setSearchError(null);
@@ -105,7 +108,7 @@ export function AddressAutocomplete({
       });
 
     return () => controller.abort();
-  }, [debouncedQuery, countryCode, focused, suppressSuggestions]);
+  }, [debouncedQuery, countryCode, focused, suppressSuggestions, editable]);
 
   const applyAddress = (address: StructuredAddress) => {
     if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
@@ -128,41 +131,44 @@ export function AddressAutocomplete({
   };
 
   const showSuggestions =
-    focused && !suppressSuggestions && debouncedQuery.trim().length >= 3;
+    editable && focused && !suppressSuggestions && debouncedQuery.trim().length >= 3;
 
   return (
     <View style={{ gap: theme.spacing.xs }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-        <Pressable
-          onPress={() => void handleUseLocation()}
-          disabled={pickingLocation}
-          accessibilityRole="button"
-          accessibilityLabel="Use current location"
-          testID={`${testID}-use-location`}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: theme.spacing.xs,
-            paddingVertical: theme.spacing.xs,
-            opacity: pickingLocation ? 0.6 : 1,
-          }}
-        >
-          {pickingLocation ? (
-            <ActivityIndicator size="small" color={theme.colors.primary} />
-          ) : (
-            <Icon icon={LocateFixed} size={16} color={theme.colors.primary} />
-          )}
-          <AppText variant="caption" tone="brand" style={{ fontWeight: '600' }}>
-            {pickingLocation ? 'Finding address…' : 'Use current location'}
-          </AppText>
-        </Pressable>
-      </View>
+      {editable ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+          <Pressable
+            onPress={() => void handleUseLocation()}
+            disabled={pickingLocation}
+            accessibilityRole="button"
+            accessibilityLabel="Use current location"
+            testID={`${testID}-use-location`}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: theme.spacing.xs,
+              paddingVertical: theme.spacing.xs,
+              opacity: pickingLocation ? 0.6 : 1,
+            }}
+          >
+            {pickingLocation ? (
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+            ) : (
+              <Icon icon={LocateFixed} size={16} color={theme.colors.primary} />
+            )}
+            <AppText variant="caption" tone="brand" style={{ fontWeight: '600' }}>
+              {pickingLocation ? 'Finding address…' : 'Use current location'}
+            </AppText>
+          </Pressable>
+        </View>
+      ) : null}
 
       <Input
         appearance="elevated"
         label={label}
         placeholder="Start typing your address"
         value={value}
+        editable={editable}
         onChangeText={(next) => {
           setSuppressSuggestions(false);
           onChangeText(next);

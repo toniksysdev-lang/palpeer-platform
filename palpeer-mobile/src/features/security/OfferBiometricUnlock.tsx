@@ -92,7 +92,8 @@ export function OfferBiometricUnlock() {
     capability,
   ]);
 
-  const label = capability && capability.status !== 'unsupported' ? capability.label : 'Fingerprint';
+  const label =
+    capability && capability.status !== 'unsupported' ? capability.label : 'Face ID or Fingerprint';
 
   const markPrompted = async () => {
     await preferencesStorage.setBiometricUnlockPrompted();

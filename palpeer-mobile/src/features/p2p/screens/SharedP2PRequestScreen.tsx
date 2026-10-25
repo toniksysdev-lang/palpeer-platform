@@ -197,28 +197,18 @@ export function SharedP2PRequestScreen() {
 
       <Card variant="outlined" padding="md">
         <ReviewRow label="Amount" value={amount} testID="p2p-share-amount" />
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: theme.spacing.md,
-            paddingVertical: theme.spacing.sm,
-          }}
-        >
-          <AppText tone="secondary" style={{ flex: 1 }}>
-            Rate
-          </AppText>
-          <View style={{ flex: 2, alignItems: 'flex-end' }}>
-            <FlippableRateLine
-              rate={data.rate}
-              base={base}
-              quote={quote}
-              variant="bodyStrong"
-              tone="primary"
-              align="right"
-              testID="p2p-share-rate"
-            />
-          </View>
+        <View style={{ gap: theme.spacing.xs, paddingVertical: theme.spacing.sm }}>
+          <AppText tone="secondary">Rate</AppText>
+          <FlippableRateLine
+            rate={data.rate}
+            base={base}
+            quote={quote}
+            variant="bodyStrong"
+            tone="primary"
+            full
+            maxDecimals={12}
+            testID="p2p-share-rate"
+          />
         </View>
         <ReviewRow
           label="Expires"

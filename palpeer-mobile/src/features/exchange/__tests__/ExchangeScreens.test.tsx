@@ -185,7 +185,9 @@ describe('ExchangeReviewScreen', () => {
     expect(screen.getByTestId('exchange-review-receive')).toHaveTextContent('105,000.00 NGN');
     expect(screen.getByTestId('exchange-review-rate')).toHaveTextContent(/1 CAD = 1,050 NGN/);
     await fireEvent.press(screen.getByTestId('exchange-review-rate'));
-    expect(screen.getByTestId('exchange-review-rate')).toHaveTextContent(/1 NGN = 0\.000952 CAD/);
+    expect(screen.getByTestId('exchange-review-rate')).toHaveTextContent(
+      /1 NGN = 0\.000952380952 CAD/,
+    );
     expect(screen.getByTestId('exchange-countdown')).toHaveTextContent(
       /Quote valid for 0:(59|60)|1:00/,
     );

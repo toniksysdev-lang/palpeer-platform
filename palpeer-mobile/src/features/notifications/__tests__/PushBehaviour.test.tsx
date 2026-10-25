@@ -230,7 +230,7 @@ describe('registration upkeep', () => {
     await renderApp();
     await waitFor(() => expect(calls(all, 'POST', '/notifications/device-tokens')).toHaveLength(1));
     expect(calls(all, 'POST', '/notifications/device-tokens')[0]?.body).toMatchObject({
-      token: 'fcm-token-1',
+      token: 'ExponentPushToken[test-token]',
       platform: PLATFORM,
     });
 
