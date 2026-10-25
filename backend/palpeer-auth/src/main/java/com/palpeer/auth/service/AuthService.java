@@ -584,31 +584,18 @@ public class AuthService {
     }
 
     /**
-     * Enforces one active session: rejects login when another device already holds a live refresh
-     * token. Re-login on the <em>same</em> {@code deviceIdentifier} is allowed (revokes that
-     * device's chain and issues a new pair). Emails a suspend link when this install is new.
+     * Enforces one active session via takeover: a successful password/Google login revokes every
+     * other refresh token, then issues a pair bound to {@code device}. Rejecting concurrent login
+     * locked users out after uninstall/reinstall (orphaned server tokens, new device id) — takeover
+     * keeps a single live session without that deadlock. Emails a suspend link when this install is
+     * new.
      */
     private AuthTokensResponse completeLogin(User user, boolean rememberMe, DeviceLoginInfo device) {
-        Instant now = Instant.now();
-        List<RefreshToken> active = refreshTokenRepository
-                .findByUserIdAndRevokedFalseAndExpiresAtAfterOrderByCreatedAtDesc(user.getId(), now);
-        if (!active.isEmpty()) {
-            String deviceId = device == null ? null : device.deviceIdentifier();
-            boolean sameDeviceOnly = deviceId != null
-                    && !deviceId.isBlank()
-                    && active.stream().allMatch(t -> deviceId.equals(t.getDeviceIdentifier()));
-            if (!sameDeviceOnly) {
-                throw new BusinessException(
-                        "SESSION_ALREADY_ACTIVE",
-                        "This account is already signed in on another device. Sign out there first, then try again.",
-                        HttpStatus.CONFLICT);
-            }
-        }
-
         boolean newDevice = device != null
                 && !refreshTokenRepository.existsByUserIdAndDeviceIdentifier(
                         user.getId(), device.deviceIdentifier());
 
+        // Drop any prior install/emulator/web sessions so only this login remains active.
         revokeAllRefreshTokens(user.getId());
         AuthTokensResponse tokens = issueTokenPair(user, rememberMe, device);
 
@@ -619,7 +606,7 @@ public class AuthService {
         auditRecorder.record(AuditRecord.builder("SECURITY_LOGIN")
                 .entity("User:" + user.getId())
                 .userRef(user.getId())
-                .newValue("singleDevice=true;rejectConcurrent=true;newDevice="
+                .newValue("singleDevice=true;takeover=true;newDevice="
                         + newDevice
                         + (device == null ? "" : ";device=" + device.deviceIdentifier()))
                 .build());
