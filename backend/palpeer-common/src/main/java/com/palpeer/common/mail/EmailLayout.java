@@ -125,12 +125,15 @@ public final class EmailLayout {
     }
 
     public static String primaryButton(String label, String href) {
+        // Use https hrefs only in mail — Gmail/Outlook strip custom schemes and leave a dead button.
         return """
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0 8px 0;">
                   <tr>
                     <td align="center" bgcolor="%s" style="border-radius:999px;background-color:%s;">
-                      <a href="%s" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;color:%s;text-decoration:none;border-radius:999px;font-family:%s;">
-                        %s
+                      <a href="%s" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;color:%s;text-decoration:none;border-radius:999px;font-family:%s;mso-padding-alt:14px 28px;">
+                        <!--[if mso]><i style="mso-font-width:150%%;mso-text-raise:18pt" hidden>&emsp;</i><![endif]-->
+                        <span style="mso-text-raise:9pt;">%s</span>
+                        <!--[if mso]><i style="mso-font-width:150%%;" hidden>&emsp;&#8203;</i><![endif]-->
                       </a>
                     </td>
                   </tr>

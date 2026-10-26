@@ -33,7 +33,18 @@ public final class EmailBrand {
 
     public static final String FONT =
             "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+    /** Marketing website (footer / logo href). */
     public static final String SITE_URL = "https://palpeer.com";
+    /**
+     * HTTPS bridge that opens the installed Palpeer app (iOS + Android). Mail clients strip
+     * custom schemes ({@code palpeer://}), so CTAs must use {@code https://}. Served by
+     * {@code OpenAppController} at {@code GET /open}, which hands off to the app scheme.
+     */
+    public static final String APP_OPEN_URL = "https://palpeer-api.onrender.com/open";
+    /** Primary CTA label for “open the app” buttons in transactional mail. */
+    public static final String APP_OPEN_CTA = "Open Palpeer App";
+    /** Native URL scheme used by the /open bridge page (not for email hrefs). */
+    public static final String APP_SCHEME_OPEN_URL = "palpeer://open";
     public static final String SUPPORT_EMAIL = "support@palpeer.com";
     public static final String TAGLINE = "Your Rate, Your Way";
 

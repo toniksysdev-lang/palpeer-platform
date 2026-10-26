@@ -87,6 +87,7 @@ public class SecurityConfig {
                                 "/secure/account-lock/**"
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET,
+                                "/open",
                                 "/api/v1/auth/account-suspend",
                                 "/secure/account-lock/**",
                                 "/api/v1/public/instant-rates",

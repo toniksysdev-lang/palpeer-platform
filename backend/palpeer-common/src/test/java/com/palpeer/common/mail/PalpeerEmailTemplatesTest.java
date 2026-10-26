@@ -62,6 +62,19 @@ class PalpeerEmailTemplatesTest {
     }
 
     @Test
+    void openAppCtaUsesHttpsBridgeNotCustomScheme() {
+        var email = PalpeerEmailTemplates.notification("Hi", "Body");
+
+        assertTrue(email.html().contains(EmailBrand.APP_OPEN_CTA));
+        assertTrue(EmailBrand.APP_OPEN_URL.startsWith("https://"));
+        assertTrue(email.html().contains("href=\"" + EmailBrand.APP_OPEN_URL + "\""));
+        assertTrue(email.text().contains(EmailBrand.APP_OPEN_URL));
+        // Gmail/Outlook disable custom-scheme hrefs — must not be the button target.
+        assertFalse(email.html().contains("href=\"palpeer://"));
+        assertFalse(email.html().contains(">Open Palpeer\n"));
+    }
+
+    @Test
     void walletFundingTemplateUsesDedicatedSubjectAndEscapesBody() {
         var email = PalpeerEmailTemplates.walletFunding(
                 "Funding successful", "Your funding of <b>50</b> CAD has been credited.");

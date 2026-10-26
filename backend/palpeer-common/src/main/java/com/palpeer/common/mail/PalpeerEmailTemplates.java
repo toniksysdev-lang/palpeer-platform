@@ -32,7 +32,7 @@ public final class PalpeerEmailTemplates {
                         + EmailLayout.mutedNote(
                                 "If you didn’t create a Palpeer account, you can safely ignore this"
                                         + " email.")
-                        + EmailLayout.primaryButton("Open Palpeer", EmailBrand.SITE_URL));
+                        + EmailLayout.primaryButton(EmailBrand.APP_OPEN_CTA, EmailBrand.APP_OPEN_URL));
 
         String text =
                 """
@@ -46,7 +46,7 @@ public final class PalpeerEmailTemplates {
 
                 %s
                 """
-                        .formatted(code, EmailBrand.SITE_URL);
+                        .formatted(code, EmailBrand.APP_OPEN_URL);
 
         return new RenderedEmail(subject, html, text);
     }
@@ -73,7 +73,7 @@ public final class PalpeerEmailTemplates {
                         + EmailLayout.otpCodeBox(code)
                         + EmailLayout.mutedNote(
                                 "If you didn’t request this, you can safely ignore this email.")
-                        + EmailLayout.primaryButton("Open Palpeer", EmailBrand.SITE_URL));
+                        + EmailLayout.primaryButton(EmailBrand.APP_OPEN_CTA, EmailBrand.APP_OPEN_URL));
 
         String text =
                 """
@@ -85,7 +85,7 @@ public final class PalpeerEmailTemplates {
 
                 %s
                 """
-                        .formatted(subject, purposeLabel, code, EmailBrand.SITE_URL);
+                        .formatted(subject, purposeLabel, code, EmailBrand.APP_OPEN_URL);
 
         return new RenderedEmail(subject, html, text);
     }
@@ -106,7 +106,7 @@ public final class PalpeerEmailTemplates {
                                 "Negotiate competitive P2P rates with verified peers, or settle instantly with InstantEX — "
                                         + EmailBrand.TAGLINE
                                         + ", instantly.")
-                        + EmailLayout.primaryButton("Open Palpeer", EmailBrand.SITE_URL)
+                        + EmailLayout.primaryButton(EmailBrand.APP_OPEN_CTA, EmailBrand.APP_OPEN_URL)
                         + EmailLayout.mutedNote(
                                 "Need a hand getting started? Reply to this email or write "
                                         + EmailBrand.SUPPORT_EMAIL
@@ -127,7 +127,7 @@ public final class PalpeerEmailTemplates {
                         .formatted(
                                 safeEmail,
                                 EmailBrand.TAGLINE,
-                                EmailBrand.SITE_URL,
+                                EmailBrand.APP_OPEN_URL,
                                 EmailBrand.SUPPORT_EMAIL);
 
         return new RenderedEmail(subject, html, text);
@@ -219,7 +219,7 @@ public final class PalpeerEmailTemplates {
         if (ctaLabel != null && ctaUrl != null && !ctaLabel.isBlank() && !ctaUrl.isBlank()) {
             inner.append(EmailLayout.primaryButton(ctaLabel, ctaUrl));
         } else {
-            inner.append(EmailLayout.primaryButton("Open Palpeer", EmailBrand.SITE_URL));
+            inner.append(EmailLayout.primaryButton(EmailBrand.APP_OPEN_CTA, EmailBrand.APP_OPEN_URL));
         }
         inner.append(EmailLayout.mutedNote(EmailBrand.TAGLINE + " — instantly."));
 
@@ -238,7 +238,7 @@ public final class PalpeerEmailTemplates {
                         .formatted(
                                 safeTitle,
                                 body == null ? "" : body,
-                                ctaUrl == null || ctaUrl.isBlank() ? EmailBrand.SITE_URL : ctaUrl);
+                                ctaUrl == null || ctaUrl.isBlank() ? EmailBrand.APP_OPEN_URL : ctaUrl);
 
         return new RenderedEmail(safeTitle, html, text);
     }
@@ -276,7 +276,7 @@ public final class PalpeerEmailTemplates {
                 }
             }
         }
-        inner.append(EmailLayout.primaryButton(ctaLabel, EmailBrand.SITE_URL));
+        inner.append(EmailLayout.primaryButton(ctaLabel, EmailBrand.APP_OPEN_URL));
         inner.append(EmailLayout.mutedNote(
                 "If you did not request this movement, contact "
                         + EmailBrand.SUPPORT_EMAIL
@@ -300,7 +300,7 @@ public final class PalpeerEmailTemplates {
                                 kindLabel + " update on your Palpeer account.",
                                 body == null ? "" : body,
                                 EmailBrand.SUPPORT_EMAIL,
-                                EmailBrand.SITE_URL);
+                                EmailBrand.APP_OPEN_URL);
 
         return new RenderedEmail(subject, html, text);
     }
