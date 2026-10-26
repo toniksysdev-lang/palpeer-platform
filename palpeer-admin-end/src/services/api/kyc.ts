@@ -63,3 +63,11 @@ export async function reviewKycCase(
     },
   });
 }
+
+/** Poll ComplyCube and apply the latest identity-check outcome to this case. */
+export async function syncKycProvider(caseId: string): Promise<AdminKycCaseDetail> {
+  return apiRequest<AdminKycCaseDetail>(
+    `/admin/kyc/cases/${encodeURIComponent(caseId)}/sync-provider`,
+    { method: 'POST' },
+  );
+}

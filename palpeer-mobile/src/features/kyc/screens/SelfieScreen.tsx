@@ -8,15 +8,16 @@ import { useAppDispatch } from '@/store';
 import { CaptureFlow } from '../components/CaptureFlow';
 
 /**
- * Still-photo selfie. The backend stores it for the provider's photo check; the app performs no
- * liveness detection (LIVENESS_CONTRACT_PENDING) and never claims to.
+ * Live photo for ComplyCube identity_check. Captured on-device (front camera only — no library)
+ * and uploaded as the provider live photo. Device-side challenge liveness (blink/turn) is still
+ * pending a native SDK; this step is required for live identity verification.
  */
 export function SelfieScreen() {
   const toast = useToast();
   const dispatch = useAppDispatch();
 
   const onUploaded = async () => {
-    toast.show({ type: 'success', title: 'Selfie uploaded' });
+    toast.show({ type: 'success', title: 'Live photo saved' });
     const progress = await dispatch(
       kycApi.endpoints.getKycProgress.initiate(undefined, { forceRefetch: true, subscribe: false }),
     );
@@ -28,9 +29,10 @@ export function SelfieScreen() {
       kind="selfie"
       target={{ kind: 'selfie' }}
       icon={ScanFace}
-      title="Take a selfie"
-      subtitle="We'll compare it with the photo on your document."
+      title="Live photo"
+      subtitle="We'll match this live photo of your face with the photo on your identity document."
       tips={[
+        'Use the front camera now — not a saved photo from your gallery.',
         'Find good, even lighting — face a window or lamp.',
         'Remove glasses, hats and anything covering your face.',
         'Look straight at the camera with a neutral expression.',

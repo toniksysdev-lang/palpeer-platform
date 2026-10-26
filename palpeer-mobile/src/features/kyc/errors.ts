@@ -7,6 +7,7 @@ const MESSAGES: Record<string, string> = {
   FILE_REQUIRED: 'The photo was empty. Please take or choose it again.',
   DOCUMENT_TYPE_REQUIRED: 'Choose the type of document first.',
   KYC_DOCUMENT_REQUIRED: 'Upload a photo of your identity document before submitting.',
+  KYC_SELFIE_REQUIRED: 'Take a live photo of your face before starting identity verification.',
   KYC_PROVIDER_DISABLED:
     "Identity verification isn't available yet. Your uploads are saved on your account — please try again later.",
   COMPLYCUBE_DISABLED:

@@ -34,6 +34,8 @@ export type KycSelfieMetadata = {
   originalFilename?: string | null;
   sizeBytes?: number | null;
   createdAt: string;
+  /** True once uploaded to ComplyCube as a live photo. */
+  linkedToProvider?: boolean;
 };
 
 export type AdminKycCaseDetail = {
@@ -43,6 +45,14 @@ export type AdminKycCaseDetail = {
   rejectionReason?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+  providerName?: string | null;
+  providerClientId?: string | null;
+  providerCheckId?: string | null;
+  providerCheckType?: string | null;
+  providerCheckStatus?: string | null;
+  providerOutcome?: string | null;
+  providerBreakdown?: string | null;
+  liveIdentityCheck?: boolean;
   documents: KycDocumentMetadata[];
   selfie: KycSelfieMetadata | null;
 };

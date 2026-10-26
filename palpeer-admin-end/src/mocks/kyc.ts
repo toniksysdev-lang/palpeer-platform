@@ -144,19 +144,64 @@ export function mockGetKycCase(caseId: string): AdminKycCaseDetail {
   if (!found) {
     throw new ApiClientError(404, 'RESOURCE_NOT_FOUND', 'KYC case not found');
   }
+  const hasLive = selfieCases.has(caseId);
+  const underReview = found.status === 'UNDER_REVIEW' || found.status === 'APPROVED';
   return {
     ...found,
+    providerName: underReview || found.status === 'REJECTED' ? 'COMPLYCUBE' : null,
+    providerClientId: underReview || found.status === 'REJECTED' ? `cc-client-${caseId}` : null,
+    providerCheckId: underReview || found.status === 'REJECTED' ? `cc-check-${caseId}` : null,
+    providerCheckType: hasLive && underReview ? 'identity_check' : null,
+    providerCheckStatus:
+      found.status === 'APPROVED'
+        ? 'complete'
+        : found.status === 'UNDER_REVIEW'
+          ? 'pending'
+          : found.status === 'REJECTED'
+            ? 'complete'
+            : null,
+    providerOutcome:
+      found.status === 'APPROVED'
+        ? 'clear'
+        : found.status === 'REJECTED'
+          ? 'rejected'
+          : found.status === 'UNDER_REVIEW'
+            ? null
+            : null,
+    providerBreakdown: null,
+    liveIdentityCheck: hasLive && Boolean(underReview || found.status === 'REJECTED'),
     documents: (documentsByCase[caseId] ?? []).map((doc) => ({ ...doc })),
-    selfie: selfieCases.has(caseId)
+    selfie: hasLive
       ? {
           id: `selfie-${caseId}`,
           contentType: 'image/svg+xml',
-          originalFilename: 'selfie.svg',
+          originalFilename: 'live-photo.svg',
           sizeBytes: 430,
           createdAt: found.createdAt ?? daysAgo(1),
+          linkedToProvider: underReview || found.status === 'REJECTED',
         }
       : null,
   };
+}
+
+export function mockSyncKycProvider(caseId: string): AdminKycCaseDetail {
+  const detail = mockGetKycCase(caseId);
+  if (!detail.providerCheckId) {
+    throw new ApiClientError(
+      400,
+      'KYC_PROVIDER_CHECK_MISSING',
+      'This case has no ComplyCube check to sync yet',
+    );
+  }
+  if (detail.status === 'UNDER_REVIEW') {
+    return {
+      ...detail,
+      providerCheckStatus: 'complete',
+      providerOutcome: 'attention',
+      rejectionReason: 'Provider flagged for review: attention',
+    };
+  }
+  return detail;
 }
 
 function mockSvg(label: string): Blob {

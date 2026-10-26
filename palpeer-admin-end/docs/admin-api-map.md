@@ -95,6 +95,8 @@ Envelope (VERIFIED pattern): responses wrapped as `ApiResponse<T>` (success mess
 | Method | Path | Status | Permission |
 |--------|------|--------|------------|
 | GET | `/admin/kyc/cases` | VERIFIED | `kyc:read` |
+| GET | `/admin/kyc/cases/{caseId}` | VERIFIED | `kyc:read` — includes ComplyCube live-check metadata |
+| POST | `/admin/kyc/cases/{caseId}/sync-provider` | VERIFIED | `kyc:read` — refresh ComplyCube identity check |
 | POST | `/admin/kyc/cases/{caseId}/review` | VERIFIED | `kyc:review` |
 
 **KycStatusResponse (VERIFIED):** `caseId`, `userId`, `status`, `rejectionReason`  

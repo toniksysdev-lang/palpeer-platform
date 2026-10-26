@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Camera, Eye, FileText } from 'lucide-react';
+import { ArrowLeft, Camera, Eye, FileText, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useToast } from '@/app/providers/ToastProvider';
 import { StatusBadge } from '@/components/data-display/StatusBadge';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -15,8 +15,8 @@ import { appConfig } from '@/config/env';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { KycPreviewDrawer, type KycPreviewTarget } from '@/features/kyc/KycPreviewDrawer';
 import { formatDateTime, formatInteger, formatStatusLabel } from '@/lib/format';
-import { mockGetKycCase, mockReviewKycCase } from '@/mocks/kyc';
-import { getKycCase, reviewKycCase } from '@/services/api/kyc';
+import { mockGetKycCase, mockReviewKycCase, mockSyncKycProvider } from '@/mocks/kyc';
+import { getKycCase, reviewKycCase, syncKycProvider } from '@/services/api/kyc';
 import type { KycCaseSummary } from '@/types/admin';
 import { ApiClientError } from '@/types/api';
 import {
@@ -69,9 +69,28 @@ function buildTimeline(detail: AdminKycCaseDetail): TimelineEvent[] {
     events.push({
       key: 'selfie',
       at: detail.selfie.createdAt,
-      title: 'Selfie uploaded',
+      title: detail.selfie.linkedToProvider
+        ? 'Live photo linked to ComplyCube'
+        : 'Live photo uploaded',
       detail: detail.selfie.originalFilename,
       tone: 'info',
+    });
+  }
+  if (detail.providerCheckId && detail.updatedAt) {
+    events.push({
+      key: 'provider',
+      at: detail.updatedAt,
+      title: detail.liveIdentityCheck
+        ? 'ComplyCube live identity check'
+        : 'ComplyCube check',
+      detail: [
+        detail.providerCheckType,
+        detail.providerCheckStatus,
+        detail.providerOutcome ? `outcome: ${detail.providerOutcome}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      tone: detail.providerOutcome === 'clear' ? 'success' : 'warning',
     });
   }
   if (detail.updatedAt) {
@@ -79,7 +98,10 @@ function buildTimeline(detail: AdminKycCaseDetail): TimelineEvent[] {
       key: 'updated',
       at: detail.updatedAt,
       title: `Status is ${formatStatusLabel(detail.status)}`,
-      detail: detail.status === 'REJECTED' ? detail.rejectionReason : null,
+      detail:
+        detail.status === 'REJECTED' || detail.rejectionReason
+          ? detail.rejectionReason
+          : null,
       tone: statusTone(detail.status),
     });
   }
@@ -158,6 +180,33 @@ export function KycDetailPage() {
       const message =
         error instanceof ApiClientError ? error.message : 'KYC review failed.';
       push({ tone: 'error', title: 'Review failed', description: message });
+    },
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      if (appConfig.useMockApi) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        return mockSyncKycProvider(caseId);
+      }
+      return syncKycProvider(caseId);
+    },
+    onSuccess: async (updated) => {
+      queryClient.setQueryData(['admin-kyc-case', caseId, appConfig.useMockApi], updated);
+      push({
+        tone: 'success',
+        title: 'ComplyCube synced',
+        description: updated.providerOutcome
+          ? `Outcome: ${updated.providerOutcome}`
+          : `Status: ${updated.status}`,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['admin-kyc'] });
+      await queryClient.invalidateQueries({ queryKey: ['dashboard', 'kyc'] });
+    },
+    onError: (error) => {
+      const message =
+        error instanceof ApiClientError ? error.message : 'Could not sync ComplyCube.';
+      push({ tone: 'error', title: 'Sync failed', description: message });
     },
   });
 
@@ -243,7 +292,7 @@ export function KycDetailPage() {
             <dd className="mt-1 text-sm text-text-primary">{kycCase.status}</dd>
           </div>
           <div>
-            <dt className="text-xs text-text-muted">Rejection reason</dt>
+            <dt className="text-xs text-text-muted">Rejection / review note</dt>
             <dd className="mt-1 text-sm text-text-primary">{kycCase.rejectionReason || '—'}</dd>
           </div>
           <div>
@@ -255,6 +304,71 @@ export function KycDetailPage() {
             <dd className="mt-1 text-sm text-text-primary">{formatDateTime(kycCase.updatedAt)}</dd>
           </div>
         </dl>
+      </section>
+
+      <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-primary" aria-hidden />
+            <div>
+              <h3 className="text-base font-semibold text-text-primary">ComplyCube live check</h3>
+              <p className="mt-0.5 text-sm text-text-secondary">
+                {kycCase.liveIdentityCheck
+                  ? 'Submitted as a live identity check (document + live photo).'
+                  : 'Provider metadata appears after the customer starts live verification.'}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={!kycCase.providerCheckId || syncMutation.isPending}
+            onClick={() => syncMutation.mutate()}
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${syncMutation.isPending ? 'animate-spin' : ''}`}
+              aria-hidden
+            />
+            Sync from ComplyCube
+          </Button>
+        </div>
+        <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <dt className="text-xs text-text-muted">Provider</dt>
+            <dd className="mt-1 text-sm text-text-primary">{kycCase.providerName || '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-text-muted">Check type</dt>
+            <dd className="mt-1 text-sm text-text-primary">
+              {kycCase.providerCheckType || (kycCase.liveIdentityCheck ? 'identity_check' : '—')}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-text-muted">Check status</dt>
+            <dd className="mt-1 text-sm text-text-primary">{kycCase.providerCheckStatus || '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-text-muted">Outcome</dt>
+            <dd className="mt-1 text-sm text-text-primary">{kycCase.providerOutcome || '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-text-muted">Client ID</dt>
+            <dd className="mt-1 break-all font-mono text-xs text-text-primary">
+              {kycCase.providerClientId || '—'}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-text-muted">Check ID</dt>
+            <dd className="mt-1 break-all font-mono text-xs text-text-primary">
+              {kycCase.providerCheckId || '—'}
+            </dd>
+          </div>
+        </dl>
+        {kycCase.providerBreakdown ? (
+          <pre className="mt-4 max-h-48 overflow-auto rounded-lg border border-border bg-surface-secondary/40 p-3 text-xs text-text-secondary">
+            {kycCase.providerBreakdown}
+          </pre>
+        ) : null}
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -309,13 +423,16 @@ export function KycDetailPage() {
         <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
           <div className="flex items-center gap-2">
             <Camera className="h-4 w-4 text-primary" aria-hidden />
-            <h3 className="text-base font-semibold text-text-primary">Selfie</h3>
+            <h3 className="text-base font-semibold text-text-primary">Live photo</h3>
           </div>
           {loadingFiles ? (
             <Skeleton className="mt-4 h-24 w-full" />
           ) : !kycCase.selfie ? (
             <div className="mt-4">
-              <EmptyState title="No selfie" description="No selfie was uploaded for this case." />
+              <EmptyState
+                title="No live photo"
+                description="The customer has not uploaded a live face photo yet."
+              />
             </div>
           ) : (
             <div className="mt-4 flex items-center justify-between gap-3 rounded-[0.6rem] border border-border p-3">
@@ -325,6 +442,7 @@ export function KycDetailPage() {
                 </p>
                 <p className="text-xs text-text-muted">
                   {kycCase.selfie.contentType} · {formatBytes(kycCase.selfie.sizeBytes)}
+                  {kycCase.selfie.linkedToProvider ? ' · Linked to ComplyCube' : ''}
                 </p>
                 <p className="text-xs text-text-muted">
                   Uploaded {formatDateTime(kycCase.selfie.createdAt)}
@@ -338,7 +456,7 @@ export function KycDetailPage() {
                     kind: 'selfie',
                     caseId: kycCase.caseId,
                     id: kycCase.selfie!.id,
-                    title: 'Selfie',
+                    title: 'Live photo',
                     filename: kycCase.selfie!.originalFilename,
                   })
                 }

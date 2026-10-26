@@ -26,7 +26,10 @@ export function KycPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const page = Number(searchParams.get('page') ?? '0') || 0;
   const size = Number(searchParams.get('size') ?? '20') || 20;
-  const status = searchParams.get('status') ?? '';
+  // ComplyCube live checks land in UNDER_REVIEW; default the queue there on first visit.
+  const status = searchParams.has('status')
+    ? (searchParams.get('status') ?? '')
+    : 'UNDER_REVIEW';
   const userId = searchParams.get('userId') ?? '';
 
   const [userIdDraft, setUserIdDraft] = useState(userId);
@@ -57,8 +60,8 @@ export function KycPage() {
 
   function setStatus(nextStatus: string) {
     const next = new URLSearchParams(searchParams);
-    if (nextStatus) next.set('status', nextStatus);
-    else next.delete('status');
+    // Keep the key when clearing so "All" is distinct from the default UNDER_REVIEW visit.
+    next.set('status', nextStatus);
     next.set('page', '0');
     setSearchParams(next);
   }
@@ -174,7 +177,8 @@ export function KycPage() {
           <div>
             <h1 className="text-xl font-semibold text-text-primary">KYC cases</h1>
             <p className="mt-1 text-sm text-text-secondary">
-              Review identity verification cases. Open a case to review documents and selfie.
+              Review ComplyCube live identity checks. Open a case to preview documents, live photo,
+              and provider outcome.
             </p>
           </div>
         </div>

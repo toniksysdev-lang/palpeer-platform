@@ -80,7 +80,7 @@ describe('KycHubScreen', () => {
     installFetchMock(kycRoutes('NOT_STARTED'));
     await renderWithProviders(<KycHubScreen />);
 
-    expect(await screen.findByText('Verify your identity')).toBeTruthy();
+    expect(await screen.findByText('Live identity verification')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('kyc-next'));
     expect(router.push).toHaveBeenCalledWith('/kyc/document-type');
   });
@@ -98,7 +98,7 @@ describe('KycHubScreen', () => {
     installFetchMock(kycRoutes('UNDER_REVIEW', { hasDocument: true, hasSelfie: true }));
     await renderWithProviders(<KycHubScreen />);
 
-    expect(await screen.findByText('Verification in progress')).toBeTruthy();
+    expect(await screen.findByText('Live check in progress')).toBeTruthy();
     expect(screen.getByTestId('kyc-check-again')).toBeTruthy();
     expect(screen.queryByTestId('kyc-step-document')).toBeNull();
     expect(screen.queryByTestId('kyc-next')).toBeNull();
@@ -132,7 +132,7 @@ describe('KycHubScreen', () => {
     await renderWithProviders(<KycHubScreen />);
 
     await fireEvent.press(await screen.findByText('Try again'));
-    expect(await screen.findByText('Verify your identity')).toBeTruthy();
+    expect(await screen.findByText('Live identity verification')).toBeTruthy();
   });
 
   it('prompts to complete personal information when the profile is incomplete', async () => {

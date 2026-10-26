@@ -37,7 +37,7 @@ Everything the mobile app needs that the backend does not verifiably provide. Ea
 | K-1 | Accepted document types list | Free text; ComplyCube mapping only | App offers PASSPORT, DRIVING_LICENSE, NATIONAL_ID, RESIDENCE_PERMIT; needs confirmation per country. |
 | K-2 | Document back side | No `side` field | Front only. |
 | K-3 | Submit for review without ComplyCube | No endpoint | Submit returns 503 in dev; app shows "Verification isn't available yet". |
-| K-4 | Liveness | Not supported | `LIVENESS_CONTRACT_PENDING`; plain selfie only. |
+| K-4 | Challenge liveness (blink/turn SDK) | Not in Pure API path | Live photo via front camera is required for ComplyCube `identity_check`; device challenge liveness still needs a native SDK. |
 | K-5 | List/delete my uploaded documents | No endpoint | Progress counts only. |
 | K-6 | Multipart request with no `file` part | Returns 500 `INTERNAL_ERROR`, not 400 `FILE_REQUIRED` (missing-part exception unhandled) | App always sends a file; backend should map `MissingServletRequestPartException` to 400. |
 | K-7 | 503 `KYC_PROVIDER_DISABLED` message text names env vars (`COMPLYCUBE_ENABLED`, `COMPLYCUBE_API_KEY`) | Config detail exposed to customers | App shows its own copy for this code; backend message should be generic. |

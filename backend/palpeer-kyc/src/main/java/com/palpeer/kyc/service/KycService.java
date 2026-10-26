@@ -183,7 +183,7 @@ public class KycService {
         if (!kycVerificationProvider.isEnabled()) {
             throw new BusinessException(
                     "KYC_PROVIDER_DISABLED",
-                    "ComplyCube is disabled — set COMPLYCUBE_ENABLED=true and COMPLYCUBE_API_KEY",
+                    "Identity verification isn't available right now. Please try again later.",
                     HttpStatus.SERVICE_UNAVAILABLE);
         }
         User user = userRepository.findById(userId)
@@ -196,7 +196,12 @@ public class KycService {
                         "KYC_DOCUMENT_REQUIRED",
                         "Upload a KYC document before starting verification",
                         HttpStatus.BAD_REQUEST));
-        Selfie selfie = selfieRepository.findFirstByKycCaseIdOrderByCreatedAtDesc(kycCase.getId()).orElse(null);
+        // Live identity verification always needs a live photo (selfie) for ComplyCube identity_check.
+        Selfie selfie = selfieRepository.findFirstByKycCaseIdOrderByCreatedAtDesc(kycCase.getId())
+                .orElseThrow(() -> new BusinessException(
+                        "KYC_SELFIE_REQUIRED",
+                        "Take a live photo of your face before starting identity verification",
+                        HttpStatus.BAD_REQUEST));
 
         String clientId = kycCase.getProviderClientId();
         if (clientId == null || clientId.isBlank()) {
@@ -225,19 +230,14 @@ public class KycService {
             kycDocumentRepository.save(document);
         }
 
-        String checkId;
-        if (selfie != null) {
-            String livePhotoId = selfie.getProviderLivePhotoId();
-            if (livePhotoId == null || livePhotoId.isBlank()) {
-                livePhotoId = kycVerificationProvider.uploadLivePhoto(
-                        clientId, selfie.getOriginalFilename(), readSelfieBytes(selfie));
-                selfie.setProviderLivePhotoId(livePhotoId);
-                selfieRepository.save(selfie);
-            }
-            checkId = kycVerificationProvider.createIdentityCheck(clientId, providerDocumentId, livePhotoId);
-        } else {
-            checkId = kycVerificationProvider.createDocumentCheck(clientId, providerDocumentId);
+        String livePhotoId = selfie.getProviderLivePhotoId();
+        if (livePhotoId == null || livePhotoId.isBlank()) {
+            livePhotoId = kycVerificationProvider.uploadLivePhoto(
+                    clientId, selfie.getOriginalFilename(), readSelfieBytes(selfie));
+            selfie.setProviderLivePhotoId(livePhotoId);
+            selfieRepository.save(selfie);
         }
+        String checkId = kycVerificationProvider.createIdentityCheck(clientId, providerDocumentId, livePhotoId);
 
         kycCase.setProviderCheckId(checkId);
         kycCase.setStatus(KycStatus.UNDER_REVIEW);
@@ -275,13 +275,13 @@ public class KycService {
         if (outcome != null) {
             if (value.equals("clear") || value.equals("approved") || value.equals("pass")) {
                 next = KycStatus.APPROVED;
-            } else if (value.contains("reject")
-                    || value.contains("consider")
-                    || value.equals("fail")
-                    || value.contains("attention")
-                    || value.equals("not_processed")) {
+            } else if (value.contains("reject") || value.equals("fail") || value.equals("not_processed")) {
                 next = KycStatus.REJECTED;
                 rejectionReason = "Provider result: " + outcome;
+            } else if (value.contains("attention") || value.contains("consider")) {
+                // Needs human review in admin — keep UNDER_REVIEW with provider note.
+                next = KycStatus.UNDER_REVIEW;
+                rejectionReason = "Provider flagged for review: " + outcome;
             } else {
                 next = KycStatus.UNDER_REVIEW;
             }
@@ -372,12 +372,62 @@ public class KycService {
         return kycCaseRepository.findAll(spec, pageable).map(KycService::toStatusResponse);
     }
 
-    /** Admin: case detail with artifact metadata (no storage keys / provider ids). */
+    /** Admin: case detail with artifact + read-only ComplyCube live-check metadata. */
     @Transactional(readOnly = true)
     public AdminKycCaseDetailResponse adminGetCase(UUID caseId) {
         KycCase kycCase = requireCase(caseId);
+        return toAdminDetail(kycCase, fetchProviderCheck(kycCase).orElse(null));
+    }
+
+    /**
+     * Admin: refresh this case from ComplyCube (poll check outcome) and return the updated detail.
+     */
+    @Transactional
+    public AdminKycCaseDetailResponse adminSyncProvider(UUID caseId) {
+        KycCase kycCase = requireCase(caseId);
+        String checkId = kycCase.getProviderCheckId();
+        if (checkId == null || checkId.isBlank()) {
+            throw new BusinessException(
+                    "KYC_PROVIDER_CHECK_MISSING",
+                    "This case has no ComplyCube check to sync yet",
+                    HttpStatus.BAD_REQUEST);
+        }
+        if (!kycVerificationProvider.isEnabled()) {
+            throw new BusinessException(
+                    "KYC_PROVIDER_DISABLED",
+                    "Identity verification provider is not configured",
+                    HttpStatus.SERVICE_UNAVAILABLE);
+        }
+        var check = kycVerificationProvider.getCheck(checkId)
+                .orElseThrow(() -> new BusinessException(
+                        "KYC_PROVIDER_SYNC_FAILED",
+                        "Could not load the ComplyCube check",
+                        HttpStatus.BAD_GATEWAY));
+        applyProviderCheckResult(check.checkId(), check.result(), check.status());
+        kycCase = requireCase(caseId);
+        auditRecorder.record(AuditRecord.builder("ADMIN_KYC_PROVIDER_SYNC")
+                .entity("KycCase:" + kycCase.getId())
+                .userRef(kycCase.getUserId())
+                .newValue("checkId=" + check.checkId()
+                        + ";status=" + check.status()
+                        + ";outcome=" + check.result())
+                .build());
+        return toAdminDetail(kycCase, check);
+    }
+
+    private Optional<KycVerificationProvider.ProviderCheckResult> fetchProviderCheck(KycCase kycCase) {
+        String checkId = kycCase.getProviderCheckId();
+        if (checkId == null || checkId.isBlank() || !kycVerificationProvider.isEnabled()) {
+            return Optional.empty();
+        }
+        return kycVerificationProvider.getCheck(checkId);
+    }
+
+    private AdminKycCaseDetailResponse toAdminDetail(
+            KycCase kycCase,
+            KycVerificationProvider.ProviderCheckResult check) {
         List<AdminKycCaseDetailResponse.Document> documents = kycDocumentRepository
-                .findByKycCaseIdOrderByCreatedAtAsc(caseId).stream()
+                .findByKycCaseIdOrderByCreatedAtAsc(kycCase.getId()).stream()
                 .map(d -> new AdminKycCaseDetailResponse.Document(
                         d.getId(),
                         d.getDocumentType(),
@@ -386,15 +436,20 @@ public class KycService {
                         d.getSizeBytes(),
                         d.getCreatedAt()))
                 .toList();
-        AdminKycCaseDetailResponse.Selfie selfie = selfieRepository
-                .findFirstByKycCaseIdOrderByCreatedAtDesc(caseId)
+        Optional<Selfie> selfieEntity =
+                selfieRepository.findFirstByKycCaseIdOrderByCreatedAtDesc(kycCase.getId());
+        AdminKycCaseDetailResponse.Selfie selfie = selfieEntity
                 .map(s -> new AdminKycCaseDetailResponse.Selfie(
                         s.getId(),
                         s.getContentType(),
                         s.getOriginalFilename(),
                         s.getSizeBytes(),
-                        s.getCreatedAt()))
+                        s.getCreatedAt(),
+                        s.getProviderLivePhotoId() != null && !s.getProviderLivePhotoId().isBlank()))
                 .orElse(null);
+        boolean liveIdentity = selfieEntity.isPresent()
+                && kycCase.getProviderCheckId() != null
+                && !kycCase.getProviderCheckId().isBlank();
         return new AdminKycCaseDetailResponse(
                 kycCase.getId(),
                 kycCase.getUserId(),
@@ -402,6 +457,14 @@ public class KycService {
                 kycCase.getRejectionReason(),
                 kycCase.getCreatedAt(),
                 kycCase.getUpdatedAt(),
+                kycCase.getProviderName(),
+                kycCase.getProviderClientId(),
+                kycCase.getProviderCheckId(),
+                check != null ? check.type() : (liveIdentity ? "identity_check" : null),
+                check != null ? check.status() : null,
+                check != null ? check.result() : null,
+                check != null ? check.breakdown() : null,
+                liveIdentity,
                 documents,
                 selfie);
     }

@@ -165,18 +165,26 @@ export function KycHubScreen() {
           />
           <StepRow
             icon={Camera}
-            title="Selfie"
+            title="Live photo"
             done={current.hasSelfie && phase !== 'rejected'}
-            detail={current.hasSelfie ? 'Uploaded — tap to retake' : 'A clear photo of your face'}
+            detail={
+              current.hasSelfie
+                ? 'Captured — tap to retake'
+                : 'A live photo of your face (required)'
+            }
             onPress={() => router.push('/kyc/selfie')}
             testID="kyc-step-selfie"
           />
           <StepRow
             icon={Send}
-            title="Submit for review"
+            title="Start live verification"
             done={false}
-            detail="Confirm your name and send your photos"
-            onPress={current.hasDocument ? () => router.push('/kyc/submit') : undefined}
+            detail="Confirm your name and send your ID + live photo to ComplyCube"
+            onPress={
+              current.hasDocument && current.hasSelfie
+                ? () => router.push('/kyc/submit')
+                : undefined
+            }
             testID="kyc-step-submit"
           />
         </View>
@@ -204,14 +212,14 @@ function PhaseSummary({ phase }: { phase: ReturnType<typeof kycPhase> }) {
     collecting: {
       icon: ShieldAlert,
       color: theme.colors.warning,
-      title: 'Verify your identity',
-      body: 'Add a photo of an identity document and a selfie, then submit them for review.',
+      title: 'Live identity verification',
+      body: 'Upload your identity document, take a live photo, then start ComplyCube verification.',
     },
     reviewing: {
       icon: Hourglass,
       color: theme.colors.warning,
-      title: 'Verification in progress',
-      body: "We're checking your details. This page updates automatically, or pull down to refresh.",
+      title: 'Live check in progress',
+      body: "ComplyCube is verifying your document and live photo. This page updates automatically, or pull down to refresh.",
     },
     approved: {
       icon: BadgeCheck,
@@ -223,7 +231,7 @@ function PhaseSummary({ phase }: { phase: ReturnType<typeof kycPhase> }) {
       icon: ShieldAlert,
       color: theme.colors.danger,
       title: 'Verification not approved',
-      body: 'You can upload new photos and submit again.',
+      body: 'You can upload new photos and start live verification again.',
     },
   };
   const { icon, color, title, body } = content[phase];
@@ -290,8 +298,8 @@ function PrimaryAction({
 }) {
   const labels = {
     document: rejected ? 'Upload a new document' : 'Add identity document',
-    selfie: 'Take a selfie',
-    submit: 'Review and submit',
+    selfie: 'Take a live photo',
+    submit: 'Start live verification',
   };
   return (
     <Button label={labels[step]} onPress={() => router.push(STEP_ROUTES[step])} testID="kyc-next" />

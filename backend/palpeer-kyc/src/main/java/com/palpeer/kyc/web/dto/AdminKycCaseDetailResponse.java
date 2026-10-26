@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Admin KYC case detail. Storage keys and provider ids are intentionally omitted.
+ * Admin KYC case detail, including read-only ComplyCube provider metadata for live identity checks.
  */
 public record AdminKycCaseDetailResponse(
         UUID caseId,
@@ -15,6 +15,16 @@ public record AdminKycCaseDetailResponse(
         String rejectionReason,
         Instant createdAt,
         Instant updatedAt,
+        String providerName,
+        String providerClientId,
+        String providerCheckId,
+        /** {@code identity_check} when a live photo was submitted; otherwise null / document path. */
+        String providerCheckType,
+        String providerCheckStatus,
+        String providerOutcome,
+        String providerBreakdown,
+        /** True when the case was submitted with a live photo for ComplyCube identity_check. */
+        boolean liveIdentityCheck,
         List<Document> documents,
         Selfie selfie
 ) {
@@ -34,7 +44,9 @@ public record AdminKycCaseDetailResponse(
             String contentType,
             String originalFilename,
             long sizeBytes,
-            Instant createdAt
+            Instant createdAt,
+            /** True once the selfie was uploaded to ComplyCube as a live photo. */
+            boolean linkedToProvider
     ) {
     }
 }

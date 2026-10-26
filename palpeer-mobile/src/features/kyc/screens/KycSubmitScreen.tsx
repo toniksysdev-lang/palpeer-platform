@@ -59,7 +59,7 @@ export function KycSubmitScreen() {
     setAlert(null);
     const result = await start(toStartVerificationRequest(values));
     if ('data' in result && result.data) {
-      toast.show({ type: 'success', title: 'Submitted for review' });
+      toast.show({ type: 'success', title: 'Live verification started' });
       goToHub();
       return;
     }
@@ -84,7 +84,7 @@ export function KycSubmitScreen() {
     }
   });
 
-  const header = <StackHeader title="Submit for review" onBack={goToHub} />;
+  const header = <StackHeader title="Start live verification" onBack={goToHub} />;
 
   if (progress.error && !progress.data) {
     return (
@@ -126,19 +126,19 @@ export function KycSubmitScreen() {
       keyboardAware
       footer={
         <Button
-          label="Submit for review"
+          label="Start live verification"
           onPress={onSubmit}
           loading={isLoading}
-          loadingLabel="Submitting…"
-          disabled={!progress.data.hasDocument}
+          loadingLabel="Starting…"
+          disabled={!progress.data.hasDocument || !progress.data.hasSelfie}
           testID="kyc-submit"
         />
       }
     >
       {header}
       <AppText tone="secondary">
-        Enter your name exactly as it appears on your document. We&apos;ll send it with your photos
-        for review.
+        Enter your name exactly as it appears on your document. We&apos;ll send your ID and live
+        photo to ComplyCube for identity verification.
       </AppText>
 
       {!progress.data.hasDocument ? (
@@ -157,10 +157,10 @@ export function KycSubmitScreen() {
         <View style={{ gap: theme.spacing.xs }}>
           <FormAlert
             tone="warning"
-            message="You haven't added a selfie yet."
+            message="A live photo of your face is required for identity verification."
             testID="kyc-submit-no-selfie"
           />
-          <TextLink label="Take a selfie" onPress={() => router.push('/kyc/selfie')} />
+          <TextLink label="Take a live photo" onPress={() => router.push('/kyc/selfie')} />
         </View>
       ) : null}
 
