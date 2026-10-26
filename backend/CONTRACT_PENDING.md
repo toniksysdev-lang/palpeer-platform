@@ -97,8 +97,8 @@
 
 | ID | Topic | Question | Current provisional behavior |
 |----|-------|----------|------------------------------|
-| P6-01 | Funding provider | PSP / bank / card rails + webhooks? | **CAD → Apaylo** Instant Interac Link; **NGN → Kuda** VA (`paymentDetails` while PENDING; credit on webhook — not demo auto-fund by default); webhooks `/api/v1/webhooks/apaylo` & `/kuda` (HMAC-signed, fail-closed); manual `process`/`fail`/`reverse` restricted to operators with `payments:operate` (V25) |
-| P6-02 | Withdrawal destination | Bank account / mobile money model? | **CAD:** Interac email/phone or `institution:transit:account` EFT; **NGN:** `bankCode:accountNumber` via Kuda; else opaque `destinationReference` |
+| P6-01 | Funding provider | PSP / bank / card rails + webhooks? | **CAD → Apaylo** Instant Interac Link; **NGN → Kuda** live dynamic collection (`ADMIN_CREATE_DYNAMIC_COLLECTION_ACCOUNT`, `paymentDetails` while PENDING; credit on `Transaction.Notification` webhook); webhooks `/api/v1/webhooks/apaylo` & `/kuda` (Kuda: dashboard username/password preferred, HMAC fallback); manual `process`/`fail`/`reverse` restricted to operators with `payments:operate` (V25) |
+| P6-02 | Withdrawal destination | Bank account / mobile money model? | **CAD:** Interac email/phone or `institution:transit:account` EFT; **NGN:** `bankCode:accountNumber` via Kuda `NAME_ENQUIRY` + `SINGLE_FUND_TRANSFER` (+ live `KUDA_CLIENT_ACCOUNT_NUMBER`, TSQ on ambiguous responses); else opaque `destinationReference` |
 | P6-03 | State transition matrix | Who may process/fail/reverse? | Owner-authenticated; provider webhooks can complete by provider reference |
 | P6-04 | Withdrawal ledger model | Direct DEBIT vs HOLD then settle? | HOLD on initiate; SUCCESS = RELEASE + DEBIT; fail = RELEASE |
 | P6-05 | Idempotency header | Required name/format? | `Idempotency-Key` HTTP header (unique per movement type table) |

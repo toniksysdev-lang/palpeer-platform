@@ -6,6 +6,28 @@ const REFRESH_KEY = 'palpeer.admin.refreshToken';
 const USER_KEY = 'palpeer.admin.userId';
 const REMEMBER_KEY = 'palpeer.admin.remember';
 const REMEMBER_EMAIL_KEY = 'palpeer.admin.rememberEmail';
+const DEVICE_KEY = 'palpeer.admin.deviceId';
+
+/**
+ * Stable per-browser id for single-session login. Survives sign-out so re-login on this
+ * console is treated as the same device (avoids legacy SESSION_ALREADY_ACTIVE deadlocks).
+ */
+export function getOrCreateAdminDeviceId(): string {
+  try {
+    const existing = localStorage.getItem(DEVICE_KEY);
+    if (existing && existing.length >= 8 && existing.length <= 128) {
+      return existing;
+    }
+    const id =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? `admin-web:${crypto.randomUUID()}`
+        : `admin-web:${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem(DEVICE_KEY, id.slice(0, 128));
+    return localStorage.getItem(DEVICE_KEY) ?? id.slice(0, 128);
+  } catch {
+    return `admin-web:ephemeral-${Date.now().toString(36)}`;
+  }
+}
 
 function store(remember: boolean): Storage {
   return remember ? localStorage : sessionStorage;

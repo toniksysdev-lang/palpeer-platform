@@ -35,6 +35,7 @@ import {
 } from '../profileOptions';
 import {
   defaultDateOfBirth,
+  maximumDateOfBirth,
   personalInfoSchema,
   profileToFormDefaults,
   toUpdateProfileRequest,
@@ -76,8 +77,8 @@ export function PersonalInformationScreen() {
   const [update, { isLoading: saving }] = useUpdateMyProfileMutation();
   const [sheet, setSheet] = useState<SheetKey>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const defaultDobDate = useMemo(() => defaultDateOfBirth(15), []);
-  const today = useMemo(() => new Date(), []);
+  const defaultDobDate = useMemo(() => defaultDateOfBirth(), []);
+  const maxDobDate = useMemo(() => maximumDateOfBirth(), []);
 
   const { control, handleSubmit, reset, setValue, setError } = useForm<PersonalInfoForm>({
     resolver: zodResolver(personalInfoSchema),
@@ -250,7 +251,7 @@ export function PersonalInformationScreen() {
             onChange={field.onChange}
             error={fieldState.error?.message}
             defaultPickerDate={defaultDobDate}
-            maximumDate={today}
+            maximumDate={maxDobDate}
             disabled={readOnly}
             testID="personal-dob"
           />

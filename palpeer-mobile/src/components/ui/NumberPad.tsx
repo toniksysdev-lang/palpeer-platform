@@ -1,4 +1,4 @@
-import { Delete } from 'lucide-react-native';
+import { ClipboardPaste, Delete } from 'lucide-react-native';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -20,8 +20,11 @@ type Props = {
   disabled?: boolean;
   /**
    * Bottom-left key: blank, decorative `*` (ignored), or `.` (decimal for amounts).
+   * When `onAccessoryPress` is set, `*` becomes a Paste action.
    */
   bottomLeft?: NumberPadBottomLeft;
+  /** Fired when the bottom-left `*` key is pressed (OTP/PIN paste). */
+  onAccessoryPress?: () => void;
   variant?: NumberPadVariant;
   testID?: string;
 };
@@ -36,16 +39,17 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 type PadKeyProps = {
   label: Key;
   disabled?: boolean;
+  pasteAction?: boolean;
   onPress: () => void;
   testID?: string;
 };
 
-function NumberPadKey({ label, disabled, onPress, testID }: PadKeyProps) {
+function NumberPadKey({ label, disabled, pasteAction, onPress, testID }: PadKeyProps) {
   const theme = useTheme();
   const press = usePressScale(0.94);
   const [pressed, setPressed] = useState(false);
   const inactive = !!disabled;
-  const decorative = label === '*';
+  const decorative = label === '*' && !pasteAction;
 
   return (
     <AnimatedPressable
@@ -62,7 +66,13 @@ function NumberPadKey({ label, disabled, onPress, testID }: PadKeyProps) {
       disabled={inactive || decorative}
       accessibilityRole="button"
       accessibilityLabel={
-        label === 'back' ? 'Delete last digit' : label === '.' ? 'Decimal point' : label
+        label === 'back'
+          ? 'Delete last digit'
+          : label === '.'
+            ? 'Decimal point'
+            : pasteAction
+              ? 'Paste code'
+              : label
       }
       accessibilityState={{ disabled: inactive || decorative }}
       testID={testID}
@@ -79,6 +89,8 @@ function NumberPadKey({ label, disabled, onPress, testID }: PadKeyProps) {
     >
       {label === 'back' ? (
         <Icon icon={Delete} size={28} color={theme.colors.textPrimary} strokeWidth={1.75} />
+      ) : pasteAction ? (
+        <Icon icon={ClipboardPaste} size={26} color={theme.colors.textPrimary} strokeWidth={1.75} />
       ) : (
         <AppText
           align="center"
@@ -107,6 +119,7 @@ export function NumberPad({
   maxLength = 15,
   disabled,
   bottomLeft = '*',
+  onAccessoryPress,
   testID,
 }: Props) {
   const rows: Key[][] = [
@@ -115,11 +128,16 @@ export function NumberPad({
     ['7', '8', '9'],
     [bottomLeft || '*', '0', 'back'],
   ];
+  const pasteAction = bottomLeft === '*' && !!onAccessoryPress;
 
   const handlePress = (key: Key) => {
     if (disabled) return;
     if (key === 'back') {
       onChange(value.slice(0, -1));
+      return;
+    }
+    if (key === '*' && onAccessoryPress) {
+      onAccessoryPress();
       return;
     }
     if (!key || key === '*') return;
@@ -147,10 +165,11 @@ export function NumberPad({
                 key={`${key}-${rowIndex}`}
                 label={key}
                 disabled={disabled}
+                pasteAction={key === '*' && pasteAction}
                 onPress={() => handlePress(key)}
                 testID={
                   testID
-                    ? `${testID}-key-${key === 'back' ? 'back' : key === '.' ? 'dot' : key}`
+                    ? `${testID}-key-${key === 'back' ? 'back' : key === '.' ? 'dot' : key === '*' && pasteAction ? 'paste' : key}`
                     : undefined
                 }
               />

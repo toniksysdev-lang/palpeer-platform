@@ -47,4 +47,26 @@ class FcmPushNotifierTest {
 
         assertThat(data).containsOnlyKeys("notificationId");
     }
+
+    @Test
+    void buildData_addsDeepLinkForP2pRequest() {
+        UUID id = UUID.randomUUID();
+        UUID refId = UUID.randomUUID();
+        Notification notification = new Notification();
+        notification.setId(id);
+        notification.setTitle("New P2P BUY");
+        notification.setBody("Details");
+        notification.setCategory("P2P");
+        notification.setChannel(NotificationChannel.PUSH);
+        notification.setStatus(NotificationStatus.PENDING);
+        notification.setReferenceType("P2P_REQUEST");
+        notification.setReferenceId(refId);
+
+        Map<String, String> data = FcmPushNotifier.buildData(notification);
+
+        assertThat(data)
+                .containsEntry("deepLink", "palpeer://p2p/request/" + refId)
+                .containsEntry("referenceType", "P2P_REQUEST")
+                .containsEntry("referenceId", refId.toString());
+    }
 }

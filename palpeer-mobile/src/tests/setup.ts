@@ -81,7 +81,16 @@ jest.mock('react-native-reanimated', () => {
     },
     Extrapolation: { IDENTITY: 'identity', CLAMP: 'clamp', EXTEND: 'extend' },
     ReduceMotion: { System: 'system', Always: 'always', Never: 'never' },
-    useSharedValue: (value: unknown) => ({ value }),
+    useSharedValue: (value: unknown) => {
+      const shared = {
+        value,
+        get: () => shared.value,
+        set: (next: unknown) => {
+          shared.value = next;
+        },
+      };
+      return shared;
+    },
     useAnimatedStyle: (factory: () => unknown) => factory(),
     useAnimatedProps: (factory: () => unknown) => factory(),
     useDerivedValue: (factory: () => unknown) => ({ value: factory() }),

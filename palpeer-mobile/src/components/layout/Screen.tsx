@@ -58,7 +58,9 @@ function ScreenScrollBody({
       ref={focusScroll?.scrollRef}
       style={styles.flex}
       contentContainerStyle={contentContainerStyle}
-      keyboardShouldPersistTaps="handled"
+      // "always" so the first tap focuses password / text fields instead of only
+      // dismissing the keyboard/pad (confirm-password was untappable otherwise).
+      keyboardShouldPersistTaps="always"
       keyboardDismissMode="on-drag"
       automaticallyAdjustKeyboardInsets
       refreshControl={refreshControl}
@@ -66,7 +68,6 @@ function ScreenScrollBody({
       scrollEventThrottle={16}
       onScroll={onScroll}
       onScrollBeginDrag={onDismissPad}
-      onTouchStart={onDismissPad}
     >
       {children}
     </ScrollView>
@@ -130,7 +131,6 @@ export function Screen({
           gap: theme.spacing.lg,
         },
       ]}
-      onTouchStart={dismissPad}
     >
       {children}
     </View>

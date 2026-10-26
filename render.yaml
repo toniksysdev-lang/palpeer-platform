@@ -163,6 +163,12 @@ services:
         sync: false
       - key: KUDA_SENDER_NAME
         sync: false
+      - key: KUDA_CLIENT_ACCOUNT_NUMBER
+        sync: false
+      - key: KUDA_DYNAMIC_COLLECTION_FUNDING
+        sync: false
+      - key: KUDA_DEMO_FUND_ENABLED
+        sync: false
       - key: KUDA_WEBHOOK_USERNAME
         sync: false
       - key: KUDA_WEBHOOK_PASSWORD

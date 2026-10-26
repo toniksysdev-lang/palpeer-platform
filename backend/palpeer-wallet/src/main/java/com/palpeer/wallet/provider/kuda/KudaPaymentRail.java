@@ -18,13 +18,13 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Kuda NGN rails — virtual account collections for funding, SINGLE_FUND_TRANSFER for withdrawals.
- * Preferred InstantEX NGN rail ({@link Order} 1). Korapay remains available when enabled as Order 2.
+ * Kuda NGN rails — live account funding via dynamic collection accounts (or static VA fallback) and
+ * {@code SINGLE_FUND_TRANSFER} withdrawals. Preferred InstantEX NGN rail ({@link Order} 1).
  *
- * <p>Default funding path (sandbox and live): create/reuse a per-wallet VA, return transfer
- * instructions, leave the funding {@code PENDING} until an inbound credit webhook settles the
- * wallet. Optional sandbox shortcut {@code KUDA_DEMO_FUND_ENABLED} calls
- * {@code FUND_VIRTUAL_ACCOUNT} and may settle immediately for eng demos.
+ * <p>Default funding (live): {@code ADMIN_CREATE_DYNAMIC_COLLECTION_ACCOUNT} for the exact amount,
+ * show bank-transfer details, stay {@code PENDING} until {@code Transaction.Notification} credit
+ * webhook. Static {@code ADMIN_CREATE_VIRTUAL_ACCOUNT} remains available when dynamic funding is
+ * disabled. Withdrawals require name enquiry + transfer with {@code clientAccountNumber} in live.
  * Docs: https://kuda.com/business/open-api/
  */
 @Slf4j
@@ -59,65 +59,160 @@ public class KudaPaymentRail implements PaymentRailProvider {
     public FundingInitiation initiateFunding(FundingInitiationRequest request) {
         requireEnabled();
         try {
-            PaymentVirtualAccount account = virtualAccountRepository
-                    .findByWalletIdAndProviderName(request.walletId(), NAME)
-                    .orElseGet(() -> createVirtualAccount(request));
-
-            if (!notBlank(account.getAccountNumber())) {
-                throw new BusinessException(
-                        "KUDA_ERROR",
-                        "Kuda virtual account has no account number",
-                        HttpStatus.BAD_GATEWAY);
+            if (properties.isDynamicCollectionFunding()) {
+                return createDynamicCollectionFunding(request);
             }
-
-            // Optional sandbox shortcut: credit the VA via Kuda FUND_VIRTUAL_ACCOUNT (eng demos).
-            // Default path is customer bank transfer → webhook settle (live and sandbox alike).
-            if (kudaClient.isSandboxMode() && properties.isDemoFundEnabled()) {
-                return demoFundVirtualAccount(request, account);
-            }
-
-            // Real payment process: return VA details and stay PENDING until inbound credit + webhook.
-            String instructions = transferInstructions(
-                    request, account, request.fundingTransactionId().toString());
-            return new FundingInitiation(
-                    request.fundingTransactionId().toString(), instructions, true);
+            return initiateStaticVirtualAccountFunding(request);
         } catch (BusinessException ex) {
             if (kudaClient.isSandboxMode() && properties.isOfflineSandboxSettle()) {
-                PaymentVirtualAccount existing = virtualAccountRepository
-                        .findByWalletIdAndProviderName(request.walletId(), NAME)
-                        .filter(account -> notBlank(account.getAccountNumber()))
-                        .orElse(null);
-                if (existing != null) {
-                    // Have a usable VA — leave PENDING with transfer instructions (no silent credit).
-                    log.warn(
-                            "Kuda unreachable in sandbox — leaving NGN funding PENDING with VA. cause={}",
-                            ex.getMessage());
-                    String ref = request.fundingTransactionId().toString();
-                    return new FundingInitiation(
-                            ref, transferInstructions(request, existing, ref), true);
-                }
-                // No VA and Kuda refused create (common on UAT when VA APIs are not entitled).
-                // Mirror Korapay offline settle: credit the wallet so Confirm funding works locally.
-                PaymentVirtualAccount local = ensureSandboxLocalVirtualAccount(request);
-                String offlineRef = "offline-"
-                        + shortTrackingRef(request.fundingTransactionId(), request.idempotencyKey());
-                log.warn(
-                        "Kuda VA unavailable in sandbox — settling NGN funding locally. va={} cause={}",
-                        local.getAccountNumber(),
-                        ex.getMessage());
-                String instructions = "Sandbox offline settle. NGN "
-                        + request.amount()
-                        + " credited to your wallet. Local VA "
-                        + local.getAccountNumber()
-                        + " ("
-                        + nullToEmpty(local.getAccountName())
-                        + "); ref="
-                        + offlineRef
-                        + ".";
-                return new FundingInitiation(offlineRef, instructions, false);
+                return offlineSandboxFunding(request, ex);
             }
             throw ex;
         }
+    }
+
+    /**
+     * Live get-paid path: one dynamic collection account per funding for the exact NGN amount.
+     * Customer transfers that amount; {@code Transaction.Notification} credit settles the wallet.
+     */
+    private FundingInitiation createDynamicCollectionFunding(FundingInitiationRequest request) {
+        String requestRef = shortTrackingRef(request.fundingTransactionId(), request.idempotencyKey());
+        String accountName = joinName(
+                        blankTo(request.customerFirstName(), "PALPEER"),
+                        blankTo(request.customerLastName(), "USER"))
+                .toUpperCase(Locale.ROOT);
+        if (accountName.length() > 50) {
+            accountName = accountName.substring(0, 50);
+        }
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("amount", kudaClient.toKobo(request.amount()));
+        payload.put("isFlexiblePayment", false);
+        payload.put("accountName", accountName);
+        if (notBlank(properties.getClientAccountNumber())) {
+            payload.put(
+                    "remittingAccounts",
+                    java.util.List.of(Map.of(
+                            "splitPercentage",
+                            100,
+                            "accountNumber",
+                            properties.getClientAccountNumber().trim())));
+        }
+
+        JsonNode response;
+        try {
+            response = kudaClient.invoke("ADMIN_CREATE_DYNAMIC_COLLECTION_ACCOUNT", payload, requestRef);
+        } catch (BusinessException createEx) {
+            // Some keys still only expose static VA APIs — fall back without failing funding.
+            log.warn(
+                    "Kuda dynamic collection unavailable; falling back to static VA. cause={}",
+                    createEx.getMessage());
+            return initiateStaticVirtualAccountFunding(request);
+        }
+
+        String accountNumber = firstText(
+                response, "accountNumber", "AccountNumber", "accountnumber", "number", "Number");
+        if (!notBlank(accountNumber)) {
+            throw new BusinessException(
+                    "KUDA_ERROR",
+                    "Kuda did not return a dynamic collection account number",
+                    HttpStatus.BAD_GATEWAY);
+        }
+        String returnedName = firstNonNull(
+                firstText(response, "accountName", "AccountName", "accountname", "fullname"), accountName);
+        CollectionAccount collection = new CollectionAccount(
+                accountNumber, returnedName, "Kuda", "999129", requestRef);
+        // Keep PVA in sync so older webhook matchers that look up by account number still work.
+        upsertVirtualAccountMirror(request, collection);
+
+        String instructions = transferInstructions(request, collection, requestRef);
+        log.info(
+                "Kuda dynamic collection funding created. account={} amount={} ref={}",
+                accountNumber,
+                request.amount(),
+                requestRef);
+        return new FundingInitiation(requestRef, instructions, true, collection);
+    }
+
+    private FundingInitiation initiateStaticVirtualAccountFunding(FundingInitiationRequest request) {
+        PaymentVirtualAccount account = virtualAccountRepository
+                .findByWalletIdAndProviderName(request.walletId(), NAME)
+                .orElseGet(() -> createVirtualAccount(request));
+
+        if (!notBlank(account.getAccountNumber())) {
+            throw new BusinessException(
+                    "KUDA_ERROR",
+                    "Kuda virtual account has no account number",
+                    HttpStatus.BAD_GATEWAY);
+        }
+
+        if (kudaClient.isSandboxMode() && properties.isDemoFundEnabled()) {
+            return demoFundVirtualAccount(request, account);
+        }
+
+        CollectionAccount collection = toCollection(account);
+        String instructions = transferInstructions(request, collection, request.fundingTransactionId().toString());
+        return new FundingInitiation(
+                request.fundingTransactionId().toString(), instructions, true, collection);
+    }
+
+    private FundingInitiation offlineSandboxFunding(FundingInitiationRequest request, BusinessException ex) {
+        PaymentVirtualAccount existing = virtualAccountRepository
+                .findByWalletIdAndProviderName(request.walletId(), NAME)
+                .filter(account -> notBlank(account.getAccountNumber()))
+                .orElse(null);
+        if (existing != null) {
+            log.warn(
+                    "Kuda unreachable in sandbox — leaving NGN funding PENDING with VA. cause={}",
+                    ex.getMessage());
+            String ref = request.fundingTransactionId().toString();
+            CollectionAccount collection = toCollection(existing);
+            return new FundingInitiation(
+                    ref, transferInstructions(request, collection, ref), true, collection);
+        }
+        PaymentVirtualAccount local = ensureSandboxLocalVirtualAccount(request);
+        String offlineRef = "offline-"
+                + shortTrackingRef(request.fundingTransactionId(), request.idempotencyKey());
+        log.warn(
+                "Kuda VA unavailable in sandbox — settling NGN funding locally. va={} cause={}",
+                local.getAccountNumber(),
+                ex.getMessage());
+        String instructions = "Sandbox offline settle. NGN "
+                + request.amount()
+                + " credited to your wallet. Local VA "
+                + local.getAccountNumber()
+                + " ("
+                + nullToEmpty(local.getAccountName())
+                + "); ref="
+                + offlineRef
+                + ".";
+        return new FundingInitiation(offlineRef, instructions, false, toCollection(local));
+    }
+
+    private void upsertVirtualAccountMirror(FundingInitiationRequest request, CollectionAccount collection) {
+        PaymentVirtualAccount account = virtualAccountRepository
+                .findByWalletIdAndProviderName(request.walletId(), NAME)
+                .orElseGet(PaymentVirtualAccount::new);
+        account.setUserId(request.userId());
+        account.setWalletId(request.walletId());
+        account.setCurrencyCode("NGN");
+        account.setProviderName(NAME);
+        account.setTrackingReference(collection.trackingReference());
+        account.setAccountNumber(collection.accountNumber());
+        account.setAccountName(collection.accountName());
+        account.setBankCode(collection.bankCode());
+        account.setBankName(collection.bankName());
+        account.setActive(true);
+        virtualAccountRepository.save(account);
+    }
+
+    private static CollectionAccount toCollection(PaymentVirtualAccount account) {
+        return new CollectionAccount(
+                account.getAccountNumber(),
+                account.getAccountName(),
+                firstNonNull(account.getBankName(), "Kuda"),
+                account.getBankCode(),
+                account.getTrackingReference());
     }
 
     /**
@@ -166,18 +261,18 @@ public class KudaPaymentRail implements PaymentRailProvider {
     }
 
     private static String transferInstructions(
-            FundingInitiationRequest request, PaymentVirtualAccount account, String reference) {
+            FundingInitiationRequest request, CollectionAccount account, String reference) {
         return "Transfer NGN "
                 + request.amount()
-                + " to Kuda virtual account "
-                + nullToEmpty(account.getAccountNumber())
+                + " to Kuda account "
+                + nullToEmpty(account.accountNumber())
                 + " ("
-                + nullToEmpty(account.getAccountName())
+                + nullToEmpty(account.accountName())
                 + ")"
                 + "; bank="
-                + nullToEmpty(account.getBankName())
+                + nullToEmpty(account.bankName())
                 + "; tracking="
-                + account.getTrackingReference()
+                + nullToEmpty(account.trackingReference())
                 + "; ref="
                 + reference
                 + ". Your balance updates once Kuda confirms the credit.";
@@ -190,6 +285,13 @@ public class KudaPaymentRail implements PaymentRailProvider {
         String shortRef = shortTrackingRef(request.withdrawalTransactionId(), request.idempotencyKey());
 
         try {
+            if (!kudaClient.isSandboxMode() && !notBlank(properties.getClientAccountNumber())) {
+                throw new BusinessException(
+                        "KUDA_CLIENT_ACCOUNT_REQUIRED",
+                        "KUDA_CLIENT_ACCOUNT_NUMBER is required for live NGN withdrawals",
+                        HttpStatus.SERVICE_UNAVAILABLE);
+            }
+
             JsonNode enquiry = kudaClient.invoke(
                     "NAME_ENQUIRY",
                     Map.of(
@@ -218,7 +320,32 @@ public class KudaPaymentRail implements PaymentRailProvider {
                 transfer.put("clientAccountNumber", properties.getClientAccountNumber().trim());
             }
 
-            JsonNode response = kudaClient.invoke("SINGLE_FUND_TRANSFER", transfer);
+            JsonNode response;
+            try {
+                response = kudaClient.invoke("SINGLE_FUND_TRANSFER", transfer, shortRef);
+            } catch (BusinessException transferEx) {
+                // Timeouts / ambiguous accepts — confirm with TSQ before failing live withdrawals.
+                if (!kudaClient.isSandboxMode()) {
+                    try {
+                        JsonNode status = kudaClient.queryTransferStatus(shortRef);
+                        String statusCode = firstText(
+                                status, "statusCode", "StatusCode", "responseCode", "ResponseCode");
+                        if (statusCode != null
+                                && (statusCode.equals("00")
+                                        || statusCode.equals("0")
+                                        || statusCode.equalsIgnoreCase("success"))) {
+                            log.warn(
+                                    "Kuda transfer call failed but TSQ reports success. ref={} cause={}",
+                                    shortRef,
+                                    transferEx.getMessage());
+                            return new WithdrawalInitiation(shortRef, true);
+                        }
+                    } catch (RuntimeException ignored) {
+                        // Fall through to original failure / sandbox offline path.
+                    }
+                }
+                throw transferEx;
+            }
             String reference = firstText(
                     response, "transactionReference", "TransactionReference", "requestRef", "RequestRef");
             if (reference == null) {

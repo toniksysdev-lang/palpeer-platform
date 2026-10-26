@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   Banknote,
   ClipboardList,
+  Droplets,
   Gift,
   RefreshCw,
   Scale,
@@ -18,6 +19,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { appConfig } from '@/config/env';
+import { liquidityPoolRows } from '@/features/dashboard/liquidityPool';
 import { useDashboardData } from '@/features/dashboard/useDashboardData';
 import { StatusBars, VolumeBars } from '@/features/reports/SummaryBars';
 import {
@@ -48,13 +50,27 @@ export function DashboardPage() {
     referrals,
     bonuses,
     summary,
+    poolFunds,
     refetchAll,
     anyError,
   } = useDashboardData();
 
   const summaryData = summary.status === 'success' ? summary.data : undefined;
+  const poolFundsData = poolFunds.status === 'success' ? poolFunds.data : undefined;
   const volumeGroups = summaryData ? volumeByCurrency(summaryData.transactions.successVolume) : [];
   const topBalances = summaryData ? balancesByWalletCount(summaryData.wallets.balancesByCurrency) : [];
+  const liquidityRows = liquidityPoolRows(poolFundsData, summaryData);
+  const liquidityState =
+    poolFunds.status === 'forbidden' || summary.status === 'forbidden'
+      ? ('forbidden' as const)
+      : poolFunds.status === 'error' || summary.status === 'error'
+        ? ('error' as const)
+        : poolFunds.status === 'loading' ||
+            poolFunds.status === 'idle' ||
+            summary.status === 'loading' ||
+            summary.status === 'idle'
+          ? ('loading' as const)
+          : ('ready' as const);
 
   return (
     <div className="space-y-6">
@@ -194,6 +210,40 @@ export function DashboardPage() {
                   topBalances.length > 3 ? ` · +${topBalances.length - 3} more currencies` : ''
                 }`
               : 'Available totals per currency'
+          }
+        />
+        <KpiCard
+          label="Liquidity Pool"
+          icon={Droplets}
+          state={liquidityState}
+          display={
+            liquidityRows.length > 0 ? (
+              <ul className="space-y-0.5">
+                {liquidityRows.map((row) => (
+                  <li
+                    key={row.currencyCode}
+                    className="flex items-baseline justify-between gap-2 font-mono text-sm text-text-primary"
+                  >
+                    <span className="font-semibold">{formatDecimal(row.amount, 2)}</span>
+                    <span className="text-xs text-text-muted">{row.currencyCode}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="font-mono text-2xl font-semibold text-text-muted">—</p>
+            )
+          }
+          hint={
+            <>
+              Pool fund − total wallet balance
+              {liquidityRows.length > 0
+                ? ` · ${liquidityRows.map((row) => row.currencyCode).join(' · ')}`
+                : ''}
+              {' · '}
+              <Link to="/admin/pool-funds" className="text-primary hover:underline">
+                Pool funds
+              </Link>
+            </>
           }
         />
         <KpiCard

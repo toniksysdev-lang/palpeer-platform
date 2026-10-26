@@ -145,8 +145,9 @@ public class FundingService {
     }
 
     /**
-     * Completes the newest pending Kuda funding for a virtual-account credit webhook.
-     * Matches wallet via VA account number and amount (naira).
+     * Completes the newest pending Kuda funding for a collection/VA credit webhook.
+     * Prefers an exact match on {@code collection_account_number}, then falls back to the
+     * wallet's virtual-account directory + amount.
      */
     @Transactional
     public FundingTransactionResponse completePendingVirtualAccountCredit(
@@ -156,16 +157,21 @@ public class FundingService {
             String kudaTransactionReference,
             boolean success,
             String reason) {
-        var account = paymentVirtualAccountRepository
-                .findByProviderNameAndAccountNumber(providerName, accountNumber)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Virtual account not found for " + providerName + " account " + accountNumber));
-        List<FundingTransaction> candidates = fundingTransactionRepository.findPendingByWalletProviderAmount(
-                account.getWalletId(), providerName, MoneyMovementStatus.PENDING, amountNaira);
+        List<FundingTransaction> candidates =
+                fundingTransactionRepository.findPendingByCollectionAccount(
+                        providerName, accountNumber, MoneyMovementStatus.PENDING, amountNaira);
         if (candidates.isEmpty()) {
-            throw new ResourceNotFoundException(
-                    "No pending " + providerName + " funding for wallet " + account.getWalletId()
-                            + " amount " + amountNaira);
+            var account = paymentVirtualAccountRepository
+                    .findByProviderNameAndAccountNumber(providerName, accountNumber)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Virtual account not found for " + providerName + " account " + accountNumber));
+            candidates = fundingTransactionRepository.findPendingByWalletProviderAmount(
+                    account.getWalletId(), providerName, MoneyMovementStatus.PENDING, amountNaira);
+            if (candidates.isEmpty()) {
+                throw new ResourceNotFoundException(
+                        "No pending " + providerName + " funding for wallet " + account.getWalletId()
+                                + " amount " + amountNaira);
+            }
         }
         FundingTransaction locked = fundingTransactionRepository
                 .findByIdForUpdate(candidates.get(0).getId())
@@ -178,6 +184,18 @@ public class FundingService {
             return processInternal(locked);
         }
         return failInternal(locked, reason);
+    }
+
+    private static void applyCollectionAccount(
+            FundingTransaction tx, PaymentRailProvider.CollectionAccount collection) {
+        if (collection == null || collection.accountNumber() == null || collection.accountNumber().isBlank()) {
+            return;
+        }
+        tx.setCollectionAccountNumber(collection.accountNumber().trim());
+        tx.setCollectionAccountName(blankToNull(collection.accountName()));
+        tx.setCollectionBankName(blankToNull(collection.bankName()));
+        tx.setCollectionBankCode(blankToNull(collection.bankCode()));
+        tx.setCollectionTrackingRef(blankToNull(collection.trackingReference()));
     }
 
     private FundingTransactionResponse processInternal(FundingTransaction tx) {
@@ -342,6 +360,7 @@ public class FundingService {
                 tx.setProviderName(rail.providerName());
                 tx.setProviderReference(initiation.providerReference());
                 tx.setFundingInstructions(initiation.instructions());
+                applyCollectionAccount(tx, initiation.collectionAccount());
                 if (initiation.pendingExternalSettlement()) {
                     tx.setStatus(MoneyMovementStatus.PENDING);
                     fundingTransactionRepository.save(tx);
@@ -452,6 +471,21 @@ public class FundingService {
             return null;
         }
         if (KudaPaymentRail.NAME.equals(tx.getProviderName())) {
+            if (tx.getCollectionAccountNumber() != null && !tx.getCollectionAccountNumber().isBlank()) {
+                return new FundingPaymentDetails(
+                        tx.getCollectionAccountNumber(),
+                        tx.getCollectionAccountName(),
+                        tx.getCollectionBankName() != null ? tx.getCollectionBankName() : "Kuda",
+                        tx.getCollectionBankCode(),
+                        tx.getCollectionTrackingRef() != null
+                                ? tx.getCollectionTrackingRef()
+                                : tx.getProviderReference(),
+                        tx.getAmount(),
+                        tx.getCurrencyCode(),
+                        FundingPaymentDetails.METHOD_BANK_TRANSFER,
+                        null,
+                        null);
+            }
             return paymentVirtualAccountRepository
                     .findByWalletIdAndProviderName(tx.getWalletId(), KudaPaymentRail.NAME)
                     .filter(PaymentVirtualAccount::isActive)
@@ -474,6 +508,10 @@ public class FundingService {
             if (payee == null) {
                 payee = "Palpeer Global Holding Inc";
             }
+            String collectionEmail = blankToNull(apayloProperties.getInteracCollectionEmail());
+            if (collectionEmail == null) {
+                collectionEmail = "ipay@apaylo.com";
+            }
             return new FundingPaymentDetails(
                     null,
                     payee,
@@ -484,7 +522,8 @@ public class FundingService {
                     tx.getCurrencyCode(),
                     FundingPaymentDetails.METHOD_INTERAC_INSTANT,
                     extractInteracEmail(tx.getFundingInstructions()),
-                    blankToNull(apayloProperties.getAplReference()));
+                    blankToNull(apayloProperties.getAplReference()),
+                    collectionEmail);
         }
         return null;
     }

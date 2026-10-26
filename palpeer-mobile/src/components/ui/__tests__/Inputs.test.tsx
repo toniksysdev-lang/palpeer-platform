@@ -2,7 +2,6 @@ import { fireEvent, screen } from '@testing-library/react-native';
 import { useState } from 'react';
 
 import { NumberPadDock } from '@/components/ui/NumberPadContext';
-import { typeIntoNumberField, typeOnNumberPad } from '@/tests/numberPad';
 import { renderWithProviders } from '@/tests/render';
 
 import { AmountInput, formatAmountDisplay, sanitizeAmount } from '../AmountInput';
@@ -20,18 +19,18 @@ describe('Input', () => {
     expect(screen.queryByText('We never share it')).toBeNull();
   });
 
-  it('opens the shared number pad when a digit field is tapped', async () => {
+  it('accepts a pasted digit string without using the system keypad props', async () => {
     function Harness() {
       const [value, setValue] = useState('');
       return (
         <>
           <Input
-            label="Institution"
+            label="Account number"
             value={value}
             onChangeText={setValue}
             numberPad="digits"
-            numberPadMaxLength={3}
-            testID="institution"
+            numberPadMaxLength={10}
+            testID="account"
           />
           <NumberPadDock />
         </>
@@ -39,10 +38,11 @@ describe('Input', () => {
     }
 
     await renderWithProviders(<Harness />);
-    expect(screen.queryByTestId('number-pad-dock-grid')).toBeNull();
-    await fireEvent.press(screen.getByTestId('institution'));
-    await typeOnNumberPad('123');
-    expect(screen.getByTestId('institution')).toHaveTextContent('123');
+    const field = screen.getByTestId('account');
+    expect(field.props.showSoftInputOnFocus).toBe(false);
+    expect(field.props.inputMode).toBe('none');
+    await fireEvent.changeText(field, '1234567890');
+    expect(field.props.value).toBe('1234567890');
   });
 });
 
@@ -64,6 +64,9 @@ describe('sanitizeAmount', () => {
     ['0012.5', 2, '12.5'],
     ['.5', 2, '0.5'],
     ['1,5', 2, '1.5'],
+    ['1,250.999', 2, '1250.99'],
+    ['1.250,99', 2, '1250.99'],
+    ['1,250', 2, '1250'],
     ['1.2.3', 2, '1.23'],
     ['abc12x', 2, '12'],
     ['10.99', 0, '10'],
@@ -113,8 +116,18 @@ describe('AmountInput', () => {
     await renderWithProviders(<Harness />);
 
     expect(screen.queryByTestId('number-pad-dock-grid')).toBeNull();
-    await typeIntoNumberField('amount', '150.555');
-    expect(screen.getByTestId('amount')).toHaveTextContent(/150\.55/);
+    const field = screen.getByTestId('amount');
+    await fireEvent.changeText(field, '150.555');
+    expect(field.props.value).toBe('150.55');
     expect(screen.getByText('USD')).toBeTruthy();
+  });
+
+  it('accepts a pasted amount and keeps the OS keypad suppressed', async () => {
+    await renderWithProviders(<Harness />);
+    const field = screen.getByTestId('amount');
+    expect(field.props.showSoftInputOnFocus).toBe(false);
+    expect(field.props.inputMode).toBe('none');
+    await fireEvent.changeText(field, '1,250.999');
+    expect(field.props.value).toBe('1,250.99');
   });
 });

@@ -80,6 +80,12 @@ public class FcmPushNotifier implements PushNotifier {
         if (notification.getCategory() != null && !notification.getCategory().isBlank()) {
             data.put("category", notification.getCategory());
         }
+        // App deep link so marketplace P2P pushes open the request screen directly.
+        if (notification.getReferenceId() != null
+                && notification.getReferenceType() != null
+                && "P2P_REQUEST".equalsIgnoreCase(notification.getReferenceType().trim())) {
+            data.put("deepLink", "palpeer://p2p/request/" + notification.getReferenceId());
+        }
         return data;
     }
 

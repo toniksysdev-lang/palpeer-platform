@@ -194,6 +194,8 @@ palpeer:
     base-url: ${APAYLO_BASE_URL:https://api.etransfer.apaylo.com/api.apaylo.com/api}
     sandbox-base-url: ${APAYLO_SANDBOX_BASE_URL:https://sandboxapi.apaylo.com/sandboxapi.apaylo.com/api}
     account-id: ${APAYLO_ACCOUNT_ID:}
+    # CAD Instant Interac destination email shown to customers (Autodeposit / send-to).
+    interac-collection-email: ${APAYLO_INTERAC_COLLECTION_EMAIL:ipay@apaylo.com}
     apl-reference: ${APAYLO_APL_REFERENCE:}
     create-searchable-etransfer-path: ${APAYLO_CREATE_SEARCHABLE_PATH:/Merchant/RequestInteracEtransferLink}
     send-interac-etransfer-path: ${APAYLO_SEND_INTERAC_PATH:/Merchant/SendInteracEtransfer}
@@ -216,6 +218,8 @@ palpeer:
     base-url: ${KUDA_BASE_URL:}
     sender-name: ${KUDA_SENDER_NAME:PALPEER}
     client-account-number: ${KUDA_CLIENT_ACCOUNT_NUMBER:}
+    # true = per-funding ADMIN_CREATE_DYNAMIC_COLLECTION_ACCOUNT (live get-paid flow).
+    dynamic-collection-funding: ${KUDA_DYNAMIC_COLLECTION_FUNDING:true}
     webhook-username: ${KUDA_WEBHOOK_USERNAME:}
     webhook-password: ${KUDA_WEBHOOK_PASSWORD:}
     webhook-secret: ${KUDA_WEBHOOK_SECRET:}

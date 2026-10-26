@@ -373,6 +373,12 @@
           Opens automatically when you tap a text field in the app. Use the on-screen keys to type into the preview.
         </p>
 
+        <label>Clipboard</label>
+        <button type="button" class="kb-toggle" id="paste-otp">Paste OTP into app</button>
+        <p style="margin-top: 8px; margin-bottom: 0">
+          Copy the code from email, then click this (the iframe often cannot read the clipboard itself).
+        </p>
+
         <div class="links">
           <a id="open-raw" href="http://localhost:8081" target="_blank" rel="noreferrer">Open raw Expo web</a>
           <a href="http://localhost:8085/swagger-ui.html" target="_blank" rel="noreferrer">Backend Swagger</a>
@@ -526,6 +532,14 @@
           });
           const action = document.createElement('div');
           action.className = 'kb-row';
+          const paste = document.createElement('button');
+          paste.type = 'button';
+          paste.className = 'wide';
+          paste.textContent = 'Paste';
+          // Parent frame can read the clipboard (email tab copy); the Expo iframe often cannot.
+          wireKey(paste, () => {
+            void pasteClipboardIntoApp();
+          });
           const abc = document.createElement('button');
           abc.type = 'button';
           abc.className = 'wide';
@@ -543,6 +557,7 @@
             postKey({ code: 'Enter' });
             setKeyboardOpen(false);
           });
+          action.appendChild(paste);
           action.appendChild(abc);
           action.appendChild(enter);
           kbRows.appendChild(action);
@@ -628,11 +643,48 @@
         if (keyboardOpen) renderKeyboard();
       });
 
+      // Parent can read clipboard; Expo iframe often cannot (cross-origin). Used by keyboard
+      // Paste, sidebar "Paste OTP", and in-app "Paste code" via palpeer-request-clipboard-paste.
+      async function pasteClipboardIntoApp() {
+        try {
+          const raw = (await navigator.clipboard.readText()) || '';
+          if (!raw.trim()) return false;
+          frame.contentWindow?.postMessage({ type: 'palpeer-paste-digits', text: raw }, '*');
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      function pulsePasteOtpButton() {
+        const btn = document.getElementById('paste-otp');
+        if (!btn) return;
+        btn.classList.add('active');
+        btn.focus();
+        window.setTimeout(() => btn.classList.remove('active'), 2500);
+      }
+
+      document.getElementById('paste-otp')?.addEventListener('click', () => {
+        void (async () => {
+          const ok = await pasteClipboardIntoApp();
+          if (!ok) {
+            pulsePasteOtpButton();
+            alert('Could not read the clipboard. Copy the OTP from email, then click Paste OTP into app again.');
+          }
+        })();
+      });
+
       // Keep the branded overlay until Expo's BrandSplash mounts (avoids a white gap).
       window.addEventListener('message', (event) => {
         const data = event?.data;
         if (!data || typeof data !== 'object') return;
         if (data.type === 'palpeer-brand-splash-ready') hideBoot();
+        if (data.type === 'palpeer-request-clipboard-paste') {
+          // May fail without a parent user gesture — highlight the sidebar Paste button.
+          void pasteClipboardIntoApp().then((ok) => {
+            if (!ok) pulsePasteOtpButton();
+          });
+        }
         if (data.type === 'palpeer-soft-keyboard-open') {
           kbMode = data.mode === 'email' || data.mode === 'phone' || data.mode === 'numeric'
             ? data.mode

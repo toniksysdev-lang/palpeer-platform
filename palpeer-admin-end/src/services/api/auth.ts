@@ -1,3 +1,4 @@
+import { getOrCreateAdminDeviceId } from '@/features/auth/session';
 import { apiRequest } from '@/services/api/client';
 import type { AdminMe } from '@/types/admin';
 import type { AuthTokens } from '@/types/api';
@@ -16,6 +17,10 @@ export async function loginRequest(input: LoginInput): Promise<AuthTokens> {
       email: input.email.trim(),
       password: input.password,
       rememberMe: Boolean(input.rememberMe),
+      // Bind admin console sessions to this browser so login can replace prior tokens.
+      deviceIdentifier: getOrCreateAdminDeviceId(),
+      deviceName: 'Palpeer Admin',
+      platform: 'web',
     },
     auth: false,
   });

@@ -15,7 +15,7 @@ import {
   getBiometricCapability,
 } from '@/services/biometrics/biometrics';
 import { secureStorage } from '@/services/storage/secureStorage';
-import { useAppDispatch, useAppSelector } from '@/store';
+import { useAppDispatch } from '@/store';
 import { appUnlocked } from '@/store/slices/appLockSlice';
 
 import { checkDeviceTrust } from '../biometricUnlock';
@@ -28,7 +28,6 @@ export function LockScreen() {
   const theme = useTheme();
   const toast = useToast();
   const dispatch = useAppDispatch();
-  const email = useAppSelector((state) => state.session.email);
   const [label, setLabel] = useState('Biometrics');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -107,11 +106,6 @@ export function LockScreen() {
         <AppText variant="h1" align="center" accessibilityRole="header">
           PALPEER is locked
         </AppText>
-        {email ? (
-          <AppText tone="secondary" align="center">
-            {email}
-          </AppText>
-        ) : null}
         <FormAlert tone="warning" message={message} testID="lock-message" />
       </View>
       <View style={{ padding: theme.spacing.xxl, gap: theme.spacing.sm }}>

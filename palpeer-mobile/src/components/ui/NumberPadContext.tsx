@@ -24,6 +24,7 @@ export type NumberPadField = {
   maxLength: number;
   bottomLeft: NumberPadBottomLeft;
   variant: NumberPadVariant;
+  onAccessoryPress?: () => void;
 };
 
 type NumberPadApi = {
@@ -52,7 +53,8 @@ export function NumberPadProvider({ children }: { children: ReactNode }) {
         current.onChange === field.onChange &&
         current.maxLength === field.maxLength &&
         current.bottomLeft === field.bottomLeft &&
-        current.variant === field.variant
+        current.variant === field.variant &&
+        current.onAccessoryPress === field.onAccessoryPress
       ) {
         return current;
       }
@@ -92,6 +94,8 @@ type BindOptions = {
   maxLength?: number;
   bottomLeft?: NumberPadBottomLeft;
   variant?: NumberPadVariant;
+  /** Bottom-left `*` key action (e.g. paste OTP from clipboard). */
+  onAccessoryPress?: () => void;
   /**
    * When true, opens the pad on mount. Prefer false so the pad only appears after a tap.
    */
@@ -108,6 +112,7 @@ export function useNumberPadField({
   maxLength = 32,
   bottomLeft = '',
   variant = 'compact',
+  onAccessoryPress,
   autoFocus = false,
   disabled = false,
 }: BindOptions) {
@@ -122,9 +127,24 @@ export function useNumberPadField({
     onChangeRef.current(next);
   }, []);
 
+  const onAccessoryPressRef = useRef(onAccessoryPress);
+  onAccessoryPressRef.current = onAccessoryPress;
+  const stableAccessoryPress = useCallback(() => {
+    onAccessoryPressRef.current?.();
+  }, []);
+  const accessory = onAccessoryPress ? stableAccessoryPress : undefined;
+
   const field = useMemo<NumberPadField>(
-    () => ({ id, value, onChange: stableOnChange, maxLength, bottomLeft, variant }),
-    [id, value, stableOnChange, maxLength, bottomLeft, variant],
+    () => ({
+      id,
+      value,
+      onChange: stableOnChange,
+      maxLength,
+      bottomLeft,
+      variant,
+      onAccessoryPress: accessory,
+    }),
+    [id, value, stableOnChange, maxLength, bottomLeft, variant, accessory],
   );
 
   const sync = pad?.sync;
@@ -187,6 +207,7 @@ export function NumberPadDock({
         onChange={active.onChange}
         maxLength={active.maxLength}
         bottomLeft={active.bottomLeft || '*'}
+        onAccessoryPress={active.onAccessoryPress}
         variant="phone"
         testID={testID}
       />

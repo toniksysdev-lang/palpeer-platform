@@ -67,7 +67,23 @@ public interface PaymentRailProvider {
     record FundingInitiation(
             String providerReference,
             String instructions,
-            boolean pendingExternalSettlement
+            boolean pendingExternalSettlement,
+            /** Optional bank-transfer destination for the payer (Kuda collection / VA). */
+            CollectionAccount collectionAccount
+    ) {
+        public FundingInitiation(
+                String providerReference, String instructions, boolean pendingExternalSettlement) {
+            this(providerReference, instructions, pendingExternalSettlement, null);
+        }
+    }
+
+    /** Structured transfer destination returned by a funding rail. */
+    record CollectionAccount(
+            String accountNumber,
+            String accountName,
+            String bankName,
+            String bankCode,
+            String trackingReference
     ) {
     }
 

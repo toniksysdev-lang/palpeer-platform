@@ -8,6 +8,7 @@ import com.palpeer.profile.web.dto.CreateProfileRequest;
 import com.palpeer.profile.web.dto.ProfileResponse;
 import com.palpeer.profile.web.dto.UpdateProfileRequest;
 import com.palpeer.user.repository.UserRepository;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -44,10 +45,14 @@ public class ProfileService {
                 .orElseThrow(() -> new ResourceNotFoundException("Profile not found"));
     }
 
+    private static final int MIN_AGE_YEARS = 18;
+
     @Transactional
     public ProfileResponse update(UUID userId, UpdateProfileRequest request) {
         Profile profile = profileRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Profile not found"));
+
+        requireMinimumAge(request.dateOfBirth());
 
         profile.setFirstName(trimToNull(request.firstName()));
         profile.setLastName(trimToNull(request.lastName()));
@@ -94,6 +99,20 @@ public class ProfileService {
                 && StringUtils.hasText(profile.getPostalCode())
                 && StringUtils.hasText(profile.getSourceOfIncome())
                 && StringUtils.hasText(profile.getMonthlyTransactionEstimate());
+    }
+
+    private static void requireMinimumAge(LocalDate dateOfBirth) {
+        if (dateOfBirth == null) {
+            throw new BusinessException(
+                    "PROFILE_AGE_REQUIRED", "Date of birth is required", HttpStatus.BAD_REQUEST);
+        }
+        LocalDate cutoff = LocalDate.now().minusYears(MIN_AGE_YEARS);
+        if (dateOfBirth.isAfter(cutoff)) {
+            throw new BusinessException(
+                    "PROFILE_UNDERAGE",
+                    "You must be at least " + MIN_AGE_YEARS + " years old",
+                    HttpStatus.BAD_REQUEST);
+        }
     }
 
     private static String trimToNull(String value) {

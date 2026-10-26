@@ -55,6 +55,20 @@ public interface FundingTransactionRepository
             @Param("status") MoneyMovementStatus status,
             @Param("amount") java.math.BigDecimal amount);
 
+    @Query("""
+            select f from FundingTransaction f
+            where f.providerName = :providerName
+              and f.collectionAccountNumber = :accountNumber
+              and f.status = :status
+              and f.amount = :amount
+            order by f.createdAt desc
+            """)
+    List<FundingTransaction> findPendingByCollectionAccount(
+            @Param("providerName") String providerName,
+            @Param("accountNumber") String accountNumber,
+            @Param("status") MoneyMovementStatus status,
+            @Param("amount") java.math.BigDecimal amount);
+
     /**
      * Successful funding totals keyed by provider + currency.
      * Rows: [providerName (nullable), currencyCode, sum(amount)].

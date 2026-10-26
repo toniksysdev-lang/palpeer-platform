@@ -63,4 +63,23 @@ public class FundingTransaction extends BaseEntity {
 
     @Column(name = "funding_instructions", columnDefinition = "TEXT")
     private String fundingInstructions;
+
+    /**
+     * Kuda dynamic collection (or static VA) account shown to the payer for this funding.
+     * Webhook credits match on {@code collection_account_number} + amount when set.
+     */
+    @Column(name = "collection_account_number", length = 40)
+    private String collectionAccountNumber;
+
+    @Column(name = "collection_account_name", length = 160)
+    private String collectionAccountName;
+
+    @Column(name = "collection_bank_name", length = 120)
+    private String collectionBankName;
+
+    @Column(name = "collection_bank_code", length = 20)
+    private String collectionBankCode;
+
+    @Column(name = "collection_tracking_ref", length = 120)
+    private String collectionTrackingRef;
 }

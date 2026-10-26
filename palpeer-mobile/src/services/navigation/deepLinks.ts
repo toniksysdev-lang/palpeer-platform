@@ -108,15 +108,31 @@ export function notificationTarget(notification: {
 
 /**
  * Where a tapped push goes. FCM data includes `notificationId` / `referenceType` /
- * `referenceId` (NT-4). The screen always refetches from the API (R-NT-1).
+ * `referenceId` / optional `deepLink` (NT-4). The screen always refetches from the API (R-NT-1).
+ *
+ * Marketplace P2P alerts open the request directly (not the inbox detail).
  */
 export function pushTarget(data: unknown): string {
   const record = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
+  const deepLinkRaw =
+    typeof record.deepLink === 'string'
+      ? record.deepLink
+      : typeof record.url === 'string'
+        ? record.url
+        : null;
+  const fromDeepLink = deepLinkRaw ? resolveDeepLink(deepLinkRaw) : null;
+  if (fromDeepLink) return fromDeepLink;
+
+  const referenceType = typeof record.referenceType === 'string' ? record.referenceType : null;
+  const referenceId = typeof record.referenceId === 'string' ? record.referenceId : null;
+  const byReference = notificationTarget({ referenceType, referenceId });
+  if (byReference && referenceType?.toUpperCase() === 'P2P_REQUEST') {
+    return byReference;
+  }
+
   const notificationId = record.notificationId;
   if (typeof notificationId === 'string' && UUID_ONLY.test(notificationId)) {
     return `/notifications/${notificationId}`;
   }
-  const referenceType = typeof record.referenceType === 'string' ? record.referenceType : null;
-  const referenceId = typeof record.referenceId === 'string' ? record.referenceId : null;
-  return notificationTarget({ referenceType, referenceId }) ?? '/notifications';
+  return byReference ?? '/notifications';
 }

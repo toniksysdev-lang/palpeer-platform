@@ -22,6 +22,29 @@ export function digitsOnly(value: string): string {
 }
 
 /**
+ * Normalize typed or pasted phone text into national digits for the selected dial code.
+ * Strips a leading country code when the paste looks international (e.g. +1 506… / 1506…).
+ */
+export function normalizeNationalPhoneInput(
+  raw: string,
+  dialCode: string,
+  maxDigits = 15,
+): string {
+  let digits = digitsOnly(raw);
+  const dialDigits = digitsOnly(dialCode);
+  if (dialDigits && digits.startsWith(dialDigits)) {
+    const withoutDial = digits.slice(dialDigits.length);
+    if (
+      withoutDial.length >= 7 &&
+      (digits.length > maxDigits || digits.length === maxDigits + dialDigits.length)
+    ) {
+      digits = withoutDial;
+    }
+  }
+  return digits.slice(0, maxDigits);
+}
+
+/**
  * Display formatting for the national phone field (digits are stored unformatted).
  * CA/US: (506) 210-0661 — other corridors: grouped with spaces.
  */

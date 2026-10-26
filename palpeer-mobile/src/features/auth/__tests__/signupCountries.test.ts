@@ -1,4 +1,25 @@
-import { formatNationalPhone, iso2FromE164, toE164 } from '../signupCountries';
+import {
+  formatNationalPhone,
+  iso2FromE164,
+  normalizeNationalPhoneInput,
+  toE164,
+} from '../signupCountries';
+
+describe('normalizeNationalPhoneInput', () => {
+  it('keeps national digits and strips formatting', () => {
+    expect(normalizeNationalPhoneInput('(506) 210-0661', '+1', 10)).toBe('5062100661');
+  });
+
+  it('strips a pasted country code when the number is international', () => {
+    expect(normalizeNationalPhoneInput('+1 506 210 0661', '+1', 10)).toBe('5062100661');
+    expect(normalizeNationalPhoneInput('15062100661', '+1', 10)).toBe('5062100661');
+    expect(normalizeNationalPhoneInput('+234 801 234 5678', '+234', 10)).toBe('8012345678');
+  });
+
+  it('does not strip a leading digit that is part of the national number', () => {
+    expect(normalizeNationalPhoneInput('5062100661', '+1', 10)).toBe('5062100661');
+  });
+});
 
 describe('formatNationalPhone', () => {
   it('formats CA/US progressively as (XXX) XXX-XXXX', () => {

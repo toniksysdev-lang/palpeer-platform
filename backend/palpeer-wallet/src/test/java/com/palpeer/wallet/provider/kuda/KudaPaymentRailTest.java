@@ -44,6 +44,7 @@ class KudaPaymentRailTest {
         properties.setAutoSandboxSettle(false);
         properties.setOfflineSandboxSettle(true);
         properties.setDemoFundEnabled(false);
+        properties.setDynamicCollectionFunding(false);
         properties.setSenderName("PALPEER");
         rail = new KudaPaymentRail(properties, kudaClient, virtualAccountRepository);
     }
@@ -138,7 +139,7 @@ class KudaPaymentRailTest {
 
         ObjectNode transfer = objectMapper.createObjectNode();
         transfer.put("transactionReference", "kuda-wd-1");
-        when(kudaClient.invoke(eq("SINGLE_FUND_TRANSFER"), anyMap())).thenReturn(transfer);
+        when(kudaClient.invoke(eq("SINGLE_FUND_TRANSFER"), anyMap(), any())).thenReturn(transfer);
 
         PaymentRailProvider.WithdrawalInitiation result =
                 rail.initiateWithdrawal(withdrawalRequest(new BigDecimal("500.00"), "999129:0123456789"));
@@ -148,7 +149,7 @@ class KudaPaymentRailTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> bodyCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(kudaClient).invoke(eq("SINGLE_FUND_TRANSFER"), bodyCaptor.capture());
+        verify(kudaClient).invoke(eq("SINGLE_FUND_TRANSFER"), bodyCaptor.capture(), any());
         assertThat(bodyCaptor.getValue()).containsEntry("beneficiaryBankCode", "999129");
         assertThat(bodyCaptor.getValue()).containsEntry("beneficiaryAccount", "0123456789");
         assertThat(bodyCaptor.getValue()).containsEntry("amount", "50000");
@@ -170,13 +171,59 @@ class KudaPaymentRailTest {
 
         ObjectNode transfer = objectMapper.createObjectNode();
         transfer.put("transactionReference", "kuda-wd-auto");
-        when(kudaClient.invoke(eq("SINGLE_FUND_TRANSFER"), anyMap())).thenReturn(transfer);
+        when(kudaClient.invoke(eq("SINGLE_FUND_TRANSFER"), anyMap(), any())).thenReturn(transfer);
 
         PaymentRailProvider.WithdrawalInitiation result =
                 rail.initiateWithdrawal(withdrawalRequest(new BigDecimal("500.00"), "999129:0123456789"));
 
         assertThat(result.providerReference()).isEqualTo("kuda-wd-auto");
         assertThat(result.pendingExternalSettlement()).isFalse();
+    }
+
+    @Test
+    void initiateFunding_dynamicCollectionCreatesExactAmountAccount() {
+        properties.setDynamicCollectionFunding(true);
+        properties.setClientAccountNumber("2000000000");
+        when(kudaClient.isConfigured()).thenReturn(true);
+        when(kudaClient.toKobo(new BigDecimal("250.00"))).thenReturn(25_000L);
+
+        UUID walletId = UUID.randomUUID();
+        ObjectNode created = objectMapper.createObjectNode();
+        created.put("accountNumber", "3020000000");
+        created.put("accountName", "PALPEER USER");
+        when(kudaClient.invoke(eq("ADMIN_CREATE_DYNAMIC_COLLECTION_ACCOUNT"), anyMap(), any()))
+                .thenReturn(created);
+        when(virtualAccountRepository.findByWalletIdAndProviderName(walletId, KudaPaymentRail.NAME))
+                .thenReturn(Optional.empty());
+        when(virtualAccountRepository.save(any(PaymentVirtualAccount.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        PaymentRailProvider.FundingInitiation result = rail.initiateFunding(fundingRequest(walletId, "250.00"));
+
+        assertThat(result.pendingExternalSettlement()).isTrue();
+        assertThat(result.collectionAccount()).isNotNull();
+        assertThat(result.collectionAccount().accountNumber()).isEqualTo("3020000000");
+        assertThat(result.instructions()).contains("3020000000").contains("250.00");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> bodyCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(kudaClient).invoke(eq("ADMIN_CREATE_DYNAMIC_COLLECTION_ACCOUNT"), bodyCaptor.capture(), any());
+        assertThat(bodyCaptor.getValue()).containsEntry("amount", 25_000L);
+        assertThat(bodyCaptor.getValue()).containsEntry("isFlexiblePayment", false);
+    }
+
+    @Test
+    void initiateWithdrawal_liveRequiresClientAccountNumber() {
+        properties.setSandbox(false);
+        properties.setClientAccountNumber("");
+        properties.setOfflineSandboxSettle(false);
+        when(kudaClient.isConfigured()).thenReturn(true);
+        when(kudaClient.isSandboxMode()).thenReturn(false);
+
+        assertThatThrownBy(() -> rail.initiateWithdrawal(withdrawalRequest(
+                        new BigDecimal("100.00"), "044:0123456789")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("KUDA_CLIENT_ACCOUNT_NUMBER");
     }
 
     @Test

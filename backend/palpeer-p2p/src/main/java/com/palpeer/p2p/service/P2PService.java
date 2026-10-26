@@ -6,7 +6,9 @@ import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
 import com.palpeer.common.notify.BroadcastPushEvent;
 import com.palpeer.common.notify.UserNotifyEvent;
+import com.palpeer.currency.domain.RateChannel;
 import com.palpeer.currency.service.CurrencyService;
+import com.palpeer.currency.service.ExchangeRateService;
 import com.palpeer.ledger.domain.LedgerEntry;
 import com.palpeer.ledger.domain.LedgerEntryType;
 import com.palpeer.ledger.service.LedgerPostingRequest;
@@ -66,6 +68,7 @@ public class P2PService {
     private final P2PRequestRepository p2PRequestRepository;
     private final P2POrderRepository p2POrderRepository;
     private final CurrencyService currencyService;
+    private final ExchangeRateService exchangeRateService;
     private final P2PRateBoundsService p2PRateBoundsService;
     private final P2PFeeTierService p2PFeeTierService;
     private final WalletRepository walletRepository;
@@ -620,10 +623,12 @@ public class P2PService {
         }
         body.append('.');
         String detail = body.toString();
-        // Push + in-app to everyone except the poster (marketplace alert with request details).
-        eventPublisher.publishEvent(new BroadcastPushEvent(
-                entity.getUserId(), title, detail, "P2P", "P2P_REQUEST", entity.getId()));
-        // Poster also gets an email + push confirmation of their own listing
+        // Marketplace push only when an InstantEX (SWAP) board rate exists for the pair.
+        if (hasInstantExRate(entity.getBaseCurrencyCode(), entity.getQuoteCurrencyCode())) {
+            eventPublisher.publishEvent(new BroadcastPushEvent(
+                    entity.getUserId(), title, detail, "P2P", "P2P_REQUEST", entity.getId()));
+        }
+        // Poster always gets an email + push confirmation of their own listing.
         eventPublisher.publishEvent(new UserNotifyEvent(
                 entity.getUserId(),
                 "P2P order posted",
@@ -633,6 +638,13 @@ public class P2PService {
                 entity.getId(),
                 true,
                 true));
+    }
+
+    /** True when admin has published an InstantEX (SWAP) rate for either pair direction. */
+    private boolean hasInstantExRate(String base, String quote) {
+        Instant now = Instant.now();
+        return exchangeRateService.findLatestOptional(base, quote, now, RateChannel.SWAP).isPresent()
+                || exchangeRateService.findLatestOptional(quote, base, now, RateChannel.SWAP).isPresent();
     }
 
     private void notifyP2PAccepted(P2PRequest request, P2POrder order) {

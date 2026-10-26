@@ -42,23 +42,41 @@ function inputModeFor(el: HTMLElement): 'default' | 'numeric' | 'email' | 'phone
   return 'default';
 }
 
-function insertText(el: HTMLInputElement | HTMLTextAreaElement, text: string) {
-  const start = el.selectionStart ?? el.value.length;
-  const end = el.selectionEnd ?? el.value.length;
-  const next = el.value.slice(0, start) + text + el.value.slice(end);
+function selectionRange(el: HTMLInputElement | HTMLTextAreaElement): { start: number; end: number } {
+  try {
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    if (typeof start === 'number' && typeof end === 'number') return { start, end };
+  } catch {
+    // Some browsers throw on password selection accessors.
+  }
+  const len = el.value.length;
+  return { start: len, end: len };
+}
+
+function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, next: string) {
   const nativeSet = Object.getOwnPropertyDescriptor(
     el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
     'value',
   )?.set;
   nativeSet?.call(el, next);
+}
+
+function insertText(el: HTMLInputElement | HTMLTextAreaElement, text: string) {
+  const { start, end } = selectionRange(el);
+  const next = el.value.slice(0, start) + text + el.value.slice(end);
+  setNativeValue(el, next);
   const caret = start + text.length;
-  el.setSelectionRange(caret, caret);
+  try {
+    el.setSelectionRange(caret, caret);
+  } catch {
+    // Password fields may disallow setSelectionRange.
+  }
   el.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
 }
 
 function deleteBackward(el: HTMLInputElement | HTMLTextAreaElement) {
-  const start = el.selectionStart ?? el.value.length;
-  const end = el.selectionEnd ?? el.value.length;
+  const { start, end } = selectionRange(el);
   let next: string;
   let caret: number;
   if (start !== end) {
@@ -70,12 +88,12 @@ function deleteBackward(el: HTMLInputElement | HTMLTextAreaElement) {
   } else {
     return;
   }
-  const nativeSet = Object.getOwnPropertyDescriptor(
-    el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
-    'value',
-  )?.set;
-  nativeSet?.call(el, next);
-  el.setSelectionRange(caret, caret);
+  setNativeValue(el, next);
+  try {
+    el.setSelectionRange(caret, caret);
+  } catch {
+    // Password fields may disallow setSelectionRange.
+  }
   el.dispatchEvent(
     new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }),
   );
@@ -91,10 +109,14 @@ function applyKey(payload: KeyPayload) {
     return;
   }
   if (payload.code === 'Enter') {
+    // Prefer submitEditing / next-field handlers; do not force-blur (that blocked
+    // moving from New password → Confirm new password in the preview keyboard).
     active.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }),
+      new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }),
     );
-    if (active instanceof HTMLInputElement) active.blur();
+    active.dispatchEvent(
+      new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }),
+    );
     return;
   }
   if (payload.code === 'Space') {

@@ -43,11 +43,21 @@ public class KudaClient {
     }
 
     public JsonNode invoke(String serviceType, Map<String, Object> data) {
+        return invoke(serviceType, data, shortRequestRef());
+    }
+
+    /**
+     * @param requestRef short unique ref (keep for {@code TRANSACTION_STATUS_QUERY} /
+     *     {@code DYNAMIC_COLLECTION_ACCOUNT_TSQ}).
+     */
+    public JsonNode invoke(String serviceType, Map<String, Object> data, String requestRef) {
         requireConfigured();
         ObjectNode envelope = objectMapper.createObjectNode();
         envelope.put("serviceType", serviceType);
         // Kuda prefers short request refs for money-movement calls.
-        envelope.put("requestRef", shortRequestRef());
+        envelope.put(
+                "requestRef",
+                notBlank(requestRef) ? requestRef.trim() : shortRequestRef());
         envelope.set("data", objectMapper.valueToTree(data == null ? Map.of() : data));
 
         try {
@@ -87,6 +97,36 @@ public class KudaClient {
 
     public long toKobo(BigDecimal amount) {
         return amount.movePointRight(2).setScale(0, RoundingMode.HALF_EVEN).longValueExact();
+    }
+
+    /**
+     * Confirms a prior {@code SINGLE_FUND_TRANSFER} using its original {@code requestRef}.
+     * Use after timeouts / pending responses before treating the payout as failed.
+     */
+    public JsonNode queryTransferStatus(String transferRequestRef) {
+        return invoke(
+                "TRANSACTION_STATUS_QUERY",
+                Map.of(
+                        "isThirdPartyBankTransfer",
+                        false,
+                        "transactionRequestReference",
+                        transferRequestRef.trim()),
+                shortRequestRef());
+    }
+
+    /**
+     * Confirms a dynamic collection account payment using the creation {@code requestRef} and/or
+     * returned account number.
+     */
+    public JsonNode queryDynamicCollectionStatus(String accountCreationRequestRef, String accountNumber) {
+        Map<String, Object> data = new java.util.HashMap<>();
+        if (notBlank(accountCreationRequestRef)) {
+            data.put("accountCreationRequestRef", accountCreationRequestRef.trim());
+        }
+        if (notBlank(accountNumber)) {
+            data.put("accountNumber", accountNumber.trim());
+        }
+        return invoke("DYNAMIC_COLLECTION_ACCOUNT_TSQ", data, shortRequestRef());
     }
 
     public static BigDecimal fromKobo(long kobo) {

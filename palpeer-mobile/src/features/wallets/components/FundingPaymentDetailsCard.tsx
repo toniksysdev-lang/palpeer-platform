@@ -88,6 +88,13 @@ export function FundingPaymentDetailsCard({ details }: { details: FundingPayment
                 testID="funding-interac-payee"
               />
             ) : null}
+            {details.collectionEmail ? (
+              <CopyRow
+                label="Send to email"
+                value={details.collectionEmail}
+                testID="funding-interac-collection-email"
+              />
+            ) : null}
             <CopyRow
               label="Amount"
               value={format(details.amount, details.currencyCode)}

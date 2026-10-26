@@ -57,30 +57,40 @@ export function MarketplaceScreen() {
 
   const createRequest = () => router.push('/p2p/create');
 
+  const headerAction = (
+    icon: typeof MessageCircle,
+    label: string,
+    onPress: () => void,
+    testID: string,
+    filled = false,
+  ) => (
+    <View style={{ alignItems: 'center', gap: 2, minWidth: 52 }}>
+      <IconButton
+        icon={icon}
+        accessibilityLabel={label}
+        onPress={onPress}
+        variant={filled ? 'filled' : 'plain'}
+        testID={testID}
+      />
+      <AppText
+        variant="caption"
+        tone="secondary"
+        numberOfLines={1}
+        style={{ fontSize: 11, lineHeight: 13 }}
+      >
+        {label}
+      </AppText>
+    </View>
+  );
+
   const header = (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
       <AppText variant="h1" accessibilityRole="header" style={{ flex: 1 }}>
         P2P
       </AppText>
-      <IconButton
-        icon={MessageCircle}
-        accessibilityLabel="Messages"
-        onPress={() => router.push('/chat')}
-        testID="p2p-messages"
-      />
-      <IconButton
-        icon={History}
-        accessibilityLabel="My requests, offers and orders"
-        onPress={() => router.push('/p2p/history')}
-        testID="p2p-history"
-      />
-      <IconButton
-        icon={Plus}
-        variant="filled"
-        accessibilityLabel="Create a request"
-        onPress={createRequest}
-        testID="p2p-create"
-      />
+      {headerAction(MessageCircle, 'Chat', () => router.push('/chat'), 'p2p-messages')}
+      {headerAction(History, 'History', () => router.push('/p2p/history'), 'p2p-history')}
+      {headerAction(Plus, 'Create', createRequest, 'p2p-create', true)}
     </View>
   );
 

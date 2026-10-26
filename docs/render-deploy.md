@@ -26,7 +26,7 @@ Blueprint file: [`render.yaml`](../render.yaml) (API + admin + Postgres + Redis)
 | `APAYLO_SANDBOX` | `true` for sandbox keys |
 | `KORAPAY_ENABLED` / `KORAPAY_SECRET_KEY` / `KORAPAY_PUBLIC_KEY` | NGN rail — required for Pool Funds (Korapay) and NGN funding |
 | `KORAPAY_SANDBOX` | `true` for `sk_test_` / `pk_test_` keys |
-| `KUDA_*` | Optional second NGN rail; leave `KUDA_ENABLED=false` if unused |
+| `KUDA_*` | Live NGN funding (dynamic collection) + withdrawals; set `KUDA_ENABLED=true`, `KUDA_SANDBOX=false`, `KUDA_CLIENT_ACCOUNT_NUMBER`, webhook user/pass, and disable offline/auto/demo settle flags |
 
 `PALPEER_MAIL_PROVIDER` defaults to `auto` (SendPulse REST when client ID/secret are set). Raw SMTP (`PALPEER_SMTP_*`) is optional fallback — outbound SMTP is often blocked on Render free.
 

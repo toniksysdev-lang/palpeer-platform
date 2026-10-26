@@ -1,4 +1,5 @@
 export { AmountInput, sanitizeAmount } from './AmountInput';
+export { numberFieldTextInputProps, suppressSystemKeyboard } from './numberFieldInput';
 export { AppModal, ConfirmDialog } from './AppModal';
 export { AppText, type TextTone, type TextVariant } from './AppText';
 export { Badge, StatusBadge } from './Badge';

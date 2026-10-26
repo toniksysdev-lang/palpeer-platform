@@ -43,7 +43,7 @@ describe('ForgotPasswordScreen', () => {
     expect(calls[0]?.body).toEqual({ email: 'ada@example.com' });
   });
 
-  it('forwards a debug OTP when the API returns one', async () => {
+  it('does not forward a debug OTP when the API returns one', async () => {
     installFetchMock({
       'POST /auth/password-reset/request': ok({ debugOtp: '654321' }),
     });
@@ -54,7 +54,7 @@ describe('ForgotPasswordScreen', () => {
     await waitFor(() =>
       expect(router.push).toHaveBeenCalledWith({
         pathname: '/reset-password',
-        params: { email: 'ada@example.com', debugOtp: '654321' },
+        params: { email: 'ada@example.com' },
       }),
     );
   });
@@ -93,12 +93,12 @@ describe('ResetPasswordScreen', () => {
     expect(screen.getByText(/If an account exists for ada@example.com/)).toBeTruthy();
   });
 
-  it('shows a dev reset code when provided', async () => {
+  it('does not show a dev reset code even when a debug param is present', async () => {
     setSearchParams({ email: 'ada@example.com', debugOtp: '112233' });
     installFetchMock({});
     await renderWithProviders(<ResetPasswordScreen />);
-    expect(screen.getByTestId('reset-debug-otp')).toBeTruthy();
-    expect(screen.getByText('Dev reset code: 112233')).toBeTruthy();
+    expect(screen.queryByTestId('reset-debug-otp')).toBeNull();
+    expect(screen.queryByText(/Dev reset code/)).toBeNull();
   });
 
   it('confirms the reset and returns to sign in', async () => {

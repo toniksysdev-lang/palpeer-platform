@@ -86,6 +86,24 @@ describe('notification and push targets', () => {
     expect(pushTarget({ url: 'palpeer://security/pin/change' })).toBe('/notifications');
     expect(pushTarget(undefined)).toBe('/notifications');
   });
+
+  it('opens P2P request pushes on the request screen via deepLink or reference', () => {
+    expect(
+      pushTarget({
+        notificationId: ID,
+        referenceType: 'P2P_REQUEST',
+        referenceId: ID,
+        deepLink: `palpeer://p2p/request/${ID}`,
+      }),
+    ).toBe(`/p2p/request/${ID}`);
+    expect(
+      pushTarget({
+        notificationId: ID,
+        referenceType: 'P2P_REQUEST',
+        referenceId: ID,
+      }),
+    ).toBe(`/p2p/request/${ID}`);
+  });
 });
 
 describe('redirectSystemPath', () => {

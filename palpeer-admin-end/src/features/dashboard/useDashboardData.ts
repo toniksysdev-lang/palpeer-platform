@@ -13,6 +13,7 @@ import { searchAuditLogs } from '@/services/api/audit';
 import { listCurrencies } from '@/services/api/currencies';
 import { listKycCases } from '@/services/api/kyc';
 import { listAdminP2POrders, listAdminP2PRequests } from '@/services/api/p2p';
+import { getPoolFundsBalances } from '@/services/api/poolFunds';
 import { listAdminBonuses, listAdminReferrals } from '@/services/api/promotions';
 import { getReportsSummary } from '@/services/api/reports';
 import { listAdminUsers } from '@/services/api/users';
@@ -27,7 +28,9 @@ import type {
   SpringPage,
 } from '@/types/admin';
 import type { BonusSummary, ReferralSummary } from '@/types/promotions';
+import type { PoolFundsBalances } from '@/types/poolFunds';
 import type { AdminReportsSummary } from '@/types/reports';
+import { mockPoolFundsBalances } from '@/mocks/poolFunds';
 import { mockListAdminBonuses, mockListAdminReferrals } from '@/mocks/promotions';
 import { mockReportsSummary } from '@/mocks/reports';
 
@@ -74,6 +77,7 @@ export function useDashboardData() {
   const canAudit = can('audit:read');
   const canPromotions = can('promotions:write');
   const canReports = can('reports:read');
+  const canWallets = can('wallets:read');
   // Currency list is authenticated platform API (no admin permission code).
   const canCurrencies = true;
 
@@ -134,11 +138,27 @@ export function useDashboardData() {
         enabled: canReports,
         queryFn: () => (appConfig.useMockApi ? delay(mockReportsSummary()) : getReportsSummary()),
       },
+      {
+        queryKey: ['dashboard', 'pool-funds', appConfig.useMockApi],
+        enabled: canWallets,
+        queryFn: () =>
+          appConfig.useMockApi ? delay(mockPoolFundsBalances()) : getPoolFundsBalances(),
+      },
     ],
   });
 
-  const [usersQ, kycQ, requestsQ, ordersQ, auditQ, currenciesQ, referralsQ, bonusesQ, summaryQ] =
-    results;
+  const [
+    usersQ,
+    kycQ,
+    requestsQ,
+    ordersQ,
+    auditQ,
+    currenciesQ,
+    referralsQ,
+    bonusesQ,
+    summaryQ,
+    poolFundsQ,
+  ] = results;
 
   const users = canUsers
     ? toSlice<SpringPage<AdminUserSummary>>(usersQ)
@@ -165,6 +185,9 @@ export function useDashboardData() {
   const summary = canReports
     ? toSlice<AdminReportsSummary>(summaryQ)
     : { status: 'forbidden' as const, errorMessage: 'Missing reports:read' };
+  const poolFunds = canWallets
+    ? toSlice<PoolFundsBalances>(poolFundsQ)
+    : { status: 'forbidden' as const, errorMessage: 'Missing wallets:read' };
 
   function refetchAll() {
     void Promise.all(results.map((result) => result.refetch()));
@@ -181,6 +204,7 @@ export function useDashboardData() {
     referrals,
     bonuses,
     summary,
+    poolFunds,
   ].some((slice) => slice.status === 'error');
 
   return {
@@ -193,6 +217,7 @@ export function useDashboardData() {
     referrals,
     bonuses,
     summary,
+    poolFunds,
     refetchAll,
     anyLoading,
     anyError,

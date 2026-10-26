@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { ChevronDown } from 'lucide-react-native';
-import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { CountryFlag } from '@/components/brand/CountryFlag';
 import { FormAlert } from '@/components/feedback/FormAlert';
@@ -11,6 +11,7 @@ import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { useNumberPadField, useOptionalNumberPad } from '@/components/ui/NumberPadContext';
+import { numberFieldTextInputProps, suppressSystemKeyboard } from '@/components/ui/numberFieldInput';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
 import {
@@ -33,6 +34,7 @@ import {
   WORLD_COUNTRIES,
   digitsOnly,
   formatNationalPhone,
+  normalizeNationalPhoneInput,
   toE164,
   type SignupCountry,
 } from '../signupCountries';
@@ -66,10 +68,17 @@ export function EnterPhoneScreen() {
     return match ?? allowedCountries[0] ?? DEFAULT_SIGNUP_COUNTRY;
   }, [allowedCountries, country.iso2]);
 
-  const setDigits = useCallback((next: string) => {
-    setNational(digitsOnly(next).slice(0, PHONE_MAX_DIGITS));
-    setError(null);
-  }, []);
+  const phoneInputRef = useRef<TextInput>(null);
+
+  const setDigits = useCallback(
+    (next: string) => {
+      setNational(
+        normalizeNationalPhoneInput(next, activeCountry.dialCode, PHONE_MAX_DIGITS),
+      );
+      setError(null);
+    },
+    [activeCountry.dialCode],
+  );
 
   const { select, active } = useNumberPadField({
     value: national,
@@ -81,6 +90,13 @@ export function EnterPhoneScreen() {
   });
   const pad = useOptionalNumberPad();
   const { ref: phoneAnchorRef, reveal: revealPhone } = useFocusAnchor();
+
+  const focusPhoneField = () => {
+    phoneInputRef.current?.focus();
+    suppressSystemKeyboard();
+    select();
+    revealPhone();
+  };
 
   const busy =
     statusState.isLoading || requestState.isLoading || resendEmailState.isLoading;
@@ -272,14 +288,8 @@ export function EnterPhoneScreen() {
         </Pressable>
 
         <Pressable
-          onPress={() => {
-            select();
-            revealPhone();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Phone number"
-          accessibilityState={{ selected: active }}
-          testID="enter-phone-number"
+          onPress={focusPhoneField}
+          accessibilityRole="none"
           style={[
             styles.phone,
             theme.shadows.card,
@@ -294,12 +304,36 @@ export function EnterPhoneScreen() {
             },
           ]}
         >
-          <AppText
-            tone={national ? 'primary' : 'muted'}
-            style={{ fontSize: theme.typography.body.fontSize }}
-          >
-            {national ? formatNationalPhone(national, activeCountry.iso2) : 'Phone number'}
-          </AppText>
+          <TextInput
+            ref={phoneInputRef}
+            value={national ? formatNationalPhone(national, activeCountry.iso2) : ''}
+            onChangeText={setDigits}
+            onFocus={() => {
+              suppressSystemKeyboard();
+              select();
+              revealPhone();
+            }}
+            placeholder="Phone number"
+            placeholderTextColor={theme.colors.textMuted}
+            selectionColor={theme.colors.primary}
+            textContentType="telephoneNumber"
+            autoComplete="tel"
+            importantForAutofill="yes"
+            accessibilityLabel="Phone number"
+            accessibilityState={{ selected: active }}
+            testID="enter-phone-number"
+            style={[
+              theme.typography.body,
+              {
+                color: theme.colors.textPrimary,
+                paddingVertical: 0,
+                margin: 0,
+                minHeight: 24,
+              },
+            ]}
+            maxFontSizeMultiplier={1.6}
+            {...numberFieldTextInputProps}
+          />
         </Pressable>
       </View>
 

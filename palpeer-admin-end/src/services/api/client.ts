@@ -58,23 +58,36 @@ function mapHumanMessage(status: number, code: string, fallback: string): string
       return 'Your session has expired. Please sign in again.';
     case 'ACCESS_DENIED':
       return 'You do not have permission to perform this action.';
+    // Legacy reject-concurrent login (replaced by session takeover). Keep copy for old APIs.
+    case 'SESSION_ALREADY_ACTIVE':
+      return 'This account already has an active session. Sign in again to take over that session.';
     default:
       break;
   }
 
   switch (status) {
     case 400:
-      return 'The request was invalid.';
+      return fallback && fallback !== 'Request failed.' ? fallback : 'The request was invalid.';
     case 401:
-      return 'Authentication is required or the session is no longer valid.';
+      return fallback && fallback !== 'Request failed.'
+        ? fallback
+        : 'Authentication is required or the session is no longer valid.';
     case 403:
-      return 'You do not have permission to access this resource.';
+      return fallback && fallback !== 'Request failed.'
+        ? fallback
+        : 'You do not have permission to access this resource.';
     case 404:
-      return 'The requested resource was not found.';
+      return fallback && fallback !== 'Request failed.'
+        ? fallback
+        : 'The requested resource was not found.';
     case 409:
-      return 'This action conflicts with the current state.';
+      return fallback && fallback !== 'Request failed.'
+        ? fallback
+        : 'This action conflicts with the current state.';
     case 422:
-      return 'The server rejected the submitted data.';
+      return fallback && fallback !== 'Request failed.'
+        ? fallback
+        : 'The server rejected the submitted data.';
     case 429:
       return 'Too many requests. Please wait and try again.';
     case 500:

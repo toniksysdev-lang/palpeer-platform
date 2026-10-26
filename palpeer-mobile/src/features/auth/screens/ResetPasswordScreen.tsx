@@ -27,11 +27,8 @@ export function ResetPasswordScreen() {
   useSensitiveScreen();
   const theme = useTheme();
   const toast = useToast();
-  const params = useLocalSearchParams<{ email?: string; debugOtp?: string }>();
+  const params = useLocalSearchParams<{ email?: string }>();
   const email = typeof params.email === 'string' ? params.email : '';
-  const initialDebugOtp =
-    typeof params.debugOtp === 'string' && params.debugOtp.length > 0 ? params.debugOtp : null;
-  const [debugOtp, setDebugOtp] = useState<string | null>(initialDebugOtp);
   const [confirmReset] = useSecretCommand(accountCommands.confirmPasswordReset);
   const [resendOtp, { isLoading: resending }] = useResendOtpMutation();
   const [formError, setFormError] = useState<string | null>(null);
@@ -63,17 +60,12 @@ export function ResetPasswordScreen() {
   const resend = async () => {
     setFormError(null);
     try {
-      const result = await resendOtp({
+      await resendOtp({
         email,
         purpose: 'PASSWORD_RESET',
         channel: 'EMAIL',
       }).unwrap();
       setValue('code', '');
-      const nextDebug =
-        typeof result?.debugOtp === 'string' && result.debugOtp.length > 0
-          ? result.debugOtp
-          : null;
-      setDebugOtp(nextDebug);
       cooldown.restart();
       toast.show({ type: 'success', title: 'New code sent' });
     } catch (raw) {
@@ -99,13 +91,6 @@ export function ResetPasswordScreen() {
         tone="info"
         message={`If an account exists for ${email}, a reset code is on its way. It expires in 10 minutes.`}
       />
-      {__DEV__ && debugOtp ? (
-        <FormAlert
-          tone="info"
-          message={`Dev reset code: ${debugOtp}`}
-          testID="reset-debug-otp"
-        />
-      ) : null}
       <FormAlert message={formError} testID="reset-error" />
 
       <Controller
@@ -163,8 +148,10 @@ export function ResetPasswordScreen() {
             onChangeText={field.onChange}
             onBlur={field.onBlur}
             error={fieldState.error?.message}
-            autoComplete="new-password"
-            textContentType="newPassword"
+            // Avoid two adjacent new-password fields confusing browser autofill into
+            // a non-editable confirm box; still treated as a password field.
+            autoComplete="password"
+            textContentType="password"
             returnKeyType="go"
             onSubmitEditing={onSubmit}
             testID="reset-confirm"

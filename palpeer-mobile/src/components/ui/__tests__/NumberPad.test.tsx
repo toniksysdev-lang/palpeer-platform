@@ -80,7 +80,7 @@ describe('NumberPad', () => {
     await renderWithProviders(<Harness />);
     expect(screen.queryByTestId('number-pad-dock-grid')).toBeNull();
     await typeIntoNumberField('code', '9042');
-    expect(screen.getByTestId('code')).toHaveTextContent('9042');
+    expect(screen.getByTestId('code').props.value).toBe('9042');
     expect(screen.getByTestId('number-pad-dock-key-*')).toBeTruthy();
     expect(screen.getByTestId('number-pad-dock-key-back')).toBeTruthy();
   });
@@ -104,7 +104,7 @@ describe('NumberPad', () => {
 
     await renderWithProviders(<Harness />);
     await typeIntoNumberField('amount', '99.5');
-    expect(screen.getByTestId('amount')).toHaveTextContent(/99\.5/);
+    expect(screen.getByTestId('amount').props.value).toBe('99.5');
     expect(screen.getByTestId('number-pad-dock-key-dot')).toBeTruthy();
   });
 });

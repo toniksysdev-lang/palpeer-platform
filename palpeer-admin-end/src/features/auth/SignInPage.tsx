@@ -73,6 +73,8 @@ export function SignInPage() {
           setFormError(error.message);
         } else if (error.code === 'INVALID_CREDENTIALS') {
           setFormError('Invalid email or password.');
+        } else if (error.code === 'SESSION_ALREADY_ACTIVE') {
+          setFormError(error.message);
         } else if (error.status === 401) {
           setFormError(error.message || 'Authentication failed. Please try again.');
         } else {

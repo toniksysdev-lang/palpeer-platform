@@ -56,11 +56,18 @@ public class KudaProperties {
     private String senderName = "PALPEER";
 
     /**
-     * Kuda Business main account number sent as {@code clientAccountNumber} on
-     * {@code SINGLE_FUND_TRANSFER}. Required by current Kuda transfer docs; leave blank only when
-     * the environment still accepts transfers without it.
+     * Kuda Business main account number. Required for live {@code SINGLE_FUND_TRANSFER}
+     * ({@code clientAccountNumber}) and for dynamic collection remitting accounts. Leave blank only
+     * when the environment still accepts transfers without it (some UAT keys).
      */
     private String clientAccountNumber = "";
+
+    /**
+     * When true (default), NGN funding creates a per-payment
+     * {@code ADMIN_CREATE_DYNAMIC_COLLECTION_ACCOUNT} (exact amount). When false, reuse/create a
+     * static {@code ADMIN_CREATE_VIRTUAL_ACCOUNT} per wallet.
+     */
+    private boolean dynamicCollectionFunding = true;
 
     /**
      * Kuda dashboard webhook username (custom {@code username} header, plaintext).

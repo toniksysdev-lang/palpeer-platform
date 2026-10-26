@@ -70,8 +70,11 @@ export type FundingPaymentDetails = {
   currencyCode: string;
   /** `BANK_TRANSFER` (Kuda VA) or `INTERAC_INSTANT` (Apaylo). */
   method: 'BANK_TRANSFER' | 'INTERAC_INSTANT' | string | null;
+  /** Customer's send-from Interac email (payer). */
   interacEmail: string | null;
   aplReference: string | null;
+  /** Destination Interac email for CAD Instant deposits (e.g. ipay@apaylo.com). */
+  collectionEmail?: string | null;
 };
 
 /** VERIFIED: `FundingTransactionResponse`. */

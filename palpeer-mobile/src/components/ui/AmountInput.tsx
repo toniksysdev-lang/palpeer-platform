@@ -1,11 +1,12 @@
-import { useCallback } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useRef } from 'react';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { useFocusAnchor } from '@/components/layout/FocusScroll';
 import { useTheme } from '@/providers/ThemeProvider';
 
 import { AppText } from './AppText';
 import { useNumberPadField } from './NumberPadContext';
+import { numberFieldTextInputProps, suppressSystemKeyboard } from './numberFieldInput';
 
 type Props = {
   label: string;
@@ -28,15 +29,37 @@ type Props = {
 
 /**
  * Keeps digits and a single decimal separator, limits decimals to `precision` and strips leading
- * zeros. Commas are treated as a decimal separator for locales that type one.
+ * zeros. Handles pasted US (`1,250.99`) and EU (`1.250,99`) grouping, and lone commas as decimals
+ * (`1,5`) when there is no dot.
  */
 export function sanitizeAmount(input: string, precision: number): string {
-  const normalized = input.replace(/,/g, '.').replace(/[^\d.]/g, '');
+  let normalized = input.replace(/[^\d.,]/g, '');
+  const hasDot = normalized.includes('.');
+  const hasComma = normalized.includes(',');
+  if (hasDot && hasComma) {
+    const lastDot = normalized.lastIndexOf('.');
+    const lastComma = normalized.lastIndexOf(',');
+    if (lastComma > lastDot) {
+      // EU: 1.250,99
+      normalized = normalized.replace(/\./g, '').replace(',', '.');
+    } else {
+      // US: 1,250.99
+      normalized = normalized.replace(/,/g, '');
+    }
+  } else if (hasComma) {
+    const parts = normalized.split(',');
+    if (parts.length === 2 && (parts[1]?.length ?? 0) > 0 && (parts[1]?.length ?? 0) <= 2) {
+      normalized = `${parts[0]}.${parts[1]}`;
+    } else {
+      normalized = normalized.replace(/,/g, '');
+    }
+  }
+  normalized = normalized.replace(/[^\d.]/g, '');
   const [rawInt = '', ...rest] = normalized.split('.');
-  const hasDot = normalized.includes('.') && precision > 0;
+  const keepDot = normalized.includes('.') && precision > 0;
   const fraction = rest.join('').slice(0, Math.max(precision, 0));
   const integer = rawInt.replace(/^0+(?=\d)/, '');
-  if (!hasDot) return integer;
+  if (!keepDot) return integer;
   return `${integer === '' ? '0' : integer}.${fraction}`;
 }
 
@@ -89,6 +112,7 @@ export function AmountInput({
 }: Props) {
   const theme = useTheme();
   const elevated = appearance === 'elevated';
+  const inputRef = useRef<TextInput>(null);
   const { ref: anchorRef, reveal } = useFocusAnchor();
 
   const handleChange = useCallback(
@@ -116,7 +140,20 @@ export function AmountInput({
 
   const a11yLabel = label.trim() || (currencyCode ? `Amount in ${currencyCode}` : 'Amount');
 
+  const emptyPlaceholder = placeholder.includes('.')
+    ? placeholder
+    : precision > 0 && padOnBlur
+      ? `0.${''.padEnd(Math.min(precision, 2), '0')}`
+      : placeholder;
+
+  const display = value
+    ? formatAmountDisplay(value, precision, { padFraction: padOnBlur && !active })
+    : '';
+
   const openPad = () => {
+    if (!editable || !padAvailable) return;
+    inputRef.current?.focus();
+    suppressSystemKeyboard();
     select();
     reveal();
   };
@@ -139,7 +176,6 @@ export function AmountInput({
         accessibilityLabel={a11yLabel}
         accessibilityHint={error ?? hint ?? 'Opens number pad'}
         accessibilityState={{ disabled: !editable, selected: active }}
-        testID={testID}
         style={[
           styles.field,
           elevated ? theme.shadows.card : null,
@@ -153,15 +189,26 @@ export function AmountInput({
           },
         ]}
       >
-        <AppText tone={value ? 'primary' : 'muted'} style={[styles.value, theme.typography.body]}>
-          {value
-            ? formatAmountDisplay(value, precision, { padFraction: padOnBlur && !active })
-            : placeholder.includes('.')
-              ? placeholder
-              : precision > 0 && padOnBlur
-                ? `0.${''.padEnd(Math.min(precision, 2), '0')}`
-                : placeholder}
-        </AppText>
+        <TextInput
+          ref={inputRef}
+          value={display}
+          onChangeText={handleChange}
+          onFocus={() => {
+            suppressSystemKeyboard();
+            select();
+            reveal();
+          }}
+          editable={editable && padAvailable}
+          placeholder={emptyPlaceholder}
+          placeholderTextColor={theme.colors.textMuted}
+          selectionColor={theme.colors.primary}
+          accessibilityLabel={a11yLabel}
+          accessibilityState={{ selected: active }}
+          testID={testID}
+          style={[styles.value, theme.typography.body, { color: theme.colors.textPrimary }]}
+          maxFontSizeMultiplier={1.6}
+          {...numberFieldTextInputProps}
+        />
         {currencyCode ? (
           <AppText variant="bodyStrong" tone="secondary">
             {currencyCode}
@@ -184,5 +231,5 @@ export function AmountInput({
 const styles = StyleSheet.create({
   label: { fontWeight: '600' },
   field: { flexDirection: 'row', alignItems: 'center', borderWidth: 1 },
-  value: { flex: 1, paddingVertical: 12 },
+  value: { flex: 1, paddingVertical: 12, margin: 0, minHeight: 24 },
 });

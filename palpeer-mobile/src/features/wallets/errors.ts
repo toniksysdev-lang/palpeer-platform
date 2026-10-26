@@ -29,6 +29,8 @@ const MESSAGES: Record<string, string> = {
   KORAPAY_WITHDRAWAL_UNSUPPORTED: 'NGN withdrawals aren’t available with this payment method yet.',
   KUDA_ERROR: "The payment provider couldn't process this. Try again later.",
   KUDA_AUTH_FAILED: "The payment provider couldn't process this. Try again later.",
+  KUDA_DISABLED: 'NGN payments are temporarily unavailable. Try again later.',
+  KUDA_CLIENT_ACCOUNT_REQUIRED: 'NGN withdrawals are temporarily unavailable. Try again later.',
   KUDA_PERMISSION_DENIED:
     "Naira funding isn't enabled for this payment account yet. Contact support.",
 };

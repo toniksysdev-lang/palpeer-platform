@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { FormAlert } from '@/components/feedback/FormAlert';
 import { AppText } from '@/components/ui/AppText';
@@ -11,6 +11,8 @@ import {
   PIN_SETUP_LENGTH,
   PinDots,
 } from '@/components/ui/PinPad';
+import { numberFieldTextInputProps, suppressSystemKeyboard } from '@/components/ui/numberFieldInput';
+import { extractDigits, readDigitsFromClipboard } from '@/components/ui/pasteDigits';
 import { useTheme } from '@/providers/ThemeProvider';
 
 type Props = {
@@ -54,8 +56,23 @@ export function PinEntry({
 }: Props) {
   const theme = useTheme();
   const [pin, setPin] = useState('');
+  const pasteRef = useRef<TextInput>(null);
   const required = Math.max(PIN_MIN_LENGTH, Math.min(length, PIN_MAX_LENGTH));
   const submittedRef = useRef(false);
+
+  const setPinDigits = useCallback(
+    (next: string) => {
+      setPin(extractDigits(next, required));
+    },
+    [required],
+  );
+
+  const pasteFromClipboard = useCallback(async () => {
+    if (disabled || loading) return;
+    const digits = await readDigitsFromClipboard(required);
+    if (!digits) return;
+    setPinDigits(digits);
+  }, [disabled, loading, required, setPinDigits]);
 
   const submit = (value = pin) => {
     if (value.length < required || disabled || loading || submittedRef.current) return;
@@ -94,12 +111,40 @@ export function PinEntry({
 
         <FormAlert message={error} testID={`${testID}-error`} />
 
-        <PinDots
-          value={pin}
-          slots={required}
-          statusMessage={statusMessage}
-          testID={`${testID}-pad`}
-        />
+        <Pressable
+          style={styles.dotsWrap}
+          onPress={() => {
+            if (disabled || loading) return;
+            pasteRef.current?.focus();
+            suppressSystemKeyboard();
+          }}
+          onLongPress={() => void pasteFromClipboard()}
+          delayLongPress={350}
+          disabled={disabled || loading}
+          accessibilityLabel="PIN"
+          accessibilityHint="Long press to paste a PIN from the clipboard"
+        >
+          <PinDots
+            value={pin}
+            slots={required}
+            statusMessage={statusMessage}
+            testID={`${testID}-pad`}
+          />
+          {/* Paste digits without opening the OS keypad. */}
+          <TextInput
+            ref={pasteRef}
+            value={pin}
+            onChangeText={setPinDigits}
+            onFocus={suppressSystemKeyboard}
+            editable={!disabled && !loading}
+            caretHidden
+            maxLength={Math.max(required * 4, 32)}
+            accessibilityLabel="PIN paste field"
+            testID={`${testID}-paste`}
+            style={styles.hiddenPaste}
+            {...numberFieldTextInputProps}
+          />
+        </Pressable>
 
         {/* Figma PIN screens have no button under the dots — pad fills the bottom.
             Keep Proceed only when the caller needs a manual confirm. */}
@@ -121,7 +166,7 @@ export function PinEntry({
       <View style={[styles.padBlock, { gap: theme.spacing.md }]}>
         <NumberPad
           value={pin}
-          onChange={setPin}
+          onChange={setPinDigits}
           maxLength={required}
           bottomLeft="*"
           variant="phone"
@@ -140,4 +185,11 @@ const styles = StyleSheet.create({
   spacer: { flexGrow: 1, flexShrink: 1, minHeight: 16 },
   /** Keep the 3×4 pad at full size; never let the header squeeze it. */
   padBlock: { width: '100%', flexShrink: 0 },
+  dotsWrap: { width: '100%', position: 'relative' },
+  hiddenPaste: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.02,
+    color: 'transparent',
+    zIndex: 2,
+  },
 });

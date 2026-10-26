@@ -56,6 +56,12 @@ public class ApayloProperties {
     private String accountId = "";
 
     /**
+     * Interac destination email for CAD Instant deposits (searchable Autodeposit / send-to email).
+     * Shown alongside the payee name in funding instructions.
+     */
+    private String interacCollectionEmail = "ipay@apaylo.com";
+
+    /**
      * Apaylo APL reference (e.g. {@code APL1234}) required in Instant deposit Descriptions.
      */
     private String aplReference = "";

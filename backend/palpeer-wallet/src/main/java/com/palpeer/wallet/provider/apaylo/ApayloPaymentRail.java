@@ -91,17 +91,22 @@ public class ApayloPaymentRail implements PaymentRailProvider {
     private String buildInstantDepositInstructions(
             java.math.BigDecimal amount, String reference, String customerEmail) {
         String accountName = blankTo(properties.getAccountId(), "Palpeer Global Holding Inc");
+        String collectionEmail = blankTo(properties.getInteracCollectionEmail(), "ipay@apaylo.com");
         String apl = properties.getAplReference() == null ? "" : properties.getAplReference().trim();
         StringBuilder sb = new StringBuilder();
         sb.append("Instant deposit via Interac. Send CAD ")
                 .append(amount)
                 .append(" with Interac e-Transfer to \"")
                 .append(accountName)
-                .append("\". Reference=")
+                .append("\" or ")
+                .append(collectionEmail)
+                .append(". Reference=")
                 .append(reference)
                 .append(". Open your banking app → Send → Interac → search for \"")
                 .append(accountName)
-                .append("\" → enter the amount and reference. You initiate the transfer — we do not send an Interac request to your email.");
+                .append("\" or send to ")
+                .append(collectionEmail)
+                .append(" → enter the amount and reference. You initiate the transfer — we do not send an Interac request to your email.");
         if (notBlank(apl)) {
             sb.append(" Include ").append(apl).append(" in the memo if asked.");
         }

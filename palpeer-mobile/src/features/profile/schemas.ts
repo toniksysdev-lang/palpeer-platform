@@ -26,17 +26,40 @@ export function toDisplayDate(iso: string | null | undefined): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+/** Minimum age required for personal information / account profile. */
+export const MIN_PROFILE_AGE_YEARS = 18;
+
 /** Default calendar / form DOB: today minus `years` (local calendar date). */
-export function defaultDateOfBirth(yearsBack = 15, today: Date = new Date()): Date {
+export function defaultDateOfBirth(
+  yearsBack = MIN_PROFILE_AGE_YEARS,
+  today: Date = new Date(),
+): Date {
   return new Date(today.getFullYear() - yearsBack, today.getMonth(), today.getDate());
 }
 
-export function defaultDateOfBirthDisplay(yearsBack = 15, today: Date = new Date()): string {
+export function defaultDateOfBirthDisplay(
+  yearsBack = MIN_PROFILE_AGE_YEARS,
+  today: Date = new Date(),
+): string {
   const date = defaultDateOfBirth(yearsBack, today);
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
   return toDisplayDate(`${yyyy}-${mm}-${dd}`);
+}
+
+/** Latest calendar date that still satisfies {@link MIN_PROFILE_AGE_YEARS}. */
+export function maximumDateOfBirth(today: Date = new Date()): Date {
+  return defaultDateOfBirth(MIN_PROFILE_AGE_YEARS, today);
+}
+
+export function isAtLeastMinAge(isoDate: string, today: Date = new Date()): boolean {
+  if (!isValidPastIsoDate(isoDate)) return false;
+  const [yyyy, mm, dd] = isoDate.split('-').map(Number);
+  const dob = new Date(yyyy!, mm! - 1, dd!);
+  if (Number.isNaN(dob.getTime())) return false;
+  const cutoff = maximumDateOfBirth(today);
+  return dob.getTime() <= cutoff.getTime();
 }
 
 export const personalInfoSchema = z.object({
@@ -57,7 +80,11 @@ export const personalInfoSchema = z.object({
     .refine((value) => {
       const iso = toIsoDate(value);
       return iso != null && isValidPastIsoDate(iso);
-    }, 'Select a valid past date of birth'),
+    }, 'Select a valid past date of birth')
+    .refine((value) => {
+      const iso = toIsoDate(value);
+      return iso != null && isAtLeastMinAge(iso);
+    }, `You must be at least ${MIN_PROFILE_AGE_YEARS} years old`),
   countryOfResidence: z.string().trim().min(2, 'Select a country').max(2),
   stateTerritory: z.string().trim().min(1, 'Select a state or territory'),
   addressLine1: z
@@ -79,8 +106,8 @@ export function profileToFormDefaults(profile: ProfileResponse | null): Personal
   return {
     firstName: profile?.firstName ?? '',
     lastName: profile?.lastName ?? '',
-    // New / empty profiles open on a DOB 15 years before today.
-    dateOfBirth: savedDob || defaultDateOfBirthDisplay(15),
+    // New / empty profiles open on a DOB at the minimum eligible age.
+    dateOfBirth: savedDob || defaultDateOfBirthDisplay(MIN_PROFILE_AGE_YEARS),
     countryOfResidence: profile?.countryOfResidence ?? '',
     stateTerritory: profile?.stateTerritory ?? '',
     addressLine1: profile?.addressLine1 ?? '',
