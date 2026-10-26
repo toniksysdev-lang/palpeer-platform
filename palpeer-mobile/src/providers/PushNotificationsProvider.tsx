@@ -27,7 +27,8 @@ const WALLET_LIST_TAG = { type: 'Wallet' as const, id: 'LIST' };
 
 /**
  * Push behaviour for the whole app (R-NT-3):
- * - received while open: in-app toast + notification center refresh, no system banner;
+ * - received while open: phone system banner/sound + in-app toast + notification center refresh;
+ * - background / killed: FCM shows the OS heads-up alert on the high-importance channel;
  * - tapped from the background or a closed app: the destination is queued and opened once the
  *   signed-in navigator is ready (after sign-in if needed), and the screen refetches;
  * - this install's registration is refreshed after sign-in and when the OS rotates the token,

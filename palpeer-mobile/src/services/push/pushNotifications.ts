@@ -24,23 +24,44 @@ export class PushUnavailableError extends Error {
   }
 }
 
-/** Must match `defaultChannel` in app.config.ts expo-notifications plugin. */
-export const ANDROID_CHANNEL_ID = 'palpeer_default';
+/**
+ * Must match `defaultChannel` in app.config.ts and backend FCM/Expo `channelId`.
+ * New id (not `palpeer_default`) so upgrades get HIGH importance — Android won't raise an
+ * existing channel's importance after it was created as DEFAULT.
+ */
+export const ANDROID_CHANNEL_ID = 'palpeer_alerts';
 
 /**
- * While the app is open a push is not shown as a system banner; the app shows its own toast and
- * refreshes the notification center instead. It is still added to the system list.
+ * Ensures the Android alert channel exists with heads-up importance (sound + vibrate).
+ * Safe to call repeatedly; required before FCM can pop the system notification UI.
+ */
+export async function ensureAndroidAlertChannel(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
+    name: 'Alerts',
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: 'default',
+    vibrationPattern: [0, 250, 250, 250],
+    enableVibrate: true,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
+}
+
+/**
+ * Use the phone's notification UI (banner + sound) even while the app is open; background and
+ * killed delivery still rely on FCM + the high-importance Android channel.
  */
 export function configureForegroundPresentation() {
   // expo-notifications has limited/no web support; skip so web preview doesn't throw at import.
   if (Platform.OS === 'web') return;
   try {
+    void ensureAndroidAlertChannel();
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowBanner: false,
+        shouldShowBanner: true,
         shouldShowList: true,
-        shouldPlaySound: false,
-        shouldSetBadge: false,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
       }),
     });
   } catch {
@@ -63,13 +84,8 @@ export async function getPushPermission(): Promise<PushPermissionState> {
 
 /** Only called from an explicit user action (R-NT-2), never at launch. */
 export async function requestPushPermission(): Promise<PushPermissionState> {
-  if (Platform.OS === 'android') {
-    // Android 13+ only shows the permission prompt once a channel exists.
-    await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
-      name: 'General',
-      importance: Notifications.AndroidImportance.DEFAULT,
-    });
-  }
+  // Android 13+ only shows the permission prompt once a channel exists.
+  await ensureAndroidAlertChannel();
   return toState(await Notifications.requestPermissionsAsync());
 }
 

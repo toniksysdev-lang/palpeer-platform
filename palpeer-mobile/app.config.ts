@@ -211,7 +211,8 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
       'expo-notifications',
       {
         color: '#0E9F6E',
-        defaultChannel: 'palpeer_default',
+        // High-importance channel so FCM/Expo heads-up when the app is backgrounded or closed.
+        defaultChannel: 'palpeer_alerts',
         // Requires google-services / GoogleService-Info in the binary. Without them, enabling
         // background remote notifications can native-crash the Android/iOS process on launch.
         enableBackgroundRemoteNotifications: Boolean(androidGoogleServices || iosGoogleServices),

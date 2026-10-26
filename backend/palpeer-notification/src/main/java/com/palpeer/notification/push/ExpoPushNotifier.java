@@ -41,6 +41,9 @@ public class ExpoPushNotifier {
         message.put("title", notification.getTitle());
         message.put("body", notification.getBody());
         message.put("sound", "default");
+        // High priority + Android channel so the phone shows a heads-up alert when the app is closed.
+        message.put("priority", "high");
+        message.put("channelId", FcmPushNotifier.ANDROID_ALERT_CHANNEL_ID);
 
         ObjectNode data = objectMapper.createObjectNode();
         for (Map.Entry<String, String> entry : FcmPushNotifier.buildData(notification).entrySet()) {

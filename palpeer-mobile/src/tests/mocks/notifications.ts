@@ -14,6 +14,7 @@ let counter = 0;
 
 export const DEFAULT_ACTION_IDENTIFIER = 'expo.modules.notifications.actions.DEFAULT';
 export const AndroidImportance = { DEFAULT: 3, HIGH: 4 };
+export const AndroidNotificationVisibility = { PUBLIC: 1, PRIVATE: 0, SECRET: -1 };
 
 function subscribe<T>(set: Set<Listener<T>>, listener: Listener<T>) {
   set.add(listener);

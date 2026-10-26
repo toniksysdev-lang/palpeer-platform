@@ -1,5 +1,7 @@
 package com.palpeer.notification.push;
 
+import com.google.firebase.messaging.AndroidConfig;
+import com.google.firebase.messaging.AndroidNotification;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
@@ -15,10 +17,16 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Delivers pushes via Firebase Cloud Messaging HTTP v1.
  * Data payload matches mobile {@code pushTarget}: notificationId, referenceType, referenceId.
+ *
+ * <p>Android uses a high-priority notification on channel {@code palpeer_alerts} so the OS shows a
+ * heads-up alert when the app is backgrounded or closed.
  */
 @Slf4j
 @RequiredArgsConstructor
 public class FcmPushNotifier implements PushNotifier {
+
+    /** Must match {@code ANDROID_CHANNEL_ID} / expo-notifications {@code defaultChannel} on mobile. */
+    static final String ANDROID_ALERT_CHANNEL_ID = "palpeer_alerts";
 
     private final FirebaseMessaging firebaseMessaging;
     private final DeviceTokenRepository deviceTokenRepository;
@@ -32,6 +40,16 @@ public class FcmPushNotifier implements PushNotifier {
                         .setBody(notification.getBody())
                         .build())
                 .putAllData(buildData(notification))
+                .setAndroidConfig(AndroidConfig.builder()
+                        .setPriority(AndroidConfig.Priority.HIGH)
+                        .setNotification(AndroidNotification.builder()
+                                .setChannelId(ANDROID_ALERT_CHANNEL_ID)
+                                .setSound("default")
+                                .setDefaultSound(true)
+                                .setDefaultVibrateTimings(true)
+                                .setPriority(AndroidNotification.Priority.HIGH)
+                                .build())
+                        .build())
                 .build();
 
         try {

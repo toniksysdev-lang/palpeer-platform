@@ -70,16 +70,16 @@ beforeEach(async () => {
 });
 
 describe('foreground', () => {
-  it('shows no system banner or sound while the app is open, but keeps it in the list', async () => {
+  it('shows the phone system banner and sound while the app is open', async () => {
     configureForegroundPresentation();
     const handler = setNotificationHandler.mock.calls.at(-1)?.[0] as {
       handleNotification: () => Promise<Record<string, boolean>>;
     };
     await expect(handler.handleNotification()).resolves.toEqual({
-      shouldShowBanner: false,
+      shouldShowBanner: true,
       shouldShowList: true,
-      shouldPlaySound: false,
-      shouldSetBadge: false,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
     });
   });
 
