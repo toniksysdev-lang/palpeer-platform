@@ -167,6 +167,7 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     './plugins/withFirebaseLaunchHardening',
+    './plugins/withSslPinning',
     [
       'expo-splash-screen',
       {

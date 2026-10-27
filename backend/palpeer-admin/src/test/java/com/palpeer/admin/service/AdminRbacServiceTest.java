@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.palpeer.admin.domain.AdminUser;
 import com.palpeer.admin.domain.Permission;
 import com.palpeer.admin.domain.Role;
+import com.palpeer.admin.repository.AdminMfaTotpRepository;
 import com.palpeer.admin.repository.AdminUserRepository;
 import com.palpeer.admin.repository.PermissionRepository;
 import com.palpeer.admin.repository.RoleRepository;
@@ -34,6 +35,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class AdminRbacServiceTest {
 
     @Mock private AdminUserRepository adminUserRepository;
+    @Mock private AdminMfaTotpRepository adminMfaTotpRepository;
+    @Mock private AdminMfaService adminMfaService;
     @Mock private RoleRepository roleRepository;
     @Mock private PermissionRepository permissionRepository;
     @Mock private UserRepository userRepository;

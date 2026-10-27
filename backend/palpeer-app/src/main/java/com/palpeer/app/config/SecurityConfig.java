@@ -1,6 +1,9 @@
 package com.palpeer.app.config;
 
+import com.palpeer.admin.security.AdminMfaEnrollmentFilter;
+import com.palpeer.auth.ratelimit.AuthRateLimitFilter;
 import com.palpeer.auth.security.JwtAuthenticationFilter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -28,9 +31,15 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final AuthRateLimitFilter authRateLimitFilter;
+    private final AdminMfaEnrollmentFilter adminMfaEnrollmentFilter;
 
     @Value("${palpeer.cors.allowed-origins:http://localhost:5173,http://127.0.0.1:5173}")
     private String allowedOrigins;
+
+    /** When false (prod), Swagger/OpenAPI paths are not publicly reachable. */
+    @Value("${springdoc.api-docs.enabled:true}")
+    private boolean springdocEnabled;
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
@@ -53,25 +62,27 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        List<String> publicGetOrAny = new ArrayList<>(List.of(
+                "/actuator/health",
+                "/actuator/info",
+                "/ws",
+                "/ws/**",
+                "/api/v1/webhooks/**"));
+        if (springdocEnabled) {
+            publicGetOrAny.addAll(List.of("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html"));
+        }
+
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(
-                                "/actuator/health",
-                                "/actuator/info",
-                                "/v3/api-docs/**",
-                                "/swagger-ui/**",
-                                "/swagger-ui.html",
-                                "/ws",
-                                "/ws/**",
-                                "/api/v1/webhooks/**"
-                        ).permitAll()
+                        .requestMatchers(publicGetOrAny.toArray(String[]::new)).permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/login",
+                                "/api/v1/auth/mfa/verify",
                                 "/api/v1/auth/google",
                                 "/api/v1/auth/logout",
                                 "/api/v1/auth/refresh",
@@ -99,7 +110,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/admin/**").hasAuthority("ROLE_ADMIN")
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(authRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(adminMfaEnrollmentFilter, JwtAuthenticationFilter.class);
         return http.build();
     }
 }

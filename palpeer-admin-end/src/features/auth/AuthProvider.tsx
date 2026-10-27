@@ -23,6 +23,7 @@ import {
   loginRequest,
   logoutRequest,
   verifyAdminAccess,
+  verifyMfaRequest,
 } from '@/services/api/auth';
 import { ApiClientError } from '@/types/api';
 
@@ -38,12 +39,21 @@ type AuthContextValue = {
   status: AuthStatus;
   user: AuthUser | null;
   isAdmin: boolean;
+  /** When true, admin must enroll TOTP before other admin APIs work. */
+  mfaEnrollmentRequired: boolean;
   /** Resolved from GET /admin/me when available; 'unknown' only in edge cases. */
   permissions: readonly string[] | 'unknown';
   roles: readonly string[];
   can: (permission?: string) => boolean;
-  login: (input: { email: string; password: string; remember: boolean }) => Promise<void>;
+  login: (input: {
+    email: string;
+    password: string;
+    remember: boolean;
+    mfaCode?: string;
+    mfaToken?: string;
+  }) => Promise<{ mfaRequired?: boolean; mfaToken?: string } | void>;
   logout: () => Promise<void>;
+  refreshMe: () => Promise<void>;
   sessionExpiredMessage: string | null;
   clearSessionExpiredMessage: () => void;
 };
@@ -63,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('bootstrapping');
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [mfaEnrollmentRequired, setMfaEnrollmentRequired] = useState(false);
   const [permissions, setPermissions] = useState<readonly string[] | 'unknown'>('unknown');
   const [roles, setRoles] = useState<readonly string[]>([]);
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState<string | null>(null);
@@ -72,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryClient.clear();
     setUser(null);
     setIsAdmin(false);
+    setMfaEnrollmentRequired(false);
     setPermissions('unknown');
     setRoles([]);
     setStatus('anonymous');
@@ -101,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!cancelled) {
           setUser(toUser(persisted.userId, persisted.accessToken));
           setIsAdmin(true);
+          setMfaEnrollmentRequired(false);
           setPermissions(mockAdminPermissions());
           setRoles(['SUPER_ADMIN']);
           setStatus('authenticated');
@@ -120,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           roleCodes: [...me.roleCodes],
         });
         setIsAdmin(true);
+        setMfaEnrollmentRequired(Boolean(me.mfaEnrollmentRequired));
         setPermissions([...me.permissionCodes]);
         setRoles([...me.roleCodes]);
         setStatus('authenticated');
@@ -140,7 +154,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [resetAnonymous]);
 
   const login = useCallback(
-    async (input: { email: string; password: string; remember: boolean }) => {
+    async (input: {
+      email: string;
+      password: string;
+      remember: boolean;
+      mfaCode?: string;
+      mfaToken?: string;
+    }) => {
       setSessionExpiredMessage(null);
 
       if (appConfig.useMockApi) {
@@ -148,17 +168,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         persistSession(tokens, input.remember, { email: input.email });
         setUser(toUser(tokens.userId, tokens.accessToken));
         setIsAdmin(true);
+        setMfaEnrollmentRequired(false);
         setPermissions(mockAdminPermissions());
         setRoles(['SUPER_ADMIN']);
         setStatus('authenticated');
         return;
       }
 
-      const tokens = await loginRequest({
-        email: input.email,
-        password: input.password,
-        rememberMe: input.remember,
-      });
+      let tokens =
+        input.mfaToken && input.mfaCode
+          ? await verifyMfaRequest({ mfaToken: input.mfaToken, code: input.mfaCode })
+          : await loginRequest({
+              email: input.email,
+              password: input.password,
+              rememberMe: input.remember,
+            });
+
+      if (tokens.mfaRequired && tokens.mfaToken) {
+        return { mfaRequired: true, mfaToken: tokens.mfaToken };
+      }
+
+      if (!tokens.accessToken || !tokens.refreshToken) {
+        throw new ApiClientError(401, 'INVALID_CREDENTIALS', 'Authentication failed. Please try again.');
+      }
+
       persistSession(tokens, input.remember, { email: input.email });
 
       let me;
@@ -182,6 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         roleCodes: [...me.roleCodes],
       });
       setIsAdmin(true);
+      setMfaEnrollmentRequired(Boolean(me.mfaEnrollmentRequired));
       setPermissions([...me.permissionCodes]);
       setRoles([...me.roleCodes]);
       setStatus('authenticated');
@@ -202,20 +236,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [resetAnonymous]);
 
+  const refreshMe = useCallback(async () => {
+    if (appConfig.useMockApi) {
+      setMfaEnrollmentRequired(false);
+      return;
+    }
+    const me = await verifyAdminAccess();
+    setMfaEnrollmentRequired(Boolean(me.mfaEnrollmentRequired));
+    setPermissions([...me.permissionCodes]);
+    setRoles([...me.roleCodes]);
+    setUser((prev) =>
+      prev
+        ? { ...prev, email: me.email || prev.email, roleCodes: [...me.roleCodes] }
+        : prev,
+    );
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
       user,
       isAdmin,
+      mfaEnrollmentRequired,
       permissions,
       roles,
       can: (permission?: string) => canPermission(permissions, permission, { isAdmin }),
       login,
       logout,
+      refreshMe,
       sessionExpiredMessage,
       clearSessionExpiredMessage: () => setSessionExpiredMessage(null),
     }),
-    [status, user, isAdmin, permissions, roles, login, logout, sessionExpiredMessage],
+    [
+      status,
+      user,
+      isAdmin,
+      mfaEnrollmentRequired,
+      permissions,
+      roles,
+      login,
+      logout,
+      refreshMe,
+      sessionExpiredMessage,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

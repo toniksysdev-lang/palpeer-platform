@@ -97,7 +97,7 @@ def main() -> int:
 
     env: dict[str, str] = {
         "SPRING_PROFILES_ACTIVE": "prod",
-        "OTP_LOG_CODE": "true",
+        "OTP_LOG_CODE": "false",
         "DB_HOST": db_host,
         "DB_PORT": db_port,
         "DB_NAME": db_name,

@@ -101,6 +101,8 @@ export type AdminMe = {
   enabled: boolean;
   roleCodes: string[];
   permissionCodes: string[];
+  mfaEnabled?: boolean;
+  mfaEnrollmentRequired?: boolean;
 };
 
 export type CurrencySummary = {

@@ -2,7 +2,10 @@ package com.palpeer.auth.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.palpeer.auth.web.dto.LoginRequest;
@@ -29,6 +32,9 @@ class AuthServiceLoginGateTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private LoginAttemptGuard loginAttemptGuard;
+
     @InjectMocks
     private AuthService authService;
 
@@ -52,5 +58,28 @@ class AuthServiceLoginGateTest {
 
         assertEquals("EMAIL_NOT_VERIFIED", ex.getCode());
         assertEquals(HttpStatus.FORBIDDEN, ex.getStatus());
+        verify(loginAttemptGuard, never()).recordSuccess(any());
+    }
+
+    @Test
+    void login_recordsFailureOnBadPassword() {
+        User user = new User();
+        user.setId(UUID.randomUUID());
+        user.setEmail("ada@example.com");
+        user.setPasswordHash("hash");
+        user.setEnabled(true);
+        user.setEmailVerified(true);
+        user.setStatus(UserStatus.ACTIVE);
+
+        when(userRepository.findByEmailIgnoreCase("ada@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches(anyString(), anyString())).thenReturn(false);
+
+        BusinessException ex = assertThrows(
+                BusinessException.class,
+                () -> authService.login(
+                        new LoginRequest("ada@example.com", "wrong", false, null, null, null)));
+
+        assertEquals("INVALID_CREDENTIALS", ex.getCode());
+        verify(loginAttemptGuard).recordFailure(user.getId());
     }
 }

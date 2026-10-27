@@ -43,10 +43,20 @@ server:
   error:
     include-stacktrace: never
 
+# Disable OpenAPI / Swagger UI in production (SecurityConfig also withholds permitAll).
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
 # Prefer SendPulse HTTPS on PaaS (outbound SMTP is often blocked). Override with PALPEER_MAIL_PROVIDER=smtp.
 palpeer:
   mail:
     provider: ${PALPEER_MAIL_PROVIDER:auto}
+  security:
+    otp:
+      log-code: ${OTP_LOG_CODE:false}
 
 logging:
   level:

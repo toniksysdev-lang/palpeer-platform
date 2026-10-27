@@ -1,5 +1,8 @@
 package com.palpeer.auth.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.palpeer.auth.ratelimit.AuthRateLimitFilter;
+import com.palpeer.auth.ratelimit.AuthRateLimiter;
 import com.palpeer.auth.security.JwtAuthenticationFilter;
 import com.palpeer.auth.security.PalpeerUserDetailsService;
 import com.palpeer.auth.service.JwtService;
@@ -22,5 +25,11 @@ public class AuthConfig {
     public JwtAuthenticationFilter jwtAuthenticationFilter(
             JwtService jwtService, PalpeerUserDetailsService userDetailsService) {
         return new JwtAuthenticationFilter(jwtService, userDetailsService);
+    }
+
+    @Bean
+    public AuthRateLimitFilter authRateLimitFilter(
+            AuthProperties authProperties, AuthRateLimiter rateLimiter, ObjectMapper objectMapper) {
+        return new AuthRateLimitFilter(authProperties, rateLimiter, objectMapper);
     }
 }

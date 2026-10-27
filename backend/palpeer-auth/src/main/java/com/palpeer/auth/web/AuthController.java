@@ -8,6 +8,7 @@ import com.palpeer.auth.web.dto.ChangeSignupEmailRequest;
 import com.palpeer.auth.web.dto.GoogleAuthRequest;
 import com.palpeer.auth.web.dto.LoginRequest;
 import com.palpeer.auth.web.dto.LogoutRequest;
+import com.palpeer.auth.web.dto.MfaVerifyRequest;
 import com.palpeer.auth.web.dto.OtpResendRequest;
 import com.palpeer.auth.web.dto.OtpResendResponse;
 import com.palpeer.auth.web.dto.OtpVerifyRequest;
@@ -61,6 +62,12 @@ public class AuthController {
     @Operation(summary = "Login with email or phone and password")
     public ApiResponse<AuthTokensResponse> login(@Valid @RequestBody LoginRequest request) {
         return ApiResponse.ok(authService.login(request));
+    }
+
+    @PostMapping("/mfa/verify")
+    @Operation(summary = "Complete login with admin TOTP after MFA_REQUIRED challenge")
+    public ApiResponse<AuthTokensResponse> verifyMfa(@Valid @RequestBody MfaVerifyRequest request) {
+        return ApiResponse.ok(authService.verifyMfa(request));
     }
 
     @PostMapping("/google")

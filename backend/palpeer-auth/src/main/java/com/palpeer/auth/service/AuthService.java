@@ -12,7 +12,9 @@ import com.palpeer.auth.repository.AccountSuspendTokenRepository;
 import com.palpeer.auth.repository.OtpChallengeRepository;
 import com.palpeer.auth.repository.PhonePreVerificationRepository;
 import com.palpeer.auth.repository.RefreshTokenRepository;
+import com.palpeer.auth.spi.AdminMfaGate;
 import com.palpeer.auth.spi.TransactionPinMatcher;
+import com.palpeer.auth.web.dto.MfaVerifyRequest;
 import com.palpeer.auth.util.TokenHashing;
 import com.palpeer.auth.web.dto.AuthTokensResponse;
 import com.palpeer.auth.web.dto.ChangePasswordRequest;
@@ -79,6 +81,8 @@ public class AuthService {
     private final AuditRecorder auditRecorder;
     private final GoogleIdTokenService googleIdTokenService;
     private final ObjectProvider<TransactionPinMatcher> pinMatcher;
+    private final ObjectProvider<AdminMfaGate> adminMfaGate;
+    private final LoginAttemptGuard loginAttemptGuard;
 
     @Transactional
     public RegisterResponse register(RegisterRequest request) {
@@ -277,6 +281,7 @@ public class AuthService {
         if (!user.isEnabled()) {
             throw new BusinessException("USER_DISABLED", "User account is disabled", HttpStatus.FORBIDDEN);
         }
+        loginAttemptGuard.ensureNotLocked(user.getId());
         if (user.getPasswordHash() == null || user.getPasswordHash().isBlank()) {
             if (user.getGoogleSub() != null && !user.getGoogleSub().isBlank()) {
                 throw new BusinessException(
@@ -291,6 +296,9 @@ public class AuthService {
                     HttpStatus.BAD_REQUEST);
         }
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            if (loginAttemptGuard.recordFailure(user.getId())) {
+                throw LoginAttemptGuard.locked();
+            }
             throw new BusinessException("INVALID_CREDENTIALS", "Invalid credentials", HttpStatus.UNAUTHORIZED);
         }
         if (!user.isEmailVerified()) {
@@ -300,8 +308,57 @@ public class AuthService {
                     HttpStatus.FORBIDDEN);
         }
 
+        loginAttemptGuard.recordSuccess(user.getId());
         boolean remember = Boolean.TRUE.equals(request.rememberMe());
+        AdminMfaGate mfa = adminMfaGate.getIfAvailable();
+        if (mfa != null && mfa.isMfaRequired(user.getId())) {
+            DeviceLoginInfo device = request.device();
+            String challenge = jwtService.createMfaChallengeToken(
+                    user.getId(),
+                    remember,
+                    device == null ? null : device.deviceIdentifier(),
+                    device == null ? null : device.deviceName(),
+                    device == null ? null : device.platform());
+            return AuthTokensResponse.mfaChallenge(user.getId(), challenge);
+        }
         return completeLogin(user, remember, request.device());
+    }
+
+    /**
+     * Completes password login after a valid admin TOTP when MFA is enrolled.
+     */
+    @Transactional
+    public AuthTokensResponse verifyMfa(MfaVerifyRequest request) {
+        String token = request.mfaToken().trim();
+        try {
+            if (!jwtService.isMfaChallengeToken(token)) {
+                throw new BusinessException("MFA_TOKEN_INVALID", "Invalid MFA session", HttpStatus.UNAUTHORIZED);
+            }
+        } catch (JwtException ex) {
+            throw new BusinessException("MFA_TOKEN_INVALID", "Invalid or expired MFA session", HttpStatus.UNAUTHORIZED);
+        }
+
+        UUID userId = jwtService.extractUserId(token);
+        User user = userRepository
+                .findById(userId)
+                .orElseThrow(() -> new BusinessException("INVALID_CREDENTIALS", "Invalid credentials", HttpStatus.UNAUTHORIZED));
+        if (!user.isEnabled()) {
+            throw new BusinessException("USER_DISABLED", "User account is disabled", HttpStatus.FORBIDDEN);
+        }
+
+        AdminMfaGate mfa = adminMfaGate.getIfAvailable();
+        if (mfa == null || !mfa.isMfaRequired(userId) || !mfa.verifySecondFactor(userId, request.code())) {
+            throw new BusinessException(
+                    "MFA_INVALID", "Invalid authenticator or recovery code", HttpStatus.UNAUTHORIZED);
+        }
+
+        var claims = jwtService.parseClaims(token);
+        boolean remember = Boolean.TRUE.equals(claims.get(JwtService.CLAIM_REMEMBER_ME, Boolean.class));
+        DeviceLoginInfo device = DeviceLoginInfo.of(
+                claims.get(JwtService.CLAIM_DEVICE_ID, String.class),
+                claims.get(JwtService.CLAIM_DEVICE_NAME, String.class),
+                claims.get(JwtService.CLAIM_PLATFORM, String.class));
+        return completeLogin(user, remember, device);
     }
 
     /**

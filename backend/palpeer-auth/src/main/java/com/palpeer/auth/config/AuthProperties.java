@@ -18,6 +18,8 @@ public class AuthProperties {
 
     private final Jwt jwt = new Jwt();
     private final Otp otp = new Otp();
+    private final LoginLockout loginLockout = new LoginLockout();
+    private final RateLimit rateLimit = new RateLimit();
     private final Google google = new Google();
     /**
      * Public origin used in emailed security links (e.g. {@code https://api.example.com} or
@@ -48,6 +50,23 @@ public class AuthProperties {
         private int maxAttempts = 5;
         /** When true, plaintext OTP is returned on register/resend for local autofill (never enable in prod). */
         private boolean logCode = false;
+    }
+
+    @Getter
+    @Setter
+    public static class LoginLockout {
+        private int maxAttempts = 5;
+        private Duration lockoutDuration = Duration.ofMinutes(15);
+    }
+
+    @Getter
+    @Setter
+    public static class RateLimit {
+        private boolean enabled = true;
+        private int loginPerMinute = 10;
+        private int otpPerMinute = 5;
+        private int passwordResetPerMinute = 5;
+        private int registerPerMinute = 5;
     }
 
     @Getter

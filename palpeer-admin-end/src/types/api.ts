@@ -17,6 +17,8 @@ export type AuthTokens = {
   accessToken: string;
   refreshToken: string;
   tokenType: string;
+  mfaRequired?: boolean | null;
+  mfaToken?: string | null;
 };
 
 export class ApiClientError extends Error {

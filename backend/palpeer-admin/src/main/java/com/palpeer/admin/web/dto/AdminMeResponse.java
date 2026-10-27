@@ -8,6 +8,8 @@ public record AdminMeResponse(
         String email,
         boolean enabled,
         Set<String> roleCodes,
-        Set<String> permissionCodes
+        Set<String> permissionCodes,
+        boolean mfaEnabled,
+        boolean mfaEnrollmentRequired
 ) {
 }

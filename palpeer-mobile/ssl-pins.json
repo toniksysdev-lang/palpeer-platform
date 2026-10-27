@@ -1,0 +1,21 @@
+{
+  "host": "palpeer-api.onrender.com",
+  "extractedAt": "2026-10-27T06:58:04.480Z",
+  "pins": [
+    {
+      "pin": "8emdl/UmneUm0I4Y/vHzOTQzb9eJwG4voRHtMdNmBPk=",
+      "subject": "onrender.com",
+      "validTo": "Dec 20 23:04:28 2026 GMT"
+    },
+    {
+      "pin": "kIdp6NNEd8wsugYyyIYFsi1ylMCED3hZbSR8ZFsa/A4=",
+      "subject": "WE1",
+      "validTo": "Feb 20 14:00:00 2029 GMT"
+    },
+    {
+      "pin": "mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=",
+      "subject": "GTS Root R4",
+      "validTo": "Jan 28 00:00:42 2028 GMT"
+    }
+  ]
+}

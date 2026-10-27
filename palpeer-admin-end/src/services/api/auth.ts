@@ -26,6 +26,61 @@ export async function loginRequest(input: LoginInput): Promise<AuthTokens> {
   });
 }
 
+export async function verifyMfaRequest(input: { mfaToken: string; code: string }): Promise<AuthTokens> {
+  return apiRequest<AuthTokens>('/auth/mfa/verify', {
+    method: 'POST',
+    body: {
+      mfaToken: input.mfaToken,
+      code: input.code.trim(),
+    },
+    auth: false,
+  });
+}
+
+export type AdminMfaStatus = {
+  enabled: boolean;
+  enabledAt?: string | null;
+  recoveryCodesRemaining?: number;
+  enrollmentRequired?: boolean;
+};
+
+export type AdminMfaSetup = {
+  secret: string;
+  otpauthUrl: string;
+};
+
+export type AdminMfaEnableResult = {
+  enabled: boolean;
+  enabledAt?: string | null;
+  recoveryCodes?: string[];
+  recoveryCodesRemaining?: number;
+};
+
+export async function fetchAdminMfaStatus(): Promise<AdminMfaStatus> {
+  return apiRequest<AdminMfaStatus>('/admin/mfa');
+}
+
+export async function beginAdminMfaSetup(): Promise<AdminMfaSetup> {
+  return apiRequest<AdminMfaSetup>('/admin/mfa/setup', { method: 'POST' });
+}
+
+export async function enableAdminMfa(code: string): Promise<AdminMfaEnableResult> {
+  return apiRequest<AdminMfaEnableResult>('/admin/mfa/enable', {
+    method: 'POST',
+    body: { code: code.trim() },
+  });
+}
+
+export async function disableAdminMfa(input: {
+  password: string;
+  code: string;
+}): Promise<AdminMfaStatus> {
+  return apiRequest<AdminMfaStatus>('/admin/mfa/disable', {
+    method: 'POST',
+    body: { password: input.password, code: input.code.trim() },
+  });
+}
+
 export async function logoutRequest(refreshToken: string): Promise<void> {
   await apiRequest<null>('/auth/logout', {
     method: 'POST',

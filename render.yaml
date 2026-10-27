@@ -24,9 +24,9 @@ services:
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
-      # Soft-fail when email fails; mobile autofills debugOtp. Prefer SendPulse REST on Render.
+      # Never return/log OTP plaintext in production. Override only for short-lived debugging.
       - key: OTP_LOG_CODE
-        value: "true"
+        value: "false"
       - key: PALPEER_MAIL_PROVIDER
         value: auto
       - key: JWT_SECRET
@@ -104,6 +104,8 @@ services:
         sync: false
       - key: ADMIN_BOOTSTRAP_EMAIL
         sync: false
+      - key: ADMIN_MFA_REQUIRED
+        value: "true"
       - key: GOOGLE_CLIENT_IDS
         sync: false
       # Payment rails — required for admin Pool Funds live balances + funding/withdrawals
@@ -227,6 +229,29 @@ services:
           type: web
           name: palpeer-api
           envVarKey: RENDER_EXTERNAL_URL
+    headers:
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=31536000; includeSubDomains
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(), microphone=(), geolocation=(), payment=()
+      - path: /*
+        name: Cross-Origin-Opener-Policy
+        value: same-origin
+      - path: /*
+        name: Content-Security-Policy
+        # connect-src allows any https/wss API host (onrender + custom). Tighten in Dashboard if needed.
+        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
     routes:
       - type: rewrite
         source: /*

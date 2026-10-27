@@ -9,8 +9,12 @@
       "developmentClient": true,
       "distribution": "internal",
       "environment": "development",
-      "env": { "EXPO_PUBLIC_ENV": "development" },
-      "android": { "buildType": "apk" }
+      "env": {
+        "EXPO_PUBLIC_ENV": "development"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -20,7 +24,8 @@
         "EXPO_PUBLIC_ENV": "staging",
         "EXPO_PUBLIC_API_BASE_URL": "https://palpeer-api.onrender.com/api/v1",
         "EXPO_PUBLIC_WS_URL": "https://palpeer-api.onrender.com/ws",
-        "NODE_OPTIONS": "--max-old-space-size=4096"
+        "NODE_OPTIONS": "--max-old-space-size=4096",
+        "EXPO_PUBLIC_API_SSL_PINS": "8emdl/UmneUm0I4Y/vHzOTQzb9eJwG4voRHtMdNmBPk=,kIdp6NNEd8wsugYyyIYFsi1ylMCED3hZbSR8ZFsa/A4="
       },
       "android": {
         "buildType": "apk"
@@ -33,7 +38,8 @@
         "EXPO_PUBLIC_ENV": "production",
         "EXPO_PUBLIC_API_BASE_URL": "https://palpeer-api.onrender.com/api/v1",
         "EXPO_PUBLIC_WS_URL": "https://palpeer-api.onrender.com/ws",
-        "NODE_OPTIONS": "--max-old-space-size=4096"
+        "NODE_OPTIONS": "--max-old-space-size=4096",
+        "EXPO_PUBLIC_API_SSL_PINS": "8emdl/UmneUm0I4Y/vHzOTQzb9eJwG4voRHtMdNmBPk=,kIdp6NNEd8wsugYyyIYFsi1ylMCED3hZbSR8ZFsa/A4="
       }
     }
   },

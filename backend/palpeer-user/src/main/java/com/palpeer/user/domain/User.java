@@ -7,6 +7,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.Instant;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -53,4 +54,12 @@ public class User extends BaseEntity {
 
     @Column(name = "phone_verified", nullable = false)
     private boolean phoneVerified;
+
+    /** Consecutive failed password-login attempts; reset on success or after lockout expires. */
+    @Column(name = "failed_login_attempts", nullable = false)
+    private int failedLoginAttempts;
+
+    /** When set and in the future, password login is rejected until this instant. */
+    @Column(name = "login_locked_until")
+    private Instant loginLockedUntil;
 }

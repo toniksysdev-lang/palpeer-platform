@@ -4,7 +4,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { Skeleton } from '@/components/ui/Skeleton';
 
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { status, isAdmin } = useAuth();
+  const { status, isAdmin, mfaEnrollmentRequired } = useAuth();
   const location = useLocation();
 
   if (status === 'bootstrapping') {
@@ -22,6 +22,12 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   if (status !== 'authenticated' || !isAdmin) {
     return <Navigate to="/sign-in" replace state={{ from: location.pathname }} />;
+  }
+
+  const onSecuritySettings =
+    location.pathname === '/admin/settings' || location.pathname.startsWith('/admin/settings/');
+  if (mfaEnrollmentRequired && !onSecuritySettings) {
+    return <Navigate to="/admin/settings#security" replace />;
   }
 
   return children;

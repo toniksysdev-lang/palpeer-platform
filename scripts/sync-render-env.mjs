@@ -91,7 +91,7 @@ const redis = parseRedis(kv);
 
 const env = {
   SPRING_PROFILES_ACTIVE: 'prod',
-  OTP_LOG_CODE: 'true',
+  OTP_LOG_CODE: 'false',
   DB_HOST: db.host,
   DB_PORT: db.port,
   DB_NAME: db.db,

@@ -3,6 +3,7 @@ package com.palpeer.admin.service;
 import com.palpeer.admin.domain.AdminUser;
 import com.palpeer.admin.domain.Permission;
 import com.palpeer.admin.domain.Role;
+import com.palpeer.admin.repository.AdminMfaTotpRepository;
 import com.palpeer.admin.repository.AdminUserRepository;
 import com.palpeer.admin.repository.PermissionRepository;
 import com.palpeer.admin.repository.RoleRepository;
@@ -42,6 +43,8 @@ public class AdminRbacService {
     public static final String ADMIN_MANAGE_PERMISSION = "admin:manage";
 
     private final AdminUserRepository adminUserRepository;
+    private final AdminMfaTotpRepository adminMfaTotpRepository;
+    private final AdminMfaService adminMfaService;
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private final UserRepository userRepository;
@@ -101,12 +104,16 @@ public class AdminRbacService {
                 .flatMap(role -> role.getPermissions().stream())
                 .map(Permission::getCode)
                 .collect(Collectors.toCollection(java.util.TreeSet::new));
+        boolean mfaEnabled = adminMfaTotpRepository.existsByUserIdAndEnabledTrue(adminUser.getUserId());
+        boolean mfaEnrollmentRequired = adminMfaService.isEnrollmentRequired(adminUser.getUserId());
         return new AdminMeResponse(
                 adminUser.getUserId(),
                 principal.getEmail(),
                 adminUser.isEnabled(),
                 roleCodesOf(adminUser),
-                permissionCodes);
+                permissionCodes,
+                mfaEnabled,
+                mfaEnrollmentRequired);
     }
 
     @Transactional(readOnly = true)
