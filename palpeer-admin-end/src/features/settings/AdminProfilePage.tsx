@@ -1,20 +1,11 @@
-import { useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { UserRound } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Shield, UserRound } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { SecuritySettings } from '@/features/settings/SecuritySettings';
 
 export function AdminProfilePage() {
   const { user, permissions, roles, can } = useAuth();
-  const location = useLocation();
   const canManage = can('admin:manage');
-
-  useEffect(() => {
-    if (location.hash !== '#security') return;
-    const el = document.getElementById('security');
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [location.hash]);
 
   return (
     <div className="space-y-5">
@@ -26,15 +17,25 @@ export function AdminProfilePage() {
               <h1 className="text-xl font-semibold text-text-primary">Admin user profile</h1>
             </div>
             <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-              Your operator account, roles, permissions, password, and signed-in sessions.
+              Your operator account, roles, and permissions. Password, sessions, and authenticator
+              MFA are under Settings → Security.
             </p>
           </div>
-          <Link
-            to="/admin/settings"
-            className="rounded-[0.6rem] border border-border px-3 py-2 text-sm text-primary hover:bg-surface-secondary"
-          >
-            Open settings
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/admin/settings#security"
+              className="inline-flex items-center gap-2 rounded-[0.6rem] border border-border px-3 py-2 text-sm text-primary hover:bg-surface-secondary"
+            >
+              <Shield className="h-4 w-4" aria-hidden />
+              Security &amp; MFA
+            </Link>
+            <Link
+              to="/admin/settings"
+              className="rounded-[0.6rem] border border-border px-3 py-2 text-sm text-primary hover:bg-surface-secondary"
+            >
+              Open settings
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -115,8 +116,6 @@ export function AdminProfilePage() {
           </div>
         ) : null}
       </section>
-
-      <SecuritySettings />
     </div>
   );
 }

@@ -202,7 +202,7 @@ export const primaryNav: NavItem[] = [
   {
     id: 'security',
     label: 'Security',
-    path: '/admin/profile#security',
+    path: '/admin/settings#security',
     icon: Shield,
   },
 ];

@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import {
   BellRing,
   Globe2,
@@ -6,6 +6,7 @@ import {
   Monitor,
   Moon,
   Settings,
+  Shield,
   ShieldAlert,
   Sun,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ import { PoolFundThresholdSettings } from '@/features/settings/PoolFundThreshold
 import { RegistrationCountriesSettings } from '@/features/settings/RegistrationCountriesSettings';
 import { FundingUnverifiedLimitSettings } from '@/features/settings/FundingUnverifiedLimitSettings';
 import { WithdrawalUnverifiedLimitSettings } from '@/features/settings/WithdrawalUnverifiedLimitSettings';
+import { SecuritySettings } from '@/features/settings/SecuritySettings';
 import type { ThemeMode } from '@/lib/theme';
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
@@ -28,6 +30,7 @@ const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
 
 type SettingsTab =
   | 'general'
+  | 'security'
   | 'pool-threshold'
   | 'registration-countries'
   | 'pin-policy'
@@ -36,6 +39,7 @@ type SettingsTab =
 
 const TABS: { id: SettingsTab; label: string; icon: typeof Settings; manageOnly?: boolean }[] = [
   { id: 'general', label: 'General', icon: Settings },
+  { id: 'security', label: 'Security', icon: Shield },
   {
     id: 'pool-threshold',
     label: 'Pool Fund Balance Threshold Notice',
@@ -65,27 +69,49 @@ const TABS: { id: SettingsTab; label: string; icon: typeof Settings; manageOnly?
 
 const TAB_IDS = new Set<string>(TABS.map((t) => t.id));
 
-function parseTab(raw: string | null): SettingsTab {
+function parseTab(raw: string | null, hash: string): SettingsTab {
+  if (hash === '#security') return 'security';
   if (raw && TAB_IDS.has(raw)) return raw as SettingsTab;
   return 'general';
 }
 
 export function SettingsPage() {
-  const { can } = useAuth();
+  const { can, mfaEnrollmentRequired } = useAuth();
   const { mode, setMode, resolved } = useTheme();
   const canManage = can('admin:manage');
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = useMemo(() => parseTab(searchParams.get('tab')), [searchParams]);
+  const tab = useMemo(
+    () => parseTab(searchParams.get('tab'), location.hash),
+    [searchParams, location.hash],
+  );
 
   const visibleTabs = TABS.filter((t) => !t.manageOnly || canManage);
 
   useEffect(() => {
-    if (!canManage && tab !== 'general') {
+    if (!canManage && tab !== 'general' && tab !== 'security') {
       setSearchParams({}, { replace: true });
     }
   }, [canManage, tab, setSearchParams]);
 
+  // MFA enrollment gate lands on /admin/settings#security — open the Security tab and scroll.
+  useEffect(() => {
+    if (location.hash !== '#security') return;
+    if (searchParams.get('tab') !== 'security') {
+      setSearchParams({ tab: 'security' }, { replace: true });
+    }
+    const el = document.getElementById('security');
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [location.hash, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!mfaEnrollmentRequired) return;
+    if (tab === 'security') return;
+    setSearchParams({ tab: 'security' }, { replace: true });
+  }, [mfaEnrollmentRequired, tab, setSearchParams]);
+
   const selectTab = (next: SettingsTab) => {
+    if (mfaEnrollmentRequired && next !== 'security') return;
     if (next === 'general') {
       setSearchParams({}, { replace: true });
       return;
@@ -103,8 +129,8 @@ export function SettingsPage() {
               <h1 className="text-xl font-semibold text-text-primary">Settings</h1>
             </div>
             <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-              Platform preferences, registration countries, pool-fund alerts, unverified
-              withdraw/fund limits, and PIN lockout policy.
+              Account security (MFA), platform preferences, registration countries, pool-fund
+              alerts, unverified withdraw/fund limits, and PIN lockout policy.
             </p>
           </div>
         </div>
@@ -113,6 +139,7 @@ export function SettingsPage() {
           {visibleTabs.map((item) => {
             const Icon = item.icon;
             const active = tab === item.id;
+            const locked = mfaEnrollmentRequired && item.id !== 'security';
             return (
               <Button
                 key={item.id}
@@ -120,6 +147,7 @@ export function SettingsPage() {
                 size="sm"
                 variant={active ? 'primary' : 'secondary'}
                 aria-pressed={active}
+                disabled={locked}
                 onClick={() => selectTab(item.id)}
               >
                 <Icon className="h-3.5 w-3.5" aria-hidden />
@@ -129,6 +157,8 @@ export function SettingsPage() {
           })}
         </div>
       </section>
+
+      {tab === 'general' || tab === 'security' ? <SecuritySettings /> : null}
 
       {tab === 'general' ? (
         <>

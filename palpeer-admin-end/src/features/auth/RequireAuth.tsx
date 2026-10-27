@@ -3,6 +3,10 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { Skeleton } from '@/components/ui/Skeleton';
 
+/** MFA enrollment UI is on Settings → Security (`SecuritySettings`). */
+const MFA_ENROLLMENT_PATH = '/admin/settings';
+const MFA_ENROLLMENT_HASH = '#security';
+
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { status, isAdmin, mfaEnrollmentRequired } = useAuth();
   const location = useLocation();
@@ -24,10 +28,11 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     return <Navigate to="/sign-in" replace state={{ from: location.pathname }} />;
   }
 
-  const onSecuritySettings =
-    location.pathname === '/admin/settings' || location.pathname.startsWith('/admin/settings/');
-  if (mfaEnrollmentRequired && !onSecuritySettings) {
-    return <Navigate to="/admin/settings#security" replace />;
+  const onMfaEnrollmentPage =
+    location.pathname === MFA_ENROLLMENT_PATH ||
+    location.pathname.startsWith(`${MFA_ENROLLMENT_PATH}/`);
+  if (mfaEnrollmentRequired && !onMfaEnrollmentPage) {
+    return <Navigate to={`${MFA_ENROLLMENT_PATH}${MFA_ENROLLMENT_HASH}`} replace />;
   }
 
   return children;
