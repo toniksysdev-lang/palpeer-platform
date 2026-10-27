@@ -11,14 +11,18 @@ function originOf(url: string | undefined, fallback?: string): string | undefine
   }
 }
 
-function buildCsp(env: Record<string, string>): string {
+function buildCsp(env: Record<string, string>, mode: string): string {
   const apiOrigin = originOf(env.VITE_API_BASE_URL);
   const wsOrigin = originOf(env.VITE_WS_URL, apiOrigin);
   const connect = new Set<string>(["'self'"]);
+  const isProd =
+    mode === 'production' ||
+    env.VITE_APP_ENV === 'production' ||
+    (!!apiOrigin && apiOrigin.startsWith('https://'));
 
   if (apiOrigin) {
     connect.add(apiOrigin);
-  } else {
+  } else if (!isProd) {
     // Local Vite defaults when env is unset
     connect.add('http://127.0.0.1:8085');
     connect.add('http://localhost:8085');
@@ -32,13 +36,14 @@ function buildCsp(env: Record<string, string>): string {
     if (wsOrigin.startsWith('http://')) {
       connect.add(wsOrigin.replace(/^http:/, 'ws:'));
     }
-  } else {
+  } else if (!isProd) {
     connect.add('ws://127.0.0.1:8085');
     connect.add('ws://localhost:8085');
   }
 
-  // Production admin on Render must always reach the HTTPS API even if env load races.
-  if (env.VITE_APP_ENV === 'production' || (apiOrigin && apiOrigin.startsWith('https://'))) {
+  // Production meta CSP must include https/wss or the Render header ∩ meta intersection
+  // collapses to 'self' only and sign-in fails with a network error.
+  if (isProd) {
     connect.add('https:');
     connect.add('wss:');
   }
@@ -57,11 +62,11 @@ function buildCsp(env: Record<string, string>): string {
   ].join('; ');
 }
 
-function cspMetaPlugin(getEnv: () => Record<string, string>): Plugin {
+function cspMetaPlugin(getEnv: () => Record<string, string>, mode: string): Plugin {
   return {
     name: 'palpeer-csp-meta',
     transformIndexHtml(html) {
-      const csp = buildCsp(getEnv());
+      const csp = buildCsp(getEnv(), mode);
       const tag = `<meta http-equiv="Content-Security-Policy" content="${csp}" />`;
       if (html.includes('<!--csp-->')) {
         return html.replace('<!--csp-->', tag);
@@ -79,7 +84,7 @@ export default defineConfig(({ mode }) => {
       Object.entries(process.env).filter(([, v]) => typeof v === 'string') as [string, string][],
     ),
   };
-  const csp = buildCsp(env);
+  const csp = buildCsp(env, mode);
 
   const securityHeaders = {
     'X-Content-Type-Options': 'nosniff',
@@ -96,7 +101,7 @@ export default defineConfig(({ mode }) => {
   };
 
   return {
-    plugins: [react(), cspMetaPlugin(() => env)],
+    plugins: [react(), cspMetaPlugin(() => env, mode)],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
