@@ -15,16 +15,17 @@ export function sellOrderAcceptPath(requestId: string): string {
   return `/p2p/request/${requestId}`;
 }
 
-/** Production App Link / Universal Link host (matches app.config intentFilters + associatedDomains). */
-const DEFAULT_SHARE_BASE_URL = 'https://app.palpeer.com';
-
 /**
- * HTTPS share link for messages. Opens PALPEER to the P2P request when the app is installed
- * (Android App Links / iOS Universal Links); otherwise the browser can show store CTAs.
+ * HTTPS share link for messages. Uses the API host bridge (`GET /p2p/share/{id}`) so the
+ * installed app opens via {@code palpeer://}, not the marketing website.
  */
 export function sellOrderShareUrl(requestId: string): string {
-  const base = (appConfig.share.baseUrl ?? DEFAULT_SHARE_BASE_URL).replace(/\/+$/, '');
-  return `${base}${sellOrderSharePath(requestId)}`;
+  const apiRoot = appConfig.apiBaseUrl.replace(/\/api\/v1\/?$/, '').replace(/\/+$/, '');
+  if (/^https?:\/\//i.test(apiRoot)) {
+    // API host serves an HTML bridge that opens palpeer:// — not the marketing website.
+    return `${apiRoot}${sellOrderSharePath(requestId)}`;
+  }
+  return `palpeer:/${sellOrderSharePath(requestId)}`;
 }
 
 export function sellOrderShareMessage(
@@ -48,7 +49,6 @@ export async function shareSellOrder(
   formattedAmount: string,
 ): Promise<'shared' | 'cancelled'> {
   const message = sellOrderShareMessage(request, formattedAmount);
-  // HTTPS App Link in the message so chats open the P2P request in-app when PALPEER is installed.
   const result = await Share.share(
     Platform.OS === 'ios'
       ? { message }

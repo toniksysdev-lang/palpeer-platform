@@ -99,6 +99,7 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/open",
+                                "/p2p/share/*",
                                 "/api/v1/auth/account-suspend",
                                 "/secure/account-lock/**",
                                 "/api/v1/public/instant-rates",

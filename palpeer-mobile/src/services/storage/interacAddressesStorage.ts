@@ -1,8 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import { authorizedRequest } from '@/services/api/authorized';
 import { logger } from '@/utils/logger';
-
-const KEY_PREFIX = 'palpeer.interac.addresses.';
 
 export type InteracAddress = {
   id: string;
@@ -12,56 +9,70 @@ export type InteracAddress = {
   createdAt: string;
 };
 
-function keyFor(userId: string): string {
-  return `${KEY_PREFIX}${userId}`;
-}
+type ApiInteracAddress = {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  createdAt: string;
+};
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function mapAddress(row: ApiInteracAddress): InteracAddress {
+  return {
+    id: row.id,
+    email: normalizeEmail(row.email),
+    firstName: row.firstName?.trim() ?? '',
+    lastName: row.lastName?.trim() ?? '',
+    createdAt: row.createdAt,
+  };
+}
+
+/**
+ * CAD Interac payer addresses — persisted on the server so they survive app reinstall.
+ * `userId` is kept in the public API for call-site compatibility; the backend scopes by JWT.
+ */
 export const interacAddressesStorage = {
-  async list(userId: string): Promise<InteracAddress[]> {
-    if (!userId) return [];
-    try {
-      const raw = await AsyncStorage.getItem(keyFor(userId));
-      if (!raw) return [];
-      const parsed = JSON.parse(raw) as InteracAddress[];
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter(
-        (item) =>
-          item &&
-          typeof item.id === 'string' &&
-          typeof item.email === 'string' &&
-          item.email.includes('@'),
-      );
-    } catch (error) {
-      logger.warn('Interac addresses load failed', { error });
+  async list(_userId: string): Promise<InteracAddress[]> {
+    const result = await authorizedRequest<ApiInteracAddress[]>('/me/interac-addresses');
+    if (!result.ok) {
+      logger.warn('Interac addresses load failed', { error: result.error });
       return [];
     }
+    return (result.data ?? [])
+      .filter((item) => item && typeof item.id === 'string' && typeof item.email === 'string')
+      .map(mapAddress);
   },
 
-  async save(userId: string, address: Omit<InteracAddress, 'id' | 'createdAt'> & { id?: string }): Promise<InteracAddress> {
-    const list = await this.list(userId);
-    const email = normalizeEmail(address.email);
-    const existing = list.find((item) => normalizeEmail(item.email) === email);
-    const next: InteracAddress = {
-      id: existing?.id ?? address.id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      firstName: address.firstName.trim(),
-      lastName: address.lastName.trim(),
-      email,
-      createdAt: existing?.createdAt ?? new Date().toISOString(),
-    };
-    const without = list.filter((item) => normalizeEmail(item.email) !== email);
-    await AsyncStorage.setItem(keyFor(userId), JSON.stringify([next, ...without]));
-    return next;
+  async save(
+    _userId: string,
+    address: Omit<InteracAddress, 'id' | 'createdAt'> & { id?: string },
+  ): Promise<InteracAddress> {
+    const result = await authorizedRequest<ApiInteracAddress>('/me/interac-addresses', {
+      method: 'POST',
+      body: {
+        email: normalizeEmail(address.email),
+        firstName: address.firstName.trim(),
+        lastName: address.lastName.trim(),
+      },
+    });
+    if (!result.ok) {
+      logger.warn('Interac address save failed', { error: result.error });
+      throw new Error(result.error.message || 'Could not save Interac address');
+    }
+    return mapAddress(result.data);
   },
 
-  async remove(userId: string, id: string): Promise<void> {
-    const list = await this.list(userId);
-    await AsyncStorage.setItem(
-      keyFor(userId),
-      JSON.stringify(list.filter((item) => item.id !== id)),
-    );
+  async remove(_userId: string, id: string): Promise<void> {
+    const result = await authorizedRequest<void>(`/me/interac-addresses/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    if (!result.ok) {
+      logger.warn('Interac address delete failed', { error: result.error });
+      throw new Error(result.error.message || 'Could not delete Interac address');
+    }
   },
 };

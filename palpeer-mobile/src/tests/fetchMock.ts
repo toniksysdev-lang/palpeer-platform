@@ -1,6 +1,8 @@
 /** `rawBody` sends exact JSON text (e.g. money with more digits than a JS number holds). */
 type Reply = { status: number; body?: unknown; rawBody?: string };
 type Handler = (request: {
+  method: string;
+  path: string;
   body: unknown;
   headers: Record<string, string>;
   query: string;
@@ -44,10 +46,16 @@ export function installFetchMock(routes: Record<string, Reply | Reply[] | Handle
     calls.push({ method, path, body, rawBody, query: search, headers });
 
     const key = `${method} ${path}`;
-    const route = routes[key];
+    const route =
+      routes[key] ??
+      Object.entries(routes).find(([pattern]) => {
+        if (!pattern.includes('*')) return false;
+        const re = new RegExp(`^${pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]+')}$`);
+        return re.test(key);
+      })?.[1];
     let reply: Reply | undefined;
     if (typeof route === 'function') {
-      reply = route({ body, headers, query: search });
+      reply = route({ method, path, body, headers, query: search });
     } else if (Array.isArray(route)) {
       if (!queues.has(key)) queues.set(key, [...route]);
       reply = queues.get(key)?.shift();

@@ -24,6 +24,61 @@ jest.mock('expo-router', () => require('../../../tests/mocks/expoRouter'));
 const posts = (calls: RecordedCall[], path: string) =>
   calls.filter((call) => call.method === 'POST' && call.path === path);
 
+type StoredInterac = {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  createdAt: string;
+};
+
+/** In-memory Interac address API used by funding/withdraw screens after DB persistence. */
+function interacApiRoutes(seed: StoredInterac[] = []) {
+  const store = [...seed];
+  return {
+    'GET /me/interac-addresses': () => ok([...store]),
+    'POST /me/interac-addresses': ({ body }: { body: unknown }) => {
+      const row = body as { email?: string; firstName?: string; lastName?: string };
+      const email = (row.email ?? '').trim().toLowerCase();
+      const existing = store.find((item) => item.email === email);
+      const next: StoredInterac = {
+        id: existing?.id ?? `ia-${store.length + 1}`,
+        email,
+        firstName: (row.firstName ?? '').trim(),
+        lastName: (row.lastName ?? '').trim(),
+        createdAt: existing?.createdAt ?? '2026-01-01T00:00:00Z',
+      };
+      if (existing) {
+        Object.assign(existing, next);
+      } else {
+        store.unshift(next);
+      }
+      return { status: 201, body: { success: true, data: next, message: 'Saved', timestamp: '' } };
+    },
+    'DELETE /me/interac-addresses/*': ({ path }: { path: string }) => {
+      const id = path.split('/').pop();
+      const index = store.findIndex((item) => item.id === id);
+      if (index >= 0) store.splice(index, 1);
+      return { status: 204, body: undefined };
+    },
+  };
+}
+
+function seedInterac(
+  firstName: string,
+  lastName: string,
+  email: string,
+  id = 'ia-1',
+): StoredInterac {
+  return {
+    id,
+    firstName,
+    lastName,
+    email: email.toLowerCase(),
+    createdAt: '2026-01-01T00:00:00Z',
+  };
+}
+
 type TreeNode = { props: Record<string, unknown>; children: (TreeNode | string)[] };
 
 function findRefreshControl(node: TreeNode): RefreshControlProps | undefined {
@@ -61,6 +116,7 @@ describe('FundWalletScreen', () => {
     const { calls } = installFetchMock({
       'GET /wallets/w-cad': ok(wallet('w-cad', 'CAD')),
       'GET /currencies': CURRENCIES,
+      ...interacApiRoutes(),
       'POST /funding': () => {
         attempt += 1;
         if (attempt === 1) throw new TypeError('Network request failed');
@@ -124,16 +180,13 @@ describe('FundWalletScreen', () => {
 
   it('deletes a saved Interac address after PIN confirmation', async () => {
     setSearchParams({ id: 'w-cad' });
-    const saved = await interacAddressesStorage.save('u-1', {
-      firstName: 'Ada',
-      lastName: 'Lovelace',
-      email: 'ada@example.com',
-    });
+    const saved = seedInterac('Ada', 'Lovelace', 'ada@example.com');
     const { calls } = installFetchMock({
       'GET /wallets/w-cad': ok(wallet('w-cad', 'CAD')),
       'GET /currencies': CURRENCIES,
       'GET /security/pin': ok(PIN_STATUS(true)),
       'POST /security/pin/verify': ok(),
+      ...interacApiRoutes([saved]),
     });
     await renderWithProviders(<FundWalletScreen />, {
       prepareStore: (store) => {
@@ -235,10 +288,15 @@ describe('FundingStatusScreen', () => {
 });
 
 describe('WithdrawScreen', () => {
-  const routes = (pinSet: boolean, extra: Record<string, unknown> = {}) => ({
+  const routes = (
+    pinSet: boolean,
+    extra: Record<string, unknown> = {},
+    interacSeed: StoredInterac[] = [],
+  ) => ({
     'GET /wallets/w-cad': ok(wallet('w-cad', 'CAD', '500.000000000000')),
     'GET /currencies': CURRENCIES,
     'GET /security/pin': ok(PIN_STATUS(pinSet)),
+    ...interacApiRoutes(interacSeed),
     ...extra,
   });
 
@@ -255,12 +313,9 @@ describe('WithdrawScreen', () => {
 
   it('stops amounts above the available balance before calling the API', async () => {
     setSearchParams({ id: 'w-cad' });
-    await interacAddressesStorage.save('u-1', {
-      firstName: 'Ada',
-      lastName: 'Lovelace',
-      email: 'ada@example.com',
-    });
-    const { calls } = installFetchMock(routes(false));
+    const { calls } = installFetchMock(
+      routes(false, {}, [seedInterac('Ada', 'Lovelace', 'ada@example.com')]),
+    );
     await renderWithProviders(<WithdrawScreen />, withSession);
 
     expect(await screen.findByTestId('withdraw-available')).toHaveTextContent(
@@ -275,19 +330,18 @@ describe('WithdrawScreen', () => {
 
   it('asks for the PIN, then sends the Interac email and opens the status', async () => {
     setSearchParams({ id: 'w-cad' });
-    await interacAddressesStorage.save('u-1', {
-      firstName: 'Ada',
-      lastName: 'Lovelace',
-      email: 'ada@example.com',
-    });
     const { calls } = installFetchMock(
-      routes(true, {
-        'POST /security/pin/verify': ok(),
-        'POST /withdrawals': {
-          status: 201,
-          body: { success: true, data: withdrawal(), timestamp: '' },
+      routes(
+        true,
+        {
+          'POST /security/pin/verify': ok(),
+          'POST /withdrawals': {
+            status: 201,
+            body: { success: true, data: withdrawal(), timestamp: '' },
+          },
         },
-      }),
+        [seedInterac('Ada', 'Lovelace', 'ada@example.com')],
+      ),
     );
     await renderWithProviders(<WithdrawScreen />, withSession);
 
@@ -314,19 +368,19 @@ describe('WithdrawScreen', () => {
 
   it('loads Interac emails saved from CAD funding and sends that destination', async () => {
     setSearchParams({ id: 'w-cad' });
-    const saved = await interacAddressesStorage.save('u-1', {
-      firstName: 'Oluwasesan',
-      lastName: 'Afolabi',
-      email: 'sesanelect@yahoo.com',
-    });
+    const saved = seedInterac('Oluwasesan', 'Afolabi', 'sesanelect@yahoo.com');
     const { calls } = installFetchMock(
-      routes(true, {
-        'POST /security/pin/verify': ok(),
-        'POST /withdrawals': {
-          status: 201,
-          body: { success: true, data: withdrawal(), timestamp: '' },
+      routes(
+        true,
+        {
+          'POST /security/pin/verify': ok(),
+          'POST /withdrawals': {
+            status: 201,
+            body: { success: true, data: withdrawal(), timestamp: '' },
+          },
         },
-      }),
+        [saved],
+      ),
     );
     await renderWithProviders(<WithdrawScreen />, withSession);
 
@@ -354,7 +408,7 @@ describe('WithdrawScreen', () => {
 
   it('adds a new Interac address on withdraw and reuses the shared store', async () => {
     setSearchParams({ id: 'w-cad' });
-    installFetchMock(routes(false));
+    installFetchMock(routes(false, {}, []));
     await renderWithProviders(<WithdrawScreen />, withSession);
 
     await fireEvent.press(await screen.findByTestId('withdraw-add-interac'));
@@ -373,12 +427,9 @@ describe('WithdrawScreen', () => {
 
   it('sends nothing when the PIN prompt is cancelled', async () => {
     setSearchParams({ id: 'w-cad' });
-    await interacAddressesStorage.save('u-1', {
-      firstName: 'Ada',
-      lastName: 'Lovelace',
-      email: 'ada@example.com',
-    });
-    const { calls } = installFetchMock(routes(true));
+    const { calls } = installFetchMock(
+      routes(true, {}, [seedInterac('Ada', 'Lovelace', 'ada@example.com')]),
+    );
     await renderWithProviders(<WithdrawScreen />, withSession);
 
     await fillInterac('100');
@@ -392,16 +443,15 @@ describe('WithdrawScreen', () => {
 
   it('shows the backend decision when the balance changed in the meantime', async () => {
     setSearchParams({ id: 'w-cad' });
-    await interacAddressesStorage.save('u-1', {
-      firstName: 'Ada',
-      lastName: 'Lovelace',
-      email: 'ada@example.com',
-    });
     installFetchMock(
-      routes(true, {
-        'POST /security/pin/verify': ok(),
-        'POST /withdrawals': fail(422, 'INSUFFICIENT_AVAILABLE_BALANCE'),
-      }),
+      routes(
+        true,
+        {
+          'POST /security/pin/verify': ok(),
+          'POST /withdrawals': fail(422, 'INSUFFICIENT_AVAILABLE_BALANCE'),
+        },
+        [seedInterac('Ada', 'Lovelace', 'ada@example.com')],
+      ),
     );
     await renderWithProviders(<WithdrawScreen />, withSession);
 

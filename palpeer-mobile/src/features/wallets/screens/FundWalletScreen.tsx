@@ -210,14 +210,19 @@ export function FundWalletScreen() {
 
   const saveAndSelectAddress = async () => {
     if (!userId || !addFormValid) return;
-    const saved = await interacAddressesStorage.save(userId, {
-      firstName,
-      lastName,
-      email: interacEmail,
-    });
-    setSelected(saved);
-    await reloadAddresses();
-    setStep('review');
+    setError(null);
+    try {
+      const saved = await interacAddressesStorage.save(userId, {
+        firstName,
+        lastName,
+        email: interacEmail,
+      });
+      setSelected(saved);
+      await reloadAddresses();
+      setStep('review');
+    } catch {
+      setError("Couldn't save this Interac address. Try again.");
+    }
   };
 
   if (isCadApaylo && step === 'payWith') {

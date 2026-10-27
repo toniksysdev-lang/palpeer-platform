@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  type KeyboardEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type RefreshControlProps,
@@ -93,8 +94,8 @@ export function Screen({
   const padding = padded ? theme.spacing.xl : 0;
   // Stack screens draw under the home indicator / Android navigation bar (edge-to-edge).
   const bottomInset = insideTabs || edges.includes('bottom') ? 0 : insets.bottom;
-  // When the pad is open it owns the bottom safe area; don't double-pad the sticky footer.
-  const footerBottomInset = padOpen ? 0 : bottomInset;
+  // Sticky footer owns the bottom safe area; the number pad sits above it without double-padding.
+  const footerBottomInset = bottomInset;
   const column: ViewStyle = { width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' };
   const dismissPad = () => {
     if (padOpen) numberPad?.close();
@@ -139,6 +140,16 @@ export function Screen({
   const content = (
     <>
       {body}
+      {/* Number pad sits above sticky footer actions (and the system home / nav bar). */}
+      <NumberPadDock
+        includeBottomInset={!footer}
+        contentStyle={[
+          column,
+          {
+            paddingHorizontal: padding,
+          },
+        ]}
+      />
       {footer ? (
         <View
           style={[
@@ -153,14 +164,6 @@ export function Screen({
           {footer}
         </View>
       ) : null}
-      <NumberPadDock
-        contentStyle={[
-          column,
-          {
-            paddingHorizontal: padding,
-          },
-        ]}
-      />
     </>
   );
 
@@ -169,7 +172,7 @@ export function Screen({
       {avoidKeyboard ? (
         <KeyboardAvoidingView
           style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={0}
         >
           {content}
@@ -199,13 +202,25 @@ function PadRevealOnOpen() {
 /** After the system keyboard finishes showing, re-measure the focused text field. */
 function KeyboardRevealOnShow() {
   const focusScroll = useFocusScroll();
-
   useEffect(() => {
-    const event = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const sub = Keyboard.addListener(event, () => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const onShow = (event: KeyboardEvent) => {
+      const height = event.endCoordinates?.height ?? 0;
+      // Android edge-to-edge often keeps the window full-height; subtract overlap when measuring.
+      focusScroll?.setKeyboardBottomInset(Platform.OS === 'android' ? height : 0);
       setTimeout(() => focusScroll?.revealActive(), Platform.OS === 'ios' ? 16 : 64);
-    });
-    return () => sub.remove();
+    };
+    const onHide = () => {
+      focusScroll?.setKeyboardBottomInset(0);
+    };
+    const showSub = Keyboard.addListener(showEvent, onShow);
+    const hideSub = Keyboard.addListener(hideEvent, onHide);
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+      focusScroll?.setKeyboardBottomInset(0);
+    };
   }, [focusScroll]);
 
   return null;

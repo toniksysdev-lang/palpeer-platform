@@ -41,9 +41,17 @@ function split(input: string): { path: string; query: URLSearchParams } | null {
   return { path, query: new URLSearchParams(rawQuery.split('#')[0] ?? '') };
 }
 
-/** `https://app.palpeer.com/p2p/share/<id>` arrives as `/app.palpeer.com/p2p/share/<id>` after scheme strip. */
+/**
+ * HTTPS share URLs arrive as `/host/p2p/share/<id>` after scheme strip.
+ * Accept the marketing host and the API bridge host.
+ */
 function stripShareHost(path: string): string {
-  const match = path.match(new RegExp(`^/app\\.palpeer\\.com(/p2p/share/${UUID})$`, 'i'));
+  const match = path.match(
+    new RegExp(
+      `^/(?:app\\.palpeer\\.com|palpeer-api\\.onrender\\.com)(/p2p/share/${UUID})$`,
+      'i',
+    ),
+  );
   return match?.[1] ?? path;
 }
 

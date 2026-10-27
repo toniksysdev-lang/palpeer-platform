@@ -358,10 +358,10 @@ export function LiveChatScreen() {
         : 'AI assistant';
 
   const canSend = !sending && !booting && !!sessionId && !awaitingEscalation && !!draft.trim();
-  // Lift the composer above the system keyboard. Edge-to-edge Android often ignores window
-  // resize, so we pad from keyboard height instead of relying on KeyboardAvoidingView.
+  // Lift the composer above the system keyboard. Prefer reported keyboard height; when the
+  // keyboard is closed, keep the home-indicator / nav-bar inset under the text field.
   const composerBottomPad =
-    theme.spacing.sm + (keyboardHeight > 0 ? 0 : insets.bottom);
+    theme.spacing.sm + (keyboardHeight > 0 ? Math.max(0, keyboardHeight - insets.bottom) : insets.bottom);
 
   return (
     <SafeAreaView
@@ -369,7 +369,7 @@ export function LiveChatScreen() {
       edges={['top']}
       testID="live-chat-screen"
     >
-      <View style={{ flex: 1, paddingBottom: keyboardHeight }}>
+      <View style={{ flex: 1 }}>
         <View style={{ paddingHorizontal: theme.spacing.xl }}>
           <StackHeader title="Live chat" />
         </View>

@@ -1,8 +1,8 @@
-import { defineConfig, type Plugin } from 'vitest/config';
+import { defineConfig, loadEnv, type Plugin } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath, URL } from 'node:url';
 
-function originOf(url: string | undefined, fallback: string): string {
+function originOf(url: string | undefined, fallback?: string): string | undefined {
   try {
     if (!url) return fallback;
     return new URL(url).origin;
@@ -11,23 +11,37 @@ function originOf(url: string | undefined, fallback: string): string {
   }
 }
 
-function buildCsp(): string {
-  const apiOrigin = originOf(
-    process.env.VITE_API_BASE_URL,
-    'http://127.0.0.1:8085',
-  );
-  const wsOrigin = originOf(process.env.VITE_WS_URL, apiOrigin);
-  const connect = [
-    "'self'",
-    apiOrigin,
-    wsOrigin,
-    // Local Vite proxy / emulator fallbacks when env is unset
-    'http://127.0.0.1:8085',
-    'http://localhost:8085',
-    'ws://127.0.0.1:8085',
-    'ws://localhost:8085',
-  ];
-  const uniqueConnect = [...new Set(connect)].join(' ');
+function buildCsp(env: Record<string, string>): string {
+  const apiOrigin = originOf(env.VITE_API_BASE_URL);
+  const wsOrigin = originOf(env.VITE_WS_URL, apiOrigin);
+  const connect = new Set<string>(["'self'"]);
+
+  if (apiOrigin) {
+    connect.add(apiOrigin);
+  } else {
+    // Local Vite defaults when env is unset
+    connect.add('http://127.0.0.1:8085');
+    connect.add('http://localhost:8085');
+  }
+  if (wsOrigin) {
+    connect.add(wsOrigin);
+    // SockJS may upgrade from https → wss on the same host
+    if (wsOrigin.startsWith('https://')) {
+      connect.add(wsOrigin.replace(/^https:/, 'wss:'));
+    }
+    if (wsOrigin.startsWith('http://')) {
+      connect.add(wsOrigin.replace(/^http:/, 'ws:'));
+    }
+  } else {
+    connect.add('ws://127.0.0.1:8085');
+    connect.add('ws://localhost:8085');
+  }
+
+  // Production admin on Render must always reach the HTTPS API even if env load races.
+  if (env.VITE_APP_ENV === 'production' || (apiOrigin && apiOrigin.startsWith('https://'))) {
+    connect.add('https:');
+    connect.add('wss:');
+  }
 
   return [
     "default-src 'self'",
@@ -35,7 +49,7 @@ function buildCsp(): string {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: blob:",
-    `connect-src ${uniqueConnect}`,
+    `connect-src ${[...connect].join(' ')}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -43,11 +57,11 @@ function buildCsp(): string {
   ].join('; ');
 }
 
-function cspMetaPlugin(): Plugin {
+function cspMetaPlugin(getEnv: () => Record<string, string>): Plugin {
   return {
     name: 'palpeer-csp-meta',
     transformIndexHtml(html) {
-      const csp = buildCsp();
+      const csp = buildCsp(getEnv());
       const tag = `<meta http-equiv="Content-Security-Policy" content="${csp}" />`;
       if (html.includes('<!--csp-->')) {
         return html.replace('<!--csp-->', tag);
@@ -57,66 +71,72 @@ function cspMetaPlugin(): Plugin {
   };
 }
 
-const csp = buildCsp();
+export default defineConfig(({ mode }) => {
+  // Load .env / .env.production.local so CSP includes the real API origin on Render builds.
+  const env = {
+    ...loadEnv(mode, process.cwd(), ''),
+    ...Object.fromEntries(
+      Object.entries(process.env).filter(([, v]) => typeof v === 'string') as [string, string][],
+    ),
+  };
+  const csp = buildCsp(env);
 
-const securityHeaders = {
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
-  'Cross-Origin-Opener-Policy': 'same-origin',
-  'Content-Security-Policy': csp,
-};
+  const securityHeaders = {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Content-Security-Policy': csp,
+  };
 
-const previewSecurityHeaders = {
-  ...securityHeaders,
-  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-};
+  const previewSecurityHeaders = {
+    ...securityHeaders,
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+  };
 
-export default defineConfig({
-  plugins: [react(), cspMetaPlugin()],
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-    },
-  },
-  server: {
-    // Bind IPv4+IPv6 so http://localhost:5173 and http://127.0.0.1:5173 both work
-    // (Node on Windows often listens only on ::1 for "localhost").
-    host: true,
-    port: 5173,
-    strictPort: true,
-    headers: securityHeaders,
-    proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:8085',
-        changeOrigin: true,
-        // User delete and other heavy admin calls can exceed the default proxy idle timeout.
-        timeout: 180_000,
-        proxyTimeout: 180_000,
+  return {
+    plugins: [react(), cspMetaPlugin(() => env)],
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
       },
     },
-  },
-  preview: {
-    headers: previewSecurityHeaders,
-  },
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./src/test/setup.ts'],
-    css: false,
-    restoreMocks: true,
-    clearMocks: true,
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
-    pool: 'threads',
-    fileParallelism: false,
-    testTimeout: 30_000,
-    hookTimeout: 30_000,
-    env: {
-      VITE_USE_MOCK_API: 'true',
-      VITE_APP_ENV: 'test',
-      VITE_API_BASE_URL: 'http://localhost:8085/api/v1',
-      VITE_WS_URL: 'http://localhost:8085/ws',
+    server: {
+      host: true,
+      port: 5173,
+      strictPort: true,
+      headers: securityHeaders,
+      proxy: {
+        '/api': {
+          target: 'http://127.0.0.1:8085',
+          changeOrigin: true,
+          timeout: 180_000,
+          proxyTimeout: 180_000,
+        },
+      },
     },
-  },
+    preview: {
+      headers: previewSecurityHeaders,
+    },
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      setupFiles: ['./src/test/setup.ts'],
+      css: false,
+      restoreMocks: true,
+      clearMocks: true,
+      include: ['src/**/*.{test,spec}.{ts,tsx}'],
+      pool: 'threads',
+      fileParallelism: false,
+      testTimeout: 30_000,
+      hookTimeout: 30_000,
+      env: {
+        VITE_USE_MOCK_API: 'true',
+        VITE_APP_ENV: 'test',
+        VITE_API_BASE_URL: 'http://localhost:8085/api/v1',
+        VITE_WS_URL: 'http://localhost:8085/ws',
+      },
+    },
+  };
 });

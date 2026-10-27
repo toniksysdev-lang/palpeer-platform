@@ -173,10 +173,16 @@ export function useNumberPadField({
 export function NumberPadDock({
   testID = 'number-pad-dock',
   contentStyle,
+  includeBottomInset = true,
 }: {
   testID?: string;
   /** Applied only while the pad is visible so inactive screens don't reserve empty space. */
   contentStyle?: StyleProp<ViewStyle>;
+  /**
+   * When false, the parent (e.g. Screen sticky footer) owns the home-indicator inset so the
+   * pad can sit directly above that footer without double padding.
+   */
+  includeBottomInset?: boolean;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -186,7 +192,7 @@ export function NumberPadDock({
 
   const { active } = pad;
   // Tab bar already clears the system nav; stack screens must pad the dock themselves.
-  const bottomSafe = insideTabs ? 0 : insets.bottom;
+  const bottomSafe = includeBottomInset && !insideTabs ? insets.bottom : 0;
 
   return (
     <View

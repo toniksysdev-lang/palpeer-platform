@@ -57,11 +57,15 @@ jest.mock('react-native-reanimated', () => {
     ...Animated,
     FadeIn: entering,
     FadeInDown: entering,
+    FadeInUp: entering,
     FadeOut: entering,
+    FadeOutUp: entering,
     ZoomIn: entering,
     ZoomOut: entering,
     SlideInDown: entering,
     SlideOutDown: entering,
+    useEvent: () => NOOP,
+    useHandler: () => ({}),
     Easing: {
       linear: ID,
       ease: ID,
@@ -91,6 +95,7 @@ jest.mock('react-native-reanimated', () => {
       };
       return shared;
     },
+    useReducedMotion: () => false,
     useAnimatedStyle: (factory: () => unknown) => factory(),
     useAnimatedProps: (factory: () => unknown) => factory(),
     useDerivedValue: (factory: () => unknown) => ({ value: factory() }),

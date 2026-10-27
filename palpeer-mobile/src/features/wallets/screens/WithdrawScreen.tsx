@@ -184,14 +184,19 @@ export function WithdrawScreen() {
 
   const saveAndSelectAddress = async () => {
     if (!userId || !addFormValid) return;
-    const saved = await interacAddressesStorage.save(userId, {
-      firstName,
-      lastName,
-      email: interacEmail,
-    });
-    selectInterac(saved);
-    await reloadAddresses();
-    setStep('form');
+    setError(null);
+    try {
+      const saved = await interacAddressesStorage.save(userId, {
+        firstName,
+        lastName,
+        email: interacEmail,
+      });
+      selectInterac(saved);
+      await reloadAddresses();
+      setStep('form');
+    } catch {
+      setError("Couldn't save this Interac address. Try again.");
+    }
   };
 
   const cadDestination = () => ({ method: 'email' as const, email: fields.email });
@@ -239,7 +244,8 @@ export function WithdrawScreen() {
     setConfirming(true);
     const confirmed = await requestPin({
       title: 'Confirm withdrawal',
-      message: `Enter your PIN to withdraw ${format(toMoney(amount), code)}.`,
+      message: `Confirm with Fingerprint or enter your PIN to withdraw ${format(toMoney(amount), code)}.`,
+      allowBiometric: true,
     });
     if (!confirmed) {
       setConfirming(false);

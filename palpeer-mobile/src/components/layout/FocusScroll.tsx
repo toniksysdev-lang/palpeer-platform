@@ -17,6 +17,8 @@ type FocusScrollApi = {
   /** Remember the last focused target so keyboard/pad layout changes can re-reveal it. */
   setActiveTarget: (target: View | null) => void;
   revealActive: () => void;
+  /** System keyboard overlap (px) subtracted from the visible bottom when measuring. */
+  setKeyboardBottomInset: (inset: number) => void;
   scrollRef: RefObject<ScrollView | null>;
   registerScrollOffset: (y: number) => void;
 };
@@ -58,6 +60,7 @@ type ProviderProps = {
 export function FocusScrollProvider({ children, scrollRef }: ProviderProps) {
   const offsetRef = useRef(0);
   const activeTargetRef = useRef<View | null>(null);
+  const keyboardInsetRef = useRef(0);
 
   const registerScrollOffset = useCallback((y: number) => {
     offsetRef.current = y;
@@ -65,6 +68,10 @@ export function FocusScrollProvider({ children, scrollRef }: ProviderProps) {
 
   const setActiveTarget = useCallback((target: View | null) => {
     activeTargetRef.current = target;
+  }, []);
+
+  const setKeyboardBottomInset = useCallback((inset: number) => {
+    keyboardInsetRef.current = Math.max(0, inset);
   }, []);
 
   const ensureVisible = useCallback(
@@ -79,7 +86,10 @@ export function FocusScrollProvider({ children, scrollRef }: ProviderProps) {
           const fieldTop = y;
           const fieldBottom = y + h;
           const visibleTop = sy + EDGE_GAP;
-          const visibleBottom = sy + sh - EDGE_GAP;
+          // When the window does not resize for the keyboard (common on edge-to-edge Android),
+          // subtract the reported keyboard overlap so fields clear the pad.
+          const keyboardInset = keyboardInsetRef.current;
+          const visibleBottom = sy + sh - EDGE_GAP - keyboardInset;
 
           let delta = 0;
           if (fieldBottom > visibleBottom) {
@@ -107,10 +117,18 @@ export function FocusScrollProvider({ children, scrollRef }: ProviderProps) {
       ensureVisible,
       setActiveTarget,
       revealActive,
+      setKeyboardBottomInset,
       scrollRef,
       registerScrollOffset,
     }),
-    [ensureVisible, setActiveTarget, revealActive, scrollRef, registerScrollOffset],
+    [
+      ensureVisible,
+      setActiveTarget,
+      revealActive,
+      setKeyboardBottomInset,
+      scrollRef,
+      registerScrollOffset,
+    ],
   );
 
   return <FocusScrollContext.Provider value={api}>{children}</FocusScrollContext.Provider>;
