@@ -30,6 +30,10 @@ public class User extends BaseEntity {
     @Column(name = "email", nullable = false, length = 320)
     private String email;
 
+    /** Public handle (lowercase); unique case-insensitively via {@code uk_users_username_lower}. */
+    @Column(name = "username", nullable = false, length = 32)
+    private String username;
+
     /** Null for Google-only accounts that have not added a phone yet. */
     @Column(name = "phone", length = 32)
     private String phone;

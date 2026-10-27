@@ -10,17 +10,26 @@ import com.palpeer.admin.repository.RoleRepository;
 import com.palpeer.admin.web.dto.AdminMeResponse;
 import com.palpeer.admin.web.dto.AdminUserResponse;
 import com.palpeer.admin.web.dto.AssignAdminRequest;
+import com.palpeer.admin.web.dto.CreateAdminRequest;
+import com.palpeer.admin.web.dto.CreateAdminResponse;
 import com.palpeer.admin.web.dto.CreatePermissionRequest;
 import com.palpeer.admin.web.dto.CreateRoleRequest;
 import com.palpeer.admin.web.dto.PermissionResponse;
 import com.palpeer.admin.web.dto.RoleResponse;
+import com.palpeer.admin.web.dto.UpdateAdminRequest;
 import com.palpeer.admin.web.dto.UpdateRoleRequest;
 import com.palpeer.auth.security.UserPrincipal;
 import com.palpeer.common.audit.AuditRecord;
 import com.palpeer.common.audit.AuditRecorder;
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
+import com.palpeer.common.mail.EmailSender;
+import com.palpeer.common.mail.PalpeerEmailTemplates;
+import com.palpeer.user.UsernameRules;
+import com.palpeer.user.domain.User;
+import com.palpeer.user.domain.UserStatus;
 import com.palpeer.user.repository.UserRepository;
+import java.security.SecureRandom;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -29,18 +38,25 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AdminRbacService {
 
     public static final String SUPER_ADMIN_CODE = "SUPER_ADMIN";
     public static final String ADMIN_MANAGE_PERMISSION = "admin:manage";
+
+    private static final char[] TEMP_PASSWORD_ALPHABET =
+            "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%".toCharArray();
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final AdminUserRepository adminUserRepository;
     private final AdminMfaTotpRepository adminMfaTotpRepository;
@@ -49,6 +65,105 @@ public class AdminRbacService {
     private final PermissionRepository permissionRepository;
     private final UserRepository userRepository;
     private final AuditRecorder auditRecorder;
+    private final PasswordEncoder passwordEncoder;
+    private final EmailSender emailSender;
+
+    @Transactional
+    public CreateAdminResponse create(CreateAdminRequest request) {
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
+        Set<Role> roles = resolveRoles(request.roleCodes());
+        boolean sendInvite = request.sendInviteEmail() == null || Boolean.TRUE.equals(request.sendInviteEmail());
+
+        String temporaryPassword = resolveTemporaryPassword(request.password());
+        User user = userRepository
+                .findByEmailIgnoreCase(email)
+                .orElseGet(() -> createPlatformUser(email, temporaryPassword));
+
+        if (adminUserRepository.existsByUserId(user.getId())) {
+            throw new BusinessException(
+                    "ADMIN_EXISTS",
+                    "An admin operator already exists for this email. Edit the existing account instead.",
+                    HttpStatus.CONFLICT);
+        }
+
+        // Ensure password login works for the console (existing Google-only users included).
+        user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
+        user.setEmailVerified(true);
+        user.setEnabled(true);
+        if (user.getStatus() == UserStatus.PENDING_VERIFICATION || user.getStatus() == null) {
+            user.setStatus(UserStatus.ACTIVE);
+        }
+        userRepository.save(user);
+
+        AdminUser adminUser = new AdminUser();
+        adminUser.setUserId(user.getId());
+        adminUser.setEnabled(true);
+        adminUser.setRoles(roles);
+        adminUserRepository.save(adminUser);
+
+        auditRecorder.record(AuditRecord.builder("ADMIN_CREATE")
+                .entity("AdminUser:" + adminUser.getId())
+                .userRef(user.getId())
+                .newValue("email=" + email + ";roles=" + roleCodesOf(adminUser))
+                .build());
+
+        boolean emailed = false;
+        if (sendInvite) {
+            emailed = sendAdminInvite(email, temporaryPassword);
+        }
+
+        return new CreateAdminResponse(toAdminResponse(adminUser), temporaryPassword, emailed);
+    }
+
+    @Transactional
+    public AdminUserResponse update(UUID userId, UpdateAdminRequest request) {
+        AdminUser adminUser = adminUserRepository
+                .findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Admin user not found"));
+        String oldValue = "enabled=" + adminUser.isEnabled() + ";roles=" + roleCodesOf(adminUser);
+
+        if (request.roleCodes() != null) {
+            adminUser.setRoles(resolveRoles(request.roleCodes()));
+        }
+        if (request.enabled() != null) {
+            if (Boolean.FALSE.equals(request.enabled())) {
+                ensureNotSelf(userId);
+                ensureNotLastManageAdmin(adminUser);
+            }
+            adminUser.setEnabled(request.enabled());
+        }
+        adminUserRepository.save(adminUser);
+
+        String temporaryPassword = null;
+        boolean emailed = false;
+        if (Boolean.TRUE.equals(request.resetPassword())) {
+            temporaryPassword = generateTemporaryPassword();
+            User user = userRepository
+                    .findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+            user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
+            userRepository.save(user);
+            String email = user.getEmail();
+            emailed = sendAdminInvite(email, temporaryPassword);
+        }
+
+        auditRecorder.record(AuditRecord.builder("ADMIN_UPDATE")
+                .entity("AdminUser:" + adminUser.getId())
+                .userRef(userId)
+                .oldValue(oldValue)
+                .newValue("enabled="
+                        + adminUser.isEnabled()
+                        + ";roles="
+                        + roleCodesOf(adminUser)
+                        + ";passwordReset="
+                        + Boolean.TRUE.equals(request.resetPassword())
+                        + ";inviteEmailSent="
+                        + emailed)
+                .build());
+
+        // Password is only returned on create; updates email it when resetPassword=true.
+        return toAdminResponse(adminUser);
+    }
 
     @Transactional
     public AdminUserResponse assign(AssignAdminRequest request) {
@@ -76,8 +191,10 @@ public class AdminRbacService {
 
     @Transactional
     public AdminUserResponse disable(UUID userId) {
+        ensureNotSelf(userId);
         AdminUser adminUser = adminUserRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Admin user not found"));
+        ensureNotLastManageAdmin(adminUser);
         String oldValue = "enabled=" + adminUser.isEnabled();
         adminUser.setEnabled(false);
         adminUserRepository.save(adminUser);
@@ -88,6 +205,23 @@ public class AdminRbacService {
                 .newValue("enabled=false")
                 .build());
         return toAdminResponse(adminUser);
+    }
+
+    @Transactional
+    public void delete(UUID userId) {
+        ensureNotSelf(userId);
+        AdminUser adminUser = adminUserRepository
+                .findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Admin user not found"));
+        ensureNotLastManageAdmin(adminUser);
+        adminMfaTotpRepository.findByUserId(userId).ifPresent(adminMfaTotpRepository::delete);
+        String entityId = String.valueOf(adminUser.getId());
+        adminUserRepository.delete(adminUser);
+        auditRecorder.record(AuditRecord.builder("ADMIN_DELETE")
+                .entity("AdminUser:" + entityId)
+                .userRef(userId)
+                .newValue("deleted=true")
+                .build());
     }
 
     @Transactional(readOnly = true)
@@ -296,5 +430,108 @@ public class AdminRbacService {
             throw new BusinessException("UNAUTHENTICATED", "Authentication required", HttpStatus.UNAUTHORIZED);
         }
         return principal;
+    }
+
+    private User createPlatformUser(String email, String temporaryPassword) {
+        User user = new User();
+        user.setEmail(email);
+        user.setUsername(allocateUsername(email));
+        // Password hash is set by the caller immediately after create.
+        user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
+        user.setStatus(UserStatus.ACTIVE);
+        user.setEnabled(true);
+        user.setEmailVerified(true);
+        user.setPhoneVerified(false);
+        user.setFailedLoginAttempts(0);
+        return userRepository.save(user);
+    }
+
+    private String allocateUsername(String email) {
+        String base = UsernameRules.fromEmail(email);
+        if (base.length() < UsernameRules.MIN_LENGTH) {
+            base = "admin";
+        }
+        if (base.length() > 24) {
+            base = base.substring(0, 24);
+        }
+        String candidate = base;
+        int attempt = 0;
+        while (userRepository.existsByUsernameIgnoreCase(candidate)) {
+            attempt++;
+            String suffix = "_" + Integer.toString(attempt, 36);
+            candidate = base.substring(0, Math.min(base.length(), UsernameRules.MAX_LENGTH - suffix.length()))
+                    + suffix;
+            if (attempt > 500) {
+                candidate = "admin_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+                break;
+            }
+        }
+        return UsernameRules.requireValid(candidate);
+    }
+
+    private String resolveTemporaryPassword(String requested) {
+        if (requested != null && !requested.isBlank()) {
+            String trimmed = requested.trim();
+            if (trimmed.length() < 8) {
+                throw new BusinessException(
+                        "INVALID_PASSWORD", "Password must be at least 8 characters", HttpStatus.BAD_REQUEST);
+            }
+            return trimmed;
+        }
+        return generateTemporaryPassword();
+    }
+
+    private static String generateTemporaryPassword() {
+        StringBuilder sb = new StringBuilder(16);
+        for (int i = 0; i < 16; i++) {
+            sb.append(TEMP_PASSWORD_ALPHABET[RANDOM.nextInt(TEMP_PASSWORD_ALPHABET.length)]);
+        }
+        return sb.toString();
+    }
+
+    private boolean sendAdminInvite(String email, String temporaryPassword) {
+        try {
+            var rendered = PalpeerEmailTemplates.adminInvite(email, temporaryPassword);
+            emailSender.send(email, rendered.subject(), rendered.text(), rendered.html());
+            return true;
+        } catch (Exception ex) {
+            log.warn("Failed to send admin invite email to {}: {}", email, ex.toString());
+            return false;
+        }
+    }
+
+    private void ensureNotSelf(UUID userId) {
+        UserPrincipal principal = currentPrincipal();
+        if (principal.getId().equals(userId)) {
+            throw new BusinessException(
+                    "ADMIN_SELF_ACTION",
+                    "You cannot disable or delete your own admin account",
+                    HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private void ensureNotLastManageAdmin(AdminUser target) {
+        if (!target.isEnabled()) {
+            return;
+        }
+        boolean targetCanManage = target.getRoles().stream()
+                .flatMap(role -> role.getPermissions().stream())
+                .anyMatch(p -> ADMIN_MANAGE_PERMISSION.equals(p.getCode()));
+        if (!targetCanManage) {
+            return;
+        }
+        long otherManageAdmins = adminUserRepository.findAll().stream()
+                .filter(AdminUser::isEnabled)
+                .filter(row -> !row.getUserId().equals(target.getUserId()))
+                .filter(row -> row.getRoles().stream()
+                        .flatMap(role -> role.getPermissions().stream())
+                        .anyMatch(p -> ADMIN_MANAGE_PERMISSION.equals(p.getCode())))
+                .count();
+        if (otherManageAdmins == 0) {
+            throw new BusinessException(
+                    "LAST_ADMIN_MANAGE",
+                    "Cannot remove the last enabled admin with " + ADMIN_MANAGE_PERMISSION,
+                    HttpStatus.BAD_REQUEST);
+        }
     }
 }

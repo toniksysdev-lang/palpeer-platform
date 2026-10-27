@@ -202,15 +202,17 @@ export const primaryNav: NavItem[] = [
   {
     id: 'security',
     label: 'Security',
-    path: '/admin/settings#security',
+    path: '/admin/settings?tab=security',
     icon: Shield,
   },
 ];
 
-/** Path without hash fragment (for matching). */
+/** Path without hash / query (for matching). */
 function navPath(path: string): string {
-  const hashAt = path.indexOf('#');
-  return hashAt >= 0 ? path.slice(0, hashAt) : path;
+  const q = path.indexOf('?');
+  const withoutQuery = q >= 0 ? path.slice(0, q) : path;
+  const hashAt = withoutQuery.indexOf('#');
+  return hashAt >= 0 ? withoutQuery.slice(0, hashAt) : withoutQuery;
 }
 
 /** Flatten primary nav including nested children for path matching. */
@@ -218,17 +220,24 @@ export function flattenNav(items: NavItem[] = primaryNav): NavItem[] {
   return items.flatMap((item) => [item, ...(item.children ? flattenNav(item.children) : [])]);
 }
 
-export function findNavItem(pathname: string, hash = ''): NavItem | undefined {
+export function findNavItem(pathname: string, hash = '', search = ''): NavItem | undefined {
   const hashId = hash.replace(/^#/, '');
+  const tab = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search).get('tab');
+  const onSettings = pathname === '/admin/settings' || pathname.startsWith('/admin/settings/');
+
+  // Security is a settings tab (?tab=security); do not highlight the parent Settings item.
+  if (onSettings && (tab === 'security' || hashId === 'security')) {
+    return flattenNav().find((item) => item.id === 'security');
+  }
+
   if (pathname === '/admin/profile' || pathname.startsWith('/admin/profile/')) {
-    if (hashId === 'security') {
-      return flattenNav().find((item) => item.id === 'security');
-    }
     return flattenNav().find((item) => item.id === 'admin-profile');
   }
 
   // Prefer the longest matching path so nested routes win over parents.
+  // Ignore query-only variants (e.g. settings?tab=security) when matching by path prefix.
   const matches = flattenNav().filter((item) => {
+    if (item.id === 'security') return false;
     const base = navPath(item.path);
     return pathname === base || pathname.startsWith(`${base}/`);
   });

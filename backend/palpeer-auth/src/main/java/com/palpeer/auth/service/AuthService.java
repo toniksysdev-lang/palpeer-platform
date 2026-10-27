@@ -41,6 +41,7 @@ import com.palpeer.common.exception.ResourceNotFoundException;
 import com.palpeer.common.mail.EmailBrand;
 import com.palpeer.common.mail.EmailSender;
 import com.palpeer.common.mail.PalpeerEmailTemplates;
+import com.palpeer.user.UsernameRules;
 import com.palpeer.user.domain.User;
 import com.palpeer.user.domain.UserStatus;
 import com.palpeer.user.repository.UserRepository;
@@ -92,9 +93,14 @@ public class AuthService {
         if (userRepository.existsByPhone(request.phone())) {
             throw new BusinessException("PHONE_ALREADY_REGISTERED", "Phone already registered", HttpStatus.CONFLICT);
         }
+        String username = UsernameRules.requireValid(request.username());
+        if (userRepository.existsByUsernameIgnoreCase(username)) {
+            throw new BusinessException("USERNAME_TAKEN", "Username is already taken", HttpStatus.CONFLICT);
+        }
 
         User user = new User();
         user.setEmail(request.email().trim().toLowerCase());
+        user.setUsername(username);
         user.setPhone(request.phone().trim());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         // CONTRACT_PENDING: initial status / enabled semantics
@@ -390,6 +396,7 @@ public class AuthService {
             } else {
                 user = new User();
                 user.setEmail(identity.email());
+                user.setUsername(allocateUsernameFromEmail(identity.email()));
                 user.setPhone(null);
                 user.setPasswordHash(null);
                 user.setGoogleSub(identity.subject());
@@ -420,6 +427,26 @@ public class AuthService {
             return userRepository.findByEmailIgnoreCase(identifier);
         }
         return userRepository.findByPhone(identifier);
+    }
+
+    /** Unique username for Google signup — derived from email, with numeric suffixes on collision. */
+    private String allocateUsernameFromEmail(String email) {
+        String base = UsernameRules.fromEmail(email);
+        if (base.length() < UsernameRules.MIN_LENGTH) {
+            base = "user";
+        }
+        if (base.length() > 24) {
+            base = base.substring(0, 24);
+        }
+        String candidate = base;
+        int suffix = 0;
+        while (userRepository.existsByUsernameIgnoreCase(candidate)) {
+            suffix += 1;
+            String tail = String.valueOf(suffix);
+            int keep = Math.max(UsernameRules.MIN_LENGTH, UsernameRules.MAX_LENGTH - tail.length());
+            candidate = base.substring(0, Math.min(base.length(), keep)) + tail;
+        }
+        return candidate;
     }
 
     @Transactional

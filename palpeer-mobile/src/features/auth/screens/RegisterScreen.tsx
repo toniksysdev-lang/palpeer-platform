@@ -98,6 +98,7 @@ export function RegisterScreen() {
     try {
       const result = await register({
         email: values.email.trim(),
+        username: values.username.trim(),
         phone,
         password: values.password,
       });
@@ -121,7 +122,7 @@ export function RegisterScreen() {
         },
       });
     } catch (error) {
-      setFormError(applyServerErrors(error, setError, ['email', 'password']));
+      setFormError(applyServerErrors(error, setError, ['email', 'username', 'password']));
     }
   });
 
@@ -185,11 +186,13 @@ export function RegisterScreen() {
             placeholder="Enter unique username"
             appearance="elevated"
             value={field.value ?? ''}
-            onChangeText={field.onChange}
+            onChangeText={(value) => field.onChange(value.replace(/\s+/g, ''))}
             onBlur={field.onBlur}
             error={fieldState.error?.message}
             autoCapitalize="none"
             autoCorrect={false}
+            autoComplete="username"
+            textContentType="username"
             returnKeyType="next"
             onSubmitEditing={() => referralRef.current?.focus()}
             testID="register-username"

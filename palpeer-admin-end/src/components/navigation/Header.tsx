@@ -35,7 +35,7 @@ type SearchOption = {
 export function Header() {
   const location = useLocation();
   const navigate = useNavigate();
-  const navItem = findNavItem(location.pathname, location.hash);
+  const navItem = findNavItem(location.pathname, location.hash, location.search);
   const crumb = navItem?.label ?? 'Admin';
   const { toggleMobileNav } = useShell();
   const { mode, cycleMode } = useTheme();

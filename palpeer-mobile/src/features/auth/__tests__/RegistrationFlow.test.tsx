@@ -38,6 +38,7 @@ function signupStatus(nextStep: string, extra: Record<string, unknown> = {}) {
 
 async function fillRegister(confirm = 'correct-horse') {
   await fireEvent.changeText(screen.getByTestId('register-email'), ' Ada@Example.com ');
+  await fireEvent.changeText(screen.getByTestId('register-username'), 'ada_l');
   await fireEvent.changeText(screen.getByTestId('register-password'), 'correct-horse');
   await fireEvent.changeText(screen.getByTestId('register-confirm'), confirm);
   await fireEvent.press(screen.getByTestId('register-submit'));
@@ -235,6 +236,7 @@ describe('RegisterScreen', () => {
     );
     expect(calls[0]?.body).toEqual({
       email: 'Ada@Example.com',
+      username: 'ada_l',
       phone: '+15062100661',
       password: 'correct-horse',
     });
@@ -246,6 +248,15 @@ describe('RegisterScreen', () => {
 
     await fillRegister();
     expect(await screen.findByText('An account with this email already exists.')).toBeTruthy();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it('puts a taken username error on the username field', async () => {
+    installFetchMock({ 'POST /auth/register': fail(409, 'USERNAME_TAKEN') });
+    await renderWithProviders(<RegisterScreen />);
+
+    await fillRegister();
+    expect(await screen.findByText('That username is already taken.')).toBeTruthy();
     expect(router.replace).not.toHaveBeenCalled();
   });
 

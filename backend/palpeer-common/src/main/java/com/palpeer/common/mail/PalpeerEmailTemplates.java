@@ -304,4 +304,63 @@ public final class PalpeerEmailTemplates {
 
         return new RenderedEmail(subject, html, text);
     }
+
+    /**
+     * Admin console invite with sign-in email + temporary password. Caller must never log the
+     * password. Recipient should change the password after first sign-in.
+     */
+    public static RenderedEmail adminInvite(String email, String temporaryPassword) {
+        String safeEmail = email == null || email.isBlank() ? "your account" : email.trim();
+        String subject = "Your Palpeer admin account";
+
+        String html = EmailLayout.wrap(
+                "Palpeer Admin — " + EmailBrand.TAGLINE,
+                subject,
+                EmailLayout.heading("Admin console access")
+                        + EmailLayout.paragraph(
+                                "An administrator created a Palpeer Admin account for "
+                                        + EmailLayout.escape(safeEmail)
+                                        + ".")
+                        + EmailLayout.paragraph(
+                                "Sign in with the credentials below, then change your password and enable"
+                                        + " authenticator MFA from Settings → Security.")
+                        + EmailLayout.paragraph(
+                                "<strong>Email</strong><br/>"
+                                        + "<span style=\"font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;\">"
+                                        + EmailLayout.escape(safeEmail)
+                                        + "</span>")
+                        + EmailLayout.credentialBox(
+                                "Temporary password", temporaryPassword == null ? "" : temporaryPassword)
+                        + EmailLayout.primaryButton(
+                                EmailBrand.ADMIN_CONSOLE_CTA, EmailBrand.ADMIN_CONSOLE_URL)
+                        + EmailLayout.mutedNote(
+                                "If you were not expecting this invite, contact "
+                                        + EmailBrand.SUPPORT_EMAIL
+                                        + " immediately."));
+
+        String text =
+                """
+                Palpeer Admin — invite
+
+                An administrator created a Palpeer Admin account for %s.
+
+                Sign-in email: %s
+                Temporary password: %s
+
+                Open the admin console: %s
+
+                After signing in, change your password and enable authenticator MFA
+                (Settings → Security).
+
+                If you were not expecting this invite, contact %s.
+                """
+                        .formatted(
+                                safeEmail,
+                                safeEmail,
+                                temporaryPassword == null ? "" : temporaryPassword,
+                                EmailBrand.ADMIN_CONSOLE_URL,
+                                EmailBrand.SUPPORT_EMAIL);
+
+        return new RenderedEmail(subject, html, text);
+    }
 }

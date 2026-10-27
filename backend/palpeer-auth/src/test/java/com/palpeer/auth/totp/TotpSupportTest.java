@@ -1,6 +1,7 @@
 package com.palpeer.auth.totp;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.ByteBuffer;
@@ -17,6 +18,26 @@ class TotpSupportTest {
         String code = currentCode(secret);
         assertTrue(TotpSupport.verify(secret, code, Instant.now(), 1));
         assertFalse(TotpSupport.verify(secret, "000000", Instant.now(), 0));
+    }
+
+    @Test
+    void otpAuthUriIsGoogleAuthenticatorCompatible() {
+        String secret = TotpSupport.generateSecret();
+        String uri = TotpSupport.otpAuthUri("Palpeer Admin", "ops@palpeer.com", secret);
+        assertTrue(uri.startsWith("otpauth://totp/"));
+        assertTrue(uri.contains("secret=" + secret));
+        assertTrue(uri.contains("algorithm=SHA1"));
+        assertTrue(uri.contains("digits=6"));
+        assertTrue(uri.contains("period=30"));
+        assertTrue(uri.contains("issuer=Palpeer%20Admin"));
+        assertTrue(uri.contains("Palpeer%20Admin:ops%40palpeer.com"));
+    }
+
+    @Test
+    void otpAuthUriRejectsInvalidSecret() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> TotpSupport.otpAuthUri("Palpeer Admin", "ops@palpeer.com", "not@base32"));
     }
 
     private static String currentCode(String base32Secret) throws Exception {

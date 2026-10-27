@@ -23,7 +23,7 @@ export function AdminProfilePage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
-              to="/admin/settings#security"
+              to="/admin/settings?tab=security"
               className="inline-flex items-center gap-2 rounded-[0.6rem] border border-border px-3 py-2 text-sm text-primary hover:bg-surface-secondary"
             >
               <Shield className="h-4 w-4" aria-hidden />

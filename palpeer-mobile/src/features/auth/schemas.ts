@@ -31,7 +31,12 @@ export type LoginForm = z.infer<typeof loginSchema>;
 export const registerSchema = z
   .object({
     email,
-    username: z.string().trim().max(64, 'Username must be 64 characters or fewer'),
+    username: z
+      .string()
+      .trim()
+      .min(3, 'Username must be at least 3 characters')
+      .max(32, 'Username must be 32 characters or fewer')
+      .regex(/^[a-zA-Z0-9_]+$/, 'Use letters, numbers, and underscores only'),
     referralCode: z
       .string()
       .trim()

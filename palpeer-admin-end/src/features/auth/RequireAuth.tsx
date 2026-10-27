@@ -5,7 +5,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 
 /** MFA enrollment UI is on Settings → Security (`SecuritySettings`). */
 const MFA_ENROLLMENT_PATH = '/admin/settings';
-const MFA_ENROLLMENT_HASH = '#security';
+const MFA_ENROLLMENT_HREF = `${MFA_ENROLLMENT_PATH}?tab=security`;
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { status, isAdmin, mfaEnrollmentRequired } = useAuth();
@@ -32,7 +32,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     location.pathname === MFA_ENROLLMENT_PATH ||
     location.pathname.startsWith(`${MFA_ENROLLMENT_PATH}/`);
   if (mfaEnrollmentRequired && !onMfaEnrollmentPage) {
-    return <Navigate to={`${MFA_ENROLLMENT_PATH}${MFA_ENROLLMENT_HASH}`} replace />;
+    return <Navigate to={MFA_ENROLLMENT_HREF} replace />;
   }
 
   return children;

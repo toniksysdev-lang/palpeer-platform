@@ -1,9 +1,10 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { KeyRound, MonitorSmartphone, ShieldCheck } from 'lucide-react';
+import { Check, Copy, Download, KeyRound, MonitorSmartphone, ShieldCheck } from 'lucide-react';
 import { z } from 'zod';
 import { useToast } from '@/app/providers/ToastProvider';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { formatTotpSecret, TotpQrCode } from '@/components/security/TotpQrCode';
 import { DataTable, type DataColumn } from '@/components/tables/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -11,6 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { appConfig } from '@/config/env';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { getRefreshToken } from '@/features/auth/session';
+import { copyToClipboard } from '@/lib/clipboard';
 import { formatDateTime } from '@/lib/format';
 import {
   mockChangePassword,
@@ -318,15 +320,31 @@ function ActiveSessionsCard() {
   );
 }
 
+function downloadTextFile(filename: string, contents: string) {
+  const blob = new Blob([contents], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.rel = 'noopener';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 function MfaEnrollmentCard() {
   const { push } = useToast();
-  const { refreshMe, mfaEnrollmentRequired } = useAuth();
+  const { refreshMe, mfaEnrollmentRequired, user } = useAuth();
   const queryClient = useQueryClient();
   const [setup, setSetup] = useState<AdminMfaSetup | null>(null);
   const [code, setCode] = useState('');
+  const [codeError, setCodeError] = useState<string | undefined>();
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
   const [disablePassword, setDisablePassword] = useState('');
   const [disableCode, setDisableCode] = useState('');
+  const [secretCopied, setSecretCopied] = useState(false);
+  const [showManualKey, setShowManualKey] = useState(false);
 
   const statusQuery = useQuery({
     queryKey: ['admin-mfa-status'],
@@ -343,10 +361,13 @@ function MfaEnrollmentCard() {
     onSuccess: (data) => {
       setSetup(data);
       setCode('');
+      setCodeError(undefined);
+      setSecretCopied(false);
+      setShowManualKey(false);
       push({
         tone: 'info',
-        title: 'Authenticator setup started',
-        description: 'Scan the otpauth URL or enter the secret in your app, then confirm with a code.',
+        title: 'Scan with Google Authenticator',
+        description: 'Open the app, add an account, scan the QR code, then enter the 6-digit code here.',
       });
     },
     onError: (error) => {
@@ -359,10 +380,11 @@ function MfaEnrollmentCard() {
   });
 
   const enableMutation = useMutation({
-    mutationFn: () => enableAdminMfa(code),
+    mutationFn: (totpCode: string) => enableAdminMfa(totpCode),
     onSuccess: async (result) => {
       setSetup(null);
       setCode('');
+      setCodeError(undefined);
       setRecoveryCodes(result.recoveryCodes?.length ? [...result.recoveryCodes] : null);
       await queryClient.invalidateQueries({ queryKey: ['admin-mfa-status'] });
       try {
@@ -372,7 +394,7 @@ function MfaEnrollmentCard() {
       }
       push({
         tone: 'success',
-        title: 'MFA enabled',
+        title: 'Google Authenticator enabled',
         description: 'Save your recovery codes now — they are shown only once.',
       });
     },
@@ -409,6 +431,63 @@ function MfaEnrollmentCard() {
   });
 
   const enabled = Boolean(statusQuery.data?.enabled);
+  const formattedSecret = setup ? formatTotpSecret(setup.secret) : '';
+
+  async function copySecret() {
+    if (!setup) return;
+    const ok = await copyToClipboard(setup.secret.replace(/\s+/g, ''));
+    if (!ok) {
+      push({ tone: 'error', title: 'Copy failed', description: 'Select the key and copy it manually.' });
+      return;
+    }
+    setSecretCopied(true);
+    window.setTimeout(() => setSecretCopied(false), 2000);
+  }
+
+  async function copyRecoveryCodes() {
+    if (!recoveryCodes?.length) return;
+    const ok = await copyToClipboard(recoveryCodes.join('\n'));
+    push(
+      ok
+        ? { tone: 'success', title: 'Recovery codes copied' }
+        : { tone: 'error', title: 'Copy failed', description: 'Download the file instead.' },
+    );
+  }
+
+  function downloadRecoveryCodes() {
+    if (!recoveryCodes?.length) return;
+    const email = user?.email ?? 'admin';
+    const body = [
+      'Palpeer Admin — MFA recovery codes',
+      `Account: ${email}`,
+      `Generated: ${new Date().toISOString()}`,
+      '',
+      'Store these offline. Each code works once.',
+      '',
+      ...recoveryCodes,
+      '',
+    ].join('\n');
+    downloadTextFile('palpeer-admin-mfa-recovery-codes.txt', body);
+  }
+
+  function onConfirmSetup(event: FormEvent) {
+    event.preventDefault();
+    const trimmed = code.trim();
+    if (!/^\d{6}$/.test(trimmed)) {
+      setCodeError('Enter the 6-digit code from Google Authenticator.');
+      return;
+    }
+    setCodeError(undefined);
+    enableMutation.mutate(trimmed);
+  }
+
+  function cancelSetup() {
+    setSetup(null);
+    setCode('');
+    setCodeError(undefined);
+    setSecretCopied(false);
+    setShowManualKey(false);
+  }
 
   return (
     <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
@@ -420,23 +499,39 @@ function MfaEnrollmentCard() {
         <Badge tone={enabled ? 'success' : 'neutral'}>{enabled ? 'Enabled' : 'Off'}</Badge>
       </div>
       <p className="mt-1 text-sm text-text-secondary">
-        Require a TOTP code from Google Authenticator, 1Password, or similar after password sign-in.
+        Protect admin sign-in with a time-based code from{' '}
+        <span className="font-medium text-text-primary">Google Authenticator</span> (or any TOTP app
+        such as 1Password or Authy). Codes refresh every 30 seconds.
         {mfaEnrollmentRequired
           ? ' Enrollment is required for this environment before other admin pages unlock.'
           : null}
       </p>
 
       {recoveryCodes ? (
-        <div className="mt-4 rounded-[0.6rem] border border-warning/30 bg-warning/10 p-3 text-sm">
-          <p className="font-medium text-text-primary">Recovery codes (save offline — shown once)</p>
-          <ul className="mt-2 grid gap-1 font-mono text-xs sm:grid-cols-2">
+        <div className="mt-4 rounded-[0.6rem] border border-warning/30 bg-warning/10 p-4 text-sm">
+          <p className="font-medium text-text-primary">Recovery codes (shown once)</p>
+          <p className="mt-1 text-text-secondary">
+            Store these offline. Use one if you lose access to Google Authenticator — each code
+            works a single time.
+          </p>
+          <ul className="mt-3 grid gap-1 font-mono text-xs sm:grid-cols-2">
             {recoveryCodes.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
-          <Button type="button" variant="secondary" className="mt-3" onClick={() => setRecoveryCodes(null)}>
-            I have saved these codes
-          </Button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" size="sm" onClick={() => void copyRecoveryCodes()}>
+              <Copy className="h-3.5 w-3.5" aria-hidden />
+              Copy
+            </Button>
+            <Button type="button" variant="secondary" size="sm" onClick={downloadRecoveryCodes}>
+              <Download className="h-3.5 w-3.5" aria-hidden />
+              Download
+            </Button>
+            <Button type="button" size="sm" onClick={() => setRecoveryCodes(null)}>
+              I have saved these codes
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -459,7 +554,7 @@ function MfaEnrollmentCard() {
             onChange={(event) => setDisablePassword(event.target.value)}
           />
           <Input
-            label="Current code"
+            label="Authenticator or recovery code"
             id="mfa-disable-code"
             autoComplete="one-time-code"
             value={disableCode}
@@ -479,51 +574,89 @@ function MfaEnrollmentCard() {
           </p>
         </form>
       ) : setup ? (
-        <div className="mt-4 space-y-3">
-          <div className="rounded-[0.6rem] border border-border bg-surface-secondary/50 p-3 text-sm">
-            <p className="font-medium text-text-primary">Secret</p>
-            <code className="mt-1 block break-all font-mono text-xs text-text-secondary">{setup.secret}</code>
-            <p className="mt-3 font-medium text-text-primary">otpauth URL</p>
-            <code className="mt-1 block break-all font-mono text-xs text-text-secondary">{setup.otpauthUrl}</code>
+        <div className="mt-4 space-y-4">
+          <ol className="list-decimal space-y-1 pl-5 text-sm text-text-secondary">
+            <li>Open Google Authenticator on your phone.</li>
+            <li>Tap + → Scan a QR code.</li>
+            <li>Confirm with the 6-digit code shown for Palpeer Admin.</li>
+          </ol>
+
+          <div className="flex flex-col gap-4 rounded-[0.6rem] border border-border bg-surface-secondary/40 p-4 sm:flex-row sm:items-start">
+            <div className="mx-auto shrink-0 sm:mx-0">
+              <TotpQrCode otpauthUrl={setup.otpauthUrl} size={200} />
+            </div>
+            <div className="min-w-0 flex-1 space-y-3 text-sm">
+              <p className="font-medium text-text-primary">Can&apos;t scan the code?</p>
+              <p className="text-text-secondary">
+                In Google Authenticator choose <span className="font-medium">Enter a setup key</span>,
+                account name <span className="font-mono text-xs">{user?.email ?? 'your email'}</span>,
+                and paste the key below (time-based).
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowManualKey((open) => !open)}
+              >
+                {showManualKey ? 'Hide setup key' : 'Show setup key'}
+              </Button>
+              {showManualKey ? (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <code className="block flex-1 break-all rounded-[0.6rem] border border-border bg-surface px-3 py-2 font-mono text-xs tracking-wider text-text-primary">
+                      {formattedSecret}
+                    </code>
+                    <Button type="button" variant="secondary" size="sm" onClick={() => void copySecret()}>
+                      {secretCopied ? (
+                        <Check className="h-3.5 w-3.5" aria-hidden />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" aria-hidden />
+                      )}
+                      {secretCopied ? 'Copied' : 'Copy key'}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-text-muted">
+                    Keep this key private. Anyone with it can generate codes for your account.
+                  </p>
+                </div>
+              ) : null}
+            </div>
           </div>
-          <form
-            className="flex flex-wrap items-end gap-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              enableMutation.mutate();
-            }}
-          >
+
+          <form className="flex flex-wrap items-end gap-3" onSubmit={onConfirmSetup} noValidate>
             <Input
-              label="Confirm code"
+              label="6-digit code from the app"
               id="mfa-enable-code"
               inputMode="numeric"
               autoComplete="one-time-code"
+              autoFocus
               value={code}
-              onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-            />
-            <Button type="submit" disabled={enableMutation.isPending}>
-              Enable MFA
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setSetup(null);
-                setCode('');
+              error={codeError}
+              onChange={(event) => {
+                setCode(event.target.value.replace(/\D/g, '').slice(0, 6));
+                setCodeError(undefined);
               }}
-            >
+            />
+            <Button type="submit" disabled={enableMutation.isPending || code.length !== 6}>
+              {enableMutation.isPending ? 'Verifying…' : 'Enable MFA'}
+            </Button>
+            <Button type="button" variant="secondary" onClick={cancelSetup}>
               Cancel
             </Button>
           </form>
         </div>
       ) : (
-        <div className="mt-4">
+        <div className="mt-4 space-y-3">
+          <p className="text-sm text-text-secondary">
+            You will scan a QR code with Google Authenticator, then confirm with a one-time code.
+            Recovery codes are issued after enrollment succeeds.
+          </p>
           <Button
             type="button"
             disabled={setupMutation.isPending || statusQuery.isLoading}
             onClick={() => setupMutation.mutate()}
           >
-            Set up authenticator
+            {setupMutation.isPending ? 'Preparing…' : 'Set up Google Authenticator'}
           </Button>
         </div>
       )}

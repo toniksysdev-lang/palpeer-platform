@@ -1,4 +1,4 @@
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   BellRing,
   Globe2,
@@ -21,6 +21,9 @@ import { FundingUnverifiedLimitSettings } from '@/features/settings/FundingUnver
 import { WithdrawalUnverifiedLimitSettings } from '@/features/settings/WithdrawalUnverifiedLimitSettings';
 import { SecuritySettings } from '@/features/settings/SecuritySettings';
 import type { ThemeMode } from '@/lib/theme';
+
+const SETTINGS_PATH = '/admin/settings';
+const SECURITY_TAB_PATH = `${SETTINGS_PATH}?tab=security`;
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -70,8 +73,9 @@ const TABS: { id: SettingsTab; label: string; icon: typeof Settings; manageOnly?
 const TAB_IDS = new Set<string>(TABS.map((t) => t.id));
 
 function parseTab(raw: string | null, hash: string): SettingsTab {
-  if (hash === '#security') return 'security';
+  // Legacy MFA gate / bookmarks used #security; prefer query tab when both present.
   if (raw && TAB_IDS.has(raw)) return raw as SettingsTab;
+  if (hash === '#security') return 'security';
   return 'general';
 }
 
@@ -80,7 +84,8 @@ export function SettingsPage() {
   const { mode, setMode, resolved } = useTheme();
   const canManage = can('admin:manage');
   const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const tab = useMemo(
     () => parseTab(searchParams.get('tab'), location.hash),
     [searchParams, location.hash],
@@ -88,35 +93,35 @@ export function SettingsPage() {
 
   const visibleTabs = TABS.filter((t) => !t.manageOnly || canManage);
 
+  const goToTab = (next: SettingsTab) => {
+    if (next === 'general') {
+      navigate(SETTINGS_PATH, { replace: true });
+      return;
+    }
+    navigate(`${SETTINGS_PATH}?tab=${next}`, { replace: true });
+  };
+
   useEffect(() => {
     if (!canManage && tab !== 'general' && tab !== 'security') {
-      setSearchParams({}, { replace: true });
+      navigate(SETTINGS_PATH, { replace: true });
     }
-  }, [canManage, tab, setSearchParams]);
+  }, [canManage, tab, navigate]);
 
-  // MFA enrollment gate lands on /admin/settings#security — open the Security tab and scroll.
+  // Legacy #security bookmarks and MFA gate → canonical ?tab=security (clears hash).
   useEffect(() => {
     if (location.hash !== '#security') return;
-    if (searchParams.get('tab') !== 'security') {
-      setSearchParams({ tab: 'security' }, { replace: true });
-    }
-    const el = document.getElementById('security');
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [location.hash, searchParams, setSearchParams]);
+    navigate(SECURITY_TAB_PATH, { replace: true });
+  }, [location.hash, navigate]);
 
   useEffect(() => {
     if (!mfaEnrollmentRequired) return;
     if (tab === 'security') return;
-    setSearchParams({ tab: 'security' }, { replace: true });
-  }, [mfaEnrollmentRequired, tab, setSearchParams]);
+    navigate(SECURITY_TAB_PATH, { replace: true });
+  }, [mfaEnrollmentRequired, tab, navigate]);
 
   const selectTab = (next: SettingsTab) => {
     if (mfaEnrollmentRequired && next !== 'security') return;
-    if (next === 'general') {
-      setSearchParams({}, { replace: true });
-      return;
-    }
-    setSearchParams({ tab: next }, { replace: true });
+    goToTab(next);
   };
 
   return (
@@ -158,10 +163,27 @@ export function SettingsPage() {
         </div>
       </section>
 
-      {tab === 'general' || tab === 'security' ? <SecuritySettings /> : null}
+      {tab === 'security' ? <SecuritySettings /> : null}
 
       {tab === 'general' ? (
         <>
+          <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-primary" aria-hidden />
+                  <h3 className="text-base font-semibold text-text-primary">Account security</h3>
+                </div>
+                <p className="mt-1 text-sm text-text-secondary">
+                  Password, active sessions, and authenticator MFA live on the Security tab.
+                </p>
+              </div>
+              <Button type="button" size="sm" onClick={() => selectTab('security')}>
+                Open Security
+              </Button>
+            </div>
+          </section>
+
           <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
             <h3 className="text-base font-semibold text-text-primary">Appearance</h3>
             <p className="mt-1 text-sm text-text-secondary">

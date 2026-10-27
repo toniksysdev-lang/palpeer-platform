@@ -21,9 +21,13 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
 
     Optional<User> findByGoogleSub(String googleSub);
 
+    Optional<User> findByUsernameIgnoreCase(String username);
+
     boolean existsByEmailIgnoreCase(String email);
 
     boolean existsByPhone(String phone);
+
+    boolean existsByUsernameIgnoreCase(String username);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where u.id = :id")

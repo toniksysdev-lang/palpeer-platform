@@ -16,17 +16,12 @@ function buildCsp(env: Record<string, string>, mode: string): string {
   const apiOrigin = originOf(env.VITE_API_BASE_URL);
   const wsOrigin = originOf(env.VITE_WS_URL, apiOrigin);
   const connect = new Set<string>(["'self'"]);
-  const isProd =
-    mode === 'production' ||
-    env.VITE_APP_ENV === 'production' ||
-    (!!apiOrigin && apiOrigin.startsWith('https://'));
+  // Only Vite `--mode production` is a prod CSP. Do not flip to prod CSP just because
+  // VITE_API_BASE_URL is https (local `npm run dev` often points at the Render API).
+  const isProd = mode === 'production';
 
   if (apiOrigin) {
     connect.add(apiOrigin);
-  } else if (!isProd) {
-    // Local Vite defaults when env is unset
-    connect.add('http://127.0.0.1:8085');
-    connect.add('http://localhost:8085');
   }
   if (wsOrigin) {
     connect.add(wsOrigin);
@@ -37,21 +32,30 @@ function buildCsp(env: Record<string, string>, mode: string): string {
     if (wsOrigin.startsWith('http://')) {
       connect.add(wsOrigin.replace(/^http:/, 'ws:'));
     }
-  } else if (!isProd) {
-    connect.add('ws://127.0.0.1:8085');
-    connect.add('ws://localhost:8085');
   }
 
-  // Production meta CSP must include https/wss or the Render header ∩ meta intersection
-  // collapses to 'self' only and sign-in fails with a network error.
   if (isProd) {
+    // Production meta CSP must include https/wss or the Render header ∩ meta intersection
+    // collapses to 'self' only and sign-in fails with a network error.
     connect.add('https:');
     connect.add('wss:');
+  } else {
+    // Local API + Vite HMR websocket (ws://localhost:5173). Without these, the admin shell
+    // fails to load in the browser even though the HTML response is 200.
+    connect.add('http://127.0.0.1:8085');
+    connect.add('http://localhost:8085');
+    connect.add('ws://127.0.0.1:8085');
+    connect.add('ws://localhost:8085');
+    connect.add('ws:');
+    connect.add('http:');
   }
+
+  // Vite injects an inline react-refresh module in development; production uses hashed files only.
+  const scriptSrc = isProd ? "script-src 'self'" : "script-src 'self' 'unsafe-inline'";
 
   return [
     "default-src 'self'",
-    "script-src 'self'",
+    scriptSrc,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: blob:",
@@ -78,13 +82,38 @@ function cspMetaPlugin(getEnv: () => Record<string, string>, mode: string): Plug
 }
 
 export default defineConfig(({ mode }) => {
-  // Load .env / .env.production.local so CSP includes the real API origin on Render builds.
-  const env = {
-    ...loadEnv(mode, process.cwd(), ''),
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(([, v]) => typeof v === 'string') as [string, string][],
-    ),
-  };
+  // Vite's loadEnv() lets process.env override .env files. Shells that ran Render deploy /
+  // render-env.mjs often leave VITE_API_BASE_URL=https://palpeer-api... set, so local sign-in
+  // calls the remote API (CORS → "Network error") instead of the Vite /api proxy to :8085.
+  if (mode === 'development') {
+    delete process.env.VITE_API_BASE_URL;
+    delete process.env.VITE_WS_URL;
+    delete process.env.VITE_APP_ENV;
+  }
+
+  const fileEnv = loadEnv(mode, process.cwd(), '');
+
+  if (mode === 'development') {
+    const localApi = fileEnv.VITE_API_BASE_URL || '/api/v1';
+    const localWs = fileEnv.VITE_WS_URL || 'http://localhost:8085/ws';
+    const localAppEnv = fileEnv.VITE_APP_ENV || 'development';
+    process.env.VITE_API_BASE_URL = localApi;
+    process.env.VITE_WS_URL = localWs;
+    process.env.VITE_APP_ENV = localAppEnv;
+    fileEnv.VITE_API_BASE_URL = localApi;
+    fileEnv.VITE_WS_URL = localWs;
+    fileEnv.VITE_APP_ENV = localAppEnv;
+  }
+
+  const processEnv = Object.fromEntries(
+    Object.entries(process.env).filter(([, v]) => typeof v === 'string') as [string, string][],
+  );
+
+  // Production builds: process env (Render) wins. Development: file/local defaults win (above).
+  const env =
+    mode === 'development'
+      ? { ...processEnv, ...fileEnv }
+      : { ...fileEnv, ...processEnv };
   const csp = buildCsp(env, mode);
 
   const securityHeaders = {

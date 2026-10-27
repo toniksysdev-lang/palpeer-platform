@@ -607,9 +607,11 @@ public class P2PService {
         String amount = formatAmount(entity.getAmount());
         String rate = formatAmount(entity.getRate());
         String pair = entity.getBaseCurrencyCode() + "/" + entity.getQuoteCurrencyCode();
-        String title = "New P2P " + entity.getSide().name() + " · " + pair;
-        StringBuilder body = new StringBuilder();
-        body.append(entity.getSide().name())
+        // Marketplace copy uses the account username (email local-part), not profile first/last name.
+        String poster = resolvePosterUsername(entity.getUserId());
+        String title = poster + " posted a P2P " + entity.getSide().name() + " · " + pair;
+        StringBuilder trade = new StringBuilder();
+        trade.append(entity.getSide().name())
                 .append(' ')
                 .append(amount)
                 .append(' ')
@@ -619,20 +621,21 @@ public class P2PService {
                 .append(" @ ")
                 .append(rate);
         if (entity.getNotes() != null && !entity.getNotes().isBlank()) {
-            body.append(". Note: ").append(entity.getNotes().trim());
+            trade.append(". Note: ").append(entity.getNotes().trim());
         }
-        body.append('.');
-        String detail = body.toString();
+        trade.append('.');
+        String tradeDetail = trade.toString();
+        String marketplaceDetail = poster + ": " + tradeDetail;
         // Marketplace push only when an InstantEX (SWAP) board rate exists for the pair.
         if (hasInstantExRate(entity.getBaseCurrencyCode(), entity.getQuoteCurrencyCode())) {
             eventPublisher.publishEvent(new BroadcastPushEvent(
-                    entity.getUserId(), title, detail, "P2P", "P2P_REQUEST", entity.getId()));
+                    entity.getUserId(), title, marketplaceDetail, "P2P", "P2P_REQUEST", entity.getId()));
         }
         // Poster always gets an email + push confirmation of their own listing.
         eventPublisher.publishEvent(new UserNotifyEvent(
                 entity.getUserId(),
                 "P2P order posted",
-                detail,
+                tradeDetail,
                 "P2P",
                 "P2P_REQUEST",
                 entity.getId(),
@@ -850,6 +853,15 @@ public class P2PService {
         return resolvePosterDisplayName(userId, profiles, users);
     }
 
+    /** Stored account username for marketplace notifications (never profile first/last name). */
+    private String resolvePosterUsername(UUID userId) {
+        return userRepository
+                .findById(userId)
+                .map(User::getUsername)
+                .filter(username -> username != null && !username.isBlank())
+                .orElse("Palpeer user");
+    }
+
     private static String resolvePosterDisplayName(
             UUID userId, Map<UUID, Profile> profiles, Map<UUID, User> users) {
         Profile profile = profiles.get(userId);
@@ -860,8 +872,8 @@ public class P2PService {
             }
         }
         User user = users.get(userId);
-        if (user != null && user.getEmail() != null && user.getEmail().contains("@")) {
-            return user.getEmail().substring(0, user.getEmail().indexOf('@'));
+        if (user != null && user.getUsername() != null && !user.getUsername().isBlank()) {
+            return user.getUsername();
         }
         return "Palpeer user";
     }

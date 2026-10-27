@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Locale;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -24,14 +25,32 @@ public final class TotpSupport {
         return encodeBase32(bytes);
     }
 
+    /**
+     * Builds a Google Authenticator–compatible otpauth URI (RFC 6238 / Key URI Format).
+     * Scan with Google Authenticator, Authy, 1Password, etc.
+     */
     public static String otpAuthUri(String issuer, String accountName, String secret) {
-        String label = url(issuer) + ":" + url(accountName);
+        if (issuer == null || issuer.isBlank()) {
+            throw new IllegalArgumentException("TOTP issuer is required");
+        }
+        if (accountName == null || accountName.isBlank()) {
+            throw new IllegalArgumentException("TOTP account name is required");
+        }
+        String compactSecret =
+                secret == null ? "" : secret.replace(" ", "").toUpperCase(Locale.ROOT);
+        if (compactSecret.isEmpty()) {
+            throw new IllegalArgumentException("TOTP secret is required");
+        }
+        // Reject non-Base32 so QR payloads never embed broken secrets.
+        decodeBase32(compactSecret);
+
+        String label = url(issuer.trim()) + ":" + url(accountName.trim());
         return "otpauth://totp/"
                 + label
                 + "?secret="
-                + secret
+                + compactSecret
                 + "&issuer="
-                + url(issuer)
+                + url(issuer.trim())
                 + "&algorithm=SHA1&digits=6&period=30";
     }
 

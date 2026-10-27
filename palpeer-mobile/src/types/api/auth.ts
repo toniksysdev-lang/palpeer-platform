@@ -36,9 +36,10 @@ export type GoogleAuthRequest = {
   platform?: string;
 };
 
-/** VERIFIED: `RegisterRequest`. email ≤ 320, phone ≤ 32 (no format rule), password 8–128. */
+/** VERIFIED: `RegisterRequest`. email ≤ 320, username 3–32 [A-Za-z0-9_], phone ≤ 32, password 8–128. */
 export type RegisterRequest = {
   email: string;
+  username: string;
   phone: string;
   password: string;
 };

@@ -14,6 +14,7 @@ const MESSAGES: Record<string, string> = {
   GOOGLE_AUTH_DISABLED: 'Google Sign-In is not available in this build.',
   GOOGLE_ACCOUNT_CONFLICT: 'This email is linked to a different Google account.',
   EMAIL_ALREADY_REGISTERED: 'An account with this email already exists.',
+  USERNAME_TAKEN: 'That username is already taken.',
   PHONE_ALREADY_REGISTERED: 'An account with this phone number already exists. Sign in instead.',
   SIGNUP_INCOMPLETE: 'Registration is incomplete for this phone. Continue where you left off.',
   EMAIL_ALREADY_VERIFIED: 'Your email is already verified. Sign in to continue.',
@@ -33,6 +34,7 @@ const MESSAGES: Record<string, string> = {
 /** Codes that belong to a single form field rather than the whole form. */
 const FIELD_FOR_CODE: Record<string, string> = {
   EMAIL_ALREADY_REGISTERED: 'email',
+  USERNAME_TAKEN: 'username',
   PHONE_ALREADY_REGISTERED: 'phone',
   OTP_INVALID: 'code',
   OTP_EXPIRED: 'code',

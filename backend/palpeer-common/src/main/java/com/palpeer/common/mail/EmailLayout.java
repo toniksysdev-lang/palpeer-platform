@@ -149,14 +149,23 @@ public final class EmailLayout {
     }
 
     public static String otpCodeBox(String code) {
+        return credentialBox("Verification code", code, "0.28em", "32px");
+    }
+
+    /** Highlighted secret (OTP or temporary password) for transactional mail. */
+    public static String credentialBox(String label, String value) {
+        return credentialBox(label, value, "0.08em", "22px");
+    }
+
+    private static String credentialBox(String label, String value, String letterSpacing, String fontSize) {
         return """
                 <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0 24px 0;">
                   <tr>
                     <td align="center" style="background-color:%s;border:1px solid %s;border-radius:14px;padding:22px 16px;">
                       <div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:%s;margin-bottom:10px;font-weight:600;">
-                        Verification code
+                        %s
                       </div>
-                      <div style="font-size:32px;line-height:1.2;font-weight:700;letter-spacing:0.28em;color:%s;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;">
+                      <div style="font-size:%s;line-height:1.35;font-weight:700;letter-spacing:%s;color:%s;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all;">
                         %s
                       </div>
                     </td>
@@ -167,8 +176,11 @@ public final class EmailLayout {
                         EmailBrand.PRIMARY_SOFT,
                         EmailBrand.PRIMARY,
                         EmailBrand.TEXT_MUTED,
+                        escape(label),
+                        fontSize,
+                        letterSpacing,
                         EmailBrand.PRIMARY,
-                        escape(code));
+                        escape(value));
     }
 
     public static String mutedNote(String text) {

@@ -45,6 +45,9 @@ public final class EmailBrand {
     public static final String APP_OPEN_CTA = "Open Palpeer App";
     /** Native URL scheme used by the /open bridge page (not for email hrefs). */
     public static final String APP_SCHEME_OPEN_URL = "palpeer://open";
+    /** Admin console sign-in (invite emails). */
+    public static final String ADMIN_CONSOLE_URL = "https://palpeer-admin.onrender.com/sign-in";
+    public static final String ADMIN_CONSOLE_CTA = "Open admin console";
     public static final String SUPPORT_EMAIL = "support@palpeer.com";
     public static final String TAGLINE = "Your Rate, Your Way";
 

@@ -10,11 +10,14 @@ import com.palpeer.admin.web.dto.AdminMeResponse;
 import com.palpeer.admin.web.dto.AdminUserResponse;
 import com.palpeer.admin.web.dto.AdminUserSummaryResponse;
 import com.palpeer.admin.web.dto.AssignAdminRequest;
+import com.palpeer.admin.web.dto.CreateAdminRequest;
+import com.palpeer.admin.web.dto.CreateAdminResponse;
 import com.palpeer.admin.web.dto.CreatePermissionRequest;
 import com.palpeer.admin.web.dto.CreateRoleRequest;
 import com.palpeer.admin.web.dto.PermissionResponse;
 import com.palpeer.admin.web.dto.ReviewKycRequest;
 import com.palpeer.admin.web.dto.RoleResponse;
+import com.palpeer.admin.web.dto.UpdateAdminRequest;
 import com.palpeer.admin.web.dto.UpdateP2PStatusRequest;
 import com.palpeer.admin.web.dto.UpdateRoleRequest;
 import com.palpeer.admin.web.dto.UpdateUserAdminRequest;
@@ -470,9 +473,28 @@ public class AdminController {
     @PostMapping("/admins")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('admin:manage')")
-    @Operation(summary = "Assign admin roles to a user")
+    @Operation(
+            summary = "Create admin operator by email (or promote existing user)",
+            description =
+                    "Creates a platform user when needed, assigns roles, and emails temporary login details.")
+    public ApiResponse<CreateAdminResponse> createAdmin(@Valid @RequestBody CreateAdminRequest request) {
+        return ApiResponse.ok("Admin created", adminRbacService.create(request));
+    }
+
+    @PostMapping("/admins/assign")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('admin:manage')")
+    @Operation(summary = "Assign admin roles to an existing user by UUID (legacy)")
     public ApiResponse<AdminUserResponse> assignAdmin(@Valid @RequestBody AssignAdminRequest request) {
         return ApiResponse.ok("Admin assigned", adminRbacService.assign(request));
+    }
+
+    @PutMapping("/admins/{userId}")
+    @PreAuthorize("hasAuthority('admin:manage')")
+    @Operation(summary = "Update admin roles, enabled flag, or reset password")
+    public ApiResponse<AdminUserResponse> updateAdmin(
+            @PathVariable UUID userId, @Valid @RequestBody UpdateAdminRequest request) {
+        return ApiResponse.ok(adminRbacService.update(userId, request));
     }
 
     @PostMapping("/admins/{userId}/disable")
@@ -480,6 +502,14 @@ public class AdminController {
     @Operation(summary = "Disable admin access for a user")
     public ApiResponse<AdminUserResponse> disableAdmin(@PathVariable UUID userId) {
         return ApiResponse.ok(adminRbacService.disable(userId));
+    }
+
+    @DeleteMapping("/admins/{userId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('admin:manage')")
+    @Operation(summary = "Delete admin operator access (keeps the underlying user account)")
+    public void deleteAdmin(@PathVariable UUID userId) {
+        adminRbacService.delete(userId);
     }
 
     @GetMapping("/roles")

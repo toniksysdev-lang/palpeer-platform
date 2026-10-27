@@ -16,8 +16,10 @@ import { findNavItem, primaryNav, type NavItem } from '@/config/navigation';
 import { cn } from '@/lib/cn';
 
 function pathWithoutHash(path: string) {
-  const hashAt = path.indexOf('#');
-  return hashAt >= 0 ? path.slice(0, hashAt) : path;
+  const q = path.indexOf('?');
+  const withoutQuery = q >= 0 ? path.slice(0, q) : path;
+  const hashAt = withoutQuery.indexOf('#');
+  return hashAt >= 0 ? withoutQuery.slice(0, hashAt) : withoutQuery;
 }
 
 function isPathActive(pathname: string, path: string) {
@@ -148,7 +150,7 @@ function NavGroup({
 function NavList({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const { can } = useAuth();
   const location = useLocation();
-  const activeId = findNavItem(location.pathname, location.hash)?.id;
+  const activeId = findNavItem(location.pathname, location.hash, location.search)?.id;
   const visible = useMemo(
     () =>
       primaryNav
