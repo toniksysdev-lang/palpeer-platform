@@ -1,38 +1,10 @@
+import { CATALOG_PERMISSION_CODES } from '@/lib/permissionCatalog';
+
 /**
- * Seeded backend permission codes (Flyway V19–V44+).
- * Keep in sync with admin_permissions rows for Roles / Permissions UIs and mocks.
- * Covers: users (+notes), KYC, rates/currencies, wallets/pool, transactions/payments,
- * P2P, fees (P2P + InstantEX), negotiations, chat, cards, notifications/push,
- * promotions/referrals/marketing, reports (platform fee revenue), audit, admin:manage.
+ * Seeded / catalog permission codes used by Roles, Permissions UIs, and mocks.
+ * Prefer {@link CATALOG_PERMISSION_CODES} for the full module matrix.
  */
-export const KNOWN_PERMISSIONS = [
-  'users:read',
-  'users:write',
-  'kyc:read',
-  'kyc:review',
-  'rates:write',
-  'currencies:write',
-  'transactions:read',
-  'p2p:read',
-  'p2p:write',
-  'promotions:write',
-  'admin:manage',
-  'audit:read',
-  'wallets:read',
-  'cards:read',
-  'cards:write',
-  'negotiations:read',
-  'negotiations:write',
-  'chat:read',
-  'notifications:read',
-  'notifications:write',
-  'reports:read',
-  'fees:read',
-  'fees:write',
-  'users:notes:read',
-  'users:notes:write',
-  'payments:operate',
-] as const;
+export const KNOWN_PERMISSIONS = CATALOG_PERMISSION_CODES;
 
 export type PermissionCode = (typeof KNOWN_PERMISSIONS)[number] | (string & {});
 

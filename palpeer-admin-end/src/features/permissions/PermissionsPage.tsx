@@ -1,28 +1,25 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { KeyRound } from 'lucide-react';
-import { z } from 'zod';
 import { useToast } from '@/app/providers/ToastProvider';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { ErrorState } from '@/components/feedback/ErrorState';
+import { PermissionActionMatrix } from '@/components/rbac/PermissionActionMatrix';
 import { DataTable, type DataColumn } from '@/components/tables/DataTable';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { appConfig } from '@/config/env';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { formatDateTime } from '@/lib/format';
+import {
+  CATALOG_PERMISSION_CODES,
+  catalogDescription,
+  type CatalogAction,
+} from '@/lib/permissionCatalog';
 import { mockCreatePermission, mockListPermissions } from '@/mocks/rbac';
 import { createPermission, listPermissions } from '@/services/api/rbac';
 import type { AdminPermission } from '@/types/admin';
 import { ApiClientError } from '@/types/api';
-
-const createSchema = z.object({
-  code: z
-    .string()
-    .trim()
-    .regex(/^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$/, 'Use resource:action (lowercase).'),
-  description: z.string().trim().max(255).optional(),
-});
 
 export function PermissionsPage() {
   const { can } = useAuth();
@@ -30,10 +27,8 @@ export function PermissionsPage() {
   const queryClient = useQueryClient();
   const allowed = can('admin:manage');
 
-  const [code, setCode] = useState('');
-  const [description, setDescription] = useState('');
-  const [errors, setErrors] = useState<{ code?: string; description?: string }>({});
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [ensuringCode, setEnsuringCode] = useState<string | null>(null);
+  const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
 
   const listQuery = useQuery({
     queryKey: ['admin-permissions', appConfig.useMockApi],
@@ -47,42 +42,37 @@ export function PermissionsPage() {
     },
   });
 
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      const parsed = createSchema.safeParse({
-        code,
-        description: description || undefined,
-      });
-      if (!parsed.success) {
-        const next: { code?: string; description?: string } = {};
-        for (const issue of parsed.error.issues) {
-          const key = issue.path[0];
-          if (key === 'code' || key === 'description') next[key] = issue.message;
-        }
-        setErrors(next);
-        throw new Error('validation');
-      }
-      setErrors({});
+  const existingCodes = useMemo(
+    () => new Set((listQuery.data ?? []).map((row) => row.code)),
+    [listQuery.data],
+  );
+
+  const missingCodes = useMemo(
+    () => CATALOG_PERMISSION_CODES.filter((code) => !existingCodes.has(code)),
+    [existingCodes],
+  );
+
+  const ensureOne = useMutation({
+    mutationFn: async (action: CatalogAction) => {
+      setEnsuringCode(action.code);
       if (appConfig.useMockApi) {
-        await new Promise((resolve) => setTimeout(resolve, 160));
-        return mockCreatePermission(parsed.data);
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        return mockCreatePermission({ code: action.code, description: action.description });
       }
-      return createPermission(parsed.data);
+      return createPermission({ code: action.code, description: action.description });
     },
     onSuccess: (created) => {
-      setConfirmOpen(false);
-      setCode('');
-      setDescription('');
+      setEnsuringCode(null);
       void queryClient.invalidateQueries({ queryKey: ['admin-permissions'] });
       void queryClient.invalidateQueries({ queryKey: ['admin-roles'] });
       push({
         tone: 'success',
-        title: 'Permission created',
-        description: `${created.code} is now available for role assignment.`,
+        title: 'Permission added',
+        description: `${created.code} is available for role assignment.`,
       });
     },
     onError: (error) => {
-      if (error instanceof Error && error.message === 'validation') return;
+      setEnsuringCode(null);
       push({
         tone: 'error',
         title: 'Create failed',
@@ -91,19 +81,64 @@ export function PermissionsPage() {
     },
   });
 
+  const syncAll = useMutation({
+    mutationFn: async () => {
+      const created: string[] = [];
+      for (const code of missingCodes) {
+        const description = catalogDescription(code);
+        if (appConfig.useMockApi) {
+          await new Promise((resolve) => setTimeout(resolve, 40));
+          mockCreatePermission({ code, description });
+        } else {
+          try {
+            await createPermission({ code, description });
+          } catch (error) {
+            if (error instanceof ApiClientError && error.status === 409) continue;
+            throw error;
+          }
+        }
+        created.push(code);
+      }
+      return created;
+    },
+    onSuccess: (created) => {
+      setSyncConfirmOpen(false);
+      void queryClient.invalidateQueries({ queryKey: ['admin-permissions'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-roles'] });
+      push({
+        tone: 'success',
+        title: 'Catalog synced',
+        description:
+          created.length > 0
+            ? `Added ${created.length} permission(s). Assign them on Roles.`
+            : 'Catalog already complete.',
+      });
+    },
+    onError: (error) => {
+      push({
+        tone: 'error',
+        title: 'Sync failed',
+        description: error instanceof ApiClientError ? error.message : 'Could not sync permissions.',
+      });
+    },
+  });
+
   const columns = useMemo<DataColumn<AdminPermission>[]>(
     () => [
       {
-        id: 'code',
-        header: 'Code',
-        cell: (row) => <span className="font-mono text-xs text-text-primary">{row.code}</span>,
-      },
-      {
-        id: 'description',
-        header: 'Description',
-        cell: (row) => (
-          <span className="text-sm text-text-secondary">{row.description || '—'}</span>
-        ),
+        id: 'action',
+        header: 'Permission action',
+        cell: (row) => {
+          const meta = catalogDescription(row.code);
+          return (
+            <div>
+              <p className="text-sm font-medium text-text-primary">
+                {row.description || meta}
+              </p>
+              <p className="font-mono text-[11px] text-text-muted">{row.code}</p>
+            </div>
+          );
+        },
       },
       {
         id: 'createdAt',
@@ -137,69 +172,76 @@ export function PermissionsPage() {
               <h1 className="text-xl font-semibold text-text-primary">Permissions</h1>
             </div>
             <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-              Platform permission catalog used by admin roles. Codes follow{' '}
-              <code className="font-mono text-xs">resource:action</code>.
+              Module permission actions for the admin console — Read, Edit, Delete, and module-specific
+              actions (Review, Manage, Operate, Notes). Sync the catalog, then assign actions on{' '}
+              <Link to="/admin/roles" className="text-primary hover:underline">
+                Roles
+              </Link>
+              .
             </p>
           </div>
+          <Button
+            onClick={() => setSyncConfirmOpen(true)}
+            disabled={syncAll.isPending || missingCodes.length === 0}
+          >
+            {missingCodes.length === 0
+              ? 'Catalog complete'
+              : `Add ${missingCodes.length} missing action${missingCodes.length === 1 ? '' : 's'}`}
+          </Button>
         </div>
       </section>
 
       <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
-        <h3 className="text-base font-semibold text-text-primary">Create permission</h3>
-        <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-          <Input
-            label="Code"
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
-            error={errors.code}
-            placeholder="reports:read"
-          />
-          <Input
-            label="Description"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            error={errors.description}
-            placeholder="Optional description"
-          />
-          <div className="flex items-end">
-            <Button onClick={() => setConfirmOpen(true)} disabled={createMutation.isPending}>
-              Create
-            </Button>
-          </div>
+        <h3 className="text-base font-semibold text-text-primary">Permission actions by module</h3>
+        <p className="mt-1 text-sm text-text-secondary">
+          Covers every admin-end area. Edit maps to API <code className="font-mono text-xs">:write</code>{' '}
+          where that is how backends are gated today.
+        </p>
+        <div className="mt-4">
+          {listQuery.isError ? (
+            <ErrorState
+              description={
+                listQuery.error instanceof ApiClientError
+                  ? listQuery.error.message
+                  : 'Failed to load permissions.'
+              }
+              onRetry={() => void listQuery.refetch()}
+            />
+          ) : (
+            <PermissionActionMatrix
+              mode="catalog"
+              existingCodes={existingCodes}
+              onEnsure={(action) => void ensureOne.mutateAsync(action)}
+              ensuringCode={ensuringCode}
+              disabled={ensureOne.isPending || syncAll.isPending || listQuery.isLoading}
+            />
+          )}
         </div>
       </section>
 
       <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
-        {listQuery.isError ? (
-          <ErrorState
-            description={
-              listQuery.error instanceof ApiClientError
-                ? listQuery.error.message
-                : 'Failed to load permissions.'
-            }
-            onRetry={() => void listQuery.refetch()}
-          />
-        ) : (
+        <h3 className="mb-3 text-base font-semibold text-text-primary">Live catalog</h3>
+        {listQuery.isError ? null : (
           <DataTable
             columns={columns}
             rows={listQuery.data ?? []}
             rowKey={(row) => row.id}
             loading={listQuery.isLoading}
             emptyTitle="No permissions"
-            emptyDescription="Create a permission code to attach it to roles."
+            emptyDescription="Sync the module catalog to create permission actions."
           />
         )}
       </section>
 
       <ConfirmDialog
-        open={confirmOpen}
-        title="Create permission?"
-        description={`Add ${code || 'this permission'} to the catalog. Existing roles are unchanged until you assign it.`}
-        confirmLabel="Create"
+        open={syncConfirmOpen}
+        title="Add missing permission actions?"
+        description={`Create ${missingCodes.length} catalog permission(s). Existing roles are unchanged until you assign them on Roles.`}
+        confirmLabel="Add missing"
         tone="primary"
-        busy={createMutation.isPending}
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={() => void createMutation.mutateAsync()}
+        busy={syncAll.isPending}
+        onClose={() => setSyncConfirmOpen(false)}
+        onConfirm={() => void syncAll.mutateAsync()}
       />
     </div>
   );

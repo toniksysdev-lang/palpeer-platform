@@ -36,6 +36,8 @@ import { ApiClientError } from '@/types/api';
 
 const createSchema = z.object({
   email: z.string().trim().email('Enter a valid email.'),
+  firstName: z.string().trim().min(1, 'First name is required.').max(80),
+  lastName: z.string().trim().min(1, 'Last name is required.').max(80),
   password: z
     .string()
     .trim()
@@ -104,11 +106,15 @@ export function AdminsPage() {
   const canManage = can('admin:manage');
 
   const [emailDraft, setEmailDraft] = useState('');
+  const [firstNameDraft, setFirstNameDraft] = useState('');
+  const [lastNameDraft, setLastNameDraft] = useState('');
   const [passwordDraft, setPasswordDraft] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>(['SUPER_ADMIN']);
   const [sendInviteEmail, setSendInviteEmail] = useState(true);
   const [formErrors, setFormErrors] = useState<{
     email?: string;
+    firstName?: string;
+    lastName?: string;
     password?: string;
     roleCodes?: string;
   }>({});
@@ -162,15 +168,29 @@ export function AdminsPage() {
     mutationFn: async () => {
       const parsed = createSchema.safeParse({
         email: emailDraft,
+        firstName: firstNameDraft,
+        lastName: lastNameDraft,
         password: passwordDraft,
         roleCodes: selectedRoles,
         sendInviteEmail,
       });
       if (!parsed.success) {
-        const next: { email?: string; password?: string; roleCodes?: string } = {};
+        const next: {
+          email?: string;
+          firstName?: string;
+          lastName?: string;
+          password?: string;
+          roleCodes?: string;
+        } = {};
         for (const issue of parsed.error.issues) {
           const key = issue.path[0];
-          if (key === 'email' || key === 'password' || key === 'roleCodes') {
+          if (
+            key === 'email' ||
+            key === 'firstName' ||
+            key === 'lastName' ||
+            key === 'password' ||
+            key === 'roleCodes'
+          ) {
             next[key] = issue.message;
           }
         }
@@ -180,6 +200,8 @@ export function AdminsPage() {
       setFormErrors({});
       const input = {
         email: parsed.data.email,
+        firstName: parsed.data.firstName,
+        lastName: parsed.data.lastName,
         password: parsed.data.password || undefined,
         roleCodes: parsed.data.roleCodes,
         sendInviteEmail: parsed.data.sendInviteEmail,
@@ -193,6 +215,8 @@ export function AdminsPage() {
     onSuccess: (result) => {
       setCreateConfirmOpen(false);
       setEmailDraft('');
+      setFirstNameDraft('');
+      setLastNameDraft('');
       setPasswordDraft('');
       setCreatedResult(result);
       setPasswordCopied(false);
@@ -317,6 +341,14 @@ export function AdminsPage() {
   const columns = useMemo<DataColumn<AdminOperator>[]>(
     () => [
       {
+        id: 'name',
+        header: 'Name',
+        cell: (row) => {
+          const name = [row.firstName, row.lastName].filter(Boolean).join(' ').trim();
+          return <span className="text-sm text-text-primary">{name || '—'}</span>;
+        },
+      },
+      {
         id: 'email',
         header: 'Email',
         cell: (row) => <span className="text-sm text-text-primary">{row.email ?? '—'}</span>,
@@ -426,6 +458,24 @@ export function AdminsPage() {
           credentials to the new operator.
         </p>
         <div className="mt-4 space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              label="First name"
+              autoComplete="off"
+              value={firstNameDraft}
+              onChange={(event) => setFirstNameDraft(event.target.value)}
+              error={formErrors.firstName}
+              placeholder="Ada"
+            />
+            <Input
+              label="Last name"
+              autoComplete="off"
+              value={lastNameDraft}
+              onChange={(event) => setLastNameDraft(event.target.value)}
+              error={formErrors.lastName}
+              placeholder="Lovelace"
+            />
+          </div>
           <Input
             label="Email"
             type="email"
@@ -515,7 +565,7 @@ export function AdminsPage() {
             rowKey={(row) => row.id}
             loading={adminsQuery.isLoading}
             emptyTitle="No admin operators"
-            emptyDescription="Create an admin user with email and at least one role."
+            emptyDescription="Create an admin user with name, email, and at least one role."
           />
         )}
       </section>

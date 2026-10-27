@@ -19,6 +19,7 @@ import com.palpeer.admin.web.dto.CreateRoleRequest;
 import com.palpeer.admin.web.dto.UpdateRoleRequest;
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
+import com.palpeer.profile.repository.ProfileRepository;
 import com.palpeer.user.domain.User;
 import com.palpeer.user.repository.UserRepository;
 import java.util.List;
@@ -40,6 +41,7 @@ class AdminRbacServiceTest {
     @Mock private RoleRepository roleRepository;
     @Mock private PermissionRepository permissionRepository;
     @Mock private UserRepository userRepository;
+    @Mock private ProfileRepository profileRepository;
     @Mock private com.palpeer.common.audit.AuditRecorder auditRecorder;
     @InjectMocks private AdminRbacService adminRbacService;
 

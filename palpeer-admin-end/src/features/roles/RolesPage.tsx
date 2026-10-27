@@ -8,11 +8,13 @@ import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { Drawer } from '@/components/dialogs/Drawer';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { DataTable, type DataColumn } from '@/components/tables/DataTable';
+import { PermissionActionMatrix } from '@/components/rbac/PermissionActionMatrix';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { appConfig } from '@/config/env';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { catalogActionByCode } from '@/lib/permissionCatalog';
 import { formatDateTime } from '@/lib/format';
 import {
   createRole,
@@ -229,7 +231,7 @@ export function RolesPage() {
           <div className="flex max-w-md flex-wrap gap-1">
             {row.permissionCodes.slice(0, 6).map((permission) => (
               <Badge key={permission} tone="info">
-                {permission}
+                {catalogActionByCode(permission)?.label ?? permission}
               </Badge>
             ))}
             {row.permissionCodes.length > 6 ? (
@@ -298,12 +300,17 @@ export function RolesPage() {
               <h1 className="text-xl font-semibold text-text-primary">Roles</h1>
             </div>
             <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-              Define admin roles and attach permission codes from the live catalog (users, KYC,
-              wallets/pool funds, rates, P2P, fee management including InstantEX fees, platform fee
-              revenue via <code className="font-mono text-xs">fees:read</code>/
-              <code className="font-mono text-xs">reports:read</code>, negotiations, chat, cards,
-              notifications/push, promotions/referrals/marketing, reports, audit, payments). Assign
-              roles from Admins. <code className="font-mono text-xs">SUPER_ADMIN</code> must retain{' '}
+              Define admin roles and attach module permission actions (Read, Edit, Delete, and other)
+              from the{' '}
+              <button
+                type="button"
+                className="text-primary hover:underline"
+                onClick={() => void navigate('/admin/permissions')}
+              >
+                Permissions
+              </button>{' '}
+              catalog. Assign roles from Admins.{' '}
+              <code className="font-mono text-xs">SUPER_ADMIN</code> must retain{' '}
               <code className="font-mono text-xs">admin:manage</code>.
             </p>
           </div>
@@ -348,34 +355,17 @@ export function RolesPage() {
           />
         </div>
         <div className="mt-4">
-          <p className="mb-2 text-sm font-medium text-text-primary">Permissions</p>
+          <p className="mb-2 text-sm font-medium text-text-primary">Permission actions</p>
           {errors.permissionCodes ? (
             <p className="mb-2 text-xs text-danger">{errors.permissionCodes}</p>
           ) : null}
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {catalog.map((permission) => {
-              const checked = selectedPermissions.includes(permission.code);
-              return (
-                <label
-                  key={permission.id}
-                  className="flex cursor-pointer items-start gap-2 rounded-[0.6rem] border border-border px-3 py-2 text-sm"
-                >
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={checked}
-                    onChange={() => togglePermission(permission.code, 'create')}
-                  />
-                  <span>
-                    <span className="block font-mono text-xs">{permission.code}</span>
-                    <span className="block text-xs text-text-muted">
-                      {permission.description || 'No description'}
-                    </span>
-                  </span>
-                </label>
-              );
-            })}
-          </div>
+          <PermissionActionMatrix
+            mode="select"
+            existingCodes={catalog.map((permission) => permission.code)}
+            selectedCodes={selectedPermissions}
+            onToggle={(code) => togglePermission(code, 'create')}
+            disabled={permissionsQuery.isLoading}
+          />
         </div>
         <div className="mt-4">
           <Button onClick={() => setConfirmOpen(true)} disabled={createMutation.isPending}>
@@ -424,25 +414,14 @@ export function RolesPage() {
               onChange={(event) => setEditDescription(event.target.value)}
             />
             <div>
-              <p className="mb-2 text-sm font-medium text-text-primary">Permissions</p>
-              <div className="grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2">
-                {catalog.map((permission) => {
-                  const checked = editPermissions.includes(permission.code);
-                  return (
-                    <label
-                      key={permission.id}
-                      className="flex cursor-pointer items-start gap-2 rounded-[0.6rem] border border-border px-3 py-2 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        className="mt-1"
-                        checked={checked}
-                        onChange={() => togglePermission(permission.code, 'edit')}
-                      />
-                      <span className="font-mono text-xs">{permission.code}</span>
-                    </label>
-                  );
-                })}
+              <p className="mb-2 text-sm font-medium text-text-primary">Permission actions</p>
+              <div className="max-h-[28rem] overflow-y-auto pr-1">
+                <PermissionActionMatrix
+                  mode="select"
+                  existingCodes={catalog.map((permission) => permission.code)}
+                  selectedCodes={editPermissions}
+                  onToggle={(code) => togglePermission(code, 'edit')}
+                />
               </div>
             </div>
             <Button onClick={() => setSaveConfirmOpen(true)} disabled={updateMutation.isPending}>
@@ -455,7 +434,7 @@ export function RolesPage() {
       <ConfirmDialog
         open={confirmOpen}
         title="Create role?"
-        description={`Create ${code || 'this role'} with ${selectedPermissions.length} permission(s).`}
+        description={`Create ${code || 'this role'} with ${selectedPermissions.length} permission action(s).`}
         confirmLabel="Create"
         tone="primary"
         busy={createMutation.isPending}

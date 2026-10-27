@@ -12,6 +12,8 @@ import java.util.List;
  */
 public record CreateAdminRequest(
         @NotBlank @Email @Size(max = 320) String email,
+        @NotBlank @Size(max = 80) String firstName,
+        @NotBlank @Size(max = 80) String lastName,
         @Size(min = 8, max = 128) String password,
         @NotEmpty List<String> roleCodes,
         Boolean sendInviteEmail) {}

@@ -1,39 +1,14 @@
 import { ApiClientError } from '@/types/api';
 import type { AdminPermission, AdminRole } from '@/types/admin';
 import type { CreatePermissionInput, CreateRoleInput, UpdateRoleInput } from '@/services/api/rbac';
+import { CATALOG_PERMISSION_CODES, catalogDescription } from '@/lib/permissionCatalog';
 
-const permissions: AdminPermission[] = [
-  {
-    id: 'perm-1',
-    code: 'users:read',
-    description: 'List/view users',
-    createdAt: '2026-01-01T00:00:00Z',
-  },
-  {
-    id: 'perm-2',
-    code: 'users:write',
-    description: 'Update user status/enabled',
-    createdAt: '2026-01-01T00:00:00Z',
-  },
-  {
-    id: 'perm-3',
-    code: 'admin:manage',
-    description: 'Manage admin users/roles',
-    createdAt: '2026-01-01T00:00:00Z',
-  },
-  {
-    id: 'perm-4',
-    code: 'audit:read',
-    description: 'Read audit logs',
-    createdAt: '2026-01-01T00:00:00Z',
-  },
-  {
-    id: 'perm-5',
-    code: 'reports:read',
-    description: 'Read reports and export CSV datasets',
-    createdAt: '2026-01-01T00:00:00Z',
-  },
-];
+const permissions: AdminPermission[] = CATALOG_PERMISSION_CODES.map((code, index) => ({
+  id: `perm-${index + 1}`,
+  code,
+  description: catalogDescription(code),
+  createdAt: '2026-01-01T00:00:00Z',
+}));
 
 const roles: AdminRole[] = [
   {
@@ -58,7 +33,7 @@ export function mockCreatePermission(input: CreatePermissionInput): AdminPermiss
   const created: AdminPermission = {
     id: `perm-${permissions.length + 1}`,
     code,
-    description: input.description ?? null,
+    description: input.description ?? catalogDescription(code),
     createdAt: new Date().toISOString(),
   };
   permissions.push(created);

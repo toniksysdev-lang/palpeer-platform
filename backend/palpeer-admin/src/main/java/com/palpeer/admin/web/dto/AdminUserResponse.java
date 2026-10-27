@@ -7,6 +7,8 @@ public record AdminUserResponse(
         UUID id,
         UUID userId,
         String email,
+        String firstName,
+        String lastName,
         boolean enabled,
         Set<String> roleCodes
 ) {

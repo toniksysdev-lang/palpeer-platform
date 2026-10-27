@@ -8,6 +8,8 @@ export type AssignAdminInput = {
 
 export type CreateAdminInput = {
   email: string;
+  firstName: string;
+  lastName: string;
   password?: string;
   roleCodes: string[];
   sendInviteEmail?: boolean;
@@ -34,6 +36,8 @@ export async function createAdmin(input: CreateAdminInput): Promise<CreateAdminR
     method: 'POST',
     body: {
       email: input.email.trim(),
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
       password: input.password?.trim() ? input.password.trim() : null,
       roleCodes: input.roleCodes,
       sendInviteEmail: input.sendInviteEmail ?? true,

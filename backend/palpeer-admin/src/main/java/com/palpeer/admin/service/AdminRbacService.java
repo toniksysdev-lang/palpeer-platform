@@ -25,6 +25,8 @@ import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
 import com.palpeer.common.mail.EmailSender;
 import com.palpeer.common.mail.PalpeerEmailTemplates;
+import com.palpeer.profile.domain.Profile;
+import com.palpeer.profile.repository.ProfileRepository;
 import com.palpeer.user.UsernameRules;
 import com.palpeer.user.domain.User;
 import com.palpeer.user.domain.UserStatus;
@@ -64,6 +66,7 @@ public class AdminRbacService {
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private final UserRepository userRepository;
+    private final ProfileRepository profileRepository;
     private final AuditRecorder auditRecorder;
     private final PasswordEncoder passwordEncoder;
     private final EmailSender emailSender;
@@ -94,6 +97,7 @@ public class AdminRbacService {
             user.setStatus(UserStatus.ACTIVE);
         }
         userRepository.save(user);
+        upsertProfileNames(user.getId(), request.firstName(), request.lastName());
 
         AdminUser adminUser = new AdminUser();
         adminUser.setUserId(user.getId());
@@ -104,7 +108,14 @@ public class AdminRbacService {
         auditRecorder.record(AuditRecord.builder("ADMIN_CREATE")
                 .entity("AdminUser:" + adminUser.getId())
                 .userRef(user.getId())
-                .newValue("email=" + email + ";roles=" + roleCodesOf(adminUser))
+                .newValue("email="
+                        + email
+                        + ";name="
+                        + request.firstName().trim()
+                        + " "
+                        + request.lastName().trim()
+                        + ";roles="
+                        + roleCodesOf(adminUser))
                 .build());
 
         boolean emailed = false;
@@ -376,14 +387,28 @@ public class AdminRbacService {
     private AdminUserResponse toAdminResponse(AdminUser adminUser) {
         String email = userRepository
                 .findById(adminUser.getUserId())
-                .map(u -> u.getEmail())
+                .map(User::getEmail)
                 .orElse(null);
+        Profile profile = profileRepository.findByUserId(adminUser.getUserId()).orElse(null);
         return new AdminUserResponse(
                 adminUser.getId(),
                 adminUser.getUserId(),
                 email,
+                profile != null ? profile.getFirstName() : null,
+                profile != null ? profile.getLastName() : null,
                 adminUser.isEnabled(),
                 roleCodesOf(adminUser));
+    }
+
+    private void upsertProfileNames(UUID userId, String firstName, String lastName) {
+        Profile profile = profileRepository.findByUserId(userId).orElseGet(() -> {
+            Profile created = new Profile();
+            created.setUserId(userId);
+            return created;
+        });
+        profile.setFirstName(trimToNull(firstName));
+        profile.setLastName(trimToNull(lastName));
+        profileRepository.save(profile);
     }
 
     private RoleResponse toRoleResponse(Role role) {
