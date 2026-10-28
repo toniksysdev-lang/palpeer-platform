@@ -2,6 +2,7 @@ import { toMoney } from '@/utils/money';
 
 import {
   answerAccountQuestion,
+  isCapacityAiReply,
   isMissingAccountAiReply,
   matchAccountQuestion,
   type AccountSnapshot,
@@ -104,5 +105,14 @@ describe('answerAccountQuestion', () => {
         "I couldn't find a Palpeer account linked to toniksyslab@gmail.com. Please confirm you're using the email registered on Palpeer.",
       ),
     ).toBe(true);
+  });
+
+  it('detects Support AI capacity / high-demand stubs', () => {
+    expect(
+      isCapacityAiReply(
+        "I apologize, but I'm currently experiencing high demand. I can connect you with a human agent who can help you right away. Would you like to speak with an agent?",
+      ),
+    ).toBe(true);
+    expect(isCapacityAiReply('Here are your wallet balances.')).toBe(false);
   });
 });

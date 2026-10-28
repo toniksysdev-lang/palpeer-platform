@@ -15,8 +15,12 @@ export async function openWebCameraStream(facing: CameraType): Promise<MediaStre
     audio: false,
     video:
       facing === 'front'
-        ? { facingMode: 'user' }
-        : { facingMode: { ideal: 'environment' } },
+        ? { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1080 } }
+        : {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
   };
 
   try {

@@ -2,6 +2,7 @@ import { MessageCircle, Send, Sparkles, UserRound } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
   Keyboard,
   Platform,
@@ -30,8 +31,10 @@ import {
 import { formatClockTime } from '@/utils/datetime';
 
 import { SupportTicketForm } from '../components/SupportTicketForm';
+import { answerHowToFromFaq } from '../faq';
 import {
   answerAccountQuestion,
+  isCapacityAiReply,
   isMissingAccountAiReply,
   matchAccountQuestion,
 } from '../liveChat/answerAccountQuestion';
@@ -80,6 +83,8 @@ export function LiveChatScreen() {
   const snapshotRef = useRef(snapshot);
   const seenRemoteIds = useRef<Set<string>>(new Set());
   const bootedRef = useRef(false);
+  // Safe-area bottom can grow with the keyboard; keep the resting inset for closed-keyboard padding.
+  const restingBottomInset = useRef(insets.bottom);
 
   useEffect(() => {
     sessionRef.current = sessionId;
@@ -90,6 +95,11 @@ export function LiveChatScreen() {
   useEffect(() => {
     snapshotRef.current = snapshot;
   }, [snapshot]);
+  useEffect(() => {
+    if (keyboardHeight === 0) {
+      restingBottomInset.current = insets.bottom;
+    }
+  }, [insets.bottom, keyboardHeight]);
 
   const push = useCallback((message: ChatMessage) => {
     setMessages((prev) => [...prev, message]);
@@ -105,8 +115,15 @@ export function LiveChatScreen() {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
     const onShow = (event: KeyboardEvent) => {
-      setKeyboardHeight(event.endCoordinates.height);
+      // Prefer overlap vs window (edge-to-edge Android); fall back to reported height.
+      const windowH = Dimensions.get('window').height;
+      const overlap = Math.max(0, Math.round(windowH - event.endCoordinates.screenY));
+      const height = overlap > 40 ? overlap : event.endCoordinates.height;
+      setKeyboardHeight(height);
       scrollToComposer();
+      if (Platform.OS === 'android') {
+        setTimeout(scrollToComposer, 50);
+      }
     };
     const onHide = () => setKeyboardHeight(0);
     const showSub = Keyboard.addListener(showEvent, onShow);
@@ -297,6 +314,19 @@ export function LiveChatScreen() {
         return;
       }
 
+      // Product how-tos from Help Center — avoid the overloaded remote AI when we can.
+      const howToAnswer = answerHowToFromFaq(text);
+      if (howToAnswer) {
+        setMessages((prev) => prev.filter((m) => m.id !== loadingId));
+        push({
+          id: `ai-faq-${Date.now()}`,
+          text: howToAnswer,
+          sender: 'ai',
+          createdAt: new Date().toISOString(),
+        });
+        return;
+      }
+
       const result = await sendAiGuestChat({
         message: text,
         sessionId,
@@ -326,6 +356,15 @@ export function LiveChatScreen() {
         reply = answerAccountQuestion(fallbackKind, activeSnapshot);
       }
 
+      // Capacity stubs from the Support AI — answer locally or offer a clean escalation.
+      const capacityStub = isCapacityAiReply(reply);
+      const capacityFaq = capacityStub ? answerHowToFromFaq(text) : null;
+      if (capacityStub) {
+        reply =
+          capacityFaq ??
+          "I'm having trouble reaching the AI service right now. I can connect you with a live agent, or you can try asking again in a moment.";
+      }
+
       push({
         id: `ai-${Date.now()}`,
         text: reply,
@@ -333,7 +372,10 @@ export function LiveChatScreen() {
         createdAt: new Date().toISOString(),
       });
 
-      if (result.shouldEscalate && !isMissingAccountAiReply(result.text)) {
+      if (
+        (result.shouldEscalate || (capacityStub && !capacityFaq)) &&
+        !isMissingAccountAiReply(result.text)
+      ) {
         push({
           id: `esc-prompt-${Date.now()}`,
           text: 'I want to make sure you get the right help. Would you like to talk to a live agent?',
@@ -358,10 +400,11 @@ export function LiveChatScreen() {
         : 'AI assistant';
 
   const canSend = !sending && !booting && !!sessionId && !awaitingEscalation && !!draft.trim();
-  // Lift the composer above the system keyboard. Prefer reported keyboard height; when the
-  // keyboard is closed, keep the home-indicator / nav-bar inset under the text field.
+  // Lift the whole chat (messages + composer) above the keyboard. Edge-to-edge Android often
+  // keeps the window full-height, so pad by measured overlap rather than KeyboardAvoidingView.
+  const keyboardLift = keyboardHeight > 0 ? keyboardHeight : 0;
   const composerBottomPad =
-    theme.spacing.sm + (keyboardHeight > 0 ? Math.max(0, keyboardHeight - insets.bottom) : insets.bottom);
+    theme.spacing.sm + (keyboardHeight > 0 ? 0 : restingBottomInset.current);
 
   return (
     <SafeAreaView
@@ -369,198 +412,199 @@ export function LiveChatScreen() {
       edges={['top']}
       testID="live-chat-screen"
     >
-      <View style={{ flex: 1 }}>
-        <View style={{ paddingHorizontal: theme.spacing.xl }}>
-          <StackHeader title="Live chat" />
-        </View>
-
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: theme.spacing.sm,
-            paddingHorizontal: theme.spacing.xl,
-            paddingBottom: theme.spacing.sm,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.colors.border,
-          }}
-        >
-          <Icon
-            icon={mode === 'agent' ? UserRound : Sparkles}
-            color={theme.colors.primary}
-            size="md"
-          />
-          <View style={{ flex: 1 }}>
-            <AppText variant="bodyStrong">
-              {mode === 'agent' ? 'Live agent' : 'AI assistant'}
-            </AppText>
-            <AppText variant="caption" tone="secondary">
-              {headerDetail}
-            </AppText>
+      <View style={{ flex: 1, paddingBottom: keyboardLift }}>
+        <View style={{ flex: 1 }}>
+          <View style={{ paddingHorizontal: theme.spacing.xl }}>
+            <StackHeader title="Live chat" />
           </View>
-          {mode === 'ai' ? (
-            <Button
-              label="Talk to agent"
-              variant="outline"
-              size="md"
-              fullWidth={false}
-              onPress={() => void escalateToAgent()}
-              disabled={sending || booting || !sessionId}
-              testID="live-chat-escalate"
-            />
-          ) : null}
-        </View>
 
-        <View style={{ flex: 1, minHeight: 0 }}>
-          {bootError ? (
-            <View style={{ padding: theme.spacing.xl, gap: theme.spacing.md, flex: 1 }}>
-              <FormAlert tone="danger" message={bootError} testID="live-chat-boot-error" />
-              <Button
-                label="Try again"
-                onPress={() => {
-                  bootedRef.current = true;
-                  setBooting(true);
-                  void boot();
-                }}
-                testID="live-chat-retry"
-              />
-            </View>
-          ) : booting ? (
-            <View
-              style={{
-                flex: 1,
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: theme.spacing.md,
-              }}
-              testID="live-chat-booting"
-            >
-              <ActivityIndicator color={theme.colors.primary} />
-              <AppText tone="secondary">Starting chat…</AppText>
-            </View>
-          ) : (
-            <FlatList
-              ref={listRef}
-              testID="live-chat-messages"
-              style={{ flex: 1 }}
-              data={messages}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={{
-                paddingHorizontal: theme.spacing.xl,
-                paddingVertical: theme.spacing.md,
-                gap: theme.spacing.sm,
-                flexGrow: 1,
-              }}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="interactive"
-              onContentSizeChange={scrollToComposer}
-              ListEmptyComponent={
-                <View
-                  style={{
-                    alignItems: 'center',
-                    marginTop: theme.spacing.xxl,
-                    gap: theme.spacing.sm,
-                  }}
-                >
-                  <Icon icon={MessageCircle} color={theme.colors.textMuted} size="lg" />
-                  <AppText tone="secondary">Start the conversation</AppText>
-                </View>
-              }
-              renderItem={({ item }) => (
-                <LiveChatBubble
-                  message={item}
-                  ticketPrefill={{
-                    fullName:
-                      [snapshot.profile?.firstName, snapshot.profile?.lastName]
-                        .filter(Boolean)
-                        .join(' ')
-                        .trim() || firstName,
-                    email,
-                    subject: 'Support request from chat',
-                  }}
-                  onTalkToAgent={() => void escalateToAgent()}
-                  onContinueAi={() => setAwaitingEscalation(false)}
-                  onTicketSubmitted={(ticket) => {
-                    push({
-                      id: `ticket-ok-${Date.now()}`,
-                      text: ticket.ticketNumber
-                        ? `Thanks — ticket ${ticket.ticketNumber} was submitted. Our team will follow up by email.`
-                        : 'Thanks — your support ticket was submitted. Our team will follow up by email.',
-                      sender: 'system',
-                      createdAt: new Date().toISOString(),
-                    });
-                  }}
-                />
-              )}
-            />
-          )}
-        </View>
-
-        {!bootError ? (
           <View
             style={{
-              borderTopWidth: 1,
-              borderTopColor: theme.colors.border,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: theme.spacing.sm,
               paddingHorizontal: theme.spacing.xl,
-              paddingTop: theme.spacing.sm,
-              paddingBottom: composerBottomPad,
-              gap: theme.spacing.xs,
-              backgroundColor: theme.colors.background,
+              paddingBottom: theme.spacing.sm,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.colors.border,
             }}
-            testID="live-chat-composer"
           >
-            {awaitingEscalation ? (
+            <Icon
+              icon={mode === 'agent' ? UserRound : Sparkles}
+              color={theme.colors.primary}
+              size="md"
+            />
+            <View style={{ flex: 1 }}>
+              <AppText variant="bodyStrong">
+                {mode === 'agent' ? 'Live agent' : 'AI assistant'}
+              </AppText>
               <AppText variant="caption" tone="secondary">
-                Choose an option above, or tap Talk to agent.
+                {headerDetail}
               </AppText>
-            ) : connecting ? (
-              <AppText variant="caption" tone="secondary" testID="live-chat-connecting">
-                Connecting to the AI assistant…
-              </AppText>
-            ) : null}
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: theme.spacing.sm }}>
-              <TextInput
-                ref={inputRef}
-                value={draft}
-                onChangeText={setDraft}
-                placeholder={mode === 'agent' ? 'Message the agent…' : 'Ask the AI assistant…'}
-                placeholderTextColor={theme.colors.textMuted}
-                editable={!sending && !booting && !!sessionId && !awaitingEscalation}
-                multiline
-                onFocus={() => {
-                  scrollToComposer();
-                  // Android can report keyboard height a frame after focus — re-scroll once laid out.
-                  if (Platform.OS === 'android') {
-                    setTimeout(scrollToComposer, 80);
-                  }
-                }}
-                style={{
-                  flex: 1,
-                  minHeight: 44,
-                  maxHeight: 120,
-                  borderWidth: 1,
-                  borderColor: theme.colors.border,
-                  borderRadius: theme.radius.lg,
-                  paddingHorizontal: theme.spacing.md,
-                  paddingVertical: theme.spacing.sm,
-                  color: theme.colors.textPrimary,
-                  backgroundColor: theme.colors.surface,
-                }}
-                testID="live-chat-input"
-              />
+            </View>
+            {mode === 'ai' ? (
               <Button
-                label="Send"
-                leftIcon={Send}
+                label="Talk to agent"
+                variant="outline"
                 size="md"
                 fullWidth={false}
-                onPress={() => void send()}
-                disabled={!canSend}
-                loading={sending}
-                testID="live-chat-send"
+                onPress={() => void escalateToAgent()}
+                disabled={sending || booting || !sessionId}
+                testID="live-chat-escalate"
               />
-            </View>
+            ) : null}
           </View>
-        ) : null}
+
+          <View style={{ flex: 1, minHeight: 0 }}>
+            {bootError ? (
+              <View style={{ padding: theme.spacing.xl, gap: theme.spacing.md, flex: 1 }}>
+                <FormAlert tone="danger" message={bootError} testID="live-chat-boot-error" />
+                <Button
+                  label="Try again"
+                  onPress={() => {
+                    bootedRef.current = true;
+                    setBooting(true);
+                    void boot();
+                  }}
+                  testID="live-chat-retry"
+                />
+              </View>
+            ) : booting ? (
+              <View
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: theme.spacing.md,
+                }}
+                testID="live-chat-booting"
+              >
+                <ActivityIndicator color={theme.colors.primary} />
+                <AppText tone="secondary">Starting chat…</AppText>
+              </View>
+            ) : (
+              <FlatList
+                ref={listRef}
+                testID="live-chat-messages"
+                style={{ flex: 1 }}
+                data={messages}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={{
+                  paddingHorizontal: theme.spacing.xl,
+                  paddingVertical: theme.spacing.md,
+                  gap: theme.spacing.sm,
+                  flexGrow: 1,
+                }}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                onContentSizeChange={scrollToComposer}
+                ListEmptyComponent={
+                  <View
+                    style={{
+                      alignItems: 'center',
+                      marginTop: theme.spacing.xxl,
+                      gap: theme.spacing.sm,
+                    }}
+                  >
+                    <Icon icon={MessageCircle} color={theme.colors.textMuted} size="lg" />
+                    <AppText tone="secondary">Start the conversation</AppText>
+                  </View>
+                }
+                renderItem={({ item }) => (
+                  <LiveChatBubble
+                    message={item}
+                    ticketPrefill={{
+                      fullName:
+                        [snapshot.profile?.firstName, snapshot.profile?.lastName]
+                          .filter(Boolean)
+                          .join(' ')
+                          .trim() || firstName,
+                      email,
+                      subject: 'Support request from chat',
+                    }}
+                    onTalkToAgent={() => void escalateToAgent()}
+                    onContinueAi={() => setAwaitingEscalation(false)}
+                    onTicketSubmitted={(ticket) => {
+                      push({
+                        id: `ticket-ok-${Date.now()}`,
+                        text: ticket.ticketNumber
+                          ? `Thanks — ticket ${ticket.ticketNumber} was submitted. Our team will follow up by email.`
+                          : 'Thanks — your support ticket was submitted. Our team will follow up by email.',
+                        sender: 'system',
+                        createdAt: new Date().toISOString(),
+                      });
+                    }}
+                  />
+                )}
+              />
+            )}
+          </View>
+
+          {!bootError ? (
+            <View
+              style={{
+                borderTopWidth: 1,
+                borderTopColor: theme.colors.border,
+                paddingHorizontal: theme.spacing.xl,
+                paddingTop: theme.spacing.sm,
+                paddingBottom: composerBottomPad,
+                gap: theme.spacing.xs,
+                backgroundColor: theme.colors.background,
+              }}
+              testID="live-chat-composer"
+            >
+              {awaitingEscalation ? (
+                <AppText variant="caption" tone="secondary">
+                  Choose an option above, or tap Talk to agent.
+                </AppText>
+              ) : connecting ? (
+                <AppText variant="caption" tone="secondary" testID="live-chat-connecting">
+                  Connecting to the AI assistant…
+                </AppText>
+              ) : null}
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: theme.spacing.sm }}>
+                <TextInput
+                  ref={inputRef}
+                  value={draft}
+                  onChangeText={setDraft}
+                  placeholder={mode === 'agent' ? 'Message the agent…' : 'Ask the AI assistant…'}
+                  placeholderTextColor={theme.colors.textMuted}
+                  editable={!sending && !booting && !!sessionId && !awaitingEscalation}
+                  multiline
+                  onFocus={() => {
+                    scrollToComposer();
+                    if (Platform.OS === 'android') {
+                      setTimeout(scrollToComposer, 80);
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    minHeight: 44,
+                    maxHeight: 120,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                    borderRadius: theme.radius.lg,
+                    paddingHorizontal: theme.spacing.md,
+                    paddingVertical: theme.spacing.sm,
+                    color: theme.colors.textPrimary,
+                    backgroundColor: theme.colors.surface,
+                  }}
+                  testID="live-chat-input"
+                />
+                <Button
+                  label="Send"
+                  leftIcon={Send}
+                  size="md"
+                  fullWidth={false}
+                  onPress={() => void send()}
+                  disabled={!canSend}
+                  loading={sending}
+                  testID="live-chat-send"
+                />
+              </View>
+            </View>
+          ) : null}
+        </View>
       </View>
     </SafeAreaView>
   );

@@ -71,6 +71,28 @@ export function isMissingAccountAiReply(text: string): boolean {
   );
 }
 
+/**
+ * True when the Support AI returns its overloaded / capacity stub instead of a real answer
+ * (e.g. "experiencing high demand… speak with an agent").
+ */
+export function isCapacityAiReply(text: string): boolean {
+  const value = text.toLowerCase().normalize('NFKD');
+  const highDemand =
+    value.includes('high demand') ||
+    value.includes('high traffic') ||
+    value.includes('currently experiencing') ||
+    value.includes('temporarily unavailable') ||
+    value.includes('too many requests');
+  const agentOffer =
+    value.includes('human agent') ||
+    value.includes('live agent') ||
+    value.includes('speak with an agent') ||
+    value.includes('talk to an agent') ||
+    value.includes('connect you with a human') ||
+    value.includes('connect you to a human');
+  return highDemand && (agentOffer || value.includes('apolog'));
+}
+
 /** Answer from the authenticated app's Palpeer backend data. */
 export function answerAccountQuestion(
   kind: AccountQuestionKind,

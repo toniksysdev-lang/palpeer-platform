@@ -191,7 +191,7 @@ describe('NotificationDetailScreen', () => {
 });
 
 describe('NotificationSettingsScreen', () => {
-  it('asks for permission only when turned on, then registers this phone', async () => {
+  it('turns push on by default and registers this phone', async () => {
     const { calls: all } = installFetchMock({
       'GET /notifications/device-tokens': [ok([]), ok([tokenRecord()])],
       'POST /notifications/device-tokens': {
@@ -200,12 +200,9 @@ describe('NotificationSettingsScreen', () => {
       },
     });
     await renderWithProviders(<NotificationSettingsScreen />);
-    expect(requestPermissionsAsync).not.toHaveBeenCalled();
-
-    await fireEvent(await screen.findByTestId('push-switch'), 'valueChange', true);
 
     await waitFor(() => expect(calls(all, 'POST', '/notifications/device-tokens')).toHaveLength(1));
-    expect(requestPermissionsAsync).toHaveBeenCalledTimes(1);
+    expect(requestPermissionsAsync).toHaveBeenCalled();
     const body = calls(all, 'POST', '/notifications/device-tokens')[0]?.body as Record<
       string,
       string
@@ -226,7 +223,7 @@ describe('NotificationSettingsScreen', () => {
     const { calls: all } = installFetchMock({ 'GET /notifications/device-tokens': ok([]) });
     await renderWithProviders(<NotificationSettingsScreen />);
 
-    await fireEvent(await screen.findByTestId('push-switch'), 'valueChange', true);
+    // Default-ON attempts enable on load; blocked permission surfaces settings CTA.
     expect(await screen.findByTestId('push-error')).toHaveTextContent(/phone settings/);
     expect(requestPermissionsAsync).not.toHaveBeenCalled();
     expect(calls(all, 'POST', '/notifications/device-tokens')).toHaveLength(0);
@@ -241,7 +238,6 @@ describe('NotificationSettingsScreen', () => {
     const { calls: all } = installFetchMock({ 'GET /notifications/device-tokens': ok([]) });
     await renderWithProviders(<NotificationSettingsScreen />);
 
-    await fireEvent(await screen.findByTestId('push-switch'), 'valueChange', true);
     expect(await screen.findByTestId('push-error')).toHaveTextContent(
       /Couldn't enable push on this install|aren't available|aren't configured/,
     );

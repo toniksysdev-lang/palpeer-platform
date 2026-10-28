@@ -1,5 +1,5 @@
 import { BellRing, Smartphone } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, RefreshControl, Switch, View } from 'react-native';
 
 import { FormAlert } from '@/components/feedback/FormAlert';
@@ -29,6 +29,7 @@ import {
   requestPushPermission,
   type PushPermissionState,
 } from '@/services/push/pushNotifications';
+import { preferencesStorage } from '@/services/storage/preferencesStorage';
 import type { DeviceTokenResponse } from '@/types/api/notification';
 import { formatDateTime } from '@/utils/datetime';
 
@@ -52,24 +53,96 @@ export function NotificationSettingsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [blocked, setBlocked] = useState(false);
   const [removing, setRemoving] = useState<DeviceTokenResponse | null>(null);
+  const [optedOut, setOptedOut] = useState<boolean | null>(null);
+  const autoEnableAttempted = useRef(false);
 
   const loadLocal = useCallback(async () => {
-    const [state, id] = await Promise.all([getPushPermission(), getRememberedPushRecordId()]);
+    const [state, id, pushOptedOut] = await Promise.all([
+      getPushPermission(),
+      getRememberedPushRecordId(),
+      preferencesStorage.getPushOptedOut(),
+    ]);
     setPermission(state);
     setRememberedId(id);
+    setOptedOut(pushOptedOut);
   }, []);
 
   useEffect(() => {
     let active = true;
-    void Promise.all([getPushPermission(), getRememberedPushRecordId()]).then(([state, id]) => {
+    void Promise.all([
+      getPushPermission(),
+      getRememberedPushRecordId(),
+      preferencesStorage.getPushOptedOut(),
+    ]).then(([state, id, pushOptedOut]) => {
       if (!active) return;
       setPermission(state);
       setRememberedId(id);
+      setOptedOut(pushOptedOut);
     });
     return () => {
       active = false;
     };
   }, []);
+
+  const enable = useCallback(
+    async (options?: { silent?: boolean }) => {
+      setError(null);
+      setBlocked(false);
+      setBusy(true);
+      try {
+        let state = await getPushPermission();
+        if (state.status !== 'granted' && state.canAskAgain) state = await requestPushPermission();
+        setPermission(state);
+        if (state.status !== 'granted') {
+          setBlocked(true);
+          setError('Notifications are turned off for PALPEER in your phone settings.');
+          return;
+        }
+        const record = await register(await buildPushRegistration()).unwrap();
+        await rememberPushRecord(record);
+        await preferencesStorage.setPushOptedOut(false);
+        setOptedOut(false);
+        setRememberedId(record.id);
+        if (!options?.silent) {
+          toast.show({ type: 'success', title: 'Push notifications on' });
+        }
+      } catch (caught) {
+        setError(
+          caught instanceof PushUnavailableError ? caught.message : toAppError(caught).message,
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [register, toast],
+  );
+
+  const disable = useCallback(async () => {
+    if (!rememberedId) return;
+    setError(null);
+    setBusy(true);
+    const result = await removeToken(rememberedId);
+    setBusy(false);
+    if ('error' in result && toAppError(result.error).status !== 404) {
+      setError(toAppError(result.error).message);
+      return;
+    }
+    await rememberPushRecord(null);
+    await preferencesStorage.setPushOptedOut(true);
+    setOptedOut(true);
+    setRememberedId(null);
+    toast.show({ type: 'success', title: 'Push notifications off' });
+  }, [rememberedId, removeToken, toast]);
+
+  // Default ON: when the user has not opted out, turn push on as soon as this screen loads.
+  useEffect(() => {
+    if (optedOut === null || !permission || rememberedId === undefined) return;
+    if (autoEnableAttempted.current || busy) return;
+    const alreadyOn = Boolean(rememberedId) && permission.status === 'granted';
+    if (optedOut || alreadyOn) return;
+    autoEnableAttempted.current = true;
+    void enable({ silent: true });
+  }, [optedOut, permission, rememberedId, busy, enable]);
 
   const header = <StackHeader title="Notification settings" />;
 
@@ -82,7 +155,7 @@ export function NotificationSettingsScreen() {
     );
   }
 
-  if (!tokens.data || !permission || rememberedId === undefined) {
+  if (!tokens.data || !permission || rememberedId === undefined || optedOut === null) {
     return (
       <Screen>
         {header}
@@ -96,47 +169,6 @@ export function NotificationSettingsScreen() {
     : undefined;
   const enabledHere = Boolean(thisRecord?.enabled) && permission.status === 'granted';
   const others = tokens.data.filter((item) => item.id !== rememberedId);
-
-  const enable = async () => {
-    setError(null);
-    setBlocked(false);
-    setBusy(true);
-    try {
-      let state = await getPushPermission();
-      if (state.status !== 'granted' && state.canAskAgain) state = await requestPushPermission();
-      setPermission(state);
-      if (state.status !== 'granted') {
-        setBlocked(true);
-        setError('Notifications are turned off for PALPEER in your phone settings.');
-        return;
-      }
-      const record = await register(await buildPushRegistration()).unwrap();
-      await rememberPushRecord(record);
-      setRememberedId(record.id);
-      toast.show({ type: 'success', title: 'Push notifications on' });
-    } catch (caught) {
-      setError(
-        caught instanceof PushUnavailableError ? caught.message : toAppError(caught).message,
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const disable = async () => {
-    if (!rememberedId) return;
-    setError(null);
-    setBusy(true);
-    const result = await removeToken(rememberedId);
-    setBusy(false);
-    if ('error' in result && toAppError(result.error).status !== 404) {
-      setError(toAppError(result.error).message);
-      return;
-    }
-    await rememberPushRecord(null);
-    setRememberedId(null);
-    toast.show({ type: 'success', title: 'Push notifications off' });
-  };
 
   const removeOther = async () => {
     if (!removing) return;

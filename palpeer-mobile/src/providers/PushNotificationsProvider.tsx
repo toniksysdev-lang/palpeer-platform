@@ -16,7 +16,9 @@ import {
   getPushPermission,
   getRememberedPushRecordId,
   rememberPushRecord,
+  requestPushPermission,
 } from '@/services/push/pushNotifications';
+import { preferencesStorage } from '@/services/storage/preferencesStorage';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { logger } from '@/utils/logger';
 
@@ -117,10 +119,28 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
   useEffect(() => {
     if (isWeb || !authenticated) return;
     const sync = async (token?: string) => {
-      const rememberedId = await getRememberedPushRecordId();
-      if (!rememberedId) return;
+      const [rememberedId, optedOut] = await Promise.all([
+        getRememberedPushRecordId(),
+        preferencesStorage.getPushOptedOut(),
+      ]);
       try {
-        const permission = await getPushPermission();
+        let permission = await getPushPermission();
+        // Default ON: register this install after sign-in unless the user opted out.
+        if (!rememberedId) {
+          if (optedOut) return;
+          if (permission.status !== 'granted' && permission.canAskAgain) {
+            permission = await requestPushPermission();
+          }
+          if (permission.status !== 'granted') return;
+          const record = await dispatch(
+            notificationApi.endpoints.registerPushToken.initiate(
+              await buildPushRegistration(token),
+            ),
+          ).unwrap();
+          await rememberPushRecord(record);
+          await preferencesStorage.setPushOptedOut(false);
+          return;
+        }
         if (permission.status !== 'granted') {
           await dispatch(notificationApi.endpoints.deletePushToken.initiate(rememberedId));
           await rememberPushRecord(null);

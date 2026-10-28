@@ -10,15 +10,14 @@ export function useAppearance() {
   const appearance = useAppSelector((state) => state.preferences.appearance);
 
   const setAppearance = useCallback(
-    (_next: AppearancePreference) => {
-      // App UI is light-only; ignore dark / system selections.
-      dispatch(appearanceChanged('light'));
-      preferencesStorage.setAppearance('light').catch((error: unknown) => {
+    (next: AppearancePreference) => {
+      dispatch(appearanceChanged(next));
+      preferencesStorage.setAppearance(next).catch((error: unknown) => {
         logger.warn('Could not persist appearance', { error });
       });
     },
     [dispatch],
   );
 
-  return { appearance: 'light' as const, setAppearance };
+  return { appearance, setAppearance };
 }

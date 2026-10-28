@@ -10,6 +10,11 @@ const KEYS = {
   biometricUnlockPrompted: 'palpeer.pref.biometricUnlockPrompted',
   /** ISO2 chosen on phone signup — seeds Complete profile Country. */
   signupCountryIso2: 'palpeer.pref.signupCountryIso2',
+  /**
+   * Explicit opt-out for "Push notifications on this phone".
+   * Unset = prefer ON (default). 'true' = user turned the switch off.
+   */
+  pushOptedOut: 'palpeer.pref.pushOptedOut',
 } as const;
 
 const APPEARANCES: readonly AppearancePreference[] = ['system', 'light', 'dark'];
@@ -25,8 +30,10 @@ export const preferencesStorage = {
         AsyncStorage.getItem(KEYS.biometricUnlockPrompted),
       ]);
       return {
-        // Dark / system prefs are ignored — the app ships light-only.
-        appearance: 'light',
+        appearance:
+          appearance && (APPEARANCES as readonly string[]).includes(appearance)
+            ? (appearance as AppearancePreference)
+            : 'light',
         onboardingSeen: onboardingSeen === 'true',
         biometricUnlockPrompted: biometricUnlockPrompted === 'true',
       };
@@ -67,5 +74,23 @@ export const preferencesStorage = {
 
   async clearSignupCountryIso2(): Promise<void> {
     await AsyncStorage.removeItem(KEYS.signupCountryIso2);
+  },
+
+  /** Default is ON — only true after the user turns the switch off. */
+  async getPushOptedOut(): Promise<boolean> {
+    try {
+      return (await AsyncStorage.getItem(KEYS.pushOptedOut)) === 'true';
+    } catch (error) {
+      logger.warn('Push opt-out load failed', { error });
+      return false;
+    }
+  },
+
+  async setPushOptedOut(optedOut: boolean): Promise<void> {
+    if (optedOut) {
+      await AsyncStorage.setItem(KEYS.pushOptedOut, 'true');
+    } else {
+      await AsyncStorage.removeItem(KEYS.pushOptedOut);
+    }
   },
 };

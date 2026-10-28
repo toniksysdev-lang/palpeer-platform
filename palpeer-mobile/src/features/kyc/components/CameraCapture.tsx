@@ -427,7 +427,8 @@ function NativeCameraCapture({
     setCapturing(true);
     setCaptureFailed(false);
     try {
-      const picture = await cameraRef.current.takePictureAsync({ quality: 0.9, exif: false });
+      // Prefer full sensor resolution — cropped guide frames from 1080p landscape are tight.
+      const picture = await cameraRef.current.takePictureAsync({ quality: 1, exif: false });
       const full: CapturedImage = {
         uri: picture.uri,
         width: picture.width ?? 0,

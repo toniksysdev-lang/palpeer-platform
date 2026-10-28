@@ -82,7 +82,7 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
   scheme: 'palpeer',
   orientation: 'portrait',
   icon: './assets/icon.png',
-  userInterfaceStyle: 'light',
+  userInterfaceStyle: 'automatic',
   ios: {
     bundleIdentifier: IOS_BUNDLE_ID,
     supportsTablet: false,

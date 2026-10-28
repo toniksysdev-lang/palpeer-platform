@@ -14,13 +14,21 @@ export const MAX_LONG_SIDE_PX = 2000;
 const JPEG_QUALITY = 0.85;
 
 /**
- * Client-side quality floor (CLIENT rule, not a backend rule).
+ * Target short-side for uploads (CLIENT rule, not a backend rule).
  *
- * Document floor is 480 (not 720) because Expo Camera on web captures from the
- * getUserMedia stream at the browser default — typically 640×480 VGA — so a
- * 720px short-side gate rejected every valid webcam photo of an ID.
+ * Cropping the on-screen guide from a landscape 1080p/720p sensor often yields a
+ * short side under 480px even when the full capture is fine. Those crops are
+ * upscaled to this target instead of rejected. Truly tiny sources still fail.
+ *
+ * 480 (not 720) also keeps VGA web-camera captures (640×480) acceptable.
  */
 export const MIN_SHORT_SIDE_PX: Record<ImageKind, number> = { document: 480, selfie: 480 };
+
+/**
+ * Hard reject floor. Below this, upscaling would invent most of the pixels.
+ * ~160 covers a badly framed crop without accepting icon-sized junk.
+ */
+export const ABSOLUTE_MIN_SHORT_SIDE_PX = 160;
 
 export class ImageQualityError extends Error {
   constructor(message: string) {
@@ -45,9 +53,10 @@ function qualityError(kind: ImageKind): ImageQualityError {
   );
 }
 
+/** Reject only unusable sources; borderline crops are upscaled in {@link prepareImage}. */
 export function checkImageQuality(image: Pick<CapturedImage, 'width' | 'height'>, kind: ImageKind) {
   const side = shortSide(image);
-  if (!Number.isFinite(side) || side < MIN_SHORT_SIDE_PX[kind]) {
+  if (!Number.isFinite(side) || side < ABSOLUTE_MIN_SHORT_SIDE_PX) {
     throw qualityError(kind);
   }
 }
@@ -137,14 +146,24 @@ export async function resolveImageDimensions(
   throw new Error('Could not measure image dimensions');
 }
 
-/** Validates, downsizes and re-encodes a captured/picked photo as JPEG ready for upload. */
+/** Validates, normalizes size, and re-encodes a captured/picked photo as JPEG ready for upload. */
 export async function prepareImage(source: CapturedImage, kind: ImageKind): Promise<PreparedImage> {
   const size = await resolveImageDimensions(source);
   checkImageQuality(size, kind);
 
   const context = ImageManipulator.manipulate(source.uri);
+  const side = shortSide(size);
+  const targetShort = MIN_SHORT_SIDE_PX[kind];
   const longSide = Math.max(size.width, size.height);
-  if (longSide > MAX_LONG_SIDE_PX) {
+
+  if (side < targetShort) {
+    // Guide-frame crops from 1080p landscape sensors often land ~270–430px short side.
+    if (size.width <= size.height) {
+      context.resize({ width: targetShort });
+    } else {
+      context.resize({ height: targetShort });
+    }
+  } else if (longSide > MAX_LONG_SIDE_PX) {
     context.resize(
       size.width >= size.height ? { width: MAX_LONG_SIDE_PX } : { height: MAX_LONG_SIDE_PX },
     );

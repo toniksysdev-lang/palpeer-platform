@@ -72,7 +72,7 @@ describe('KYC capture', () => {
     setSearchParams({ type: 'PASSPORT' });
     await renderWithProviders(<DocumentCaptureScreen />);
 
-    await pickFromLibrary(320, 240);
+    await pickFromLibrary(120, 90);
 
     expect(await screen.findByTestId('capture-warning')).toBeTruthy();
     expect(screen.getByText(/This photo is too small to read/)).toBeTruthy();

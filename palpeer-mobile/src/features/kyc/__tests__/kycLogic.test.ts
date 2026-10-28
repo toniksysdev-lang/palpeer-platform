@@ -49,10 +49,12 @@ describe('kycState', () => {
 describe('image preparation', () => {
   beforeEach(() => media.reset());
 
-  it('rejects photos below the minimum resolution', () => {
-    expect(() => checkImageQuality({ width: 320, height: 240 }, 'document')).toThrow(
+  it('rejects only tiny sources; guide-frame crops may be below the upload target', () => {
+    expect(() => checkImageQuality({ width: 120, height: 90 }, 'document')).toThrow(
       ImageQualityError,
     );
+    // Crop from a 1080p landscape sensor (~272 short side) must not hard-fail.
+    expect(() => checkImageQuality({ width: 429, height: 272 }, 'document')).not.toThrow();
     // VGA (640×480) is the typical Expo web-camera capture — must be accepted.
     expect(() => checkImageQuality({ width: 640, height: 480 }, 'document')).not.toThrow();
     expect(() => checkImageQuality({ width: 640, height: 480 }, 'selfie')).not.toThrow();
@@ -99,12 +101,30 @@ describe('image preparation', () => {
     });
   });
 
-  it('rejects when the measured file is too small even if reported size looks fine', async () => {
-    media.sizes['file:///tiny.jpg'] = { width: 320, height: 240 };
+  it('rejects when the measured file is unusably small even if reported size looks fine', async () => {
+    media.sizes['file:///tiny.jpg'] = { width: 120, height: 90 };
 
     await expect(
       prepareImage({ uri: 'file:///tiny.jpg', width: 3000, height: 4000 }, 'document'),
     ).rejects.toBeInstanceOf(ImageQualityError);
+  });
+
+  it('upscales guide-frame crops that land below the 480px upload target', async () => {
+    // Typical crop from a 1920×1080 sensor on a tall phone preview.
+    media.sizes['file:///crop.jpg'] = { width: 429, height: 272 };
+
+    const prepared = await prepareImage(
+      { uri: 'file:///crop.jpg', width: 429, height: 272 },
+      'document',
+    );
+
+    expect(media.resize).toHaveBeenCalledWith({ height: 480 });
+    expect(prepared).toMatchObject({
+      uri: 'file:///prepared.jpeg',
+      width: 757,
+      height: 480,
+      mimeType: 'image/jpeg',
+    });
   });
 
   it('accepts a VGA webcam capture even when metadata reports 0×0', async () => {

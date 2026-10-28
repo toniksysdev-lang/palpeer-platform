@@ -42,3 +42,36 @@ export function searchFaq(
     }))
     .filter((section) => section.items.length > 0);
 }
+
+/**
+ * Best local How-To answer for Live Chat when the remote AI is overloaded or
+ * when the user asks a product how-to that matches Help Center content.
+ */
+export function answerHowToFromFaq(query: string): string | null {
+  const words = normalize(query)
+    .split(' ')
+    .filter((word) => word.length > 2);
+  if (words.length === 0) return null;
+
+  type Scored = { item: FaqItem; score: number };
+  const scored: Scored[] = [];
+  for (const section of FAQ_SECTIONS) {
+    for (const item of section.items) {
+      const text = normalize(`${item.question} ${item.answer}`);
+      let score = 0;
+      for (const word of words) {
+        if (text.includes(word)) score += 1;
+        if (normalize(item.question).includes(word)) score += 1;
+      }
+      // Need a meaningful overlap (at least 2 hits, or all significant words).
+      if (score >= 2 || (words.length <= 3 && score >= words.length)) {
+        scored.push({ item, score });
+      }
+    }
+  }
+  if (scored.length === 0) return null;
+  scored.sort((a, b) => b.score - a.score);
+  const best = scored[0]!;
+  if (best.score < 2) return null;
+  return best.item.answer;
+}
