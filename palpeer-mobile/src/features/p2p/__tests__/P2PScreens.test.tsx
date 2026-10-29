@@ -438,6 +438,32 @@ describe('CreateRequestScreen', () => {
 });
 
 describe('RequestDetailScreen — state transitions', () => {
+  it('shows a clean whole Switch rate for created NGN/CAD requests (no float noise)', async () => {
+    setSearchParams({ id: 'r-cad' });
+    installFetchMock({
+      'GET /currencies': CURRENCIES,
+      'GET /wallets': WALLETS,
+      'GET /negotiations/me': NO_NEGOTIATIONS,
+      'GET /p2p/fee-estimate': feeEstimate(),
+      'GET /p2p/requests/r-cad': ok(
+        p2pRequest({
+          id: 'r-cad',
+          userId: ME,
+          baseCurrencyCode: 'NGN',
+          quoteCurrencyCode: 'CAD',
+          amount: '98000.000000000000',
+          // Reciprocal of 980 — previously rendered as 980.0000002548 at 12 dp.
+          rate: '0.001020408163',
+        }),
+      ),
+    });
+    await renderWithProviders(<RequestDetailScreen />, signedIn);
+
+    const rate = await screen.findByTestId('p2p-request-rate');
+    expect(rate).toHaveTextContent(/1 CAD = 980 NGN/);
+    expect(rate).not.toHaveTextContent(/\d\.\d/);
+  });
+
   it('does not auto-apply promo; buyer enters a code then Apply', async () => {
     setSearchParams({ id: 'r-1' });
     const { calls } = installFetchMock({
@@ -867,6 +893,8 @@ describe('OrderDetailScreen', () => {
     expect(screen.getByTestId('p2p-order-role')).toHaveTextContent('You accepted this request');
     expect(screen.getByTestId('p2p-order-amount')).toHaveTextContent('100.00 USD');
     expect(screen.getByTestId('p2p-order-rate')).toHaveTextContent(/1 USD = 1,500 NGN/);
+    // Whole Switch rates must not show float noise (e.g. 1,500.0000002548).
+    expect(screen.getByTestId('p2p-order-rate')).not.toHaveTextContent(/\d\.\d/);
     expect(screen.getByTestId('p2p-order-message')).toHaveTextContent(
       /Wallet settlement should complete momentarily/,
     );

@@ -206,7 +206,6 @@ export function SharedP2PRequestScreen() {
             variant="bodyStrong"
             tone="primary"
             full
-            maxDecimals={12}
             testID="p2p-share-rate"
           />
         </View>

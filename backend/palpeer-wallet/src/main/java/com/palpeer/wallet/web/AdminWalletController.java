@@ -1,7 +1,9 @@
 package com.palpeer.wallet.web;
 
 import com.palpeer.auth.security.UserPrincipal;
+import com.palpeer.auth.spi.AdminMfaGate;
 import com.palpeer.common.api.ApiResponse;
+import com.palpeer.common.exception.BusinessException;
 import com.palpeer.wallet.funding.dto.FailMovementRequest;
 import com.palpeer.wallet.funding.dto.FundingTransactionResponse;
 import com.palpeer.wallet.service.AdminWalletMovementService;
@@ -9,6 +11,7 @@ import com.palpeer.wallet.service.WalletService;
 import com.palpeer.wallet.web.dto.AdminCreateFundingRequest;
 import com.palpeer.wallet.web.dto.AdminCreateWithdrawalRequest;
 import com.palpeer.wallet.web.dto.AdminMoneyMovementResponse;
+import com.palpeer.wallet.web.dto.AdminStepUpMfaRequest;
 import com.palpeer.wallet.web.dto.LedgerTransactionResponse;
 import com.palpeer.wallet.web.dto.WalletResponse;
 import com.palpeer.wallet.withdrawal.dto.WithdrawalTransactionResponse;
@@ -19,6 +22,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -50,6 +54,7 @@ public class AdminWalletController {
 
     private final WalletService walletService;
     private final AdminWalletMovementService movementService;
+    private final ObjectProvider<AdminMfaGate> adminMfaGate;
 
     @GetMapping
     @PreAuthorize("hasAuthority('wallets:read')")
@@ -120,7 +125,9 @@ public class AdminWalletController {
     public ApiResponse<FundingTransactionResponse> processFunding(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable UUID walletId,
-            @PathVariable UUID fundingId) {
+            @PathVariable UUID fundingId,
+            @Valid @RequestBody AdminStepUpMfaRequest request) {
+        requireAuthenticator(principal, request.code());
         return ApiResponse.ok(movementService.processFunding(principal.getId(), walletId, fundingId));
     }
 
@@ -142,7 +149,9 @@ public class AdminWalletController {
     public ApiResponse<FundingTransactionResponse> reverseFunding(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable UUID walletId,
-            @PathVariable UUID fundingId) {
+            @PathVariable UUID fundingId,
+            @Valid @RequestBody AdminStepUpMfaRequest request) {
+        requireAuthenticator(principal, request.code());
         return ApiResponse.ok(movementService.reverseFunding(principal.getId(), walletId, fundingId));
     }
 
@@ -152,7 +161,9 @@ public class AdminWalletController {
     public ApiResponse<WithdrawalTransactionResponse> processWithdrawal(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable UUID walletId,
-            @PathVariable UUID withdrawalId) {
+            @PathVariable UUID withdrawalId,
+            @Valid @RequestBody AdminStepUpMfaRequest request) {
+        requireAuthenticator(principal, request.code());
         return ApiResponse.ok(movementService.processWithdrawal(principal.getId(), walletId, withdrawalId));
     }
 
@@ -174,7 +185,28 @@ public class AdminWalletController {
     public ApiResponse<WithdrawalTransactionResponse> reverseWithdrawal(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable UUID walletId,
-            @PathVariable UUID withdrawalId) {
+            @PathVariable UUID withdrawalId,
+            @Valid @RequestBody AdminStepUpMfaRequest request) {
+        requireAuthenticator(principal, request.code());
         return ApiResponse.ok(movementService.reverseWithdrawal(principal.getId(), walletId, withdrawalId));
+    }
+
+    /**
+     * Step-up Google Authenticator check for irreversible ledger mutations.
+     * Requires enrolled MFA and a valid 6-digit TOTP (recovery codes are not accepted here).
+     */
+    private void requireAuthenticator(UserPrincipal principal, String code) {
+        AdminMfaGate mfa = adminMfaGate.getIfAvailable();
+        if (mfa == null || !mfa.isMfaRequired(principal.getId())) {
+            throw new BusinessException(
+                    "MFA_REQUIRED",
+                    "Enable Google Authenticator MFA before processing or reversing money movements",
+                    HttpStatus.FORBIDDEN);
+        }
+        String trimmed = code == null ? "" : code.trim();
+        if (!trimmed.matches("\\d{6}") || !mfa.verifySecondFactor(principal.getId(), trimmed)) {
+            throw new BusinessException(
+                    "MFA_INVALID", "Invalid authenticator code", HttpStatus.UNAUTHORIZED);
+        }
     }
 }

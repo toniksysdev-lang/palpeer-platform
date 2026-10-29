@@ -12,8 +12,11 @@ function groupThousands(integerPart: string): string {
 /** "1,089.451234" — trailing zeros dropped, never through a JS float. */
 export function formatRateValue(rate: string, maxDecimals = RATE_DISPLAY_DECIMALS): string {
   const fixed = new Decimal(rate).toDecimalPlaces(maxDecimals, Decimal.ROUND_HALF_EVEN).toFixed();
-  const [intPart = '0', fracPart] = fixed.split('.');
-  return fracPart ? `${groupThousands(intPart)}.${fracPart}` : groupThousands(intPart);
+  const [intPart = '0', fracPart = ''] = fixed.split('.');
+  const trimmedFrac = fracPart.replace(/0+$/, '');
+  return trimmedFrac
+    ? `${groupThousands(intPart)}.${trimmedFrac}`
+    : groupThousands(intPart);
 }
 
 /** "1 CAD = 1,089.45 NGN" using the backend `appliedRate` (target units per source unit). */

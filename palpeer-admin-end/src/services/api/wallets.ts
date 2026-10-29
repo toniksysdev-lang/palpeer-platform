@@ -136,13 +136,18 @@ export async function actOnAdminWalletFunding(
   walletId: string,
   fundingId: string,
   action: MoneyMovementAction,
-  reason?: string,
+  options?: { reason?: string; mfaCode?: string },
 ): Promise<void> {
   await apiRequest<unknown>(
     `/admin/wallets/${encodeURIComponent(walletId)}/fundings/${encodeURIComponent(fundingId)}/${action}`,
     {
       method: 'POST',
-      body: action === 'fail' ? { reason: reason?.trim() || null } : undefined,
+      body:
+        action === 'fail'
+          ? { reason: options?.reason?.trim() || null }
+          : action === 'process' || action === 'reverse'
+            ? { code: options?.mfaCode?.trim() }
+            : undefined,
     },
   );
 }
@@ -151,13 +156,18 @@ export async function actOnAdminWalletWithdrawal(
   walletId: string,
   withdrawalId: string,
   action: MoneyMovementAction,
-  reason?: string,
+  options?: { reason?: string; mfaCode?: string },
 ): Promise<void> {
   await apiRequest<unknown>(
     `/admin/wallets/${encodeURIComponent(walletId)}/withdrawals/${encodeURIComponent(withdrawalId)}/${action}`,
     {
       method: 'POST',
-      body: action === 'fail' ? { reason: reason?.trim() || null } : undefined,
+      body:
+        action === 'fail'
+          ? { reason: options?.reason?.trim() || null }
+          : action === 'process' || action === 'reverse'
+            ? { code: options?.mfaCode?.trim() }
+            : undefined,
     },
   );
 }

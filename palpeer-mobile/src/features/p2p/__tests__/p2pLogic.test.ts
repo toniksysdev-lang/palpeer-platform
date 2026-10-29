@@ -134,6 +134,14 @@ describe('labels', () => {
     expect(p2pRateLine('1000', 'CAD', 'NGN')).toBe('1 CAD = 1,000 NGN');
     expect(p2pRateLine('0.001', 'NGN', 'CAD', 'NGN')).toBe('1 NGN = 0.001 CAD');
   });
+
+  it('snaps near-whole Switch rates even at 12 display decimals (post-create detail)', () => {
+    // Stored CAD-per-NGN reciprocal of 980 — invert used to show 980.0000002548 at 12 dp.
+    expect(p2pRateLine('0.001020408163', 'NGN', 'CAD', 'CAD', 12)).toBe('1 CAD = 980 NGN');
+    expect(p2pRateLine('0.001020408163', 'NGN', 'CAD', 'CAD', 12)).not.toContain('.');
+    expect(p2pRateLine('1500.000000000000', 'USD', 'NGN', 'USD', 12)).toBe('1 USD = 1,500 NGN');
+    expect(p2pRateLine('1500.000000000000', 'USD', 'NGN', 'USD', 12)).not.toContain('.');
+  });
 });
 
 describe('CAD-anchored either-direction rates', () => {

@@ -129,6 +129,9 @@ export function applyRateDisplayEdit(
 /**
  * "1 USD = 1,500 NGN" — API stores quote-per-base; when `unitCode` is omitted, CAD is preferred
  * as the "1" side so marketplace rates stay comparable across directions.
+ *
+ * Near-whole reciprocals snap to clean integers (980, not 980.0000002548) so the Switch label
+ * after create (which often passes maxDecimals=12) never shows float noise from inversion.
  */
 export function p2pRateLine(
   rate: string,
@@ -139,7 +142,9 @@ export function p2pRateLine(
 ): string {
   const unit = unitCode.toUpperCase();
   const other = otherOfPair(unit, base, quote).toUpperCase();
-  const display = unit === base.toUpperCase() ? rate : invertRate(rate);
+  const raw = unit === base.toUpperCase() ? rate : invertRate(rate);
+  const decimals = maxDecimals ?? RATE_INPUT_DECIMALS;
+  const display = snapNearIntegerRate(raw, decimals);
   return `1 ${unit} = ${formatRateValue(display, maxDecimals)} ${other}`;
 }
 

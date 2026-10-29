@@ -196,7 +196,6 @@ export function OrderDetailScreen() {
             variant="bodyStrong"
             tone="primary"
             full
-            maxDecimals={12}
             testID="p2p-order-rate"
           />
         </View>

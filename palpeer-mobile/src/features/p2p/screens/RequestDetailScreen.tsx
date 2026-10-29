@@ -496,7 +496,6 @@ export function RequestDetailScreen() {
             variant="bodyStrong"
             tone="primary"
             full
-            maxDecimals={12}
             testID="p2p-request-rate"
           />
         </View>

@@ -85,8 +85,13 @@ export function WalletDetailPage() {
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawRef, setWithdrawRef] = useState('');
   const [failReason, setFailReason] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
   const [confirmCreate, setConfirmCreate] = useState<'funding' | 'withdrawal' | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+
+  const needsMfa =
+    pendingAction?.action === 'process' || pendingAction?.action === 'reverse';
+  const mfaReady = /^\d{6}$/.test(mfaCode.trim());
 
   const walletQuery = useQuery({
     queryKey: ['admin-wallet', id, appConfig.useMockApi],
@@ -189,19 +194,27 @@ export function WalletDetailPage() {
     mutationFn: async (input: PendingAction) => {
       const { movement, action } = input;
       if (appConfig.useMockApi) {
+        if ((action === 'process' || action === 'reverse') && !/^\d{6}$/.test(mfaCode.trim())) {
+          throw new ApiClientError(401, 'MFA_INVALID', 'Enter the 6-digit authenticator code.');
+        }
         await new Promise((resolve) => setTimeout(resolve, 200));
         return mockActOnMovement(id, movement.id, action, failReason.trim() || undefined);
       }
+      const options = {
+        reason: failReason.trim() || undefined,
+        mfaCode: mfaCode.trim() || undefined,
+      };
       if (movement.type === 'FUNDING') {
-        await actOnAdminWalletFunding(id, movement.id, action, failReason.trim() || undefined);
+        await actOnAdminWalletFunding(id, movement.id, action, options);
       } else {
-        await actOnAdminWalletWithdrawal(id, movement.id, action, failReason.trim() || undefined);
+        await actOnAdminWalletWithdrawal(id, movement.id, action, options);
       }
       return movement;
     },
     onSuccess: async (_data, variables) => {
       setPendingAction(null);
       setFailReason('');
+      setMfaCode('');
       const done =
         variables.action === 'process'
           ? 'processed'
@@ -312,7 +325,11 @@ export function WalletDetailPage() {
                   size="sm"
                   variant="ghost"
                   disabled={actionMutation.isPending}
-                  onClick={() => setPendingAction({ movement: row, action: 'process' })}
+                  onClick={() => {
+                    setMfaCode('');
+                    setFailReason('');
+                    setPendingAction({ movement: row, action: 'process' });
+                  }}
                 >
                   Process
                 </Button>
@@ -322,7 +339,11 @@ export function WalletDetailPage() {
                   size="sm"
                   variant="ghost"
                   disabled={actionMutation.isPending}
-                  onClick={() => setPendingAction({ movement: row, action: 'fail' })}
+                  onClick={() => {
+                    setMfaCode('');
+                    setFailReason('');
+                    setPendingAction({ movement: row, action: 'fail' });
+                  }}
                 >
                   Fail
                 </Button>
@@ -332,7 +353,11 @@ export function WalletDetailPage() {
                   size="sm"
                   variant="ghost"
                   disabled={actionMutation.isPending}
-                  onClick={() => setPendingAction({ movement: row, action: 'reverse' })}
+                  onClick={() => {
+                    setMfaCode('');
+                    setFailReason('');
+                    setPendingAction({ movement: row, action: 'reverse' });
+                  }}
                 >
                   Reverse
                 </Button>
@@ -571,15 +596,19 @@ export function WalletDetailPage() {
         }
         description={
           pendingAction
-            ? `${pendingAction.action} ${formatDecimal(pendingAction.movement.amount)} ${pendingAction.movement.currencyCode} (${pendingAction.movement.status} → ${pendingAction.action === 'process' ? 'SUCCESS' : pendingAction.action === 'fail' ? 'FAILED' : 'REVERSED'}).`
+            ? `${pendingAction.action} ${formatDecimal(pendingAction.movement.amount)} ${pendingAction.movement.currencyCode} (${pendingAction.movement.status} → ${pendingAction.action === 'process' ? 'SUCCESS' : pendingAction.action === 'fail' ? 'FAILED' : 'REVERSED'}).${
+                needsMfa ? ' Confirm with your Google Authenticator code.' : ''
+              }`
             : ''
         }
         confirmLabel={pendingAction ? `${pendingAction.action[0].toUpperCase()}${pendingAction.action.slice(1)}` : 'Confirm'}
         tone={pendingAction?.action === 'fail' || pendingAction?.action === 'reverse' ? 'danger' : 'primary'}
         busy={actionMutation.isPending}
+        confirmDisabled={needsMfa && !mfaReady}
         onClose={() => {
           setPendingAction(null);
           setFailReason('');
+          setMfaCode('');
         }}
         onConfirm={() => pendingAction && actionMutation.mutate(pendingAction)}
       >
@@ -590,6 +619,19 @@ export function WalletDetailPage() {
               value={failReason}
               onChange={(event) => setFailReason(event.target.value)}
               placeholder="e.g. Provider rejected"
+            />
+          </div>
+        ) : null}
+        {needsMfa ? (
+          <div className="mt-3">
+            <Input
+              label="Google Authenticator code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              value={mfaCode}
+              onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="6-digit code"
+              maxLength={6}
             />
           </div>
         ) : null}
