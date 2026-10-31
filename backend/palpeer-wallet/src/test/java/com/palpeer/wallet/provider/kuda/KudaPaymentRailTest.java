@@ -185,12 +185,14 @@ class KudaPaymentRailTest {
         properties.setDynamicCollectionFunding(true);
         properties.setClientAccountNumber("2000000000");
         when(kudaClient.isConfigured()).thenReturn(true);
+        when(kudaClient.isSandboxMode()).thenReturn(false);
         when(kudaClient.toKobo(new BigDecimal("250.00"))).thenReturn(25_000L);
 
         UUID walletId = UUID.randomUUID();
         ObjectNode created = objectMapper.createObjectNode();
         created.put("accountNumber", "3020000000");
         created.put("accountName", "PALPEER USER");
+        created.put("bankCode", "090267");
         when(kudaClient.invoke(eq("ADMIN_CREATE_DYNAMIC_COLLECTION_ACCOUNT"), anyMap(), any()))
                 .thenReturn(created);
         when(virtualAccountRepository.findByWalletIdAndProviderName(walletId, KudaPaymentRail.NAME))
@@ -203,6 +205,7 @@ class KudaPaymentRailTest {
         assertThat(result.pendingExternalSettlement()).isTrue();
         assertThat(result.collectionAccount()).isNotNull();
         assertThat(result.collectionAccount().accountNumber()).isEqualTo("3020000000");
+        assertThat(result.collectionAccount().bankCode()).isEqualTo("090267");
         assertThat(result.instructions()).contains("3020000000").contains("250.00");
 
         @SuppressWarnings("unchecked")
@@ -210,6 +213,29 @@ class KudaPaymentRailTest {
         verify(kudaClient).invoke(eq("ADMIN_CREATE_DYNAMIC_COLLECTION_ACCOUNT"), bodyCaptor.capture(), any());
         assertThat(bodyCaptor.getValue()).containsEntry("amount", 25_000L);
         assertThat(bodyCaptor.getValue()).containsEntry("isFlexiblePayment", false);
+    }
+
+    @Test
+    void initiateFunding_dynamicCollectionLiveDefaultsKudaNipBankCode() {
+        properties.setDynamicCollectionFunding(true);
+        when(kudaClient.isConfigured()).thenReturn(true);
+        when(kudaClient.isSandboxMode()).thenReturn(false);
+        when(kudaClient.toKobo(new BigDecimal("100.00"))).thenReturn(10_000L);
+
+        UUID walletId = UUID.randomUUID();
+        ObjectNode created = objectMapper.createObjectNode();
+        created.put("accountNumber", "3011111111");
+        when(kudaClient.invoke(eq("ADMIN_CREATE_DYNAMIC_COLLECTION_ACCOUNT"), anyMap(), any()))
+                .thenReturn(created);
+        when(virtualAccountRepository.findByWalletIdAndProviderName(walletId, KudaPaymentRail.NAME))
+                .thenReturn(Optional.empty());
+        when(virtualAccountRepository.save(any(PaymentVirtualAccount.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        PaymentRailProvider.FundingInitiation result = rail.initiateFunding(fundingRequest(walletId, "100.00"));
+
+        assertThat(result.collectionAccount().bankCode()).isEqualTo("090267");
+        assertThat(result.collectionAccount().bankCode()).isNotEqualTo("999129");
     }
 
     @Test

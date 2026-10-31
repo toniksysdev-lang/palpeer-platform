@@ -120,8 +120,13 @@ public class KudaPaymentRail implements PaymentRailProvider {
         }
         String returnedName = firstNonNull(
                 firstText(response, "accountName", "AccountName", "accountname", "fullname"), accountName);
+        // Never hardcode UAT bank code 999129 on live — NIP transfers would fail / misroute.
+        String bankCode = firstNonNull(
+                firstText(response, "bankCode", "BankCode", "beneficiaryBankCode"),
+                kudaClient.isSandboxMode() ? "999129" : "090267");
+        String bankName = firstNonNull(firstText(response, "bankName", "BankName"), "Kuda");
         CollectionAccount collection = new CollectionAccount(
-                accountNumber, returnedName, "Kuda", "999129", requestRef);
+                accountNumber, returnedName, bankName, bankCode, requestRef);
         // Keep PVA in sync so older webhook matchers that look up by account number still work.
         upsertVirtualAccountMirror(request, collection);
 

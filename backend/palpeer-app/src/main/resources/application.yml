@@ -218,10 +218,11 @@ palpeer:
     webhook-signature-header: ${APAYLO_WEBHOOK_SIGNATURE_HEADER:X-Webhook-Signature}
   kuda:
     enabled: ${KUDA_ENABLED:false}
-    sandbox: ${KUDA_SANDBOX:true}
+    # Default false so production cannot silently call UAT. Local/UAT must set KUDA_SANDBOX=true.
+    sandbox: ${KUDA_SANDBOX:false}
     # false = funding stays PENDING with VA details until webhook (real payment process).
     auto-sandbox-settle: ${KUDA_AUTO_SANDBOX_SETTLE:false}
-    offline-sandbox-settle: ${KUDA_OFFLINE_SANDBOX_SETTLE:true}
+    offline-sandbox-settle: ${KUDA_OFFLINE_SANDBOX_SETTLE:false}
     # true skips customer transfer (FUND_VIRTUAL_ACCOUNT demo). Leave false for real funding UX.
     demo-fund-enabled: ${KUDA_DEMO_FUND_ENABLED:false}
     email: ${KUDA_EMAIL:}
