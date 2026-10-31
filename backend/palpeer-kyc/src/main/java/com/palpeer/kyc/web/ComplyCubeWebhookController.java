@@ -35,23 +35,36 @@ public class ComplyCubeWebhookController {
             @RequestBody String rawBody,
             @RequestHeader(value = "ComplyCube-Signature", required = false) String signature) {
         if (!WebhookSignatures.hmacSha256Matches(properties.getWebhookSecret(), rawBody, signature)) {
-            log.warn("ComplyCube webhook rejected — missing secret or invalid signature");
+            log.warn(
+                    "ComplyCube webhook rejected — missing secret or invalid signature (hasSignature={})",
+                    signature != null && !signature.isBlank());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.fail("Invalid signature", null));
         }
         try {
-            JsonNode event = objectMapper.readTree(rawBody);
+            JsonNode event = objectMapper.readTree(rawBody == null ? "{}" : rawBody);
             String type = text(event, "type");
             JsonNode payload = event.path("payload");
-            if (payload.isMissingNode()) {
+            if (payload.isMissingNode() || payload.isNull()) {
                 payload = event.path("data");
             }
             String checkId = firstText(payload, "id", "checkId");
-            String result = extractOutcome(payload);
+            if (checkId == null) {
+                checkId = firstText(event, "id", "checkId");
+            }
+            String result = extractOutcome(payload.isMissingNode() || payload.isNull() ? event : payload);
             String status = firstText(payload, "status");
-            if (checkId != null && type != null && type.toLowerCase().contains("check")) {
-                kycService.applyProviderCheckResult(checkId, result, status);
-            } else if (checkId != null) {
+            if (status == null) {
+                status = firstText(event, "status");
+            }
+            log.info(
+                    "ComplyCube webhook received type={} checkId={} status={} outcome={} bodyChars={}",
+                    type,
+                    checkId,
+                    status,
+                    result,
+                    rawBody == null ? 0 : rawBody.length());
+            if (checkId != null) {
                 kycService.applyProviderCheckResult(checkId, result, status);
             } else {
                 log.warn("ComplyCube webhook ignored — no check id. type={}", type);

@@ -41,6 +41,9 @@ public interface FundingTransactionRepository
 
     Optional<FundingTransaction> findByProviderNameAndProviderReference(String providerName, String providerReference);
 
+    List<FundingTransaction> findByProviderNameAndStatusOrderByCreatedAtAsc(
+            String providerName, MoneyMovementStatus status);
+
     @Query("""
             select f from FundingTransaction f
             where f.walletId = :walletId

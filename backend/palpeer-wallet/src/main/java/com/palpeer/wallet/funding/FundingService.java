@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -45,6 +47,7 @@ import org.springframework.transaction.annotation.Transactional;
  * CONTRACT_PENDING (P6-03): exact state transition matrix.
  * Provisional process(): INITIATED|PENDING → PROCESSING → SUCCESS (+ CREDIT).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FundingService {
@@ -65,6 +68,7 @@ public class FundingService {
     private final PaymentVirtualAccountRepository paymentVirtualAccountRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final FundingUnverifiedLimitService fundingUnverifiedLimitService;
+    private final ObjectProvider<KudaPaymentRail> kudaPaymentRail;
 
     @Transactional
     public FundingTransactionResponse initiate(UUID userId, String idempotencyKey, CreateFundingRequest request) {
@@ -102,12 +106,44 @@ public class FundingService {
         return response;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public FundingTransactionResponse get(UUID userId, UUID fundingId) {
-        // Never auto-settle on poll. Mobile polls this while the customer pays (Instant Interac /
-        // Kuda VA). Crediting here skipped the payment step whenever APAYLO_/KUDA_AUTO_SANDBOX_SETTLE
-        // was true. Settlement is webhook or operator process only.
-        return toResponse(requireOwned(userId, fundingId));
+        // Live Kuda often delivers money before (or without) the Transaction.Notification webhook.
+        // Reconcile PENDING NGN collection fundings via DYNAMIC_COLLECTION_ACCOUNT_TSQ on poll so the
+        // app reflects SUCCESS + balance without waiting for a missing callback. Sandbox auto-settle
+        // flags still do not credit here — only a confirmed Kuda receipt does.
+        FundingTransaction tx = requireOwned(userId, fundingId);
+        return reconcileProviderPaymentIfNeeded(tx);
+    }
+
+    /**
+     * Background / webhook-fallback sweep: settle PENDING Kuda fundings that Kuda already reports as
+     * paid via TSQ.
+     */
+    @Transactional
+    public int reconcilePendingKudaFundings(int limit) {
+        int max = Math.max(1, Math.min(limit, 50));
+        List<FundingTransaction> pending = fundingTransactionRepository
+                .findByProviderNameAndStatusOrderByCreatedAtAsc(KudaPaymentRail.NAME, MoneyMovementStatus.PENDING);
+        int settled = 0;
+        for (FundingTransaction listed : pending) {
+            if (settled >= max) {
+                break;
+            }
+            FundingTransaction tx = fundingTransactionRepository.findById(listed.getId()).orElse(null);
+            if (tx == null) {
+                continue;
+            }
+            try {
+                FundingTransactionResponse after = reconcileProviderPaymentIfNeeded(tx);
+                if (after.status() == MoneyMovementStatus.SUCCESS) {
+                    settled++;
+                }
+            } catch (RuntimeException ex) {
+                log.warn("Kuda funding reconcile skipped for {}: {}", listed.getId(), ex.getMessage());
+            }
+        }
+        return settled;
     }
 
     /** Manual operator completion. Callers must be authorised operators, never the funding owner. */
@@ -160,6 +196,16 @@ public class FundingService {
         List<FundingTransaction> candidates =
                 fundingTransactionRepository.findPendingByCollectionAccount(
                         providerName, accountNumber, MoneyMovementStatus.PENDING, amountNaira);
+        // Exact BigDecimal equality can miss scale differences (100 vs 100.00); fall back to compare.
+        if (candidates.isEmpty()) {
+            candidates = fundingTransactionRepository
+                    .findByProviderNameAndStatusOrderByCreatedAtAsc(providerName, MoneyMovementStatus.PENDING)
+                    .stream()
+                    .filter(f -> accountNumber.equals(f.getCollectionAccountNumber())
+                            && f.getAmount() != null
+                            && f.getAmount().compareTo(amountNaira) == 0)
+                    .toList();
+        }
         if (candidates.isEmpty()) {
             var account = paymentVirtualAccountRepository
                     .findByProviderNameAndAccountNumber(providerName, accountNumber)
@@ -167,6 +213,15 @@ public class FundingService {
                             "Virtual account not found for " + providerName + " account " + accountNumber));
             candidates = fundingTransactionRepository.findPendingByWalletProviderAmount(
                     account.getWalletId(), providerName, MoneyMovementStatus.PENDING, amountNaira);
+            if (candidates.isEmpty()) {
+                candidates = fundingTransactionRepository
+                        .findByProviderNameAndStatusOrderByCreatedAtAsc(providerName, MoneyMovementStatus.PENDING)
+                        .stream()
+                        .filter(f -> account.getWalletId().equals(f.getWalletId())
+                                && f.getAmount() != null
+                                && f.getAmount().compareTo(amountNaira) == 0)
+                        .toList();
+            }
             if (candidates.isEmpty()) {
                 throw new ResourceNotFoundException(
                         "No pending " + providerName + " funding for wallet " + account.getWalletId()
@@ -417,6 +472,46 @@ public class FundingService {
     private FundingTransaction requireOwned(UUID userId, UUID fundingId) {
         return fundingTransactionRepository.findByIdAndUserId(fundingId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Funding transaction not found"));
+    }
+
+    private FundingTransactionResponse reconcileProviderPaymentIfNeeded(FundingTransaction tx) {
+        if (tx.getStatus() != MoneyMovementStatus.PENDING && tx.getStatus() != MoneyMovementStatus.INITIATED) {
+            return toResponse(tx);
+        }
+        if (tx.getProviderName() == null
+                || !KudaPaymentRail.NAME.equalsIgnoreCase(tx.getProviderName().trim())) {
+            return toResponse(tx);
+        }
+        KudaPaymentRail rail = kudaPaymentRail.getIfAvailable();
+        if (rail == null || !rail.isEnabled()) {
+            return toResponse(tx);
+        }
+        String accountNumber = blankToNull(tx.getCollectionAccountNumber());
+        String trackingRef = blankToNull(tx.getCollectionTrackingRef());
+        if (trackingRef == null) {
+            trackingRef = blankToNull(tx.getProviderReference());
+        }
+        if (accountNumber == null && trackingRef == null) {
+            return toResponse(tx);
+        }
+        var confirmed = rail.confirmCollectionPayment(trackingRef, accountNumber, tx.getAmount());
+        if (confirmed.isEmpty()) {
+            return toResponse(tx);
+        }
+        log.info(
+                "Kuda funding reconciled via TSQ. fundingId={} account={} amount={} ref={}",
+                tx.getId(),
+                accountNumber,
+                tx.getAmount(),
+                confirmed.get().providerReference());
+        FundingTransaction locked = fundingTransactionRepository
+                .findByIdForUpdate(tx.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Funding transaction not found"));
+        if (confirmed.get().providerReference() != null && !confirmed.get().providerReference().isBlank()) {
+            locked.setProviderReference(confirmed.get().providerReference().trim());
+            fundingTransactionRepository.save(locked);
+        }
+        return processInternal(locked);
     }
 
     private FundingTransaction requireForUpdate(UUID fundingId) {

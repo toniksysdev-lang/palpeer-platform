@@ -5,9 +5,11 @@ import com.palpeer.common.exception.BusinessException;
 import com.palpeer.wallet.domain.PaymentVirtualAccount;
 import com.palpeer.wallet.provider.PaymentRailProvider;
 import com.palpeer.wallet.repository.PaymentVirtualAccountRepository;
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +55,76 @@ public class KudaPaymentRail implements PaymentRailProvider {
     public boolean isEnabled() {
         return kudaClient.isConfigured();
     }
+
+    /**
+     * Live reconciliation for dynamic-collection (and mirrored VA) funding: Kuda's
+     * {@code DYNAMIC_COLLECTION_ACCOUNT_TSQ} reports whether the exact amount was received even when
+     * the inbound {@code Transaction.Notification} webhook never arrives.
+     */
+    public Optional<ConfirmedCollectionPayment> confirmCollectionPayment(
+            String accountCreationRequestRef, String accountNumber, BigDecimal expectedAmount) {
+        if (!isEnabled() || expectedAmount == null || expectedAmount.signum() <= 0) {
+            return Optional.empty();
+        }
+        if (!notBlank(accountCreationRequestRef) && !notBlank(accountNumber)) {
+            return Optional.empty();
+        }
+        try {
+            JsonNode data = kudaClient.queryDynamicCollectionStatus(accountCreationRequestRef, accountNumber);
+            BigDecimal received = parseMoney(firstText(data, "totalAmountReceived", "TotalAmountReceived", "amount"));
+            if (received == null) {
+                JsonNode details = data.path("transactionDetails");
+                if (details.isMissingNode() || !details.isArray()) {
+                    details = data.path("TransactionDetails");
+                }
+                if (details.isArray()) {
+                    BigDecimal sum = BigDecimal.ZERO;
+                    for (JsonNode row : details) {
+                        BigDecimal part = parseMoney(firstText(row, "amount", "Amount"));
+                        if (part != null) {
+                            sum = sum.add(part);
+                        }
+                    }
+                    if (sum.signum() > 0) {
+                        received = sum;
+                    }
+                }
+            }
+            if (received == null || received.compareTo(expectedAmount) < 0) {
+                return Optional.empty();
+            }
+            String txnRef = null;
+            JsonNode details = data.path("transactionDetails");
+            if (details.isMissingNode() || !details.isArray()) {
+                details = data.path("TransactionDetails");
+            }
+            if (details.isArray() && !details.isEmpty()) {
+                JsonNode first = details.get(0);
+                txnRef = firstText(
+                        first,
+                        "transactionReference",
+                        "TransactionReference",
+                        "instrumentNumber",
+                        "InstrumentNumber",
+                        "reference");
+            }
+            if (!notBlank(txnRef)) {
+                txnRef = notBlank(accountCreationRequestRef)
+                        ? accountCreationRequestRef.trim()
+                        : accountNumber.trim();
+            }
+            return Optional.of(new ConfirmedCollectionPayment(txnRef, received));
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "Kuda collection TSQ reconcile failed. account={} ref={} cause={}",
+                    accountNumber,
+                    accountCreationRequestRef,
+                    ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    public record ConfirmedCollectionPayment(String providerReference, BigDecimal amountReceived) {}
 
     @Override
     @Transactional
@@ -584,6 +656,17 @@ public class KudaPaymentRail implements PaymentRailProvider {
 
     private static boolean notBlank(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private static BigDecimal parseMoney(String raw) {
+        if (!notBlank(raw)) {
+            return null;
+        }
+        try {
+            return new BigDecimal(raw.trim().replace(",", ""));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
     private record ParsedDestination(String bankCode, String accountNumber) {}

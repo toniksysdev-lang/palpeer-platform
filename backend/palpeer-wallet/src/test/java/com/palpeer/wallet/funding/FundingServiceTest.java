@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,6 +23,7 @@ import com.palpeer.wallet.funding.dto.CreateFundingRequest;
 import com.palpeer.wallet.funding.dto.FundingTransactionResponse;
 import com.palpeer.wallet.provider.PaymentRailRouter;
 import com.palpeer.wallet.provider.apaylo.ApayloProperties;
+import com.palpeer.wallet.provider.kuda.KudaPaymentRail;
 import com.palpeer.wallet.repository.WalletRepository;
 import com.palpeer.wallet.service.FundingUnverifiedLimitService;
 import java.math.BigDecimal;
@@ -34,6 +36,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)
 class FundingServiceTest {
@@ -49,6 +52,7 @@ class FundingServiceTest {
     @Mock private com.palpeer.wallet.repository.PaymentVirtualAccountRepository paymentVirtualAccountRepository;
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
     @Mock private FundingUnverifiedLimitService fundingUnverifiedLimitService;
+    @Mock private ObjectProvider<KudaPaymentRail> kudaPaymentRail;
 
     @InjectMocks private FundingService fundingService;
 
@@ -66,6 +70,7 @@ class FundingServiceTest {
         wallet.setCurrencyCode("USD");
         wallet.setAvailableBalance(BigDecimal.ZERO);
         wallet.setPendingBalance(BigDecimal.ZERO);
+        lenient().when(kudaPaymentRail.getIfAvailable()).thenReturn(null);
     }
 
     @Test

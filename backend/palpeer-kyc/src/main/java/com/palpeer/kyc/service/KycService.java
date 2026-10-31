@@ -36,6 +36,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -46,6 +47,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class KycService {
@@ -172,6 +174,45 @@ public class KycService {
         }
         kycVerificationProvider.getCheck(checkId).ifPresent(check ->
                 applyProviderCheckResult(check.checkId(), check.result(), check.status()));
+    }
+
+    /**
+     * Background / webhook-fallback sweep for Live ComplyCube: poll check outcomes for
+     * {@code UNDER_REVIEW} cases so approvals land even when the dashboard webhook is delayed.
+     */
+    @Transactional
+    public int reconcileUnderReviewProviderChecks(int limit) {
+        if (!kycVerificationProvider.isEnabled()) {
+            return 0;
+        }
+        int max = Math.max(1, Math.min(limit, 50));
+        List<KycCase> pending = kycCaseRepository.findByStatusOrderByUpdatedAtAsc(KycStatus.UNDER_REVIEW);
+        int updated = 0;
+        for (KycCase listed : pending) {
+            if (updated >= max) {
+                break;
+            }
+            KycCase kycCase = kycCaseRepository.findById(listed.getId()).orElse(null);
+            if (kycCase == null || kycCase.getStatus() != KycStatus.UNDER_REVIEW) {
+                continue;
+            }
+            KycStatus before = kycCase.getStatus();
+            try {
+                syncProviderCheckIfNeeded(kycCase);
+                KycCase after = kycCaseRepository.findById(kycCase.getId()).orElse(kycCase);
+                if (after.getStatus() != before) {
+                    updated++;
+                    log.info(
+                            "ComplyCube KYC reconciled via poll. caseId={} status {} -> {}",
+                            after.getId(),
+                            before,
+                            after.getStatus());
+                }
+            } catch (RuntimeException ex) {
+                log.warn("ComplyCube KYC reconcile skipped for {}: {}", listed.getId(), ex.getMessage());
+            }
+        }
+        return updated;
     }
 
     /**

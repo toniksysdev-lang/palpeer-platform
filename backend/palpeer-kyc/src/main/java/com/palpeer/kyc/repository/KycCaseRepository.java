@@ -1,6 +1,8 @@
 package com.palpeer.kyc.repository;
 
 import com.palpeer.kyc.domain.KycCase;
+import com.palpeer.kyc.domain.KycStatus;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,4 +17,6 @@ public interface KycCaseRepository extends JpaRepository<KycCase, UUID>, JpaSpec
     Optional<KycCase> findByProviderCheckId(String providerCheckId);
 
     Optional<KycCase> findByProviderClientId(String providerClientId);
+
+    List<KycCase> findByStatusOrderByUpdatedAtAsc(KycStatus status);
 }

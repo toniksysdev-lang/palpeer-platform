@@ -73,6 +73,11 @@ public class PaymentWebhookController {
             @RequestBody(required = false) String rawBody, HttpServletRequest request) {
         String body = rawBody == null ? "" : rawBody;
         if (!authenticateKuda(request, body)) {
+            log.warn(
+                    "KUDA webhook auth failed — hasUsernameHeader={} hasPasswordHeader={} bodyChars={}",
+                    notBlank(request.getHeader("username")),
+                    notBlank(request.getHeader("password")),
+                    body.length());
             return unauthorized();
         }
 
@@ -80,11 +85,17 @@ public class PaymentWebhookController {
             JsonNode root = objectMapper.readTree(body.isBlank() ? "{}" : body);
             String eventType = firstText(root, "eventType", "EventType");
             String transactionType = firstText(root, "transactionType", "TransactionType");
+            String accountNumber = firstText(root, "accountNumber", "AccountNumber");
+            log.info(
+                    "KUDA webhook received eventType={} transactionType={} account={} bodyChars={}",
+                    eventType,
+                    transactionType,
+                    accountNumber,
+                    body.length());
 
             // Live Kuda Transaction.Notification payload
             if ((eventType != null && eventType.equalsIgnoreCase("Transaction.Notification"))
-                    || (transactionType != null
-                            && notBlank(firstText(root, "accountNumber", "AccountNumber")))) {
+                    || (transactionType != null && notBlank(accountNumber))) {
                 return handleKudaTransactionNotification(root);
             }
 
