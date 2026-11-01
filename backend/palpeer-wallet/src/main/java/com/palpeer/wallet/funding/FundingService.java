@@ -27,6 +27,9 @@ import com.palpeer.wallet.repository.PaymentVirtualAccountRepository;
 import com.palpeer.wallet.repository.WalletRepository;
 import com.palpeer.wallet.service.FundingUnverifiedLimitService;
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -118,7 +121,8 @@ public class FundingService {
 
     /**
      * Background / webhook-fallback sweep: settle PENDING Kuda fundings that Kuda already reports as
-     * paid via TSQ.
+     * paid via TSQ, and reverse recent SUCCESS credits that TSQ no longer substantiates (e.g. NIP
+     * reversal after a premature Credit webhook).
      */
     @Transactional
     public int reconcilePendingKudaFundings(int limit) {
@@ -143,7 +147,70 @@ public class FundingService {
                 log.warn("Kuda funding reconcile skipped for {}: {}", listed.getId(), ex.getMessage());
             }
         }
+        reclaimUnsubstantiatedKudaCredits(max);
         return settled;
+    }
+
+    /**
+     * Reverse SUCCESS Kuda collection credits when Live TSQ no longer shows the amount as received
+     * (payment failed / returned to the sender after we credited).
+     */
+    @Transactional
+    public int reclaimUnsubstantiatedKudaCredits(int limit) {
+        int max = Math.max(1, Math.min(limit, 50));
+        KudaPaymentRail rail = kudaPaymentRail.getIfAvailable();
+        if (rail == null || !rail.isEnabled()) {
+            return 0;
+        }
+        Instant since = Instant.now().minus(48, ChronoUnit.HOURS);
+        List<FundingTransaction> recentSuccess = fundingTransactionRepository.findRecentByProviderAndStatus(
+                KudaPaymentRail.NAME, MoneyMovementStatus.SUCCESS, since);
+        int reversed = 0;
+        for (FundingTransaction listed : recentSuccess) {
+            if (reversed >= max) {
+                break;
+            }
+            String trackingRef = blankToNull(listed.getCollectionTrackingRef());
+            if (trackingRef == null) {
+                trackingRef = blankToNull(listed.getProviderReference());
+            }
+            if (!KudaPaymentRail.isDynamicCollectionRequestRef(trackingRef)) {
+                continue;
+            }
+            String accountNumber = blankToNull(listed.getCollectionAccountNumber());
+            try {
+                var confirmed = rail.confirmCollectionPayment(trackingRef, accountNumber, listed.getAmount());
+                if (confirmed.isPresent()) {
+                    continue;
+                }
+                FundingTransaction locked = fundingTransactionRepository
+                        .findByIdForUpdate(listed.getId())
+                        .orElse(null);
+                if (locked == null || locked.getStatus() != MoneyMovementStatus.SUCCESS) {
+                    continue;
+                }
+                // Re-check under lock — only reverse when TSQ still does not confirm funds held.
+                confirmed = rail.confirmCollectionPayment(
+                        blankToNull(locked.getCollectionTrackingRef()) != null
+                                ? locked.getCollectionTrackingRef()
+                                : locked.getProviderReference(),
+                        locked.getCollectionAccountNumber(),
+                        locked.getAmount());
+                if (confirmed.isPresent()) {
+                    continue;
+                }
+                log.warn(
+                        "Reclaiming unsubstantiated Kuda funding credit. fundingId={} account={} amount={}",
+                        locked.getId(),
+                        locked.getCollectionAccountNumber(),
+                        locked.getAmount());
+                reverseInternal(locked);
+                reversed++;
+            } catch (RuntimeException ex) {
+                log.warn("Kuda credit reclaim skipped for {}: {}", listed.getId(), ex.getMessage());
+            }
+        }
+        return reversed;
     }
 
     /** Manual operator completion. Callers must be authorised operators, never the funding owner. */
@@ -236,9 +303,110 @@ public class FundingService {
             fundingTransactionRepository.save(locked);
         }
         if (success) {
+            // NGN / Kuda: never ledger-credit on Credit webhook alone. NIP can reverse after a
+            // Credit notification; only DYNAMIC_COLLECTION_ACCOUNT_TSQ proving funds held may settle.
+            if (KudaPaymentRail.NAME.equalsIgnoreCase(providerName)) {
+                if (!kudaCollectionPaymentConfirmed(locked, accountNumber, amountNaira)) {
+                    log.warn(
+                            "KUDA credit webhook deferred — TSQ has not confirmed funds held. fundingId={} account={} amount={}",
+                            locked.getId(),
+                            accountNumber,
+                            amountNaira);
+                    return toResponse(locked);
+                }
+            }
             return processInternal(locked);
         }
         return failInternal(locked, reason);
+    }
+
+    /**
+     * Kuda {@code Reversal} (or failed collection) for a dynamic VA / collection account: fail a still
+     * open funding or reverse a SUCCESS credit so the Naira wallet is never left funded after the
+     * payer's bank returns the money.
+     */
+    @Transactional
+    public FundingTransactionResponse reverseVirtualAccountCredit(
+            String providerName,
+            String accountNumber,
+            BigDecimal amountNaira,
+            String kudaTransactionReference,
+            String reason) {
+        String detail = reason == null || reason.isBlank()
+                ? "Kuda reversed or returned the collection payment"
+                : reason.trim();
+
+        List<FundingTransaction> matches = new ArrayList<>();
+        if (kudaTransactionReference != null && !kudaTransactionReference.isBlank()) {
+            fundingTransactionRepository
+                    .findByProviderNameAndProviderReference(providerName, kudaTransactionReference.trim())
+                    .ifPresent(matches::add);
+        }
+        if (matches.isEmpty() && accountNumber != null && amountNaira != null) {
+            matches.addAll(fundingTransactionRepository.findByCollectionAccountAndStatus(
+                    providerName, accountNumber, MoneyMovementStatus.SUCCESS, amountNaira));
+            if (matches.isEmpty()) {
+                matches.addAll(fundingTransactionRepository
+                        .findByProviderNameAndStatusOrderByCreatedAtDesc(providerName, MoneyMovementStatus.SUCCESS)
+                        .stream()
+                        .filter(f -> accountNumber.equals(f.getCollectionAccountNumber())
+                                && f.getAmount() != null
+                                && f.getAmount().compareTo(amountNaira) == 0)
+                        .toList());
+            }
+            if (matches.isEmpty()) {
+                matches.addAll(fundingTransactionRepository.findPendingByCollectionAccount(
+                        providerName, accountNumber, MoneyMovementStatus.PENDING, amountNaira));
+            }
+            if (matches.isEmpty()) {
+                matches.addAll(fundingTransactionRepository
+                        .findByProviderNameAndStatusOrderByCreatedAtAsc(providerName, MoneyMovementStatus.PENDING)
+                        .stream()
+                        .filter(f -> accountNumber.equals(f.getCollectionAccountNumber())
+                                && f.getAmount() != null
+                                && f.getAmount().compareTo(amountNaira) == 0)
+                        .toList());
+            }
+        }
+        if (matches.isEmpty()) {
+            throw new ResourceNotFoundException(
+                    "No " + providerName + " funding to reverse for account " + accountNumber
+                            + " amount " + amountNaira);
+        }
+
+        FundingTransaction locked = fundingTransactionRepository
+                .findByIdForUpdate(matches.get(0).getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Funding transaction not found"));
+        if (locked.getStatus() == MoneyMovementStatus.SUCCESS) {
+            log.warn(
+                    "Reversing Kuda funding after collection reversal. fundingId={} account={} amount={}",
+                    locked.getId(),
+                    accountNumber,
+                    amountNaira);
+            return reverseInternal(locked);
+        }
+        if (PROCESSABLE.contains(locked.getStatus())) {
+            return failInternal(locked, detail);
+        }
+        return toResponse(locked);
+    }
+
+    private boolean kudaCollectionPaymentConfirmed(
+            FundingTransaction tx, String accountNumber, BigDecimal amountNaira) {
+        KudaPaymentRail rail = kudaPaymentRail.getIfAvailable();
+        if (rail == null || !rail.isEnabled()) {
+            return false;
+        }
+        String trackingRef = blankToNull(tx.getCollectionTrackingRef());
+        if (trackingRef == null) {
+            trackingRef = blankToNull(tx.getProviderReference());
+        }
+        String account = blankToNull(accountNumber);
+        if (account == null) {
+            account = blankToNull(tx.getCollectionAccountNumber());
+        }
+        BigDecimal amount = amountNaira != null ? amountNaira : tx.getAmount();
+        return rail.confirmCollectionPayment(trackingRef, account, amount).isPresent();
     }
 
     private static void applyCollectionAccount(

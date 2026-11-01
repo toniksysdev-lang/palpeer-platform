@@ -77,43 +77,38 @@ public class KudaPaymentRail implements PaymentRailProvider {
         }
         try {
             JsonNode data = kudaClient.queryDynamicCollectionStatus(accountCreationRequestRef, accountNumber);
+            JsonNode details = data.path("transactionDetails");
+            if (details.isMissingNode() || !details.isArray()) {
+                details = data.path("TransactionDetails");
+            }
+            // Require concrete transaction rows — a bare totalAmountReceived can stay elevated after
+            // a payer-bank reversal and must not alone authorize a Naira wallet credit.
+            if (!details.isArray() || details.isEmpty()) {
+                return Optional.empty();
+            }
             BigDecimal received = parseMoney(firstText(data, "totalAmountReceived", "TotalAmountReceived", "amount"));
             if (received == null) {
-                JsonNode details = data.path("transactionDetails");
-                if (details.isMissingNode() || !details.isArray()) {
-                    details = data.path("TransactionDetails");
+                BigDecimal sum = BigDecimal.ZERO;
+                for (JsonNode row : details) {
+                    BigDecimal part = parseMoney(firstText(row, "amount", "Amount"));
+                    if (part != null) {
+                        sum = sum.add(part);
+                    }
                 }
-                if (details.isArray()) {
-                    BigDecimal sum = BigDecimal.ZERO;
-                    for (JsonNode row : details) {
-                        BigDecimal part = parseMoney(firstText(row, "amount", "Amount"));
-                        if (part != null) {
-                            sum = sum.add(part);
-                        }
-                    }
-                    if (sum.signum() > 0) {
-                        received = sum;
-                    }
+                if (sum.signum() > 0) {
+                    received = sum;
                 }
             }
             if (received == null || received.compareTo(expectedAmount) < 0) {
                 return Optional.empty();
             }
-            String txnRef = null;
-            JsonNode details = data.path("transactionDetails");
-            if (details.isMissingNode() || !details.isArray()) {
-                details = data.path("TransactionDetails");
-            }
-            if (details.isArray() && !details.isEmpty()) {
-                JsonNode first = details.get(0);
-                txnRef = firstText(
-                        first,
-                        "transactionReference",
-                        "TransactionReference",
-                        "instrumentNumber",
-                        "InstrumentNumber",
-                        "reference");
-            }
+            String txnRef = firstText(
+                    details.get(0),
+                    "transactionReference",
+                    "TransactionReference",
+                    "instrumentNumber",
+                    "InstrumentNumber",
+                    "reference");
             if (!notBlank(txnRef)) {
                 txnRef = notBlank(accountCreationRequestRef)
                         ? accountCreationRequestRef.trim()
@@ -462,7 +457,7 @@ public class KudaPaymentRail implements PaymentRailProvider {
      * {@code ADMIN_CREATE_DYNAMIC_COLLECTION_ACCOUNT}. Static VA tracking ({@code pp…}), offline
      * sandbox refs, and funding UUIDs must not be sent to {@code DYNAMIC_COLLECTION_ACCOUNT_TSQ}.
      */
-    static boolean isDynamicCollectionRequestRef(String ref) {
+    public static boolean isDynamicCollectionRequestRef(String ref) {
         if (!notBlank(ref)) {
             return false;
         }

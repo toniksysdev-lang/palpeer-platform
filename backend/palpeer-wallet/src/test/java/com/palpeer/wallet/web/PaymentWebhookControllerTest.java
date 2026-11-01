@@ -153,6 +153,41 @@ class PaymentWebhookControllerTest {
     }
 
     @Test
+    void reversesVirtualAccountOnTransactionReversalNotification() {
+        kudaProperties.setWebhookSecret("");
+        kudaProperties.setWebhookUsername(WEBHOOK_USER);
+        kudaProperties.setWebhookPassword(WEBHOOK_PASS);
+
+        String body = """
+                {
+                  "eventType":"Transaction.Notification",
+                  "amount":10000,
+                  "transactionReference":"231208609730",
+                  "accountNumber":"7006236882",
+                  "transactionType":"Reversal",
+                  "narrations":"NIP reversal"
+                }
+                """;
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("username", WEBHOOK_USER);
+        request.addHeader(
+                "password",
+                Base64.getEncoder().encodeToString(WEBHOOK_PASS.getBytes(StandardCharsets.UTF_8)));
+
+        var response = controller.kuda(body, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(fundingService)
+                .reverseVirtualAccountCredit(
+                        eq(KudaPaymentRail.NAME),
+                        eq("7006236882"),
+                        eq(new BigDecimal("100.00")),
+                        eq("231208609730"),
+                        eq("NIP reversal"));
+        verifyNoInteractions(withdrawalService);
+    }
+
+    @Test
     void missingStatusIsIgnoredInsteadOfTreatedAsSuccess() {
         String body = "{\"fundingId\":\"" + UUID.randomUUID() + "\"}";
 

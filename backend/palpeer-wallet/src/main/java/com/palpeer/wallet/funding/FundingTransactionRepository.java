@@ -44,6 +44,35 @@ public interface FundingTransactionRepository
     List<FundingTransaction> findByProviderNameAndStatusOrderByCreatedAtAsc(
             String providerName, MoneyMovementStatus status);
 
+    List<FundingTransaction> findByProviderNameAndStatusOrderByCreatedAtDesc(
+            String providerName, MoneyMovementStatus status);
+
+    @Query("""
+            select f from FundingTransaction f
+            where f.providerName = :providerName
+              and f.status = :status
+              and f.createdAt >= :since
+            order by f.createdAt desc
+            """)
+    List<FundingTransaction> findRecentByProviderAndStatus(
+            @Param("providerName") String providerName,
+            @Param("status") MoneyMovementStatus status,
+            @Param("since") Instant since);
+
+    @Query("""
+            select f from FundingTransaction f
+            where f.providerName = :providerName
+              and f.collectionAccountNumber = :accountNumber
+              and f.status = :status
+              and f.amount = :amount
+            order by f.createdAt desc
+            """)
+    List<FundingTransaction> findByCollectionAccountAndStatus(
+            @Param("providerName") String providerName,
+            @Param("accountNumber") String accountNumber,
+            @Param("status") MoneyMovementStatus status,
+            @Param("amount") java.math.BigDecimal amount);
+
     @Query("""
             select f from FundingTransaction f
             where f.walletId = :walletId

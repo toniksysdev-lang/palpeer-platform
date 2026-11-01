@@ -158,27 +158,59 @@ public class PaymentWebhookController {
                 return ResponseEntity.ok(ApiResponse.ok("ignored", null));
             }
             BigDecimal amountNaira = parseKudaAmountNaira(amountRaw);
+            // Ledger credit is gated inside FundingService on DYNAMIC_COLLECTION_ACCOUNT_TSQ —
+            // Credit webhooks alone must not fund the Naira wallet (NIP can reverse afterwards).
             fundingService.completePendingVirtualAccountCredit(
                     KudaPaymentRail.NAME, accountNumber, amountNaira, txnRef, true, null);
             return ResponseEntity.ok(ApiResponse.ok("accepted", null));
         }
 
-        if (type.contains("debit") || type.contains("reversal")) {
-            boolean success = !type.contains("reversal") && !type.contains("fail");
+        // Collection payment returned to the sender — reverse/fail the matching NGN funding.
+        // Must run before the withdrawal debit path; Kuda uses transactionType=Reversal for this.
+        if (type.contains("reversal")) {
+            if (accountNumber == null || amountRaw == null) {
+                log.warn("KUDA reversal notification missing accountNumber/amount");
+                return ResponseEntity.ok(ApiResponse.ok("ignored", null));
+            }
+            BigDecimal amountNaira = parseKudaAmountNaira(amountRaw);
+            String reason = firstText(root, "narrations", "message", "reason");
+            try {
+                fundingService.reverseVirtualAccountCredit(
+                        KudaPaymentRail.NAME, accountNumber, amountNaira, txnRef, reason);
+            } catch (Exception fundingMiss) {
+                log.warn(
+                        "KUDA reversal had no matching funding (account={} amount={}): {}",
+                        accountNumber,
+                        amountNaira,
+                        fundingMiss.getMessage());
+                // Fall through: may be an outbound transfer reversal.
+                String reference = clientRef != null ? clientRef : txnRef;
+                if (reference != null) {
+                    try {
+                        withdrawalService.completeFromProvider(
+                                KudaPaymentRail.NAME, reference, false, reason);
+                    } catch (Exception withdrawalMiss) {
+                        log.warn(
+                                "KUDA reversal matched neither funding nor withdrawal. ref={}",
+                                reference);
+                    }
+                }
+            }
+            return ResponseEntity.ok(ApiResponse.ok("accepted", null));
+        }
+
+        if (type.contains("debit")) {
             String reference = clientRef != null ? clientRef : txnRef;
             if (reference == null) {
                 log.warn("KUDA debit notification missing clientRequestRef/transactionReference");
                 return ResponseEntity.ok(ApiResponse.ok("ignored", null));
             }
-            String reason = firstText(root, "narrations", "message", "reason");
             try {
-                withdrawalService.completeFromProvider(
-                        KudaPaymentRail.NAME, reference, success, success ? null : reason);
+                withdrawalService.completeFromProvider(KudaPaymentRail.NAME, reference, true, null);
             } catch (Exception ex) {
                 // Idempotency key is often the withdrawal trackingReference; also try txnRef.
                 if (clientRef != null && txnRef != null && !clientRef.equals(txnRef)) {
-                    withdrawalService.completeFromProvider(
-                            KudaPaymentRail.NAME, txnRef, success, success ? null : reason);
+                    withdrawalService.completeFromProvider(KudaPaymentRail.NAME, txnRef, true, null);
                 } else {
                     throw ex;
                 }
