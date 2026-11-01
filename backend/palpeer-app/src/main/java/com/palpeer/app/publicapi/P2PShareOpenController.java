@@ -23,7 +23,7 @@ public class P2PShareOpenController {
     private static final String ANDROID_PACKAGE = "com.palpeer.app";
     private static final String PLAY_STORE =
             "https://play.google.com/store/apps/details?id=" + ANDROID_PACKAGE;
-    private static final String APP_STORE = "https://apps.apple.com/app/id6753612161";
+    private static final String APP_STORE = "https://apps.apple.com/app/id6826088742";
     private static final Pattern UUID_PATTERN = Pattern.compile(
             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 

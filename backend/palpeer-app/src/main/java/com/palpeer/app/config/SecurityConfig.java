@@ -97,9 +97,14 @@ public class SecurityConfig {
                                 "/api/v1/auth/password-reset/confirm",
                                 "/secure/account-lock/**"
                         ).permitAll()
-                        .requestMatchers(HttpMethod.GET,
+                        // Share bridge + App Link association files (GET and HEAD for verifiers).
+                        .requestMatchers(
                                 "/open",
                                 "/p2p/share/*",
+                                "/.well-known/assetlinks.json",
+                                "/.well-known/apple-app-site-association"
+                        ).permitAll()
+                        .requestMatchers(HttpMethod.GET,
                                 "/api/v1/auth/account-suspend",
                                 "/secure/account-lock/**",
                                 "/api/v1/public/instant-rates",

@@ -68,10 +68,23 @@ describe('buildConfig', () => {
       iosClientId: null,
     });
     expect(buildConfig({}).share).toEqual({
-      baseUrl: null,
+      baseUrl: 'https://palpeer-api.onrender.com',
       androidStoreUrl: 'https://play.google.com/store/apps/details?id=com.palpeer.app',
       iosStoreUrl: null,
     });
+    expect(
+      buildConfig({
+        EXPO_PUBLIC_API_BASE_URL: 'https://staging.example.com/api/v1',
+        EXPO_PUBLIC_ENV: 'staging',
+      }).share.baseUrl,
+    ).toBe('https://staging.example.com');
+    expect(
+      buildConfig({
+        EXPO_PUBLIC_API_BASE_URL: 'https://staging.example.com/api/v1',
+        EXPO_PUBLIC_ENV: 'staging',
+        EXPO_PUBLIC_SHARE_BASE_URL: 'https://app.palpeer.com',
+      }).share.baseUrl,
+    ).toBe('https://app.palpeer.com');
     const config = buildConfig({
       EXPO_PUBLIC_SUPPORT_EMAIL: 'not-an-email',
       EXPO_PUBLIC_SUPPORT_PHONE: 'call us',

@@ -87,7 +87,8 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
     bundleIdentifier: IOS_BUNDLE_ID,
     supportsTablet: false,
     ...(iosGoogleServices ? { googleServicesFile: iosGoogleServices } : {}),
-    associatedDomains: ['applinks:app.palpeer.com'],
+    // API host serves the working share bridge today; keep app.palpeer.com for when DNS is live.
+    associatedDomains: ['applinks:palpeer-api.onrender.com', 'applinks:app.palpeer.com'],
     infoPlist: {
       NSCameraUsageDescription:
         'PALPEER uses the camera to capture your identity document and selfie for verification.',
@@ -127,13 +128,19 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
       'android.permission.SYSTEM_ALERT_WINDOW',
     ],
     predictiveBackGestureEnabled: false,
-    // HTTPS share links open the app when installed; otherwise the browser shows store CTAs.
+    // HTTPS share links: API bridge host (live) + branded host (when DNS is ready).
+    // Chat apps often still open HTTPS in-browser; the API HTML page then hands off to palpeer://.
     intentFilters: [
       {
         action: 'VIEW',
         autoVerify: true,
         category: ['BROWSABLE', 'DEFAULT'],
         data: [
+          {
+            scheme: 'https',
+            host: 'palpeer-api.onrender.com',
+            pathPrefix: '/p2p/share',
+          },
           {
             scheme: 'https',
             host: 'app.palpeer.com',

@@ -16,16 +16,16 @@ export function sellOrderAcceptPath(requestId: string): string {
 }
 
 /**
- * HTTPS share link for messages. Uses the API host bridge (`GET /p2p/share/{id}`) so the
- * installed app opens via {@code palpeer://}, not the marketing website.
+ * HTTPS share link for chat / SMS messages.
+ *
+ * Points at {@link appConfig.share.baseUrl} (API origin by default), which serves
+ * an HTML bridge that redirects to {@code palpeer://p2p/share/{id}} so the
+ * installed app opens. Override with {@code EXPO_PUBLIC_SHARE_BASE_URL} when a
+ * branded App Links host is live and proxied to the same bridge.
  */
 export function sellOrderShareUrl(requestId: string): string {
-  const apiRoot = appConfig.apiBaseUrl.replace(/\/api\/v1\/?$/, '').replace(/\/+$/, '');
-  if (/^https?:\/\//i.test(apiRoot)) {
-    // API host serves an HTML bridge that opens palpeer:// — not the marketing website.
-    return `${apiRoot}${sellOrderSharePath(requestId)}`;
-  }
-  return `palpeer:/${sellOrderSharePath(requestId)}`;
+  const base = appConfig.share.baseUrl.replace(/\/+$/, '');
+  return `${base}${sellOrderSharePath(requestId)}`;
 }
 
 export function sellOrderShareMessage(

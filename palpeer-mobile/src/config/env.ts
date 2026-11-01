@@ -10,9 +10,14 @@ export type SupportConfig = {
   termsUrl: string | null;
 };
 
-/** HTTPS base for shareable deep links (App Links / Universal Links). Null → use palpeer://. */
+/** HTTPS base for shareable deep links (browser bridge → opens the app). */
 export type ShareConfig = {
-  baseUrl: string | null;
+  /**
+   * Public HTTPS origin that serves {@code /p2p/share/{id}}.
+   * Defaults to the API host origin (working bridge); override with
+   * {@code EXPO_PUBLIC_SHARE_BASE_URL} when a branded domain is live.
+   */
+  baseUrl: string;
   androidStoreUrl: string;
   iosStoreUrl: string | null;
 };
@@ -102,6 +107,13 @@ const DEFAULT_SUPPORT_CHAT_API = 'https://app.palpeer.com.ng/api';
 /** Same-origin Metro proxy path used on Expo web to avoid CORS. */
 export const SUPPORT_CHAT_WEB_PROXY_PATH = '/support-chat-api';
 
+/**
+ * Live API origin that serves the P2P share HTML bridge
+ * ({@code GET /p2p/share/{id}} → {@code palpeer://…}). Used when no branded share
+ * domain is configured. Prefer deriving from {@code EXPO_PUBLIC_API_BASE_URL}.
+ */
+export const DEFAULT_SHARE_BASE_URL = 'https://palpeer-api.onrender.com';
+
 const DEFAULT_ANDROID_STORE =
   'https://play.google.com/store/apps/details?id=com.palpeer.app';
 
@@ -110,8 +122,31 @@ function parseOptionalId(value: string | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+/** Origin of the API base URL (e.g. https://host/api/v1 → https://host). */
+export function originFromApiBaseUrl(apiBaseUrl: string): string | null {
+  const trimmed = apiBaseUrl.trim();
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    if (!url.hostname) return null;
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return null;
+  }
+}
+
+function resolveShareBaseUrl(raw: RawEnv, apiBaseUrl: string): string {
+  const explicit = parseHttpsUrl(raw.EXPO_PUBLIC_SHARE_BASE_URL);
+  if (explicit) return trimTrailingSlash(explicit);
+  const fromApi = originFromApiBaseUrl(apiBaseUrl);
+  if (fromApi && /^https:/i.test(fromApi)) return fromApi;
+  // Dev http API (emulator): still point shares at the live HTTPS bridge.
+  return DEFAULT_SHARE_BASE_URL;
+}
+
 export function buildConfig(raw: RawEnv): AppConfig {
   const env = parseEnvironment(raw.EXPO_PUBLIC_ENV);
+  const apiBaseUrl = parseEndpoint(raw.EXPO_PUBLIC_API_BASE_URL, env, ['https://']);
   const supportChatConfigured = parseEndpoint(
     raw.EXPO_PUBLIC_SUPPORT_CHAT_API_BASE_URL,
     env,
@@ -123,7 +158,7 @@ export function buildConfig(raw: RawEnv): AppConfig {
     Platform.OS === 'web' ? SUPPORT_CHAT_WEB_PROXY_PATH : supportChatDirect;
   return {
     env,
-    apiBaseUrl: parseEndpoint(raw.EXPO_PUBLIC_API_BASE_URL, env, ['https://']),
+    apiBaseUrl,
     wsUrl: parseEndpoint(raw.EXPO_PUBLIC_WS_URL, env, ['https://', 'wss://']),
     supportChatApiBaseUrl,
     // Staging/production often hit a cold Render free instance; keep headroom beyond 15s.
@@ -141,7 +176,7 @@ export function buildConfig(raw: RawEnv): AppConfig {
       iosClientId: parseOptionalId(raw.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID),
     },
     share: {
-      baseUrl: parseHttpsUrl(raw.EXPO_PUBLIC_SHARE_BASE_URL),
+      baseUrl: resolveShareBaseUrl(raw, apiBaseUrl),
       androidStoreUrl: parseHttpsUrl(raw.EXPO_PUBLIC_ANDROID_STORE_URL) ?? DEFAULT_ANDROID_STORE,
       iosStoreUrl: parseHttpsUrl(raw.EXPO_PUBLIC_IOS_STORE_URL),
     },
