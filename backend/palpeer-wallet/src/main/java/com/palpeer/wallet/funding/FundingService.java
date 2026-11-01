@@ -406,7 +406,12 @@ public class FundingService {
             account = blankToNull(tx.getCollectionAccountNumber());
         }
         BigDecimal amount = amountNaira != null ? amountNaira : tx.getAmount();
-        return rail.confirmCollectionPayment(trackingRef, account, amount).isPresent();
+        // Live dynamic collections: TSQ must show funds still held (Credit webhook alone is not enough).
+        if (KudaPaymentRail.isDynamicCollectionRequestRef(trackingRef)) {
+            return rail.confirmCollectionPayment(trackingRef, account, amount).isPresent();
+        }
+        // Static VA fallback has no collection TSQ — settle on Credit, unwind on Reversal.
+        return account != null;
     }
 
     private static void applyCollectionAccount(
