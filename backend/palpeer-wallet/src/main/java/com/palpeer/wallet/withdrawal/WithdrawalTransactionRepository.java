@@ -42,6 +42,9 @@ public interface WithdrawalTransactionRepository
 
     Optional<WithdrawalTransaction> findByProviderNameAndProviderReference(String providerName, String providerReference);
 
+    List<WithdrawalTransaction> findByProviderNameAndStatusOrderByCreatedAtAsc(
+            String providerName, MoneyMovementStatus status);
+
     /**
      * Successful withdrawal totals keyed by provider + currency.
      * Rows: [providerName (nullable), currencyCode, sum(amount)].

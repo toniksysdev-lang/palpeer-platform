@@ -48,6 +48,8 @@ class WithdrawalServiceTest {
     @Mock private com.palpeer.wallet.service.PoolLiquidityGuard poolLiquidityGuard;
     @Mock private com.palpeer.wallet.service.PoolFundThresholdService poolFundThresholdService;
     @Mock private com.palpeer.wallet.service.WithdrawalUnverifiedLimitService withdrawalUnverifiedLimitService;
+    @Mock private org.springframework.beans.factory.ObjectProvider<com.palpeer.wallet.provider.kuda.KudaPaymentRail>
+            kudaPaymentRail;
 
     @InjectMocks private WithdrawalService withdrawalService;
 

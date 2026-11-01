@@ -136,16 +136,39 @@ public class KudaClient {
     /**
      * Confirms a prior {@code SINGLE_FUND_TRANSFER} using its original {@code requestRef}.
      * Use after timeouts / pending responses before treating the payout as failed.
+     *
+     * <p>Tries {@code isThirdPartyBankTransfer=false} first (Kuda→Kuda), then {@code true} (NIP to
+     * other banks). Live payouts to customer banks need the third-party flag.
      */
     public JsonNode queryTransferStatus(String transferRequestRef) {
-        return invoke(
-                "TRANSACTION_STATUS_QUERY",
-                Map.of(
-                        "isThirdPartyBankTransfer",
-                        false,
-                        "transactionRequestReference",
-                        transferRequestRef.trim()),
-                shortRequestRef());
+        String ref = transferRequestRef.trim();
+        BusinessException last = null;
+        for (boolean thirdParty : new boolean[] {false, true}) {
+            try {
+                return invoke(
+                        "TRANSACTION_STATUS_QUERY",
+                        Map.of(
+                                "isThirdPartyBankTransfer",
+                                thirdParty,
+                                "transactionRequestReference",
+                                ref),
+                        shortRequestRef());
+            } catch (BusinessException ex) {
+                last = ex;
+                String msg = ex.getMessage() == null ? "" : ex.getMessage().toLowerCase(Locale.ROOT);
+                // Not found / wrong rail — try the other flag before failing.
+                if (msg.contains("k25")
+                        || msg.contains("not found")
+                        || msg.contains("does not exist")
+                        || msg.contains("no transaction")) {
+                    continue;
+                }
+                throw ex;
+            }
+        }
+        throw last != null
+                ? last
+                : new BusinessException("KUDA_ERROR", "Kuda transfer TSQ failed", HttpStatus.BAD_GATEWAY);
     }
 
     /**

@@ -17,6 +17,7 @@ import com.palpeer.wallet.domain.Wallet;
 import com.palpeer.wallet.funding.MoneyMovementStatus;
 import com.palpeer.wallet.provider.PaymentRailProvider;
 import com.palpeer.wallet.provider.PaymentRailRouter;
+import com.palpeer.wallet.provider.kuda.KudaPaymentRail;
 import com.palpeer.wallet.repository.WalletRepository;
 import com.palpeer.wallet.service.PoolFundThresholdService;
 import com.palpeer.wallet.service.PoolLiquidityGuard;
@@ -25,9 +26,14 @@ import com.palpeer.wallet.withdrawal.dto.CreateWithdrawalRequest;
 import com.palpeer.wallet.withdrawal.dto.WithdrawalTransactionResponse;
 import java.math.BigDecimal;
 import java.util.EnumSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -47,6 +53,7 @@ import org.springframework.transaction.annotation.Transactional;
  * - fail: RELEASE hold back to available
  * - reverse SUCCESS: CREDIT back
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class WithdrawalService {
@@ -67,6 +74,7 @@ public class WithdrawalService {
     private final PoolLiquidityGuard poolLiquidityGuard;
     private final PoolFundThresholdService poolFundThresholdService;
     private final WithdrawalUnverifiedLimitService withdrawalUnverifiedLimitService;
+    private final ObjectProvider<KudaPaymentRail> kudaPaymentRail;
 
     @Transactional
     public WithdrawalTransactionResponse initiate(UUID userId, String idempotencyKey, CreateWithdrawalRequest request) {
@@ -108,10 +116,42 @@ public class WithdrawalService {
         return response;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public WithdrawalTransactionResponse get(UUID userId, UUID withdrawalId) {
-        // Never auto-settle on poll. CAD/NGN payouts stay PENDING until webhook or operator process.
-        return toResponse(requireOwned(userId, withdrawalId));
+        // Live Kuda Debit webhooks are often missing/mismatched; reconcile PENDING NGN payouts via
+        // TRANSACTION_STATUS_QUERY so the app moves to SUCCESS after money has left the business account.
+        WithdrawalTransaction tx = requireOwned(userId, withdrawalId);
+        return reconcileProviderPaymentIfNeeded(tx);
+    }
+
+    /**
+     * Background / poll fallback: settle PENDING Kuda withdrawals that TSQ already reports as paid.
+     */
+    @Transactional
+    public int reconcilePendingKudaWithdrawals(int limit) {
+        int max = Math.max(1, Math.min(limit, 50));
+        List<WithdrawalTransaction> pending = withdrawalTransactionRepository
+                .findByProviderNameAndStatusOrderByCreatedAtAsc(
+                        KudaPaymentRail.NAME, MoneyMovementStatus.PENDING);
+        int settled = 0;
+        for (WithdrawalTransaction listed : pending) {
+            if (settled >= max) {
+                break;
+            }
+            WithdrawalTransaction tx = withdrawalTransactionRepository.findById(listed.getId()).orElse(null);
+            if (tx == null) {
+                continue;
+            }
+            try {
+                WithdrawalTransactionResponse after = reconcileProviderPaymentIfNeeded(tx);
+                if (after.status() == MoneyMovementStatus.SUCCESS) {
+                    settled++;
+                }
+            } catch (RuntimeException ex) {
+                log.warn("Kuda withdrawal reconcile skipped for {}: {}", listed.getId(), ex.getMessage());
+            }
+        }
+        return settled;
     }
 
     /** Manual operator completion. Callers must be authorised operators, never the withdrawal owner. */
@@ -126,14 +166,97 @@ public class WithdrawalService {
     @Transactional
     public WithdrawalTransactionResponse completeFromProvider(
             String providerName, String providerReference, boolean success, String reason) {
-        WithdrawalTransaction found = withdrawalTransactionRepository
-                .findByProviderNameAndProviderReference(providerName, providerReference)
-                .orElseThrow(() -> new ResourceNotFoundException("Withdrawal not found for provider reference"));
+        return completeFromProvider(providerName, List.of(providerReference), success, reason);
+    }
+
+    /**
+     * Provider webhook completion — tries each reference until a withdrawal row matches (Kuda may send
+     * {@code clientRequestRef}, {@code transactionReference}, or narration-embedded tracking refs).
+     */
+    @Transactional
+    public WithdrawalTransactionResponse completeFromProvider(
+            String providerName, List<String> providerReferences, boolean success, String reason) {
+        LinkedHashSet<String> refs = new LinkedHashSet<>();
+        if (providerReferences != null) {
+            for (String raw : providerReferences) {
+                if (raw != null && !raw.isBlank()) {
+                    refs.add(raw.trim());
+                }
+            }
+        }
+        if (refs.isEmpty()) {
+            throw new ResourceNotFoundException("Withdrawal not found for provider reference");
+        }
+        WithdrawalTransaction found = null;
+        for (String ref : refs) {
+            found = withdrawalTransactionRepository
+                    .findByProviderNameAndProviderReference(providerName, ref)
+                    .orElse(null);
+            if (found != null) {
+                break;
+            }
+        }
+        if (found == null) {
+            throw new ResourceNotFoundException(
+                    "Withdrawal not found for provider reference " + String.join(",", refs));
+        }
         WithdrawalTransaction locked = requireForUpdate(found.getId());
         if (success) {
             return settleSuccess(locked);
         }
         return failInternal(locked, reason);
+    }
+
+    private WithdrawalTransactionResponse reconcileProviderPaymentIfNeeded(WithdrawalTransaction tx) {
+        if (tx.getStatus() != MoneyMovementStatus.PENDING && tx.getStatus() != MoneyMovementStatus.INITIATED) {
+            return toResponse(tx);
+        }
+        if (tx.getProviderName() == null
+                || !KudaPaymentRail.NAME.equalsIgnoreCase(tx.getProviderName().trim())) {
+            return toResponse(tx);
+        }
+        LinkedHashSet<String> candidateRefs = new LinkedHashSet<>();
+        if (tx.getProviderReference() != null && !tx.getProviderReference().isBlank()) {
+            candidateRefs.add(tx.getProviderReference().trim());
+        }
+        // Older rows stored Kuda's transactionReference; TSQ needs our original requestRef.
+        candidateRefs.add(KudaPaymentRail.shortTrackingRef(tx.getId(), tx.getIdempotencyKey()));
+        candidateRefs.removeIf(
+                r -> r == null || r.isBlank() || r.toLowerCase(Locale.ROOT).startsWith("offline-"));
+        if (candidateRefs.isEmpty()) {
+            return toResponse(tx);
+        }
+        KudaPaymentRail rail = kudaPaymentRail.getIfAvailable();
+        if (rail == null || !rail.isEnabled()) {
+            return toResponse(tx);
+        }
+        KudaPaymentRail.ConfirmedTransferPayment confirmed = null;
+        for (String candidate : candidateRefs) {
+            var hit = rail.confirmTransferPayment(candidate);
+            if (hit.isPresent()) {
+                confirmed = hit.get();
+                break;
+            }
+        }
+        if (confirmed == null) {
+            return toResponse(tx);
+        }
+        log.info(
+                "Kuda withdrawal reconciled via TSQ. withdrawalId={} ref={}",
+                tx.getId(),
+                confirmed.providerReference());
+        WithdrawalTransaction locked = requireForUpdate(tx.getId());
+        // Normalize providerReference to the requestRef that TSQ confirmed against.
+        if (locked.getProviderReference() == null
+                || locked.getProviderReference().isBlank()
+                || !candidateRefs.contains(locked.getProviderReference().trim())) {
+            locked.setProviderReference(
+                    confirmed.providerReference() != null && !confirmed.providerReference().isBlank()
+                            ? confirmed.providerReference().trim()
+                            : candidateRefs.iterator().next());
+            withdrawalTransactionRepository.save(locked);
+        }
+        return settleSuccess(locked);
     }
 
     private WithdrawalTransactionResponse settleSuccess(WithdrawalTransaction tx) {

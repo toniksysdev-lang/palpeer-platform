@@ -144,7 +144,8 @@ class KudaPaymentRailTest {
         PaymentRailProvider.WithdrawalInitiation result =
                 rail.initiateWithdrawal(withdrawalRequest(new BigDecimal("500.00"), "999129:0123456789"));
 
-        assertThat(result.providerReference()).isEqualTo("kuda-wd-1");
+        // Persist the transfer requestRef (from idempotency), not Kuda's transactionReference.
+        assertThat(result.providerReference()).isEqualTo("IDEMWD1");
         assertThat(result.pendingExternalSettlement()).isTrue();
 
         @SuppressWarnings("unchecked")
@@ -176,7 +177,7 @@ class KudaPaymentRailTest {
         PaymentRailProvider.WithdrawalInitiation result =
                 rail.initiateWithdrawal(withdrawalRequest(new BigDecimal("500.00"), "999129:0123456789"));
 
-        assertThat(result.providerReference()).isEqualTo("kuda-wd-auto");
+        assertThat(result.providerReference()).isEqualTo("IDEMWD1");
         assertThat(result.pendingExternalSettlement()).isFalse();
     }
 

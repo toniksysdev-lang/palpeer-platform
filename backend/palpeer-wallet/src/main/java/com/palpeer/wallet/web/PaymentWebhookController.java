@@ -184,42 +184,72 @@ public class PaymentWebhookController {
                         amountNaira,
                         fundingMiss.getMessage());
                 // Fall through: may be an outbound transfer reversal.
-                String reference = clientRef != null ? clientRef : txnRef;
-                if (reference != null) {
-                    try {
-                        withdrawalService.completeFromProvider(
-                                KudaPaymentRail.NAME, reference, false, reason);
-                    } catch (Exception withdrawalMiss) {
-                        log.warn(
-                                "KUDA reversal matched neither funding nor withdrawal. ref={}",
-                                reference);
-                    }
+                try {
+                    withdrawalService.completeFromProvider(
+                            KudaPaymentRail.NAME,
+                            kudaWithdrawalLookupRefs(root, clientRef, txnRef),
+                            false,
+                            reason);
+                } catch (Exception withdrawalMiss) {
+                    log.warn(
+                            "KUDA reversal matched neither funding nor withdrawal. refs={}",
+                            kudaWithdrawalLookupRefs(root, clientRef, txnRef));
                 }
             }
             return ResponseEntity.ok(ApiResponse.ok("accepted", null));
         }
 
         if (type.contains("debit")) {
-            String reference = clientRef != null ? clientRef : txnRef;
-            if (reference == null) {
+            java.util.List<String> refs = kudaWithdrawalLookupRefs(root, clientRef, txnRef);
+            if (refs.isEmpty()) {
                 log.warn("KUDA debit notification missing clientRequestRef/transactionReference");
                 return ResponseEntity.ok(ApiResponse.ok("ignored", null));
             }
             try {
-                withdrawalService.completeFromProvider(KudaPaymentRail.NAME, reference, true, null);
+                withdrawalService.completeFromProvider(KudaPaymentRail.NAME, refs, true, null);
             } catch (Exception ex) {
-                // Idempotency key is often the withdrawal trackingReference; also try txnRef.
-                if (clientRef != null && txnRef != null && !clientRef.equals(txnRef)) {
-                    withdrawalService.completeFromProvider(KudaPaymentRail.NAME, txnRef, true, null);
-                } else {
-                    throw ex;
-                }
+                log.warn(
+                        "KUDA debit notification matched no withdrawal. refs={} cause={}",
+                        refs,
+                        ex.getMessage());
+                return ResponseEntity.ok(ApiResponse.ok("ignored", null));
             }
             return ResponseEntity.ok(ApiResponse.ok("accepted", null));
         }
 
         log.warn("KUDA Transaction.Notification ignored — transactionType={}", transactionType);
         return ResponseEntity.ok(ApiResponse.ok("ignored", null));
+    }
+
+    /**
+     * Candidate keys for matching a Live Debit/Reversal to our withdrawal row. We persist the
+     * transfer {@code requestRef} as {@code providerReference}; Kuda may echo it as
+     * {@code clientRequestRef}, embed it in narrations ({@code PALPEER WD <ref>}), or only send its
+     * own {@code transactionReference}.
+     */
+    private static java.util.List<String> kudaWithdrawalLookupRefs(
+            JsonNode root, String clientRef, String txnRef) {
+        java.util.LinkedHashSet<String> refs = new java.util.LinkedHashSet<>();
+        if (notBlank(clientRef)) {
+            refs.add(clientRef.trim());
+        }
+        if (notBlank(txnRef)) {
+            refs.add(txnRef.trim());
+        }
+        String instrument = firstText(root, "instrumentNumber", "InstrumentNumber");
+        if (notBlank(instrument)) {
+            refs.add(instrument.trim());
+        }
+        String narration = firstText(root, "narrations", "Narrations", "narration", "message");
+        if (notBlank(narration)) {
+            java.util.regex.Matcher m =
+                    java.util.regex.Pattern.compile("(?i)PALPEER\\s+WD\\s+([A-Fa-f0-9]{8,20})")
+                            .matcher(narration);
+            if (m.find()) {
+                refs.add(m.group(1).toUpperCase(Locale.ROOT));
+            }
+        }
+        return new java.util.ArrayList<>(refs);
     }
 
     private static BigDecimal parseKudaAmountNaira(String amountRaw) {

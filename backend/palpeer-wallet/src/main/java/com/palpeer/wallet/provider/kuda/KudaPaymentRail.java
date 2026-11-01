@@ -127,6 +127,54 @@ public class KudaPaymentRail implements PaymentRailProvider {
 
     public record ConfirmedCollectionPayment(String providerReference, BigDecimal amountReceived) {}
 
+    /**
+     * Live reconciliation for outbound NGN payouts: {@code TRANSACTION_STATUS_QUERY} on the original
+     * transfer {@code requestRef}. Returns empty while pending / unknown.
+     */
+    public Optional<ConfirmedTransferPayment> confirmTransferPayment(String transferRequestRef) {
+        if (!isEnabled() || !notBlank(transferRequestRef)) {
+            return Optional.empty();
+        }
+        try {
+            JsonNode data = kudaClient.queryTransferStatus(transferRequestRef.trim());
+            String statusCode = firstText(
+                    data, "statusCode", "StatusCode", "responseCode", "ResponseCode", "transactionStatus");
+            if (statusCode == null) {
+                // Some envelopes nest status under data; unwrap already applied — also check message.
+                String message = firstText(data, "message", "Message", "statusMessage", "StatusMessage");
+                if (message != null && message.toLowerCase(Locale.ROOT).contains("success")) {
+                    statusCode = "00";
+                }
+            }
+            if (statusCode == null) {
+                return Optional.empty();
+            }
+            String code = statusCode.trim();
+            if (!(code.equals("00") || code.equals("0") || code.equalsIgnoreCase("success"))) {
+                return Optional.empty();
+            }
+            String txnRef = firstText(
+                    data,
+                    "transactionReference",
+                    "TransactionReference",
+                    "instrumentNumber",
+                    "InstrumentNumber",
+                    "reference");
+            if (!notBlank(txnRef)) {
+                txnRef = transferRequestRef.trim();
+            }
+            return Optional.of(new ConfirmedTransferPayment(txnRef));
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "Kuda transfer TSQ reconcile failed. ref={} cause={}",
+                    transferRequestRef,
+                    ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    public record ConfirmedTransferPayment(String providerReference) {}
+
     @Override
     @Transactional
     public FundingInitiation initiateFunding(FundingInitiationRequest request) {
@@ -420,7 +468,8 @@ public class KudaPaymentRail implements PaymentRailProvider {
                                     "Kuda transfer call failed but TSQ reports success. ref={} cause={}",
                                     shortRef,
                                     transferEx.getMessage());
-                            return new WithdrawalInitiation(shortRef, true);
+                            // Money already left — settle now; do not wait for a Debit webhook.
+                            return new WithdrawalInitiation(shortRef, false);
                         }
                     } catch (RuntimeException ignored) {
                         // Fall through to original failure / sandbox offline path.
@@ -428,19 +477,23 @@ public class KudaPaymentRail implements PaymentRailProvider {
                 }
                 throw transferEx;
             }
-            String reference = firstText(
+            // Always persist our requestRef (shortRef) — TRANSACTION_STATUS_QUERY and many Debit
+            // webhooks key off it. Kuda's transactionReference is logged but not used as the
+            // provider key (mismatches left Live payouts PENDING forever after money moved).
+            String kudaTxnRef = firstText(
                     response, "transactionReference", "TransactionReference", "requestRef", "RequestRef");
-            if (reference == null) {
-                reference = shortRef;
-            }
+            log.info(
+                    "Kuda NGN withdrawal accepted. requestRef={} kudaTxnRef={}",
+                    shortRef,
+                    kudaTxnRef);
 
             // Sandbox shortcut: settle immediately after Kuda accepts the transfer.
             boolean settleNow = kudaClient.isSandboxMode() && properties.isAutoSandboxSettle();
             log.info(
                     "Kuda NGN withdrawal submitted. ref={} pendingExternal={}",
-                    reference,
+                    shortRef,
                     !settleNow);
-            return new WithdrawalInitiation(reference, !settleNow);
+            return new WithdrawalInitiation(shortRef, !settleNow);
         } catch (BusinessException ex) {
             if (kudaClient.isSandboxMode() && properties.isOfflineSandboxSettle()) {
                 log.warn(
@@ -473,7 +526,7 @@ public class KudaPaymentRail implements PaymentRailProvider {
     }
 
     /** Kuda rejects long UUID-style tracking refs on money-movement calls. */
-    static String shortTrackingRef(UUID withdrawalId, String idempotencyKey) {
+    public static String shortTrackingRef(UUID withdrawalId, String idempotencyKey) {
         String raw = notBlank(idempotencyKey)
                 ? idempotencyKey
                 : (withdrawalId == null ? UUID.randomUUID().toString() : withdrawalId.toString());
