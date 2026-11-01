@@ -83,12 +83,25 @@ export function cropRectForOverlay(
 /**
  * Crops a full camera capture down to the on-screen guide frame.
  * Falls back to the original image if layout is unknown or crop fails.
+ *
+ * Face overlays are a capture guide only — ComplyCube live-photo QA rejects tight oval
+ * crops ({@code face_cropped} / {@code face_not_centred}), so selfies keep the full frame.
  */
 export async function cropCapturedToOverlay(
   source: CapturedImage,
   view: ViewSize | null,
   overlay: OverlayKind,
 ): Promise<CapturedImage> {
+  if (overlay === 'face') {
+    if (source.width > 0 && source.height > 0) return source;
+    try {
+      const measured = await resolveImageDimensions(source);
+      return { ...source, width: measured.width, height: measured.height };
+    } catch {
+      return source;
+    }
+  }
+
   if (!view || view.width <= 0 || view.height <= 0) return source;
 
   let width = source.width;

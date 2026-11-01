@@ -1,4 +1,4 @@
-import { cropRectForOverlay, overlayFrameInView } from '../cropToOverlay';
+import { cropCapturedToOverlay, cropRectForOverlay, overlayFrameInView } from '../cropToOverlay';
 
 describe('cropToOverlay', () => {
   it('centers the face guide at 64% width with aspect 0.78', () => {
@@ -38,5 +38,11 @@ describe('cropToOverlay', () => {
     expect(crop.originX + crop.width).toBeLessThanOrEqual(size.width);
     expect(crop.originY + crop.height).toBeLessThanOrEqual(size.height);
     expect(crop.width / crop.height).toBeCloseTo(1.58, 1);
+  });
+
+  it('keeps the full selfie frame for ComplyCube (oval is guide-only)', async () => {
+    const source = { uri: 'file:///selfie.jpg', width: 1080, height: 1920 };
+    const cropped = await cropCapturedToOverlay(source, { width: 390, height: 844 }, 'face');
+    expect(cropped).toEqual(source);
   });
 });

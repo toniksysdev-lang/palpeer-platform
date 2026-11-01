@@ -19,11 +19,16 @@ import { useToast } from '@/providers/ToastProvider';
 import { toAppError } from '@/services/api/errors';
 import { useGetKycProgressQuery, useStartKycVerificationMutation } from '@/services/api/kycApi';
 
-import { isVerificationUnavailable, kycErrorMessage } from '../errors';
+import { isLivePhotoRejected, isVerificationUnavailable, kycErrorMessage } from '../errors';
 import { canUpload } from '../kycState';
 import { kycSubmitSchema, toStartVerificationRequest, type KycSubmitForm } from '../schemas';
 
-type Alert = { tone: 'danger' | 'info'; message: string; addDocument?: boolean };
+type Alert = {
+  tone: 'danger' | 'info';
+  message: string;
+  addDocument?: boolean;
+  retakeSelfie?: boolean;
+};
 
 const FIELDS = ['firstName', 'lastName', 'dateOfBirth', 'issuingCountry'] as const;
 
@@ -76,6 +81,8 @@ export function KycSubmitScreen() {
       setAlert({ tone: 'info', message: kycErrorMessage(error) });
     } else if (error.code === 'KYC_DOCUMENT_REQUIRED') {
       setAlert({ tone: 'danger', message: kycErrorMessage(error), addDocument: true });
+    } else if (isLivePhotoRejected(error) || error.code === 'KYC_SELFIE_REQUIRED') {
+      setAlert({ tone: 'danger', message: kycErrorMessage(error), retakeSelfie: true });
     } else if (error.code === 'KYC_UPLOAD_NOT_ALLOWED') {
       setAlert({ tone: 'info', message: kycErrorMessage(error) });
       void progress.refetch();
@@ -172,6 +179,9 @@ export function KycSubmitScreen() {
               label="Add identity document"
               onPress={() => router.push('/kyc/document-type')}
             />
+          ) : null}
+          {alert.retakeSelfie ? (
+            <TextLink label="Retake live photo" onPress={() => router.push('/kyc/selfie')} />
           ) : null}
         </View>
       ) : null}

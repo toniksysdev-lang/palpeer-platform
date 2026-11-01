@@ -174,10 +174,7 @@ public class ComplyCubeKycProvider implements KycVerificationProvider {
             return objectMapper.readTree(raw == null ? "{}" : raw);
         } catch (RestClientResponseException ex) {
             log.error("ComplyCube POST {} failed: status={} body={}", path, ex.getStatusCode(), ex.getResponseBodyAsString());
-            throw new BusinessException(
-                    "COMPLYCUBE_ERROR",
-                    "ComplyCube request failed: " + ex.getStatusCode().value(),
-                    HttpStatus.BAD_GATEWAY);
+            throw toComplyCubeException(path, ex);
         } catch (Exception ex) {
             throw new BusinessException("COMPLYCUBE_ERROR", "ComplyCube request failed", HttpStatus.BAD_GATEWAY);
         }
@@ -188,13 +185,47 @@ public class ComplyCubeKycProvider implements KycVerificationProvider {
             String raw = client().get().uri(path).retrieve().body(String.class);
             return objectMapper.readTree(raw == null ? "{}" : raw);
         } catch (RestClientResponseException ex) {
-            throw new BusinessException(
-                    "COMPLYCUBE_ERROR",
-                    "ComplyCube request failed: " + ex.getStatusCode().value(),
-                    HttpStatus.BAD_GATEWAY);
+            throw toComplyCubeException(path, ex);
         } catch (Exception ex) {
             throw new BusinessException("COMPLYCUBE_ERROR", "ComplyCube request failed", HttpStatus.BAD_GATEWAY);
         }
+    }
+
+    private BusinessException toComplyCubeException(String path, RestClientResponseException ex) {
+        String type = null;
+        String providerMessage = null;
+        try {
+            JsonNode body = objectMapper.readTree(ex.getResponseBodyAsString() == null ? "{}" : ex.getResponseBodyAsString());
+            type = textOrNull(body, "type");
+            providerMessage = textOrNull(body, "message");
+        } catch (Exception ignored) {
+            // fall through to generic message
+        }
+        String code = "COMPLYCUBE_ERROR";
+        String message = providerMessage != null && !providerMessage.isBlank()
+                ? providerMessage
+                : "ComplyCube request failed: " + ex.getStatusCode().value();
+        HttpStatus status = HttpStatus.BAD_GATEWAY;
+        if (path != null && path.contains("livePhotos") && type != null) {
+            code = "COMPLYCUBE_LIVE_PHOTO_REJECTED";
+            status = HttpStatus.UNPROCESSABLE_ENTITY;
+            message = switch (type.trim().toLowerCase()) {
+                case "face_not_centred", "face_not_centered" ->
+                        "Your face isn't centered. Retake the live photo with your face fully inside the oval, then start verification again.";
+                case "face_cropped" ->
+                        "Your face is cut off in the photo. Hold the phone farther back so your whole face and a bit of shoulders are visible, then retake.";
+                case "no_face_detected", "face_not_detected" ->
+                        "We couldn't detect a face. Retake the live photo in good light, looking straight at the camera.";
+                case "multiple_faces" ->
+                        "More than one face was detected. Retake with only your face in the frame.";
+                case "face_obstructed", "facial_obstruction" ->
+                        "Your face looks covered. Remove glasses, hats, or masks and retake the live photo.";
+                default -> providerMessage != null && !providerMessage.isBlank()
+                        ? "Live photo rejected: " + providerMessage + ". Please retake and try again."
+                        : "Live photo was rejected. Please retake a clearer selfie and try again.";
+            };
+        }
+        return new BusinessException(code, message, status);
     }
 
     private RestClient client() {

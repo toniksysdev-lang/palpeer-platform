@@ -33,11 +33,12 @@ export function SelfieScreen() {
       subtitle="We'll match this live photo of your face with the photo on your identity document."
       tips={[
         'Use the front camera now — not a saved photo from your gallery.',
+        'Keep your whole face and a little of your shoulders visible — don’t crop too close.',
         'Find good, even lighting — face a window or lamp.',
         'Remove glasses, hats and anything covering your face.',
         'Look straight at the camera with a neutral expression.',
       ]}
-      cameraHint="Position your face inside the oval"
+      cameraHint="Center your face in the oval — leave a little space around your head"
       allowLibrary={false}
       onUploaded={() => void onUploaded()}
       onExit={() => (router.canGoBack() ? router.back() : router.replace('/kyc'))}
