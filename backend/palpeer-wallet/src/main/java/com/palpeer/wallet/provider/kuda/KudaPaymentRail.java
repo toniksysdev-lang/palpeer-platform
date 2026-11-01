@@ -175,6 +175,32 @@ public class KudaPaymentRail implements PaymentRailProvider {
 
     public record ConfirmedTransferPayment(String providerReference) {}
 
+    /**
+     * Poll {@link #confirmTransferPayment} a few times right after {@code SINGLE_FUND_TRANSFER}
+     * so Live withdrawals can settle in the create response when Kuda already reports success.
+     */
+    private boolean confirmTransferSoon(String transferRequestRef) {
+        final int attempts = 3;
+        for (int attempt = 0; attempt < attempts; attempt++) {
+            if (confirmTransferPayment(transferRequestRef).isPresent()) {
+                log.info(
+                        "Kuda transfer TSQ confirmed soon after accept. ref={} attempt={}",
+                        transferRequestRef,
+                        attempt + 1);
+                return true;
+            }
+            if (attempt + 1 < attempts) {
+                try {
+                    Thread.sleep(400L);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        return false;
+    }
+
     @Override
     @Transactional
     public FundingInitiation initiateFunding(FundingInitiationRequest request) {
@@ -487,12 +513,19 @@ public class KudaPaymentRail implements PaymentRailProvider {
                     shortRef,
                     kudaTxnRef);
 
-            // Sandbox shortcut: settle immediately after Kuda accepts the transfer.
+            // Prefer immediate settlement when Kuda already confirms the payout:
+            // - Sandbox auto-settle flag
+            // - Live (and sandbox without auto): brief TRANSACTION_STATUS_QUERY so the app does
+            //   not wait on Debit webhooks that are often delayed or missing.
             boolean settleNow = kudaClient.isSandboxMode() && properties.isAutoSandboxSettle();
+            if (!settleNow) {
+                settleNow = confirmTransferSoon(shortRef);
+            }
             log.info(
-                    "Kuda NGN withdrawal submitted. ref={} pendingExternal={}",
+                    "Kuda NGN withdrawal submitted. ref={} pendingExternal={} kudaTxnRef={}",
                     shortRef,
-                    !settleNow);
+                    !settleNow,
+                    kudaTxnRef);
             return new WithdrawalInitiation(shortRef, !settleNow);
         } catch (BusinessException ex) {
             if (kudaClient.isSandboxMode() && properties.isOfflineSandboxSettle()) {

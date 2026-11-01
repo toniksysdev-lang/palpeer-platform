@@ -7,7 +7,8 @@ export function isInProgress(status: string): boolean {
   return IN_PROGRESS.includes(status);
 }
 
-export const FUNDING_POLL_MS = 5_000;
+/** In-progress funding/withdrawal status poll interval (ms). */
+export const FUNDING_POLL_MS = 3_000;
 /** INITIATED without a provider only changes through an operator, so it's checked less often. */
 export const IDLE_POLL_MS = 30_000;
 

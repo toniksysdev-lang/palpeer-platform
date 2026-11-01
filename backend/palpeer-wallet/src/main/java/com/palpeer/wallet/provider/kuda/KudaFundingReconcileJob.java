@@ -22,8 +22,8 @@ public class KudaFundingReconcileJob {
     private final WithdrawalService withdrawalService;
 
     @Scheduled(
-            initialDelayString = "${palpeer.kuda.reconcile-initial-delay-ms:20000}",
-            fixedDelayString = "${palpeer.kuda.reconcile-delay-ms:30000}")
+            initialDelayString = "${palpeer.kuda.reconcile-initial-delay-ms:10000}",
+            fixedDelayString = "${palpeer.kuda.reconcile-delay-ms:10000}")
     public void sweep() {
         try {
             int settled = fundingService.reconcilePendingKudaFundings(20);

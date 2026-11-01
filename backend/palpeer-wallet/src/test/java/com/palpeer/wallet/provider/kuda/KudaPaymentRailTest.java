@@ -140,6 +140,10 @@ class KudaPaymentRailTest {
         ObjectNode transfer = objectMapper.createObjectNode();
         transfer.put("transactionReference", "kuda-wd-1");
         when(kudaClient.invoke(eq("SINGLE_FUND_TRANSFER"), anyMap(), any())).thenReturn(transfer);
+        // TSQ not yet successful — remain pending for webhook / later reconcile.
+        ObjectNode pendingStatus = objectMapper.createObjectNode();
+        pendingStatus.put("statusCode", "01");
+        when(kudaClient.queryTransferStatus(any())).thenReturn(pendingStatus);
 
         PaymentRailProvider.WithdrawalInitiation result =
                 rail.initiateWithdrawal(withdrawalRequest(new BigDecimal("500.00"), "999129:0123456789"));
@@ -156,6 +160,36 @@ class KudaPaymentRailTest {
         assertThat(bodyCaptor.getValue()).containsEntry("amount", "50000");
         assertThat(bodyCaptor.getValue()).containsEntry("senderName", "PALPEER");
         assertThat(bodyCaptor.getValue().get("trackingReference").toString()).doesNotContain("-");
+    }
+
+    @Test
+    void initiateWithdrawal_settlesImmediatelyWhenTsqConfirmsAfterAccept() {
+        properties.setAutoSandboxSettle(false);
+        properties.setClientAccountNumber("3002685563");
+        when(kudaClient.isConfigured()).thenReturn(true);
+        when(kudaClient.isSandboxMode()).thenReturn(false);
+        when(kudaClient.toKobo(new BigDecimal("500.00"))).thenReturn(50_000L);
+
+        ObjectNode enquiry = objectMapper.createObjectNode();
+        enquiry.put("SessionID", "sess-1");
+        enquiry.put("BeneficiaryName", "ADA LOVELACE");
+        when(kudaClient.invoke(eq("NAME_ENQUIRY"), anyMap())).thenReturn(enquiry);
+
+        ObjectNode transfer = objectMapper.createObjectNode();
+        transfer.put("transactionReference", "kuda-wd-live");
+        when(kudaClient.invoke(eq("SINGLE_FUND_TRANSFER"), anyMap(), any())).thenReturn(transfer);
+
+        ObjectNode tsq = objectMapper.createObjectNode();
+        tsq.put("statusCode", "00");
+        tsq.put("transactionReference", "kuda-wd-live");
+        when(kudaClient.queryTransferStatus(any())).thenReturn(tsq);
+
+        PaymentRailProvider.WithdrawalInitiation result =
+                rail.initiateWithdrawal(withdrawalRequest(new BigDecimal("500.00"), "999129:0123456789"));
+
+        assertThat(result.providerReference()).isEqualTo("IDEMWD1");
+        assertThat(result.pendingExternalSettlement()).isFalse();
+        verify(kudaClient).queryTransferStatus(any());
     }
 
     @Test

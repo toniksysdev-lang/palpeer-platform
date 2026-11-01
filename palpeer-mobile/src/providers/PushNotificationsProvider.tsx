@@ -68,13 +68,24 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
         refresh();
         const data = notification.request.content.data as Record<string, unknown> | undefined;
         const category = typeof data?.category === 'string' ? data.category.toUpperCase() : '';
+        const referenceType =
+          typeof data?.referenceType === 'string' ? data.referenceType.toUpperCase() : '';
+        const referenceId = typeof data?.referenceId === 'string' ? data.referenceId : '';
         if (
           category === 'TRANSACTION' ||
           category === 'FUNDING' ||
           category === 'EXCHANGE' ||
           category === 'WITHDRAWAL'
         ) {
-          dispatch(baseApi.util.invalidateTags([WALLET_LIST_TAG]));
+          const tags: { type: 'Wallet' | 'Transaction'; id: string }[] = [WALLET_LIST_TAG];
+          // Refresh the open funding/withdrawal status screen without waiting for the next poll.
+          if (referenceId && (referenceType === 'WITHDRAWAL' || category === 'WITHDRAWAL')) {
+            tags.push({ type: 'Transaction', id: `WITHDRAWAL-${referenceId}` });
+          }
+          if (referenceId && (referenceType === 'FUNDING' || category === 'FUNDING')) {
+            tags.push({ type: 'Transaction', id: `FUNDING-${referenceId}` });
+          }
+          dispatch(baseApi.util.invalidateTags(tags));
         }
         const { title, body } = notification.request.content;
         toastRef.current.show({
