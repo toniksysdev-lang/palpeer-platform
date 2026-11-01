@@ -91,6 +91,9 @@ springdoc:
 palpeer:
   api:
     version: v1
+  # Ops one-shot: comma-separated funding UUIDs to reverse on boot. Clear after use.
+  repair:
+    force-reverse-funding-ids: ${PALPEER_FORCE_REVERSE_FUNDING_IDS:}
   fcm:
     # Firebase Cloud Messaging via Admin SDK. When false (or credentials missing), pushes are logged only.
     enabled: ${PALPEER_FCM_ENABLED:false}
