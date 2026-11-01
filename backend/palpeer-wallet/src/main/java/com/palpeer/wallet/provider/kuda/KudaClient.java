@@ -225,21 +225,22 @@ public class KudaClient {
     }
 
     /**
-     * Main business account available balance in NGN (not kobo). Null when Kuda is disabled.
+     * Main business account available balance in NGN (major units). Null when Kuda is disabled.
+     *
+     * <p>{@code invoke} already unwraps the Kuda {@code data} object. Balance fields are in kobo
+     * per Kuda Business docs ({@code ADMIN_RETRIEVE_MAIN_ACCOUNT_BALANCE}).
      */
     public BigDecimal getMainAccountBalance() {
         if (!isConfigured()) {
             return null;
         }
-        JsonNode root = invoke("ADMIN_RETRIEVE_MAIN_ACCOUNT_BALANCE", Map.of());
-        JsonNode data = root.path("data");
-        if (data.isMissingNode() || data.isNull()) {
-            data = root.path("Data");
+        JsonNode node = invoke("ADMIN_RETRIEVE_MAIN_ACCOUNT_BALANCE", Map.of());
+        // Prefer nested data only when present (defensive if unwrap ever changes).
+        JsonNode data = firstObject(node, "data", "Data");
+        if (data == null) {
+            data = node;
         }
-        if (data.isMissingNode() || data.isNull()) {
-            data = root;
-        }
-        Long kobo = firstLong(
+        BigDecimal kobo = firstDecimal(
                 data,
                 "availableBalance",
                 "AvailableBalance",
@@ -248,14 +249,27 @@ public class KudaClient {
                 "ledgerBalance",
                 "LedgerBalance");
         if (kobo == null) {
-            log.warn("Kuda balance response did not include a recognised balance field: {}", root);
+            log.warn("Kuda balance response did not include a recognised balance field: {}", node);
             return null;
         }
-        return fromKobo(kobo);
+        return kobo.movePointLeft(2).setScale(2, RoundingMode.HALF_EVEN);
     }
 
-    private static Long firstLong(JsonNode node, String... fields) {
-        if (node == null) {
+    private static JsonNode firstObject(JsonNode node, String... fields) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        for (String field : fields) {
+            JsonNode child = node.path(field);
+            if (!child.isMissingNode() && !child.isNull() && child.isObject()) {
+                return child;
+            }
+        }
+        return null;
+    }
+
+    private static BigDecimal firstDecimal(JsonNode node, String... fields) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
             return null;
         }
         for (String field : fields) {
@@ -264,13 +278,16 @@ public class KudaClient {
                 continue;
             }
             if (child.isNumber()) {
-                return child.longValue();
+                return child.decimalValue();
             }
             if (child.isTextual()) {
-                try {
-                    return new BigDecimal(child.asText().trim()).longValue();
-                } catch (NumberFormatException ignored) {
-                    // continue
+                String text = child.asText();
+                if (text != null && !text.isBlank()) {
+                    try {
+                        return new BigDecimal(text.trim());
+                    } catch (NumberFormatException ignored) {
+                        // try next field
+                    }
                 }
             }
         }

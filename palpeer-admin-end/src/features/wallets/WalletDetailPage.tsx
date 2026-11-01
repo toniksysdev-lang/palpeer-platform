@@ -89,8 +89,7 @@ export function WalletDetailPage() {
   const [confirmCreate, setConfirmCreate] = useState<'funding' | 'withdrawal' | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
-  const needsMfa =
-    pendingAction?.action === 'process' || pendingAction?.action === 'reverse';
+  // All funding/withdrawal admin mutations require Google Authenticator step-up.
   const mfaReady = /^\d{6}$/.test(mfaCode.trim());
 
   const walletQuery = useQuery({
@@ -138,6 +137,10 @@ export function WalletDetailPage() {
   const createMutation = useMutation({
     mutationFn: async (kind: 'funding' | 'withdrawal') => {
       const key = newIdempotencyKey();
+      const code = mfaCode.trim();
+      if (!/^\d{6}$/.test(code)) {
+        throw new ApiClientError(401, 'MFA_INVALID', 'Enter the 6-digit authenticator code.');
+      }
       if (kind === 'funding') {
         if (!(Number(fundAmount) > 0)) {
           throw new ApiClientError(400, 'VALIDATION_FAILED', 'Enter a funding amount greater than zero.');
@@ -148,7 +151,7 @@ export function WalletDetailPage() {
         }
         return createAdminWalletFunding(
           id,
-          { amount: fundAmount, providerReference: fundRef.trim() || undefined },
+          { amount: fundAmount, providerReference: fundRef.trim() || undefined, mfaCode: code },
           key,
         );
       }
@@ -161,12 +164,13 @@ export function WalletDetailPage() {
       }
       return createAdminWalletWithdrawal(
         id,
-        { amount: withdrawAmount, destinationReference: withdrawRef.trim() || undefined },
+        { amount: withdrawAmount, destinationReference: withdrawRef.trim() || undefined, mfaCode: code },
         key,
       );
     },
     onSuccess: async (created, kind) => {
       setConfirmCreate(null);
+      setMfaCode('');
       if (kind === 'funding') {
         setFundAmount('');
         setFundRef('');
@@ -193,16 +197,16 @@ export function WalletDetailPage() {
   const actionMutation = useMutation({
     mutationFn: async (input: PendingAction) => {
       const { movement, action } = input;
+      if (!/^\d{6}$/.test(mfaCode.trim())) {
+        throw new ApiClientError(401, 'MFA_INVALID', 'Enter the 6-digit authenticator code.');
+      }
       if (appConfig.useMockApi) {
-        if ((action === 'process' || action === 'reverse') && !/^\d{6}$/.test(mfaCode.trim())) {
-          throw new ApiClientError(401, 'MFA_INVALID', 'Enter the 6-digit authenticator code.');
-        }
         await new Promise((resolve) => setTimeout(resolve, 200));
         return mockActOnMovement(id, movement.id, action, failReason.trim() || undefined);
       }
       const options = {
         reason: failReason.trim() || undefined,
-        mfaCode: mfaCode.trim() || undefined,
+        mfaCode: mfaCode.trim(),
       };
       if (movement.type === 'FUNDING') {
         await actOnAdminWalletFunding(id, movement.id, action, options);
@@ -455,7 +459,8 @@ export function WalletDetailPage() {
         <h3 className="text-base font-semibold text-text-primary">Funding / withdrawal admin actions</h3>
         <p className="mt-1 text-sm text-text-secondary">
           Initiate funding or withdrawal for this wallet, then process, fail, or reverse movements.
-          Requires <span className="font-mono text-xs">payments:operate</span>.
+          Requires <span className="font-mono text-xs">payments:operate</span> and a Google
+          Authenticator code for every action.
         </p>
 
         {!canOperate ? (
@@ -486,7 +491,14 @@ export function WalletDetailPage() {
                   onChange={(event) => setFundRef(event.target.value)}
                   placeholder="External ref"
                 />
-                <Button onClick={() => setConfirmCreate('funding')}>Review & fund</Button>
+                <Button
+                  onClick={() => {
+                    setMfaCode('');
+                    setConfirmCreate('funding');
+                  }}
+                >
+                  Review & fund
+                </Button>
               </div>
             </div>
             <div className="rounded-[0.5rem] border border-border p-4">
@@ -508,7 +520,13 @@ export function WalletDetailPage() {
                   onChange={(event) => setWithdrawRef(event.target.value)}
                   placeholder="Bank / payout ref"
                 />
-                <Button variant="secondary" onClick={() => setConfirmCreate('withdrawal')}>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setMfaCode('');
+                    setConfirmCreate('withdrawal');
+                  }}
+                >
                   Review & withdraw
                 </Button>
               </div>
@@ -577,15 +595,29 @@ export function WalletDetailPage() {
         title={confirmCreate === 'funding' ? 'Initiate funding?' : 'Initiate withdrawal?'}
         description={
           confirmCreate === 'funding'
-            ? `Credit path for ${fundAmount || '—'} ${currency} on this wallet. Status will start as INITIATED until processed.`
-            : `Hold ${withdrawAmount || '—'} ${currency} on this wallet. Available balance decreases until the withdrawal is processed or failed.`
+            ? `Credit path for ${fundAmount || '—'} ${currency} on this wallet. Status will start as INITIATED until processed. Confirm with your Google Authenticator code.`
+            : `Hold ${withdrawAmount || '—'} ${currency} on this wallet. Available balance decreases until the withdrawal is processed or failed. Confirm with your Google Authenticator code.`
         }
         confirmLabel={confirmCreate === 'funding' ? 'Initiate funding' : 'Initiate withdrawal'}
         tone="primary"
         busy={createMutation.isPending}
-        onClose={() => setConfirmCreate(null)}
+        confirmDisabled={!mfaReady}
+        onClose={() => {
+          setConfirmCreate(null);
+          setMfaCode('');
+        }}
         onConfirm={() => confirmCreate && createMutation.mutate(confirmCreate)}
-      />
+      >
+        <Input
+          label="Google Authenticator code"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          value={mfaCode}
+          onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+          placeholder="6-digit code"
+          maxLength={6}
+        />
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={Boolean(pendingAction)}
@@ -596,15 +628,13 @@ export function WalletDetailPage() {
         }
         description={
           pendingAction
-            ? `${pendingAction.action} ${formatDecimal(pendingAction.movement.amount)} ${pendingAction.movement.currencyCode} (${pendingAction.movement.status} → ${pendingAction.action === 'process' ? 'SUCCESS' : pendingAction.action === 'fail' ? 'FAILED' : 'REVERSED'}).${
-                needsMfa ? ' Confirm with your Google Authenticator code.' : ''
-              }`
+            ? `${pendingAction.action} ${formatDecimal(pendingAction.movement.amount)} ${pendingAction.movement.currencyCode} (${pendingAction.movement.status} → ${pendingAction.action === 'process' ? 'SUCCESS' : pendingAction.action === 'fail' ? 'FAILED' : 'REVERSED'}). Confirm with your Google Authenticator code.`
             : ''
         }
         confirmLabel={pendingAction ? `${pendingAction.action[0].toUpperCase()}${pendingAction.action.slice(1)}` : 'Confirm'}
         tone={pendingAction?.action === 'fail' || pendingAction?.action === 'reverse' ? 'danger' : 'primary'}
         busy={actionMutation.isPending}
-        confirmDisabled={needsMfa && !mfaReady}
+        confirmDisabled={!mfaReady}
         onClose={() => {
           setPendingAction(null);
           setFailReason('');
@@ -622,19 +652,17 @@ export function WalletDetailPage() {
             />
           </div>
         ) : null}
-        {needsMfa ? (
-          <div className="mt-3">
-            <Input
-              label="Google Authenticator code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              value={mfaCode}
-              onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="6-digit code"
-              maxLength={6}
-            />
-          </div>
-        ) : null}
+        <div className="mt-3">
+          <Input
+            label="Google Authenticator code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={mfaCode}
+            onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="6-digit code"
+            maxLength={6}
+          />
+        </div>
       </ConfirmDialog>
     </div>
   );

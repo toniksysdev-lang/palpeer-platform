@@ -254,6 +254,7 @@ public class AdminController {
     }
 
     @GetMapping("/rates/latest")
+    @PreAuthorize("hasAnyAuthority('rates:read', 'rates:write', 'fees:read')")
     @Operation(summary = "Latest effective rate for every base/quote pair (admin, optional channel filter)")
     public ApiResponse<List<ExchangeRateResponse>> latestRates(
             @RequestParam(required = false) RateChannel channel) {
@@ -399,7 +400,7 @@ public class AdminController {
     }
 
     @GetMapping("/p2p/rate-bounds")
-    @PreAuthorize("hasAuthority('p2p:read')")
+    @PreAuthorize("hasAnyAuthority('p2p:read', 'fees:read')")
     @Operation(summary = "List P2P min/max rate bounds per currency pair")
     public ApiResponse<List<P2PRateBoundsResponse>> listP2PRateBounds() {
         return ApiResponse.ok(p2PRateBoundsService.listAll());

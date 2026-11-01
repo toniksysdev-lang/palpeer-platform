@@ -29,6 +29,15 @@ export function PlatformFeeDetailPage() {
     );
   }
 
+  if (appConfig.useMockApi) {
+    return (
+      <ErrorState
+        title="Live API required"
+        description="Platform fee revenue is not available in mock API mode."
+      />
+    );
+  }
+
   if (!id) {
     return <ErrorState title="Missing id" description="No platform fee id in the URL." />;
   }

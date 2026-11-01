@@ -33,9 +33,28 @@ function store(remember: boolean): Storage {
   return remember ? localStorage : sessionStorage;
 }
 
+function otherStore(remember: boolean): Storage {
+  return remember ? sessionStorage : localStorage;
+}
+
+function isRememberEnabled(): boolean {
+  return localStorage.getItem(REMEMBER_KEY) === 'true';
+}
+
+function clearTokenKeys(target: Storage) {
+  target.removeItem(ACCESS_KEY);
+  target.removeItem(REFRESH_KEY);
+  target.removeItem(USER_KEY);
+}
+
+/** Drop tokens from the storage that must not own this session. */
+function purgeOppositeStore(remember: boolean) {
+  clearTokenKeys(otherStore(remember));
+}
+
 /** Last "Remember session" checkbox preference (defaults to false). */
 export function loadRememberPreference(): boolean {
-  return localStorage.getItem(REMEMBER_KEY) === 'true';
+  return isRememberEnabled();
 }
 
 /** Email saved when the operator last signed in with Remember session. */
@@ -56,16 +75,25 @@ export type PersistedSession = {
   remember: boolean;
 };
 
+/**
+ * Load the active admin session.
+ *
+ * Remembered sessions live only in localStorage (survive browser close).
+ * Ephemeral sessions live only in sessionStorage (cleared when the browser session ends).
+ * Tokens are never read across stores — that previously resurrected signed-in state after
+ * closing the browser even when "Remember session" was off.
+ */
 export function loadPersistedSession(): PersistedSession | null {
-  const remember = localStorage.getItem(REMEMBER_KEY) === 'true';
+  const remember = isRememberEnabled();
+  purgeOppositeStore(remember);
+
   const storage = store(remember);
-  const accessToken =
-    storage.getItem(ACCESS_KEY) ?? localStorage.getItem(ACCESS_KEY) ?? sessionStorage.getItem(ACCESS_KEY);
-  const refreshToken =
-    storage.getItem(REFRESH_KEY) ?? localStorage.getItem(REFRESH_KEY) ?? sessionStorage.getItem(REFRESH_KEY);
-  const userId = storage.getItem(USER_KEY) ?? localStorage.getItem(USER_KEY) ?? sessionStorage.getItem(USER_KEY);
+  const accessToken = storage.getItem(ACCESS_KEY);
+  const refreshToken = storage.getItem(REFRESH_KEY);
+  const userId = storage.getItem(USER_KEY);
 
   if (!accessToken || !refreshToken || !userId) {
+    clearTokenKeys(storage);
     return null;
   }
 
@@ -88,21 +116,24 @@ export function persistSession(
   }
 
   const rememberedEmail = options?.email?.trim().toLowerCase() || loadRememberedEmail();
+  // Wipe both stores first so a flip between remember on/off cannot leave orphans.
   clearSession();
   localStorage.setItem(REMEMBER_KEY, String(remember));
   if (remember && rememberedEmail) {
     localStorage.setItem(REMEMBER_EMAIL_KEY, rememberedEmail);
-  } else {
+  } else if (!remember) {
+    // Ephemeral login: do not keep a saved email that implies a durable session.
     localStorage.removeItem(REMEMBER_EMAIL_KEY);
   }
   const storage = store(remember);
   storage.setItem(ACCESS_KEY, tokens.accessToken);
   storage.setItem(REFRESH_KEY, tokens.refreshToken);
   storage.setItem(USER_KEY, tokens.userId);
+  purgeOppositeStore(remember);
 }
 
 export function persistRotatedTokens(tokens: AuthTokens) {
-  const remember = localStorage.getItem(REMEMBER_KEY) === 'true';
+  const remember = isRememberEnabled();
   persistSession(tokens, remember);
 }
 
@@ -113,8 +144,14 @@ export function clearSession() {
   // Keep REMEMBER_KEY / REMEMBER_EMAIL_KEY so the sign-in form can restore preference + email.
 }
 
+function tokenFromActiveStore(key: string): string | null {
+  const remember = isRememberEnabled();
+  purgeOppositeStore(remember);
+  return store(remember).getItem(key);
+}
+
 export function getAccessToken(): string | null {
-  const token = localStorage.getItem(ACCESS_KEY) ?? sessionStorage.getItem(ACCESS_KEY);
+  const token = tokenFromActiveStore(ACCESS_KEY);
   if (!looksLikeJwt(token)) {
     if (token) clearSession();
     return null;
@@ -123,7 +160,7 @@ export function getAccessToken(): string | null {
 }
 
 export function getRefreshToken(): string | null {
-  const token = localStorage.getItem(REFRESH_KEY) ?? sessionStorage.getItem(REFRESH_KEY);
+  const token = tokenFromActiveStore(REFRESH_KEY);
   if (!looksLikeJwt(token)) {
     if (token) clearSession();
     return null;

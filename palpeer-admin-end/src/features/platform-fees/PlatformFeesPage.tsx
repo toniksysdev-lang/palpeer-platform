@@ -33,7 +33,10 @@ function todayStamp(): string {
 
 function localInputToIso(value: string, endOfDay = false): string | undefined {
   if (!value) return undefined;
-  const date = new Date(value);
+  // Parse YYYY-MM-DD as local calendar date (avoid UTC midnight shift from Date.parse).
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return undefined;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
   if (Number.isNaN(date.getTime())) return undefined;
   if (endOfDay) {
     date.setHours(23, 59, 59, 999);

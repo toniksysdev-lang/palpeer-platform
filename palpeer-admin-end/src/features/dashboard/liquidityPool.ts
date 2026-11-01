@@ -23,7 +23,7 @@ export function poolFundAmount(row: ProviderPoolBalance | null | undefined): num
 
 /**
  * Liquidity per implemented pool rail: CAD (Apaylo) and NGN (Kuda, else Korapay).
- * Amount = pool fund − sum of user wallet available balances for that currency.
+ * Amount = live pool fund (fallback booked) − sum of user wallet available balances.
  */
 export function liquidityPoolRows(
   pool: PoolFundsBalances | undefined,

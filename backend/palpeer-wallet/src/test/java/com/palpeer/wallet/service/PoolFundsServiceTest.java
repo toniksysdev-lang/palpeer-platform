@@ -68,16 +68,39 @@ class PoolFundsServiceTest {
         assertThat(response.apaylo().instantExPaidTotal()).isEqualByComparingTo("0");
         // booked: 300 − 50 + 100 − 0
         assertThat(response.apaylo().balance()).isEqualByComparingTo("350.00");
-        // live: 999 + 300 − 50 + 100 − 0
-        assertThat(response.apaylo().liveBalance()).isEqualByComparingTo("1349.00");
+        // live stays as raw provider settlement (not adjusted by booked activity)
+        assertThat(response.apaylo().liveBalance()).isEqualByComparingTo("999.00");
 
         assertThat(response.korapay().fundedTotal()).isEqualByComparingTo("5000.00");
         assertThat(response.korapay().withdrawnTotal()).isEqualByComparingTo("2000.00");
         assertThat(response.korapay().balance()).isEqualByComparingTo("3000.00");
+        assertThat(response.korapay().liveBalance()).isEqualByComparingTo("50.00");
 
         // InstantEX NGN is attributed to Kuda (active NGN rail)
         assertThat(response.kuda().instantExPaidTotal()).isEqualByComparingTo("120000.00");
         assertThat(response.kuda().fundedTotal()).isEqualByComparingTo("10000.00");
         assertThat(response.kuda().configured()).isTrue();
+        // booked: 10000 − 0 + 0 − 120000
+        assertThat(response.kuda().balance()).isEqualByComparingTo("-110000.00");
+    }
+
+    @Test
+    void balances_exposesRawKudaLiveBalance() {
+        when(apayloClient.isConfigured()).thenReturn(false);
+        when(korapayClient.isConfigured()).thenReturn(false);
+        when(kudaClient.isConfigured()).thenReturn(true);
+        when(kudaClient.getMainAccountBalance()).thenReturn(new BigDecimal("6144.75"));
+        when(fundingTransactionRepository.sumAmountByProviderAndCurrency(MoneyMovementStatus.SUCCESS))
+                .thenReturn(List.of());
+        when(withdrawalTransactionRepository.sumAmountByProviderAndCurrency(MoneyMovementStatus.SUCCESS))
+                .thenReturn(List.of());
+        when(instantExPoolContributionRepository.sumReceivedByCurrency()).thenReturn(List.of());
+        when(instantExPoolContributionRepository.sumPaidByCurrency()).thenReturn(List.of());
+
+        PoolFundsBalanceResponse response = poolFundsService.balances();
+
+        assertThat(response.kuda().configured()).isTrue();
+        assertThat(response.kuda().liveBalance()).isEqualByComparingTo("6144.75");
+        assertThat(response.kuda().balance()).isEqualByComparingTo("0");
     }
 }

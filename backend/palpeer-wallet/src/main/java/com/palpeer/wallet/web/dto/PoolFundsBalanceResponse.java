@@ -5,8 +5,8 @@ import java.math.BigDecimal;
 /**
  * Pool funds for admin Treasury.
  * {@code balance} is booked: funding − withdrawals + InstantEX received − InstantEX paid.
- * {@code liveBalance} is provider settlement adjusted by the same booked movements
- * (sandbox rails often do not move with wallet/InstantEX activity).
+ * {@code liveBalance} is the raw provider settlement balance (e.g. Kuda main account available
+ * balance in NGN). Prefer live when present for liquidity; booked is for reconciliation.
  */
 public record PoolFundsBalanceResponse(
         ProviderBalance apaylo, ProviderBalance korapay, ProviderBalance kuda) {

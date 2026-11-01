@@ -316,6 +316,19 @@ export function P2PFeesPage() {
           </div>
         ) : (
           <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {boundsQuery.isError ? (
+              <div className="md:col-span-2 lg:col-span-3">
+                <ErrorState
+                  title="Could not load P2P pairs"
+                  description={
+                    boundsQuery.error instanceof ApiClientError
+                      ? boundsQuery.error.message
+                      : 'Failed to load configured P2P bounds. Pair selection needs fees:read or p2p:read.'
+                  }
+                  onRetry={() => void boundsQuery.refetch()}
+                />
+              </div>
+            ) : null}
             <Select
               label="P2P pair (base / quote)"
               value={selectedPairKey}
@@ -330,14 +343,16 @@ export function P2PFeesPage() {
                 }
               }}
               error={errors.baseCurrencyCode || errors.quoteCurrencyCode}
-              disabled={boundsQuery.isLoading}
+              disabled={boundsQuery.isLoading || boundsQuery.isError}
             >
               <option value="">
                 {boundsQuery.isLoading
                   ? 'Loading P2P pairs…'
-                  : p2pPairOptions.length === 0
-                    ? 'No P2P bounds yet — configure on Rates'
-                    : 'Select P2P pair'}
+                  : boundsQuery.isError
+                    ? 'Pairs unavailable'
+                    : p2pPairOptions.length === 0
+                      ? 'No P2P bounds yet — configure on Rates'
+                      : 'Select P2P pair'}
               </option>
               {p2pPairOptions.map((pair) => (
                 <option key={pair.key} value={pair.key}>

@@ -41,9 +41,9 @@ function BalanceCard({
     ? 'Provider not configured'
     : hasLive
       ? balance?.pendingBalance != null && Number(balance.pendingBalance) > 0
-        ? `Pending ${formatDecimal(balance.pendingBalance, 2)} ${currency}`
-        : 'Live provider balance'
-      : 'Booked pool (live settlement unavailable)';
+        ? `Live settlement · pending ${formatDecimal(balance.pendingBalance, 2)} ${currency}`
+        : 'Live provider settlement balance'
+      : 'Booked pool only (live settlement unavailable)';
 
   return (
     <KpiCard
@@ -57,6 +57,15 @@ function BalanceCard({
               {formatDecimal(displayAmount, 2)}{' '}
               <span className="text-base font-medium text-text-secondary">{currency}</span>
             </p>
+            {hasLive ? (
+              <p className="text-xs text-text-secondary">
+                Booked{' '}
+                <span className="font-mono text-text-primary">
+                  {formatDecimal(balance?.balance ?? 0, 2)}
+                </span>{' '}
+                {currency}
+              </p>
+            ) : null}
             <p className="text-xs text-text-secondary">
               Funded{' '}
               <span className="font-mono text-text-primary">
@@ -91,6 +100,7 @@ export function PoolFundsPage() {
   const query = useQuery({
     queryKey: ['admin', 'pool-funds'],
     queryFn: getPoolFundsBalances,
+    refetchInterval: 60_000,
   });
 
   return (
@@ -101,9 +111,9 @@ export function PoolFundsPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Treasury</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight text-text-primary">Pool Funds</h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-secondary">
-              Live settlement balances from each payment rail, adjusted by successful wallet funding,
-              withdrawals, and InstantEX (source currency in, target currency out). Apaylo is CAD;
-              Kuda is the active NGN rail (InstantEX NGN is attributed to Kuda).
+              Live settlement balances from each payment rail. Kuda shows the main NGN business
+              account available balance; Apaylo shows CAD. Booked figures below are funding −
+              withdrawals ± InstantEX for reconciliation.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

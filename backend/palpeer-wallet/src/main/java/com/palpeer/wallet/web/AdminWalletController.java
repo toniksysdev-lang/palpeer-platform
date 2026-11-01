@@ -4,12 +4,12 @@ import com.palpeer.auth.security.UserPrincipal;
 import com.palpeer.auth.spi.AdminMfaGate;
 import com.palpeer.common.api.ApiResponse;
 import com.palpeer.common.exception.BusinessException;
-import com.palpeer.wallet.funding.dto.FailMovementRequest;
 import com.palpeer.wallet.funding.dto.FundingTransactionResponse;
 import com.palpeer.wallet.service.AdminWalletMovementService;
 import com.palpeer.wallet.service.WalletService;
 import com.palpeer.wallet.web.dto.AdminCreateFundingRequest;
 import com.palpeer.wallet.web.dto.AdminCreateWithdrawalRequest;
+import com.palpeer.wallet.web.dto.AdminFailMovementRequest;
 import com.palpeer.wallet.web.dto.AdminMoneyMovementResponse;
 import com.palpeer.wallet.web.dto.AdminStepUpMfaRequest;
 import com.palpeer.wallet.web.dto.LedgerTransactionResponse;
@@ -100,6 +100,7 @@ public class AdminWalletController {
             @PathVariable UUID walletId,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody AdminCreateFundingRequest request) {
+        requireAuthenticator(principal, request.code());
         return ApiResponse.ok(
                 "Funding initiated",
                 movementService.createFunding(principal.getId(), walletId, idempotencyKey, request));
@@ -114,6 +115,7 @@ public class AdminWalletController {
             @PathVariable UUID walletId,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody AdminCreateWithdrawalRequest request) {
+        requireAuthenticator(principal, request.code());
         return ApiResponse.ok(
                 "Withdrawal initiated",
                 movementService.createWithdrawal(principal.getId(), walletId, idempotencyKey, request));
@@ -138,9 +140,10 @@ public class AdminWalletController {
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable UUID walletId,
             @PathVariable UUID fundingId,
-            @RequestBody(required = false) FailMovementRequest request) {
-        String reason = request == null ? null : request.reason();
-        return ApiResponse.ok(movementService.failFunding(principal.getId(), walletId, fundingId, reason));
+            @Valid @RequestBody AdminFailMovementRequest request) {
+        requireAuthenticator(principal, request.code());
+        return ApiResponse.ok(
+                movementService.failFunding(principal.getId(), walletId, fundingId, request.reason()));
     }
 
     @PostMapping("/{walletId}/fundings/{fundingId}/reverse")
@@ -174,9 +177,10 @@ public class AdminWalletController {
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable UUID walletId,
             @PathVariable UUID withdrawalId,
-            @RequestBody(required = false) FailMovementRequest request) {
-        String reason = request == null ? null : request.reason();
-        return ApiResponse.ok(movementService.failWithdrawal(principal.getId(), walletId, withdrawalId, reason));
+            @Valid @RequestBody AdminFailMovementRequest request) {
+        requireAuthenticator(principal, request.code());
+        return ApiResponse.ok(
+                movementService.failWithdrawal(principal.getId(), walletId, withdrawalId, request.reason()));
     }
 
     @PostMapping("/{walletId}/withdrawals/{withdrawalId}/reverse")
@@ -200,7 +204,7 @@ public class AdminWalletController {
         if (mfa == null || !mfa.isMfaRequired(principal.getId())) {
             throw new BusinessException(
                     "MFA_REQUIRED",
-                    "Enable Google Authenticator MFA before processing or reversing money movements",
+                    "Enable Google Authenticator MFA before funding or withdrawal admin actions",
                     HttpStatus.FORBIDDEN);
         }
         String trimmed = code == null ? "" : code.trim();

@@ -46,6 +46,14 @@ function buildCsp(env: Record<string, string>, mode: string): string {
     connect.add('http://localhost:8085');
     connect.add('ws://127.0.0.1:8085');
     connect.add('ws://localhost:8085');
+    // Optional remote proxy target (e.g. Render) when local Spring is not running.
+    const proxyTarget = originOf(env.VITE_DEV_PROXY_TARGET);
+    if (proxyTarget) {
+      connect.add(proxyTarget);
+      if (proxyTarget.startsWith('https://')) {
+        connect.add(proxyTarget.replace(/^https:/, 'wss:'));
+      }
+    }
     connect.add('ws:');
     connect.add('http:');
   }
@@ -77,6 +85,22 @@ function cspMetaPlugin(getEnv: () => Record<string, string>, mode: string): Plug
         return html.replace('<!--csp-->', tag);
       }
       return html.replace('</head>', `    ${tag}\n  </head>`);
+    },
+  };
+}
+
+/** Drop browser Origin/Referer before Vite's /api proxy so remote Spring CORS does not reject. */
+function stripProxyCorsHeadersPlugin(): Plugin {
+  return {
+    name: 'palpeer-strip-proxy-cors-headers',
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        if (req.url?.startsWith('/api')) {
+          delete req.headers.origin;
+          delete req.headers.referer;
+        }
+        next();
+      });
     },
   };
 }
@@ -130,8 +154,13 @@ export default defineConfig(({ mode }) => {
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
   };
 
+  const proxyTarget =
+    mode === 'development'
+      ? env.VITE_DEV_PROXY_TARGET?.trim() || 'http://127.0.0.1:8085'
+      : 'http://127.0.0.1:8085';
+
   return {
-    plugins: [react(), cspMetaPlugin(() => env, mode)],
+    plugins: [react(), cspMetaPlugin(() => env, mode), stripProxyCorsHeadersPlugin()],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -144,10 +173,18 @@ export default defineConfig(({ mode }) => {
       headers: securityHeaders,
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:8085',
+          target: proxyTarget,
           changeOrigin: true,
+          secure: proxyTarget.startsWith('https://'),
           timeout: 180_000,
           proxyTimeout: 180_000,
+          // Also strip on the outbound proxyReq (belt-and-suspenders with stripProxyCorsHeadersPlugin).
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq) => {
+              proxyReq.removeHeader('origin');
+              proxyReq.removeHeader('referer');
+            });
+          },
         },
       },
     },

@@ -6,7 +6,7 @@ export type ProviderPoolBalance = {
   /** Booked pool: funding − withdrawals + InstantEX in − InstantEX out. */
   balance: string | number | null;
   pendingBalance?: string | number | null;
-  /** Provider settlement adjusted by funding, withdrawals, and InstantEX. */
+  /** Raw provider settlement (e.g. Kuda main account available balance). */
   liveBalance?: string | number | null;
   fundedTotal?: string | number | null;
   withdrawnTotal?: string | number | null;

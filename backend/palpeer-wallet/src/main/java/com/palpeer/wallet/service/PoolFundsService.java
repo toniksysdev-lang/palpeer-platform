@@ -131,10 +131,8 @@ public class PoolFundsService {
             received = instantExIn.getOrDefault(currencyCode, BigDecimal.ZERO);
             paid = instantExOut.getOrDefault(currencyCode, BigDecimal.ZERO);
         }
-        // Live = provider settlement + funding − withdrawals + InstantEX in − InstantEX out
-        BigDecimal adjustedLive = liveBalance == null
-                ? null
-                : liveBalance.add(in).subtract(out).add(received).subtract(paid);
+        // liveBalance is the raw provider settlement balance (e.g. Kuda main account).
+        // Do not adjust by booked wallet/InstantEX activity — Live rails already reflect those flows.
         return ProviderBalance.booked(
                 provider,
                 currencyCode,
@@ -143,7 +141,7 @@ public class PoolFundsService {
                 out,
                 received,
                 paid,
-                adjustedLive,
+                liveBalance,
                 pendingBalance,
                 null);
     }

@@ -318,6 +318,19 @@ export function InstantExFeesPage() {
           </div>
         ) : (
           <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {swapPairsQuery.isError ? (
+              <div className="md:col-span-2 lg:col-span-3">
+                <ErrorState
+                  title="Could not load InstantEX pairs"
+                  description={
+                    swapPairsQuery.error instanceof ApiClientError
+                      ? swapPairsQuery.error.message
+                      : 'Failed to load latest swap rates. Pair selection needs fees:read or rates:read.'
+                  }
+                  onRetry={() => void swapPairsQuery.refetch()}
+                />
+              </div>
+            ) : null}
             <Select
               label="InstantEX / Swap pair"
               value={
@@ -334,14 +347,16 @@ export function InstantExFeesPage() {
                 }));
               }}
               error={errors.baseCurrencyCode || errors.quoteCurrencyCode}
-              disabled={swapPairsQuery.isLoading}
+              disabled={swapPairsQuery.isLoading || swapPairsQuery.isError}
             >
               <option value="">
                 {swapPairsQuery.isLoading
                   ? 'Loading swap pairs…'
-                  : swapPairOptions.length === 0
-                    ? 'No swap pairs yet — publish on Rates'
-                    : 'Select swap pair'}
+                  : swapPairsQuery.isError
+                    ? 'Pairs unavailable'
+                    : swapPairOptions.length === 0
+                      ? 'No swap pairs yet — publish on Rates'
+                      : 'Select swap pair'}
               </option>
               {swapPairOptions.map((pair) => (
                 <option key={pair.key} value={pair.key}>

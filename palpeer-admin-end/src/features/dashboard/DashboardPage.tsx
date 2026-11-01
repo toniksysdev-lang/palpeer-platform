@@ -235,7 +235,7 @@ export function DashboardPage() {
           }
           hint={
             <>
-              Pool fund − total wallet balance
+              Live pool − wallet liabilities
               {liquidityRows.length > 0
                 ? ` · ${liquidityRows.map((row) => row.currencyCode).join(' · ')}`
                 : ''}

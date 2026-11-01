@@ -338,15 +338,20 @@ export function SignInPage() {
                 </div>
 
                 <div className="flex items-center justify-between gap-3 pt-1">
-                  <label className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-text-secondary">
+                  <label className="inline-flex max-w-[14rem] items-start gap-2 text-sm text-gray-600 dark:text-text-secondary">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 rounded border-gray-300 text-primary-500 focus:ring-primary-500/30"
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-500 focus:ring-primary-500/30"
                       checked={remember}
                       onChange={(e) => setRemember(e.target.checked)}
                       disabled={submitting}
                     />
-                    Remember session
+                    <span>
+                      Remember session
+                      <span className="block text-xs text-gray-500 dark:text-text-muted">
+                        Stay signed in after closing the browser
+                      </span>
+                    </span>
                   </label>
                   <Link
                     to={`/forgot-password${email ? `?email=${encodeURIComponent(email)}` : ''}`}

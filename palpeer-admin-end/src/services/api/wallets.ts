@@ -56,7 +56,7 @@ export async function listAdminWalletMovements(walletId: string): Promise<AdminM
 
 export async function createAdminWalletFunding(
   walletId: string,
-  input: { amount: string; providerReference?: string },
+  input: { amount: string; providerReference?: string; mfaCode: string },
   idempotencyKey: string,
 ): Promise<AdminMoneyMovement> {
   const created = await apiRequest<{
@@ -74,6 +74,7 @@ export async function createAdminWalletFunding(
     body: {
       amount: input.amount,
       providerReference: input.providerReference?.trim() || null,
+      code: input.mfaCode.trim(),
     },
     headers: { 'Idempotency-Key': idempotencyKey },
   });
@@ -94,7 +95,7 @@ export async function createAdminWalletFunding(
 
 export async function createAdminWalletWithdrawal(
   walletId: string,
-  input: { amount: string; destinationReference?: string },
+  input: { amount: string; destinationReference?: string; mfaCode: string },
   idempotencyKey: string,
 ): Promise<AdminMoneyMovement> {
   const created = await apiRequest<{
@@ -112,6 +113,7 @@ export async function createAdminWalletWithdrawal(
     body: {
       amount: input.amount,
       destinationReference: input.destinationReference?.trim() || null,
+      code: input.mfaCode.trim(),
     },
     headers: { 'Idempotency-Key': idempotencyKey },
   });
@@ -136,7 +138,7 @@ export async function actOnAdminWalletFunding(
   walletId: string,
   fundingId: string,
   action: MoneyMovementAction,
-  options?: { reason?: string; mfaCode?: string },
+  options: { reason?: string; mfaCode: string },
 ): Promise<void> {
   await apiRequest<unknown>(
     `/admin/wallets/${encodeURIComponent(walletId)}/fundings/${encodeURIComponent(fundingId)}/${action}`,
@@ -144,10 +146,8 @@ export async function actOnAdminWalletFunding(
       method: 'POST',
       body:
         action === 'fail'
-          ? { reason: options?.reason?.trim() || null }
-          : action === 'process' || action === 'reverse'
-            ? { code: options?.mfaCode?.trim() }
-            : undefined,
+          ? { reason: options.reason?.trim() || null, code: options.mfaCode.trim() }
+          : { code: options.mfaCode.trim() },
     },
   );
 }
@@ -156,7 +156,7 @@ export async function actOnAdminWalletWithdrawal(
   walletId: string,
   withdrawalId: string,
   action: MoneyMovementAction,
-  options?: { reason?: string; mfaCode?: string },
+  options: { reason?: string; mfaCode: string },
 ): Promise<void> {
   await apiRequest<unknown>(
     `/admin/wallets/${encodeURIComponent(walletId)}/withdrawals/${encodeURIComponent(withdrawalId)}/${action}`,
@@ -164,10 +164,8 @@ export async function actOnAdminWalletWithdrawal(
       method: 'POST',
       body:
         action === 'fail'
-          ? { reason: options?.reason?.trim() || null }
-          : action === 'process' || action === 'reverse'
-            ? { code: options?.mfaCode?.trim() }
-            : undefined,
+          ? { reason: options.reason?.trim() || null, code: options.mfaCode.trim() }
+          : { code: options.mfaCode.trim() },
     },
   );
 }
