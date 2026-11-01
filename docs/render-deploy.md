@@ -53,9 +53,11 @@ After the first deploy, set `CORS_ALLOWED_ORIGINS` on **palpeer-api** to the adm
 
 Mobile (`EXPO_PUBLIC_API_BASE_URL`) still needs that same HTTPS API URL when you build an APK.
 
-## 4. Custom domain (optional)
+## 4. Custom domain, WAF, admin IP allowlist, Access SSO
 
-In the web service → **Settings** → **Custom Domains** → add `api.yourdomain.com` and follow DNS instructions.
+See **[`edge-hardening.md`](edge-hardening.md)** for the full runbook (`api.palpeer.com` / `admin.palpeer.com`, Truehost CNAMEs, Cloudflare WAF + Access, and `ADMIN_IP_ALLOWLIST`).
+
+Quick version: Render → **Custom Domains** on API + admin → add Truehost CNAMEs → update `CORS_ALLOWED_ORIGINS` / mobile EAS URLs after certificates issue.
 
 ## 5. Local Docker still works
 

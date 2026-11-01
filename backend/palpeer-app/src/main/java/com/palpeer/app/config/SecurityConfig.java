@@ -1,5 +1,6 @@
 package com.palpeer.app.config;
 
+import com.palpeer.admin.security.AdminIpAllowlistFilter;
 import com.palpeer.admin.security.AdminMfaEnrollmentFilter;
 import com.palpeer.auth.ratelimit.AuthRateLimitFilter;
 import com.palpeer.auth.security.JwtAuthenticationFilter;
@@ -33,6 +34,7 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final AuthRateLimitFilter authRateLimitFilter;
     private final AdminMfaEnrollmentFilter adminMfaEnrollmentFilter;
+    private final AdminIpAllowlistFilter adminIpAllowlistFilter;
 
     @Value("${palpeer.cors.allowed-origins:http://localhost:5173,http://127.0.0.1:5173}")
     private String allowedOrigins;
@@ -116,6 +118,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/admin/**").hasAuthority("ROLE_ADMIN")
                         .anyRequest().authenticated()
                 )
+                .addFilterBefore(adminIpAllowlistFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(authRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(adminMfaEnrollmentFilter, JwtAuthenticationFilter.class);

@@ -106,6 +106,9 @@ services:
         sync: false
       - key: ADMIN_MFA_REQUIRED
         value: "true"
+      # Optional: comma-separated IPv4/CIDRs allowed to call /api/v1/admin/** (empty = open).
+      - key: ADMIN_IP_ALLOWLIST
+        sync: false
       - key: GOOGLE_CLIENT_IDS
         sync: false
       # Payment rails — required for admin Pool Funds live balances + funding/withdrawals
