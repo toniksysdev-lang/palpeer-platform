@@ -406,6 +406,27 @@ class KudaPaymentRailTest {
         return account;
     }
 
+    @Test
+    void isDynamicCollectionRequestRef_acceptsShortHexRefsOnly() {
+        assertThat(KudaPaymentRail.isDynamicCollectionRequestRef("E208FDB5ED584036")).isTrue();
+        assertThat(KudaPaymentRail.isDynamicCollectionRequestRef("671A1F7B47354CE2")).isTrue();
+        assertThat(KudaPaymentRail.isDynamicCollectionRequestRef("ppd4cdbac68a494612")).isFalse();
+        assertThat(KudaPaymentRail.isDynamicCollectionRequestRef("offline-ABC123")).isFalse();
+        assertThat(KudaPaymentRail.isDynamicCollectionRequestRef(UUID.randomUUID().toString())).isFalse();
+        assertThat(KudaPaymentRail.isDynamicCollectionRequestRef(null)).isFalse();
+        assertThat(KudaPaymentRail.isDynamicCollectionRequestRef("")).isFalse();
+    }
+
+    @Test
+    void confirmCollectionPayment_skipsStaticVirtualAccountTrackingRefs() {
+        when(kudaClient.isConfigured()).thenReturn(true);
+
+        assertThat(rail.confirmCollectionPayment(
+                        "ppd4cdbac68a494612", "0066957897", new BigDecimal("100.00")))
+                .isEmpty();
+        verify(kudaClient, never()).queryDynamicCollectionStatus(any(), any());
+    }
+
     private static PaymentRailProvider.FundingInitiationRequest fundingRequest(UUID walletId, String amount) {
         return new PaymentRailProvider.FundingInitiationRequest(
                 UUID.randomUUID(),

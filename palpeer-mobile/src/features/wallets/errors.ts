@@ -28,7 +28,8 @@ const MESSAGES: Record<string, string> = {
   KORAPAY_AMOUNT_TOO_LOW: 'Enter at least ₦100 to fund with bank transfer.',
   KORAPAY_WITHDRAWAL_UNSUPPORTED: 'NGN withdrawals aren’t available with this payment method yet.',
   KUDA_ERROR: "The payment provider couldn't process this. Try again later.",
-  KUDA_AUTH_FAILED: "The payment provider couldn't process this. Try again later.",
+  KUDA_AUTH_FAILED:
+    "We couldn't connect to the Naira payment provider. Wait a moment and try again.",
   KUDA_DISABLED: 'NGN payments are temporarily unavailable. Try again later.',
   KUDA_CLIENT_ACCOUNT_REQUIRED: 'NGN withdrawals are temporarily unavailable. Try again later.',
   KUDA_PERMISSION_DENIED:

@@ -61,33 +61,67 @@ public class KudaClient {
         envelope.set("data", objectMapper.valueToTree(data == null ? Map.of() : data));
 
         try {
-            String raw = client(token(false))
+            return invokeWithTokenRetry(serviceType, envelope);
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new BusinessException("KUDA_ERROR", "Kuda request failed", HttpStatus.BAD_GATEWAY);
+        }
+    }
+
+    /**
+     * Posts the Kuda envelope, refreshing the bearer token once when Kuda returns HTTP 401 or an
+     * unauthorized JSON body. Without the HTTP 401 retry, an expired cached token makes every call
+     * (including NGN funding) fail with {@code KUDA_ERROR} until the process restarts.
+     */
+    private JsonNode invokeWithTokenRetry(String serviceType, ObjectNode envelope) {
+        try {
+            JsonNode root = postEnvelope(envelope, token(false));
+            if (isUnauthorized(root)) {
+                cachedToken.set(null);
+                root = postEnvelope(envelope, token(true));
+            }
+            requireSuccessful(root, serviceType);
+            return unwrap(root);
+        } catch (RestClientResponseException ex) {
+            if (ex.getStatusCode().value() == 401) {
+                cachedToken.set(null);
+                try {
+                    JsonNode root = postEnvelope(envelope, token(true));
+                    requireSuccessful(root, serviceType);
+                    return unwrap(root);
+                } catch (RestClientResponseException retryEx) {
+                    log.error(
+                            "Kuda {} failed after token refresh: {} {}",
+                            serviceType,
+                            retryEx.getStatusCode(),
+                            retryEx.getResponseBodyAsString());
+                    throw new BusinessException(
+                            "KUDA_AUTH_FAILED",
+                            "Kuda request failed: " + retryEx.getStatusCode().value(),
+                            HttpStatus.BAD_GATEWAY);
+                }
+            }
+            log.error("Kuda {} failed: {} {}", serviceType, ex.getStatusCode(), ex.getResponseBodyAsString());
+            throw new BusinessException(
+                    "KUDA_ERROR",
+                    "Kuda request failed: " + ex.getStatusCode().value(),
+                    HttpStatus.BAD_GATEWAY);
+        }
+    }
+
+    private JsonNode postEnvelope(ObjectNode envelope, String bearer) throws RestClientResponseException {
+        try {
+            String raw = client(bearer)
                     .post()
                     .uri("")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(envelope)
                     .retrieve()
                     .body(String.class);
-            JsonNode root = objectMapper.readTree(raw == null ? "{}" : raw);
-            if (isUnauthorized(root)) {
-                cachedToken.set(null);
-                raw = client(token(true))
-                        .post()
-                        .uri("")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(envelope)
-                        .retrieve()
-                        .body(String.class);
-                root = objectMapper.readTree(raw == null ? "{}" : raw);
-            }
-            requireSuccessful(root, serviceType);
-            return unwrap(root);
+            return objectMapper.readTree(raw == null ? "{}" : raw);
         } catch (RestClientResponseException ex) {
-            log.error("Kuda {} failed: {} {}", serviceType, ex.getStatusCode(), ex.getResponseBodyAsString());
-            throw new BusinessException(
-                    "KUDA_ERROR",
-                    "Kuda request failed: " + ex.getStatusCode().value(),
-                    HttpStatus.BAD_GATEWAY);
+            throw ex;
         } catch (BusinessException ex) {
             throw ex;
         } catch (Exception ex) {

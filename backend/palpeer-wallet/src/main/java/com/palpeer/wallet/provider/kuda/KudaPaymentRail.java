@@ -69,6 +69,12 @@ public class KudaPaymentRail implements PaymentRailProvider {
         if (!notBlank(accountCreationRequestRef) && !notBlank(accountNumber)) {
             return Optional.empty();
         }
+        // Static VA fundings use tracking refs like "pp…" / full UUIDs — not dynamic-collection
+        // creation refs. TSQ against them always fails and was flooding Live with 401s that
+        // poisoned the shared Kuda bearer token used by funding initiation.
+        if (!isDynamicCollectionRequestRef(accountCreationRequestRef)) {
+            return Optional.empty();
+        }
         try {
             JsonNode data = kudaClient.queryDynamicCollectionStatus(accountCreationRequestRef, accountNumber);
             BigDecimal received = parseMoney(firstText(data, "totalAmountReceived", "TotalAmountReceived", "amount"));
@@ -175,6 +181,10 @@ public class KudaPaymentRail implements PaymentRailProvider {
         try {
             response = kudaClient.invoke("ADMIN_CREATE_DYNAMIC_COLLECTION_ACCOUNT", payload, requestRef);
         } catch (BusinessException createEx) {
+            // Auth failures must surface — falling back would hide an expired/invalid Live token.
+            if ("KUDA_AUTH_FAILED".equals(createEx.getCode())) {
+                throw createEx;
+            }
             // Some keys still only expose static VA APIs — fall back without failing funding.
             log.warn(
                     "Kuda dynamic collection unavailable; falling back to static VA. cause={}",
@@ -445,6 +455,26 @@ public class KudaPaymentRail implements PaymentRailProvider {
             }
             throw ex;
         }
+    }
+
+    /**
+     * True for refs produced by {@link #shortTrackingRef} for
+     * {@code ADMIN_CREATE_DYNAMIC_COLLECTION_ACCOUNT}. Static VA tracking ({@code pp…}), offline
+     * sandbox refs, and funding UUIDs must not be sent to {@code DYNAMIC_COLLECTION_ACCOUNT_TSQ}.
+     */
+    static boolean isDynamicCollectionRequestRef(String ref) {
+        if (!notBlank(ref)) {
+            return false;
+        }
+        String trimmed = ref.trim();
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        if (lower.startsWith("pp") || lower.startsWith("offline-")) {
+            return false;
+        }
+        if (trimmed.indexOf('-') >= 0) {
+            return false;
+        }
+        return trimmed.length() <= 20 && trimmed.matches("[A-Fa-f0-9]+");
     }
 
     /** Kuda rejects long UUID-style tracking refs on money-movement calls. */
