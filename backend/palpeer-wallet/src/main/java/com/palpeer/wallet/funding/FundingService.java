@@ -839,10 +839,8 @@ public class FundingService {
             if (payee == null) {
                 payee = "Palpeer Global Holding Inc";
             }
-            String collectionEmail = blankToNull(apayloProperties.getInteracCollectionEmail());
-            if (collectionEmail == null) {
-                collectionEmail = "ipay@apaylo.com";
-            }
+            // Instant Interac is Autodeposit by searchable payee name only. Do not expose
+            // ipay@apaylo.com (or any collection email) — that path prompts for a security Q&A.
             return new FundingPaymentDetails(
                     null,
                     payee,
@@ -854,7 +852,7 @@ public class FundingService {
                     FundingPaymentDetails.METHOD_INTERAC_INSTANT,
                     extractInteracEmail(tx.getFundingInstructions()),
                     blankToNull(apayloProperties.getAplReference()),
-                    collectionEmail);
+                    null);
         }
         return null;
     }

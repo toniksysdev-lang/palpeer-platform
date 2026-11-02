@@ -98,22 +98,19 @@ public class ApayloPaymentRail implements PaymentRailProvider {
     private String buildInstantDepositInstructions(
             java.math.BigDecimal amount, String reference, String customerEmail) {
         String accountName = blankTo(properties.getAccountId(), "Palpeer Global Holding Inc");
-        String collectionEmail = blankTo(properties.getInteracCollectionEmail(), "ipay@apaylo.com");
         String apl = properties.getAplReference() == null ? "" : properties.getAplReference().trim();
+        // Instant Interac / Autodeposit is by searchable business name only.
+        // Do not direct customers to ipay@apaylo.com — that path often asks for a security
+        // question/answer and is not the Instant Autodeposit flow.
         StringBuilder sb = new StringBuilder();
-        sb.append("Instant deposit via Interac. Send CAD ")
+        sb.append("Instant deposit via Interac Autodeposit. Send CAD ")
                 .append(amount)
-                .append(" with Interac e-Transfer to \"")
+                .append(" with Interac e-Transfer. Open your banking app → Send → Interac → search for \"")
                 .append(accountName)
-                .append("\" or ")
-                .append(collectionEmail)
-                .append(". Reference=")
+                .append("\" (Autodeposit) → enter the exact amount. Reference=")
                 .append(reference)
-                .append(". Open your banking app → Send → Interac → search for \"")
-                .append(accountName)
-                .append("\" or send to ")
-                .append(collectionEmail)
-                .append(" → enter the amount and reference. You initiate the transfer — we do not send an Interac request to your email.");
+                .append(". Do not send to an email address — email sends may ask for a security question. ")
+                .append("We do not email you an Interac request.");
         if (notBlank(apl)) {
             sb.append(" Include ").append(apl).append(" in the memo if asked.");
         }

@@ -7,7 +7,7 @@ import java.math.BigDecimal;
  *
  * <ul>
  *   <li>{@code BANK_TRANSFER} — Kuda virtual account (account number / bank)
- *   <li>{@code INTERAC_INSTANT} — Apaylo Instant Interac (searchable payee name + collection email)
+ *   <li>{@code INTERAC_INSTANT} — Apaylo Instant Interac (searchable Autodeposit payee name only)
  * </ul>
  */
 public record FundingPaymentDetails(
@@ -24,7 +24,10 @@ public record FundingPaymentDetails(
         String interacEmail,
         /** Optional Apaylo APL#### memo for Instant deposit. */
         String aplReference,
-        /** Destination Interac email customers send CAD to (e.g. {@code ipay@apaylo.com}). */
+        /**
+         * Unused for Instant Interac Autodeposit (leave null). Email destinations often require a
+         * security question and are not used for Instant deposit.
+         */
         String collectionEmail
 ) {
     public static final String METHOD_BANK_TRANSFER = "BANK_TRANSFER";

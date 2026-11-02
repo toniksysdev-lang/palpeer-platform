@@ -75,7 +75,7 @@ export function FundingPaymentDetailsCard({ details }: { details: FundingPayment
       </AppText>
       <AppText variant="caption" tone="secondary" style={{ marginTop: theme.spacing.xxs }}>
         {isInterac
-          ? `From your banking app, send exactly ${format(details.amount, details.currencyCode)} via Interac e-Transfer. Search for the payee name below — we do not email you a request. Your wallet updates after Apaylo confirms.`
+          ? `From your banking app, send exactly ${format(details.amount, details.currencyCode)} via Interac e-Transfer. Search for the Autodeposit payee name below (do not send to an email — that can ask for a security question). We do not email you a request. Your wallet updates after Apaylo confirms.`
           : `Send exactly ${format(details.amount, details.currencyCode)} from your bank. Your wallet updates after Kuda confirms the credit.`}
       </AppText>
       <View style={{ marginTop: theme.spacing.sm }}>
