@@ -71,30 +71,16 @@ export function FundingPaymentDetailsCard({ details }: { details: FundingPayment
   return (
     <Card variant="outlined" padding="md" testID="funding-payment-details">
       <AppText variant="overline" tone="muted">
-        {isInterac ? 'Send Instant Interac' : 'Transfer to this account'}
+        {isInterac ? 'Pay Instant Interac request' : 'Transfer to this account'}
       </AppText>
       <AppText variant="caption" tone="secondary" style={{ marginTop: theme.spacing.xxs }}>
         {isInterac
-          ? `From your banking app, send exactly ${format(details.amount, details.currencyCode)} via Interac e-Transfer. Search for the Autodeposit payee name below (do not send to an email — that can ask for a security question). We do not email you a request. Your wallet updates after Apaylo confirms.`
+          ? `We emailed an Interac money request for exactly ${format(details.amount, details.currencyCode)} to your Interac address. Open that email or your banking app → Interac → Fulfill / Respond to request → pay. Do not search for a business name or start a new Send. Your wallet updates after Apaylo confirms.`
           : `Send exactly ${format(details.amount, details.currencyCode)} from your bank. Your wallet updates after Kuda confirms the credit.`}
       </AppText>
       <View style={{ marginTop: theme.spacing.sm }}>
         {isInterac ? (
           <>
-            {details.accountName ? (
-              <CopyRow
-                label="Payee name"
-                value={details.accountName}
-                testID="funding-interac-payee"
-              />
-            ) : null}
-            {details.collectionEmail ? (
-              <CopyRow
-                label="Send to email"
-                value={details.collectionEmail}
-                testID="funding-interac-collection-email"
-              />
-            ) : null}
             <CopyRow
               label="Amount"
               value={format(details.amount, details.currencyCode)}
@@ -102,9 +88,16 @@ export function FundingPaymentDetailsCard({ details }: { details: FundingPayment
             />
             {details.trackingReference ? (
               <CopyRow
-                label="Reference"
+                label="Interac reference"
                 value={details.trackingReference}
                 testID="funding-interac-ref"
+              />
+            ) : null}
+            {details.interacEmail ? (
+              <CopyRow
+                label="Request sent to"
+                value={details.interacEmail}
+                testID="funding-interac-email"
               />
             ) : null}
             {details.aplReference ? (
@@ -114,11 +107,11 @@ export function FundingPaymentDetailsCard({ details }: { details: FundingPayment
                 testID="funding-interac-apl"
               />
             ) : null}
-            {details.interacEmail ? (
+            {details.collectionEmail ? (
               <CopyRow
-                label="Your Interac email"
-                value={details.interacEmail}
-                testID="funding-interac-email"
+                label="Send to email"
+                value={details.collectionEmail}
+                testID="funding-interac-collection-email"
               />
             ) : null}
           </>

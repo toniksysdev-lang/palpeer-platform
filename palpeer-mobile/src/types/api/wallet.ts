@@ -73,7 +73,7 @@ export type FundingPaymentDetails = {
   /** Customer's send-from Interac email (payer). */
   interacEmail: string | null;
   aplReference: string | null;
-  /** Destination Interac email for CAD Instant deposits (e.g. ipay@apaylo.com). */
+  /** Unused for Instant Request Money; do not show as send-to. */
   collectionEmail?: string | null;
 };
 

@@ -230,10 +230,11 @@ describe('FundingStatusScreen', () => {
 
     expect(await screen.findByText('Waiting for Instant Interac')).toBeTruthy();
     expect(screen.getByTestId('funding-payment-details')).toBeTruthy();
-    expect(screen.getByTestId('funding-interac-payee')).toHaveTextContent(
-      'Palpeer Global Holding Inc',
+    expect(screen.queryByTestId('funding-interac-payee')).toBeNull();
+    expect(screen.getByTestId('funding-interac-ref')).toHaveTextContent('CA1-APY-1');
+    expect(screen.getByTestId('funding-interac-email')).toHaveTextContent(
+      'sesanelect@yahoo.com',
     );
-    expect(screen.getByTestId('funding-interac-ref')).toHaveTextContent('APY-1');
     expect(screen.queryByTestId('funding-instructions')).toBeNull();
     expect(screen.getByTestId('movement-amount')).toHaveTextContent('250.00 CAD');
     expect(screen.queryByText('Funds added')).toBeNull();

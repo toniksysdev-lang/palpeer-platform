@@ -835,15 +835,11 @@ public class FundingService {
                     .orElse(null);
         }
         if (ApayloPaymentRail.NAME.equals(tx.getProviderName())) {
-            String payee = blankToNull(apayloProperties.getAccountId());
-            if (payee == null) {
-                payee = "Palpeer Global Holding Inc";
-            }
-            // Instant Interac is Autodeposit by searchable payee name only. Do not expose
-            // ipay@apaylo.com (or any collection email) — that path prompts for a security Q&A.
+            // Request Money to the customer's Interac email — do not show merchant Autodeposit
+            // name or ipay@apaylo.com (neither is how Instant deposit is fulfilled).
             return new FundingPaymentDetails(
                     null,
-                    payee,
+                    null,
                     "Interac",
                     null,
                     tx.getProviderReference(),

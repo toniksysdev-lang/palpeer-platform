@@ -40,20 +40,20 @@ class ApayloPaymentRailTest {
         properties.setOfflineSandboxSettle(true);
         properties.setAccountId("Palpeer Global Holding Inc");
         properties.setAplReference("APL1234");
-        properties.setCreateSearchableEtransferPath("/Merchant/RequestInteracEtransferLink");
+        properties.setCreateSearchableEtransferPath("/Merchant/RequestInteracEtransferEmail");
         properties.setSendInteracEtransferPath("/Merchant/SendInteracEtransfer");
         properties.setSendEftPath("/EFT/CreateEFTTransaction");
         rail = new ApayloPaymentRail(properties, apayloClient);
     }
 
     @Test
-    void initiateFunding_usesLinkApiAndStaysPendingForCustomerInterac() {
+    void initiateFunding_usesEmailRequestMoneyAndStaysPendingForCustomerPay() {
         when(apayloClient.isConfigured()).thenReturn(true);
         // Even if auto-settle is on, funding must wait for the Instant Interac payment step.
         properties.setAutoSandboxSettle(true);
         ObjectNode data = objectMapper.createObjectNode();
-        data.put("ReferenceNumber", "REF-INSTANT-1");
-        when(apayloClient.post(eq("/Merchant/RequestInteracEtransferLink"), anyMap())).thenReturn(data);
+        data.put("ReferenceNumber", "CA1-REF-INSTANT-1");
+        when(apayloClient.post(eq("/Merchant/RequestInteracEtransferEmail"), anyMap())).thenReturn(data);
 
         PaymentRailProvider.FundingInitiation result = rail.initiateFunding(
                 new PaymentRailProvider.FundingInitiationRequest(
@@ -71,21 +71,24 @@ class ApayloPaymentRailTest {
                         "Oluwasesan",
                         "Afolabi"));
 
-        assertThat(result.providerReference()).isEqualTo("REF-INSTANT-1");
+        assertThat(result.providerReference()).isEqualTo("CA1-REF-INSTANT-1");
         assertThat(result.pendingExternalSettlement()).isTrue();
         assertThat(result.instructions())
-                .contains("Palpeer Global Holding Inc")
                 .contains("sesanelect@yahoo.com")
-                .contains("Instant deposit via Interac")
-                .doesNotContain("Sandbox funding completed")
-                .doesNotContain("accept the Interac request");
+                .contains("money request")
+                .contains("CA1-REF-INSTANT-1")
+                .contains("Fulfill")
+                .doesNotContain("Palpeer Global Holding Inc")
+                .doesNotContain("Autodeposit")
+                .doesNotContain("Sandbox funding completed");
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> bodyCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(apayloClient).post(eq("/Merchant/RequestInteracEtransferLink"), bodyCaptor.capture());
+        verify(apayloClient).post(eq("/Merchant/RequestInteracEtransferEmail"), bodyCaptor.capture());
         assertThat(bodyCaptor.getValue()).containsEntry("CustomerEmail", "sesanelect@yahoo.com");
         assertThat(bodyCaptor.getValue()).containsEntry("CustomerName", "Oluwasesan Afolabi");
         assertThat(bodyCaptor.getValue()).containsEntry("UniqueId", "idem-fund-1");
+        assertThat(bodyCaptor.getValue()).containsEntry("MerchantReferenceNumber", "idem-fund-1");
         assertThat(bodyCaptor.getValue().get("Description").toString()).contains("APL1234");
     }
 

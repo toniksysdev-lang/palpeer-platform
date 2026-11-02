@@ -21,10 +21,10 @@ import org.springframework.stereotype.Component;
 /**
  * Apaylo CAD rails — Instant Interac deposit for funding; Interac send / EFT for withdrawals.
  *
- * <p>Funding uses {@code RequestInteracEtransferLink} (checkout Instant deposit — no request email
- * is sent). Returns {@code PENDING} with payee/amount/reference instructions; the CAD wallet is
- * credited only after webhook (or operator) settlement. Customers send Interac to the searchable
- * merchant account name ({@link ApayloProperties#getAccountId()}).
+ * <p>Funding uses {@code RequestInteracEtransferEmail}: Apaylo emails the customer an Interac
+ * <em>Request Money</em>. The customer pays that request from their banking app (no Autodeposit
+ * payee search — {@code SearchPayee} often has no match for the merchant display name). Returns
+ * {@code PENDING} until Apaylo reconcile / operator settlement.
  * Docs: https://docs.apaylo.com/apaylo-api-reference/ref
  */
 @Slf4j
@@ -71,7 +71,8 @@ public class ApayloPaymentRail implements PaymentRailProvider {
         body.put("CustomerEmail", customerEmail.trim());
         body.put("Amount", request.amount());
         body.put("Description", fundingDescription(request));
-        // Link API idempotency; Email API used MerchantReferenceNumber historically.
+        // Email Request Money: MerchantReferenceNumber. Link API uses UniqueId — send both.
+        body.put("MerchantReferenceNumber", request.idempotencyKey());
         body.put("UniqueId", request.idempotencyKey());
 
         JsonNode response = apayloClient.post(properties.getCreateSearchableEtransferPath(), body);
@@ -80,8 +81,8 @@ public class ApayloPaymentRail implements PaymentRailProvider {
                 text(response, "TransactionNumber"),
                 text(response, "InteracReference"),
                 request.fundingTransactionId().toString());
-        // Real payment process: Instant Interac instructions + PENDING until webhook settles.
-        // Sandbox auto-settle must not skip the customer send step (same as Kuda VA funding).
+        // Real payment process: Instant Interac instructions + PENDING until reconcile settles.
+        // Sandbox auto-settle must not skip the customer pay step (same as Kuda VA funding).
         String instructions = buildInstantDepositInstructions(request.amount(), reference, customerEmail);
         return new FundingInitiation(reference, instructions, true);
     }
@@ -97,24 +98,20 @@ public class ApayloPaymentRail implements PaymentRailProvider {
 
     private String buildInstantDepositInstructions(
             java.math.BigDecimal amount, String reference, String customerEmail) {
-        String accountName = blankTo(properties.getAccountId(), "Palpeer Global Holding Inc");
-        String apl = properties.getAplReference() == null ? "" : properties.getAplReference().trim();
-        // Instant Interac / Autodeposit is by searchable business name only.
-        // Do not direct customers to ipay@apaylo.com — that path often asks for a security
-        // question/answer and is not the Instant Autodeposit flow.
+        // Request Money: customer pays the Interac request sent to their email — not Autodeposit
+        // payee search (merchant name is often not searchable) and not send-to-ipay@apaylo.com.
         StringBuilder sb = new StringBuilder();
-        sb.append("Instant deposit via Interac Autodeposit. Send CAD ")
+        sb.append("Instant Interac deposit. We sent a money request for CAD ")
                 .append(amount)
-                .append(" with Interac e-Transfer. Open your banking app → Send → Interac → search for \"")
-                .append(accountName)
-                .append("\" (Autodeposit) → enter the exact amount. Reference=")
+                .append(" to ")
+                .append(customerEmail.trim())
+                .append(". Open that Interac email or your banking app → Interac e-Transfer → ")
+                .append("Fulfill / Respond to request → pay exactly that amount. Reference=")
                 .append(reference)
-                .append(". Do not send to an email address — email sends may ask for a security question. ")
-                .append("We do not email you an Interac request.");
-        if (notBlank(apl)) {
-            sb.append(" Include ").append(apl).append(" in the memo if asked.");
-        }
-        sb.append(" Your Interac email: ").append(customerEmail.trim()).append('.');
+                .append(". Do not search for a payee name and do not start a new Send to an email. ")
+                .append("Your Interac email: ")
+                .append(customerEmail.trim())
+                .append('.');
         return sb.toString();
     }
 

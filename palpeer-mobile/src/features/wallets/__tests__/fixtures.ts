@@ -66,13 +66,13 @@ export const funding = (overrides: Record<string, unknown> = {}) => ({
   providerName: 'APAYLO',
   providerReference: 'APY-1',
   fundingInstructions:
-    'Instant deposit via Interac. Send CAD 250.00 with Interac e-Transfer to "Palpeer Global Holding Inc". Reference=APY-1. Open your banking app → Send → Interac → search for "Palpeer Global Holding Inc". You initiate the transfer — we do not send an Interac request to your email. Your Interac email: sesanelect@yahoo.com.',
+    'Instant Interac deposit. We sent a money request for CAD 250.00 to sesanelect@yahoo.com. Open that Interac email or your banking app → Interac e-Transfer → Fulfill / Respond to request → pay exactly that amount. Reference=CA1-APY-1. Do not search for a payee name and do not start a new Send to an email. Your Interac email: sesanelect@yahoo.com.',
   paymentDetails: {
     accountNumber: null,
-    accountName: 'Palpeer Global Holding Inc',
+    accountName: null,
     bankName: 'Interac',
     bankCode: null,
-    trackingReference: 'APY-1',
+    trackingReference: 'CA1-APY-1',
     amount: '250.00',
     currencyCode: 'CAD',
     method: 'INTERAC_INSTANT',

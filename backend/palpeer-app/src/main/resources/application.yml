@@ -213,7 +213,7 @@ palpeer:
     # Unused for Instant Autodeposit UI (payee name only). Email sends ask for a security Q&A.
     interac-collection-email: ${APAYLO_INTERAC_COLLECTION_EMAIL:}
     apl-reference: ${APAYLO_APL_REFERENCE:}
-    create-searchable-etransfer-path: ${APAYLO_CREATE_SEARCHABLE_PATH:/Merchant/RequestInteracEtransferLink}
+    create-searchable-etransfer-path: ${APAYLO_CREATE_SEARCHABLE_PATH:/Merchant/RequestInteracEtransferEmail}
     send-interac-etransfer-path: ${APAYLO_SEND_INTERAC_PATH:/Merchant/SendInteracEtransfer}
     send-eft-path: ${APAYLO_SEND_EFT_PATH:/EFT/CreateEFTTransaction}
     interac-security-question: ${APAYLO_INTERAC_SECURITY_QUESTION:What is the name of this transfer?}
