@@ -17,6 +17,7 @@ import com.palpeer.wallet.domain.Wallet;
 import com.palpeer.wallet.funding.MoneyMovementStatus;
 import com.palpeer.wallet.provider.PaymentRailProvider;
 import com.palpeer.wallet.provider.PaymentRailRouter;
+import com.palpeer.wallet.provider.apaylo.ApayloPaymentRail;
 import com.palpeer.wallet.provider.kuda.KudaPaymentRail;
 import com.palpeer.wallet.repository.WalletRepository;
 import com.palpeer.wallet.service.PoolFundThresholdService;
@@ -75,6 +76,7 @@ public class WithdrawalService {
     private final PoolFundThresholdService poolFundThresholdService;
     private final WithdrawalUnverifiedLimitService withdrawalUnverifiedLimitService;
     private final ObjectProvider<KudaPaymentRail> kudaPaymentRail;
+    private final ObjectProvider<ApayloPaymentRail> apayloPaymentRail;
 
     @Transactional
     public WithdrawalTransactionResponse initiate(UUID userId, String idempotencyKey, CreateWithdrawalRequest request) {
@@ -129,10 +131,21 @@ public class WithdrawalService {
      */
     @Transactional
     public int reconcilePendingKudaWithdrawals(int limit) {
+        return reconcilePendingByProvider(KudaPaymentRail.NAME, limit, "Kuda");
+    }
+
+    /**
+     * Background / poll fallback: settle PENDING Apaylo CAD withdrawals (Apaylo has no webhooks).
+     */
+    @Transactional
+    public int reconcilePendingApayloWithdrawals(int limit) {
+        return reconcilePendingByProvider(ApayloPaymentRail.NAME, limit, "Apaylo");
+    }
+
+    private int reconcilePendingByProvider(String providerName, int limit, String label) {
         int max = Math.max(1, Math.min(limit, 50));
         List<WithdrawalTransaction> pending = withdrawalTransactionRepository
-                .findByProviderNameAndStatusOrderByCreatedAtAsc(
-                        KudaPaymentRail.NAME, MoneyMovementStatus.PENDING);
+                .findByProviderNameAndStatusOrderByCreatedAtAsc(providerName, MoneyMovementStatus.PENDING);
         int settled = 0;
         for (WithdrawalTransaction listed : pending) {
             if (settled >= max) {
@@ -148,7 +161,7 @@ public class WithdrawalService {
                     settled++;
                 }
             } catch (RuntimeException ex) {
-                log.warn("Kuda withdrawal reconcile skipped for {}: {}", listed.getId(), ex.getMessage());
+                log.warn("{} withdrawal reconcile skipped for {}: {}", label, listed.getId(), ex.getMessage());
             }
         }
         return settled;
@@ -211,8 +224,14 @@ public class WithdrawalService {
         if (tx.getStatus() != MoneyMovementStatus.PENDING && tx.getStatus() != MoneyMovementStatus.INITIATED) {
             return toResponse(tx);
         }
-        if (tx.getProviderName() == null
-                || !KudaPaymentRail.NAME.equalsIgnoreCase(tx.getProviderName().trim())) {
+        if (tx.getProviderName() == null) {
+            return toResponse(tx);
+        }
+        String provider = tx.getProviderName().trim();
+        if (ApayloPaymentRail.NAME.equalsIgnoreCase(provider)) {
+            return reconcileApayloWithdrawalIfNeeded(tx);
+        }
+        if (!KudaPaymentRail.NAME.equalsIgnoreCase(provider)) {
             return toResponse(tx);
         }
         LinkedHashSet<String> candidateRefs = new LinkedHashSet<>();
@@ -254,6 +273,31 @@ public class WithdrawalService {
                     confirmed.providerReference() != null && !confirmed.providerReference().isBlank()
                             ? confirmed.providerReference().trim()
                             : candidateRefs.iterator().next());
+            withdrawalTransactionRepository.save(locked);
+        }
+        return settleSuccess(locked);
+    }
+
+    private WithdrawalTransactionResponse reconcileApayloWithdrawalIfNeeded(WithdrawalTransaction tx) {
+        ApayloPaymentRail rail = apayloPaymentRail.getIfAvailable();
+        if (rail == null || !rail.isEnabled()) {
+            return toResponse(tx);
+        }
+        String ref = tx.getProviderReference() == null ? null : tx.getProviderReference().trim();
+        if (ref == null || ref.isBlank()) {
+            return toResponse(tx);
+        }
+        var confirmed = rail.confirmWithdrawalPayment(ref);
+        if (confirmed.isEmpty()) {
+            return toResponse(tx);
+        }
+        log.info(
+                "Apaylo withdrawal reconciled via search poll. withdrawalId={} ref={}",
+                tx.getId(),
+                confirmed.get().providerReference());
+        WithdrawalTransaction locked = requireForUpdate(tx.getId());
+        if (confirmed.get().providerReference() != null && !confirmed.get().providerReference().isBlank()) {
+            locked.setProviderReference(confirmed.get().providerReference().trim());
             withdrawalTransactionRepository.save(locked);
         }
         return settleSuccess(locked);

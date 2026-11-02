@@ -3,8 +3,15 @@ package com.palpeer.wallet.provider.apaylo;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.wallet.provider.PaymentRailProvider;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -198,6 +205,244 @@ public class ApayloPaymentRail implements PaymentRailProvider {
         body.put("TransactionNumber", request.withdrawalTransactionId().toString().replace("-", ""));
         body.put("Description", sanitizeDescription("PALPEER withdrawal"));
         return apayloClient.post(properties.getSendInteracEtransferPath(), body);
+    }
+
+    /**
+     * Poll Apaylo for Instant Interac / request funding completion (Apaylo has no webhooks).
+     */
+    public Optional<ConfirmedPayment> confirmFundingPayment(
+            String providerReference, String idempotencyKey, BigDecimal expectedAmount) {
+        if (!isEnabled()) {
+            return Optional.empty();
+        }
+        LocalDate end = LocalDate.now(ZoneOffset.UTC);
+        LocalDate start = end.minusDays(14);
+        if (notBlank(providerReference)) {
+            Optional<ConfirmedPayment> byRequest = findCompletedRequest(
+                    providerReference.trim(), null, start, end, expectedAmount);
+            if (byRequest.isPresent()) {
+                return byRequest;
+            }
+            Optional<ConfirmedPayment> byIncoming = findCompletedIncoming(providerReference.trim(), expectedAmount, start, end);
+            if (byIncoming.isPresent()) {
+                return byIncoming;
+            }
+        }
+        if (notBlank(idempotencyKey)) {
+            return findCompletedRequest(null, idempotencyKey.trim(), start, end, expectedAmount);
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Poll Apaylo for Interac send / EFT withdrawal completion.
+     */
+    public Optional<ConfirmedPayment> confirmWithdrawalPayment(String providerReference) {
+        if (!isEnabled() || !notBlank(providerReference)) {
+            return Optional.empty();
+        }
+        String ref = providerReference.trim();
+        LocalDate end = LocalDate.now(ZoneOffset.UTC);
+        LocalDate start = end.minusDays(14);
+        Optional<ConfirmedPayment> send = findCompletedSend(ref, start, end);
+        if (send.isPresent()) {
+            return send;
+        }
+        return findCompletedEft(ref, start, end);
+    }
+
+    public record ConfirmedPayment(String providerReference) {}
+
+    private Optional<ConfirmedPayment> findCompletedRequest(
+            String interacOrTxnRef,
+            String uniqueId,
+            LocalDate start,
+            LocalDate end,
+            BigDecimal expectedAmount) {
+        Map<String, Object> body = dateRange(start, end);
+        if (notBlank(interacOrTxnRef)) {
+            body.put("InteracReferenceNumber", interacOrTxnRef);
+        }
+        JsonNode response = apayloClient.postAllowEmpty(properties.getSearchRequestInteracPath(), body);
+        for (JsonNode row : resultRows(response)) {
+            if (!isCompletedStatus(firstText(row, "TransactionStatus", "Status", "transferStatus"))) {
+                continue;
+            }
+            if (expectedAmount != null && !amountMatches(row, expectedAmount)) {
+                continue;
+            }
+            if (notBlank(uniqueId)) {
+                String uid = firstText(row, "UniqueId", "uniqueId");
+                if (notBlank(uid) && !uniqueId.equalsIgnoreCase(uid.trim())) {
+                    continue;
+                }
+            }
+            if (notBlank(interacOrTxnRef) && !rowMatchesRef(row, interacOrTxnRef)) {
+                continue;
+            }
+            return Optional.of(new ConfirmedPayment(firstNonBlank(
+                    firstText(row, "InteracReferenceNumber", "ReferenceNumber", "TransactionNumber"),
+                    interacOrTxnRef,
+                    uniqueId)));
+        }
+        return Optional.empty();
+    }
+
+    private Optional<ConfirmedPayment> findCompletedIncoming(
+            String providerReference, BigDecimal expectedAmount, LocalDate start, LocalDate end) {
+        JsonNode response =
+                apayloClient.postAllowEmpty(properties.getSearchIncomingInteracPath(), dateRange(start, end));
+        for (JsonNode row : resultRows(response)) {
+            if (!rowMatchesRef(row, providerReference)) {
+                continue;
+            }
+            if (expectedAmount != null && !amountMatches(row, expectedAmount)) {
+                continue;
+            }
+            return Optional.of(new ConfirmedPayment(firstNonBlank(
+                    firstText(row, "ReferenceNumber", "TransactionReferenceNumber", "InteracReferenceNumber"),
+                    providerReference)));
+        }
+        return Optional.empty();
+    }
+
+    private Optional<ConfirmedPayment> findCompletedSend(String providerReference, LocalDate start, LocalDate end) {
+        Map<String, Object> byInterac = dateRange(start, end);
+        byInterac.put("InteracReferenceNumber", providerReference);
+        Optional<ConfirmedPayment> hit = matchSendRows(
+                apayloClient.postAllowEmpty(properties.getSearchSendInteracPath(), byInterac), providerReference);
+        if (hit.isPresent()) {
+            return hit;
+        }
+        Map<String, Object> byTxn = dateRange(start, end);
+        byTxn.put("TransactionNumber", providerReference.replace("-", ""));
+        return matchSendRows(
+                apayloClient.postAllowEmpty(properties.getSearchSendInteracPath(), byTxn), providerReference);
+    }
+
+    private Optional<ConfirmedPayment> matchSendRows(JsonNode response, String providerReference) {
+        for (JsonNode row : resultRows(response)) {
+            if (!isCompletedStatus(firstText(row, "TransactionStatus", "Status"))) {
+                continue;
+            }
+            if (!rowMatchesRef(row, providerReference)) {
+                continue;
+            }
+            return Optional.of(new ConfirmedPayment(firstNonBlank(
+                    firstText(row, "InteracReferenceNumber", "TransactionNumber"), providerReference)));
+        }
+        return Optional.empty();
+    }
+
+    private Optional<ConfirmedPayment> findCompletedEft(String providerReference, LocalDate start, LocalDate end) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("TransactionNumber", providerReference.replace("-", ""));
+        body.put("MinTransactionDate", start.toString());
+        body.put("MaxTransactionDate", end.toString());
+        JsonNode response = apayloClient.postAllowEmpty(properties.getSearchEftPath(), body);
+        for (JsonNode row : resultRows(response)) {
+            if (!isCompletedStatus(firstText(row, "TransactionStatus", "Status"))) {
+                continue;
+            }
+            if (!rowMatchesRef(row, providerReference)) {
+                continue;
+            }
+            return Optional.of(new ConfirmedPayment(firstNonBlank(
+                    firstText(row, "TransactionNumber", "TransactionId"), providerReference)));
+        }
+        return Optional.empty();
+    }
+
+    private static Map<String, Object> dateRange(LocalDate start, LocalDate end) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("StartDate", start.toString());
+        body.put("EndDate", end.toString());
+        return body;
+    }
+
+    private static List<JsonNode> resultRows(JsonNode response) {
+        List<JsonNode> rows = new ArrayList<>();
+        if (response == null) {
+            return rows;
+        }
+        JsonNode result = response.path("Result");
+        if (result.isArray()) {
+            result.forEach(rows::add);
+            return rows;
+        }
+        if (result.isObject() && !result.has("Message")) {
+            rows.add(result);
+            return rows;
+        }
+        if (response.isArray()) {
+            response.forEach(rows::add);
+        }
+        return rows;
+    }
+
+    private static boolean rowMatchesRef(JsonNode row, String ref) {
+        if (!notBlank(ref)) {
+            return true;
+        }
+        String needle = ref.trim();
+        String compact = needle.replace("-", "");
+        for (String field : new String[] {
+            "InteracReferenceNumber",
+            "ReferenceNumber",
+            "TransactionReferenceNumber",
+            "TransactionNumber",
+            "TransactionId",
+            "UniqueId",
+            "transferReferenceNumber"
+        }) {
+            String value = firstText(row, field);
+            if (!notBlank(value)) {
+                continue;
+            }
+            String trimmed = value.trim();
+            if (trimmed.equalsIgnoreCase(needle) || trimmed.replace("-", "").equalsIgnoreCase(compact)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean amountMatches(JsonNode row, BigDecimal expected) {
+        String raw = firstText(row, "Amount", "amount");
+        if (!notBlank(raw)) {
+            return true;
+        }
+        try {
+            return new BigDecimal(raw.trim().replace(",", "")).compareTo(expected) == 0;
+        } catch (NumberFormatException ex) {
+            return true;
+        }
+    }
+
+    static boolean isCompletedStatus(String status) {
+        if (!notBlank(status)) {
+            // SearchInteracEtransfers only returns completed incoming transfers.
+            return true;
+        }
+        String normalized = status.trim().toLowerCase(Locale.ROOT);
+        return normalized.equals("completed")
+                || normalized.equals("complete")
+                || normalized.equals("settled")
+                || normalized.equals("success")
+                || normalized.equals("successful")
+                || normalized.equals("paid")
+                || normalized.equals("deposited")
+                || normalized.equals("accepted");
+    }
+
+    private static String firstText(JsonNode node, String... fields) {
+        for (String field : fields) {
+            String value = text(node, field);
+            if (notBlank(value)) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private static String blankTo(String value, String fallback) {

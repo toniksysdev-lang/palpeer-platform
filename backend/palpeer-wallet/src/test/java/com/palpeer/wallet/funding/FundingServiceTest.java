@@ -22,6 +22,7 @@ import com.palpeer.wallet.domain.Wallet;
 import com.palpeer.wallet.funding.dto.CreateFundingRequest;
 import com.palpeer.wallet.funding.dto.FundingTransactionResponse;
 import com.palpeer.wallet.provider.PaymentRailRouter;
+import com.palpeer.wallet.provider.apaylo.ApayloPaymentRail;
 import com.palpeer.wallet.provider.apaylo.ApayloProperties;
 import com.palpeer.wallet.provider.kuda.KudaPaymentRail;
 import com.palpeer.wallet.repository.WalletRepository;
@@ -53,6 +54,7 @@ class FundingServiceTest {
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
     @Mock private FundingUnverifiedLimitService fundingUnverifiedLimitService;
     @Mock private ObjectProvider<KudaPaymentRail> kudaPaymentRail;
+    @Mock private ObjectProvider<ApayloPaymentRail> apayloPaymentRail;
 
     @InjectMocks private FundingService fundingService;
 
@@ -71,6 +73,7 @@ class FundingServiceTest {
         wallet.setAvailableBalance(BigDecimal.ZERO);
         wallet.setPendingBalance(BigDecimal.ZERO);
         lenient().when(kudaPaymentRail.getIfAvailable()).thenReturn(null);
+        lenient().when(apayloPaymentRail.getIfAvailable()).thenReturn(null);
     }
 
     @Test

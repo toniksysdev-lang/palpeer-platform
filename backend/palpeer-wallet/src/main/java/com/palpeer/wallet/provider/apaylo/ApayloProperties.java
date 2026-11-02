@@ -98,7 +98,34 @@ public class ApayloProperties {
     private String accountBalancePath = "/Merchant/GetBalance";
 
     /**
-     * HMAC-SHA256 secret for inbound webhooks. Blank rejects every webhook.
+     * Poll Instant Interac / request-money funding status (Apaylo has no webhooks).
+     */
+    private String searchRequestInteracPath = "/Merchant/SearchRequestInteracEtransfer";
+
+    /**
+     * Poll completed incoming Interac receives (autodeposit / send-to-business).
+     */
+    private String searchIncomingInteracPath = "/Merchant/SearchInteracEtransfers";
+
+    /**
+     * Poll Interac send (CAD withdrawal) status.
+     */
+    private String searchSendInteracPath = "/Merchant/SearchSendInteracEtransfer";
+
+    /**
+     * Poll EFT credit (CAD bank withdrawal) status.
+     */
+    private String searchEftPath = "/EFT/SearchEFTTransaction";
+
+    /**
+     * Background reconcile delay (Apaylo recommends polling every 3–5 minutes).
+     */
+    private long reconcileDelayMs = 180_000L;
+
+    private long reconcileInitialDelayMs = 20_000L;
+
+    /**
+     * Unused: Apaylo does not offer webhooks (see docs FAQ). Kept for forward-compat.
      */
     private String webhookSecret = "";
 

@@ -219,6 +219,13 @@ palpeer:
     interac-security-question: ${APAYLO_INTERAC_SECURITY_QUESTION:What is the name of this transfer?}
     interac-security-answer: ${APAYLO_INTERAC_SECURITY_ANSWER:PALPEER}
     account-balance-path: ${APAYLO_ACCOUNT_BALANCE_PATH:/Merchant/GetBalance}
+    # Apaylo FAQ: no webhooks — poll these search endpoints every 3–5 minutes.
+    search-request-interac-path: ${APAYLO_SEARCH_REQUEST_PATH:/Merchant/SearchRequestInteracEtransfer}
+    search-incoming-interac-path: ${APAYLO_SEARCH_INCOMING_PATH:/Merchant/SearchInteracEtransfers}
+    search-send-interac-path: ${APAYLO_SEARCH_SEND_PATH:/Merchant/SearchSendInteracEtransfer}
+    search-eft-path: ${APAYLO_SEARCH_EFT_PATH:/EFT/SearchEFTTransaction}
+    reconcile-delay-ms: ${APAYLO_RECONCILE_DELAY_MS:180000}
+    reconcile-initial-delay-ms: ${APAYLO_RECONCILE_INITIAL_DELAY_MS:20000}
     webhook-secret: ${APAYLO_WEBHOOK_SECRET:}
     webhook-signature-header: ${APAYLO_WEBHOOK_SIGNATURE_HEADER:X-Webhook-Signature}
   kuda:

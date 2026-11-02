@@ -50,6 +50,8 @@ class WithdrawalServiceTest {
     @Mock private com.palpeer.wallet.service.WithdrawalUnverifiedLimitService withdrawalUnverifiedLimitService;
     @Mock private org.springframework.beans.factory.ObjectProvider<com.palpeer.wallet.provider.kuda.KudaPaymentRail>
             kudaPaymentRail;
+    @Mock private org.springframework.beans.factory.ObjectProvider<com.palpeer.wallet.provider.apaylo.ApayloPaymentRail>
+            apayloPaymentRail;
 
     @InjectMocks private WithdrawalService withdrawalService;
 

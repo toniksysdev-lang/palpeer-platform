@@ -53,6 +53,18 @@ public class ApayloClient {
     }
 
     public JsonNode post(String path, Map<String, Object> body) {
+        return post(path, body, false);
+    }
+
+    /**
+     * Search/poll helper: Apaylo returns HTTP 400 + {@code IsError} with
+     * {@code "No data found"} when a date range has no rows — treat that as an empty result.
+     */
+    public JsonNode postAllowEmpty(String path, Map<String, Object> body) {
+        return post(path, body, true);
+    }
+
+    private JsonNode post(String path, Map<String, Object> body, boolean allowEmpty) {
         requireConfigured();
         Map<String, Object> payload = body == null ? new HashMap<>() : new HashMap<>(body);
         URI uri = URI.create(joinUrl(resolveBaseUrl(), path));
@@ -65,8 +77,15 @@ public class ApayloClient {
                     .body(payload)
                     .retrieve()
                     .body(String.class);
-            return requireSuccess(parseBody(raw), path);
+            JsonNode parsed = parseBody(raw);
+            if (allowEmpty && isNoData(parsed)) {
+                return objectMapper.createObjectNode().put("IsError", false).set("Result", objectMapper.createArrayNode());
+            }
+            return requireSuccess(parsed, path);
         } catch (RestClientResponseException ex) {
+            if (allowEmpty && isNoDataBody(ex.getResponseBodyAsString())) {
+                return objectMapper.createObjectNode().put("IsError", false).set("Result", objectMapper.createArrayNode());
+            }
             log.error("Apaylo POST {} failed: {} {}", uri, ex.getStatusCode(), ex.getResponseBodyAsString());
             throw apayloHttpError(ex);
         } catch (BusinessException ex) {
@@ -74,6 +93,28 @@ public class ApayloClient {
         } catch (Exception ex) {
             log.error("Apaylo POST {} failed: {}", uri, ex.toString());
             throw new BusinessException("APAYLO_ERROR", "Apaylo request failed", HttpStatus.BAD_GATEWAY);
+        }
+    }
+
+    private static boolean isNoData(JsonNode response) {
+        if (response == null || !response.path("IsError").asBoolean(false)) {
+            return false;
+        }
+        String message = text(response, "Message");
+        if (message == null || message.isBlank()) {
+            message = text(response.path("Result"), "Message");
+        }
+        return message != null && message.toLowerCase().contains("no data");
+    }
+
+    private boolean isNoDataBody(String rawBody) {
+        if (rawBody == null || rawBody.isBlank()) {
+            return false;
+        }
+        try {
+            return isNoData(objectMapper.readTree(rawBody));
+        } catch (Exception ignored) {
+            return rawBody.toLowerCase().contains("no data");
         }
     }
 

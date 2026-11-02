@@ -23,7 +23,8 @@ Blueprint file: [`render.yaml`](../render.yaml) (API + admin + Postgres + Redis)
 | `ADMIN_BOOTSTRAP_EMAIL` | First admin user email (optional) |
 | `GOOGLE_CLIENT_IDS` | Comma-separated OAuth client IDs, or leave empty |
 | `APAYLO_ENABLED` / `APAYLO_API_KEY` / `APAYLO_SHARED_KEY` | CAD Interac rail — required for Pool Funds (Apaylo) and CAD funding |
-| `APAYLO_SANDBOX` | `true` for sandbox keys |
+| `APAYLO_SANDBOX` | `true` for sandbox keys; live = `false` + offline/auto settle `false` |
+| Apaylo webhooks | **Not available** (Apaylo FAQ). CAD settle uses search polling (`ApayloReconcileJob`) |
 | `KORAPAY_ENABLED` / `KORAPAY_SECRET_KEY` / `KORAPAY_PUBLIC_KEY` | NGN rail — required for Pool Funds (Korapay) and NGN funding |
 | `KORAPAY_SANDBOX` | `true` for `sk_test_` / `pk_test_` keys |
 | `KUDA_*` | Live NGN funding (dynamic collection) + withdrawals; set `KUDA_ENABLED=true`, `KUDA_SANDBOX=false`, `KUDA_CLIENT_ACCOUNT_NUMBER`, webhook user/pass, and disable offline/auto/demo settle flags |

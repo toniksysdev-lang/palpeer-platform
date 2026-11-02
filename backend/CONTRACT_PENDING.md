@@ -103,7 +103,7 @@
 | P6-04 | Withdrawal ledger model | Direct DEBIT vs HOLD then settle? | HOLD on initiate; SUCCESS = RELEASE + DEBIT; fail = RELEASE |
 | P6-05 | Idempotency header | Required name/format? | `Idempotency-Key` HTTP header (unique per movement type table) |
 | P6-APAYLO-01 | Apaylo endpoint paths | Exact Merchant API paths / payload fields? | Provisional paths under `/api/Merchant/*` — confirm against live Apaylo docs once credentials issued |
-| P6-APAYLO-02 | Apaylo webhook signing | Apaylo's real signature scheme and header? | Generic HMAC-SHA256 hex of raw body in `APAYLO_WEBHOOK_SIGNATURE_HEADER` (default `X-Webhook-Signature`) keyed by `APAYLO_WEBHOOK_SECRET`; blank secret rejects all |
+| P6-APAYLO-02 | Apaylo webhook signing | Apaylo's real signature scheme and header? | **Resolved (2026-11):** Apaylo FAQ — *does not offer webhooks*; settle via polling `SearchRequestInteracEtransfer` / `SearchInteracEtransfers` / `SearchSendInteracEtransfer` / `SearchEFTTransaction` (`ApayloReconcileJob`, ~3 min). Legacy `/api/v1/webhooks/apaylo` kept but unused |
 | P6-KUDA-02 | Kuda webhook signing | Kuda's real webhook auth (signature vs basic auth)? | Same generic HMAC scheme with `KUDA_WEBHOOK_SECRET` / `KUDA_WEBHOOK_SIGNATURE_HEADER`; blank secret rejects all |
 | P6-KUDA-01 | Kuda webhook auth | Signed webhooks vs IP allow-list? | Open webhook endpoint; harden once Kuda webhook contract confirmed |
 

@@ -72,6 +72,7 @@ public class FundingService {
     private final ApplicationEventPublisher eventPublisher;
     private final FundingUnverifiedLimitService fundingUnverifiedLimitService;
     private final ObjectProvider<KudaPaymentRail> kudaPaymentRail;
+    private final ObjectProvider<ApayloPaymentRail> apayloPaymentRail;
 
     @Transactional
     public FundingTransactionResponse initiate(UUID userId, String idempotencyKey, CreateFundingRequest request) {
@@ -647,12 +648,47 @@ public class FundingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Funding transaction not found"));
     }
 
+    /**
+     * Background / poll fallback: settle PENDING Apaylo CAD fundings (Apaylo has no webhooks).
+     */
+    @Transactional
+    public int reconcilePendingApayloFundings(int limit) {
+        int max = Math.max(1, Math.min(limit, 50));
+        List<FundingTransaction> pending = fundingTransactionRepository
+                .findByProviderNameAndStatusOrderByCreatedAtAsc(ApayloPaymentRail.NAME, MoneyMovementStatus.PENDING);
+        int settled = 0;
+        for (FundingTransaction listed : pending) {
+            if (settled >= max) {
+                break;
+            }
+            FundingTransaction tx = fundingTransactionRepository.findById(listed.getId()).orElse(null);
+            if (tx == null) {
+                continue;
+            }
+            try {
+                FundingTransactionResponse after = reconcileProviderPaymentIfNeeded(tx);
+                if (after.status() == MoneyMovementStatus.SUCCESS) {
+                    settled++;
+                }
+            } catch (RuntimeException ex) {
+                log.warn("Apaylo funding reconcile skipped for {}: {}", listed.getId(), ex.getMessage());
+            }
+        }
+        return settled;
+    }
+
     private FundingTransactionResponse reconcileProviderPaymentIfNeeded(FundingTransaction tx) {
         if (tx.getStatus() != MoneyMovementStatus.PENDING && tx.getStatus() != MoneyMovementStatus.INITIATED) {
             return toResponse(tx);
         }
-        if (tx.getProviderName() == null
-                || !KudaPaymentRail.NAME.equalsIgnoreCase(tx.getProviderName().trim())) {
+        if (tx.getProviderName() == null) {
+            return toResponse(tx);
+        }
+        String provider = tx.getProviderName().trim();
+        if (ApayloPaymentRail.NAME.equalsIgnoreCase(provider)) {
+            return reconcileApayloFundingIfNeeded(tx);
+        }
+        if (!KudaPaymentRail.NAME.equalsIgnoreCase(provider)) {
             return toResponse(tx);
         }
         KudaPaymentRail rail = kudaPaymentRail.getIfAvailable();
@@ -675,6 +711,33 @@ public class FundingService {
                 "Kuda funding reconciled via TSQ. fundingId={} account={} amount={} ref={}",
                 tx.getId(),
                 accountNumber,
+                tx.getAmount(),
+                confirmed.get().providerReference());
+        FundingTransaction locked = fundingTransactionRepository
+                .findByIdForUpdate(tx.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Funding transaction not found"));
+        if (confirmed.get().providerReference() != null && !confirmed.get().providerReference().isBlank()) {
+            locked.setProviderReference(confirmed.get().providerReference().trim());
+            fundingTransactionRepository.save(locked);
+        }
+        return processInternal(locked);
+    }
+
+    private FundingTransactionResponse reconcileApayloFundingIfNeeded(FundingTransaction tx) {
+        ApayloPaymentRail rail = apayloPaymentRail.getIfAvailable();
+        if (rail == null || !rail.isEnabled()) {
+            return toResponse(tx);
+        }
+        var confirmed = rail.confirmFundingPayment(
+                blankToNull(tx.getProviderReference()),
+                blankToNull(tx.getIdempotencyKey()),
+                tx.getAmount());
+        if (confirmed.isEmpty()) {
+            return toResponse(tx);
+        }
+        log.info(
+                "Apaylo funding reconciled via search poll. fundingId={} amount={} ref={}",
+                tx.getId(),
                 tx.getAmount(),
                 confirmed.get().providerReference());
         FundingTransaction locked = fundingTransactionRepository
