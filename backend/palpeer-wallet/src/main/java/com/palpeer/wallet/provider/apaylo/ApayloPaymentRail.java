@@ -190,7 +190,10 @@ public class ApayloPaymentRail implements PaymentRailProvider {
             body.put("CustomerPhone", destination);
         }
         body.put("SecurityQuestion", blankTo(properties.getInteracSecurityQuestion(), "What is the name of this transfer?"));
-        body.put("SecurityAnswer", blankTo(properties.getInteracSecurityAnswer(), "PALPEER"));
+        // Live Apaylo expects SecurityQuestionAnswer (SecurityAnswer is ignored → "Please enter security answer").
+        body.put(
+                "SecurityQuestionAnswer",
+                blankTo(properties.getInteracSecurityAnswer(), "PALPEER"));
         body.put("MerchantReferenceNumber", request.idempotencyKey());
         body.put("TransactionNumber", request.withdrawalTransactionId().toString().replace("-", ""));
         body.put("Description", sanitizeDescription("PALPEER withdrawal"));

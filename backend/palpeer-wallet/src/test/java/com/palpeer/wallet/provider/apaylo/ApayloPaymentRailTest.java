@@ -108,6 +108,7 @@ class ApayloPaymentRailTest {
         verify(apayloClient).post(eq("/Merchant/SendInteracEtransfer"), bodyCaptor.capture());
         assertThat(bodyCaptor.getValue()).containsEntry("CustomerEmail", "user@example.com");
         assertThat(bodyCaptor.getValue()).containsKey("SecurityQuestion");
+        assertThat(bodyCaptor.getValue()).containsKey("SecurityQuestionAnswer");
         assertThat(bodyCaptor.getValue()).containsKey("CustomerName");
     }
 
