@@ -73,7 +73,7 @@ export type FundingPaymentDetails = {
   /** Customer's send-from Interac email (payer). */
   interacEmail: string | null;
   aplReference: string | null;
-  /** Unused for Instant Request Money; do not show as send-to. */
+  /** Merchant Autodeposit receive email (e.g. pay@palpeer.com). */
   collectionEmail?: string | null;
 };
 

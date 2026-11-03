@@ -7,8 +7,8 @@ import java.math.BigDecimal;
  *
  * <ul>
  *   <li>{@code BANK_TRANSFER} — Kuda virtual account (account number / bank)
- *   <li>{@code INTERAC_INSTANT} — Apaylo Instant Interac Request Money (pay via Interac email /
- *       banking fulfill; {@code trackingReference} is the Interac reference)
+ *   <li>{@code INTERAC_INSTANT} — Apaylo Instant Interac Autodeposit ({@code collectionEmail} is
+ *       the send-to address; {@code trackingReference} is the memo / settlement ref)
  * </ul>
  */
 public record FundingPaymentDetails(
@@ -21,14 +21,11 @@ public record FundingPaymentDetails(
         String currencyCode,
         /** {@code BANK_TRANSFER} or {@code INTERAC_INSTANT}. */
         String method,
-        /** Payer Interac email that receives the Request Money (CAD Instant deposit). */
+        /** Payer Interac email (send-from) for CAD Instant deposit. */
         String interacEmail,
         /** Optional Apaylo APL#### memo for Instant deposit. */
         String aplReference,
-        /**
-         * Unused for Instant Interac Request Money (leave null). Do not send customers to a
-         * collection email — that path prompts for a security question.
-         */
+        /** Merchant Autodeposit receive email (e.g. pay@palpeer.com). */
         String collectionEmail
 ) {
     public static final String METHOD_BANK_TRANSFER = "BANK_TRANSFER";

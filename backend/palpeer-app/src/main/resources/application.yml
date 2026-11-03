@@ -210,8 +210,8 @@ palpeer:
     base-url: ${APAYLO_BASE_URL:https://api.etransfer.apaylo.com/api.apaylo.com/api}
     sandbox-base-url: ${APAYLO_SANDBOX_BASE_URL:https://sandboxapi.apaylo.com/sandboxapi.apaylo.com/api}
     account-id: ${APAYLO_ACCOUNT_ID:}
-    # Unused for Instant Autodeposit UI (payee name only). Email sends ask for a security Q&A.
-    interac-collection-email: ${APAYLO_INTERAC_COLLECTION_EMAIL:}
+    # Registered Autodeposit email customers send CAD Instant Interac to (e.g. pay@palpeer.com).
+    interac-collection-email: ${APAYLO_INTERAC_COLLECTION_EMAIL:pay@palpeer.com}
     apl-reference: ${APAYLO_APL_REFERENCE:}
     create-searchable-etransfer-path: ${APAYLO_CREATE_SEARCHABLE_PATH:/Merchant/RequestInteracEtransferEmail}
     send-interac-etransfer-path: ${APAYLO_SEND_INTERAC_PATH:/Merchant/SendInteracEtransfer}

@@ -21,10 +21,9 @@ import org.springframework.stereotype.Component;
 /**
  * Apaylo CAD rails — Instant Interac deposit for funding; Interac send / EFT for withdrawals.
  *
- * <p>Funding uses {@code RequestInteracEtransferEmail}: Apaylo emails the customer an Interac
- * <em>Request Money</em>. The customer pays that request from their banking app (no Autodeposit
- * payee search — {@code SearchPayee} often has no match for the merchant display name). Returns
- * {@code PENDING} until Apaylo reconcile / operator settlement.
+ * <p>Funding uses Interac <em>Autodeposit</em> to the merchant collection email (e.g.
+ * {@code pay@palpeer.com}). No Request Money is created. Settlement is polled via
+ * {@code SearchInteracEtransfers} (match by Interac ref, or by amount + sender email).
  * Docs: https://docs.apaylo.com/apaylo-api-reference/ref
  */
 @Slf4j
@@ -62,54 +61,43 @@ public class ApayloPaymentRail implements PaymentRailProvider {
                     "Interac email is required for Instant Interac deposit",
                     HttpStatus.BAD_REQUEST);
         }
-        String name = customerName(
-                firstNonBlank(request.interacFirstName(), request.customerFirstName()),
-                firstNonBlank(request.interacLastName(), request.customerLastName()));
-
-        Map<String, Object> body = new HashMap<>();
-        body.put("CustomerName", name);
-        body.put("CustomerEmail", customerEmail.trim());
-        body.put("Amount", request.amount());
-        body.put("Description", fundingDescription(request));
-        // Email Request Money: MerchantReferenceNumber. Link API uses UniqueId — send both.
-        body.put("MerchantReferenceNumber", request.idempotencyKey());
-        body.put("UniqueId", request.idempotencyKey());
-
-        JsonNode response = apayloClient.post(properties.getCreateSearchableEtransferPath(), body);
-        String reference = firstNonBlank(
-                text(response, "ReferenceNumber"),
-                text(response, "TransactionNumber"),
-                text(response, "InteracReference"),
-                request.fundingTransactionId().toString());
-        // Real payment process: Instant Interac instructions + PENDING until reconcile settles.
-        // Sandbox auto-settle must not skip the customer pay step (same as Kuda VA funding).
-        String instructions = buildInstantDepositInstructions(request.amount(), reference, customerEmail);
+        String collectionEmail = blankTo(properties.getInteracCollectionEmail(), "").trim().toLowerCase(Locale.ROOT);
+        if (!notBlank(collectionEmail) || !collectionEmail.contains("@")) {
+            throw new BusinessException(
+                    "APAYLO_COLLECTION_EMAIL_REQUIRED",
+                    "Autodeposit collection email is not configured (APAYLO_INTERAC_COLLECTION_EMAIL)",
+                    HttpStatus.SERVICE_UNAVAILABLE);
+        }
+        // Autodeposit: customer sends Interac to the merchant email. No Request Money API call.
+        // Memo ref is for the payer; settlement matches by Interac ref or amount + sender email.
+        String reference = fundingMemoReference(request.fundingTransactionId());
+        String instructions = buildInstantDepositInstructions(
+                request.amount(), reference, customerEmail, collectionEmail);
         return new FundingInitiation(reference, instructions, true);
     }
 
-    private String fundingDescription(FundingInitiationRequest request) {
-        String apl = blankTo(properties.getAplReference(), "");
-        String account = blankTo(properties.getAccountId(), "PALPEER");
-        String raw = notBlank(apl)
-                ? "PALPEER funding " + apl + " " + account
-                : "PALPEER Instant Interac " + account;
-        return sanitizeDescription(raw);
+    private static String fundingMemoReference(java.util.UUID fundingTransactionId) {
+        String compact = fundingTransactionId.toString().replace("-", "").toUpperCase(Locale.ROOT);
+        return "PP" + compact.substring(0, Math.min(10, compact.length()));
     }
 
     private String buildInstantDepositInstructions(
-            java.math.BigDecimal amount, String reference, String customerEmail) {
-        // Request Money: customer pays the Interac request sent to their email — not Autodeposit
-        // payee search (merchant name is often not searchable) and not send-to-ipay@apaylo.com.
+            java.math.BigDecimal amount,
+            String reference,
+            String customerEmail,
+            String collectionEmail) {
         StringBuilder sb = new StringBuilder();
-        sb.append("Instant Interac deposit. We sent a money request for CAD ")
+        sb.append("Instant Interac Autodeposit. Send CAD ")
                 .append(amount)
-                .append(" to ")
-                .append(customerEmail.trim())
-                .append(". Open that Interac email or your banking app → Interac e-Transfer → ")
-                .append("Fulfill / Respond to request → pay exactly that amount. Reference=")
-                .append(reference)
-                .append(". Do not search for a payee name and do not start a new Send to an email. ")
-                .append("Your Interac email: ")
+                .append(" via Interac e-Transfer to ")
+                .append(collectionEmail)
+                .append(" (Autodeposit — no security question). Include memo ")
+                .append(reference);
+        String apl = properties.getAplReference() == null ? "" : properties.getAplReference().trim();
+        if (notBlank(apl)) {
+            sb.append(" / ").append(apl);
+        }
+        sb.append(" if your bank asks for a message. Your Interac email: ")
                 .append(customerEmail.trim())
                 .append('.');
         return sb.toString();
@@ -202,10 +190,15 @@ public class ApayloPaymentRail implements PaymentRailProvider {
     }
 
     /**
-     * Poll Apaylo for Instant Interac / request funding completion (Apaylo has no webhooks).
+     * Poll Apaylo for Instant Interac / Autodeposit funding completion (Apaylo has no webhooks).
+     *
+     * @param senderEmail customer's Interac email (matches {@code SenderEmail} on Autodeposit receives)
      */
     public Optional<ConfirmedPayment> confirmFundingPayment(
-            String providerReference, String idempotencyKey, BigDecimal expectedAmount) {
+            String providerReference,
+            String idempotencyKey,
+            BigDecimal expectedAmount,
+            String senderEmail) {
         if (!isEnabled()) {
             return Optional.empty();
         }
@@ -217,15 +210,30 @@ public class ApayloPaymentRail implements PaymentRailProvider {
             if (byRequest.isPresent()) {
                 return byRequest;
             }
-            Optional<ConfirmedPayment> byIncoming = findCompletedIncoming(providerReference.trim(), expectedAmount, start, end);
+            Optional<ConfirmedPayment> byIncoming =
+                    findCompletedIncoming(providerReference.trim(), expectedAmount, null, start, end);
             if (byIncoming.isPresent()) {
                 return byIncoming;
             }
         }
         if (notBlank(idempotencyKey)) {
-            return findCompletedRequest(null, idempotencyKey.trim(), start, end, expectedAmount);
+            Optional<ConfirmedPayment> byUnique =
+                    findCompletedRequest(null, idempotencyKey.trim(), start, end, expectedAmount);
+            if (byUnique.isPresent()) {
+                return byUnique;
+            }
+        }
+        // Autodeposit receives often have Description "-" and no merchant memo — match sender + amount.
+        if (notBlank(senderEmail) && expectedAmount != null) {
+            return findCompletedIncoming(null, expectedAmount, senderEmail.trim(), start, end);
         }
         return Optional.empty();
+    }
+
+    /** @deprecated Prefer {@link #confirmFundingPayment(String, String, BigDecimal, String)}. */
+    public Optional<ConfirmedPayment> confirmFundingPayment(
+            String providerReference, String idempotencyKey, BigDecimal expectedAmount) {
+        return confirmFundingPayment(providerReference, idempotencyKey, expectedAmount, null);
     }
 
     /**
@@ -283,21 +291,56 @@ public class ApayloPaymentRail implements PaymentRailProvider {
     }
 
     private Optional<ConfirmedPayment> findCompletedIncoming(
-            String providerReference, BigDecimal expectedAmount, LocalDate start, LocalDate end) {
+            String providerReference,
+            BigDecimal expectedAmount,
+            String senderEmail,
+            LocalDate start,
+            LocalDate end) {
         JsonNode response =
                 apayloClient.postAllowEmpty(properties.getSearchIncomingInteracPath(), dateRange(start, end));
         for (JsonNode row : resultRows(response)) {
-            if (!rowMatchesRef(row, providerReference)) {
+            if (notBlank(providerReference) && !rowMatchesRef(row, providerReference)) {
                 continue;
             }
             if (expectedAmount != null && !amountMatches(row, expectedAmount)) {
                 continue;
             }
+            if (notBlank(senderEmail) && !senderEmailMatches(row, senderEmail)) {
+                continue;
+            }
+            // Prefer Autodeposit / Auto Receive rows when matching by sender (not by Interac ref).
+            if (!notBlank(providerReference) && notBlank(senderEmail) && !isAutodepositRow(row)) {
+                continue;
+            }
             return Optional.of(new ConfirmedPayment(firstNonBlank(
-                    firstText(row, "ReferenceNumber", "TransactionReferenceNumber", "InteracReferenceNumber"),
+                    firstText(
+                            row,
+                            "ReferenceNumber",
+                            "TransactionReferenceNumber",
+                            "InteracReferenceNumber",
+                            "TransactionNumber"),
                     providerReference)));
         }
         return Optional.empty();
+    }
+
+    private static boolean senderEmailMatches(JsonNode row, String senderEmail) {
+        String actual = firstText(row, "SenderEmail", "CustomerEmail", "ResponderEmail");
+        return notBlank(actual) && actual.trim().equalsIgnoreCase(senderEmail.trim());
+    }
+
+    private static boolean isAutodepositRow(JsonNode row) {
+        if (row.path("IsAutodeposit").asBoolean(false)) {
+            return true;
+        }
+        String paymentType = firstText(row, "PaymentType", "TransactionType");
+        if (!notBlank(paymentType)) {
+            return false;
+        }
+        String normalized = paymentType.trim().toLowerCase(Locale.ROOT);
+        return normalized.contains("auto deposit")
+                || normalized.contains("autodeposit")
+                || normalized.contains("auto receive");
     }
 
     private Optional<ConfirmedPayment> findCompletedSend(String providerReference, LocalDate start, LocalDate end) {

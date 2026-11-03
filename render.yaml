@@ -126,6 +126,8 @@ services:
         sync: false
       - key: APAYLO_ACCOUNT_ID
         sync: false
+      - key: APAYLO_INTERAC_COLLECTION_EMAIL
+        sync: false
       - key: APAYLO_BASE_URL
         sync: false
       - key: APAYLO_SANDBOX_BASE_URL

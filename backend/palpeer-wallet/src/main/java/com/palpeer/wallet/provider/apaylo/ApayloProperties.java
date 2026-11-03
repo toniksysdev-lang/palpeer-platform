@@ -51,24 +51,23 @@ public class ApayloProperties {
     private String sandboxBaseUrl = "https://sandboxapi.apaylo.com/sandboxapi.apaylo.com/api";
 
     /**
-     * Merchant display / account label (used in Descriptions). Not a searchable Autodeposit payee.
+     * Merchant display / account label (optional; shown on funding details).
      */
     private String accountId = "";
 
     /**
-     * Legacy optional Interac receive email. Instant deposit uses Request Money to the customer's
-     * Interac email — do not show this as a send-to destination (security Q&A path).
+     * Registered Autodeposit receive email customers send CAD Instant Interac to
+     * (e.g. {@code pay@palpeer.com}).
      */
     private String interacCollectionEmail = "";
 
     /**
-     * Apaylo APL reference (e.g. {@code APL1234}) required in Instant deposit Descriptions.
+     * Apaylo APL reference (e.g. {@code APL1234}) optional memo for Instant deposit.
      */
     private String aplReference = "";
 
     /**
-     * Path for Instant Interac deposit (CAD funding). Default emails Request Money to the customer:
-     * {@code /Merchant/RequestInteracEtransferEmail}.
+     * Unused for Autodeposit funding (kept for forward-compat / optional Request Money experiments).
      */
     private String createSearchableEtransferPath = "/Merchant/RequestInteracEtransferEmail";
 

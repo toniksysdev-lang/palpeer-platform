@@ -230,8 +230,10 @@ describe('FundingStatusScreen', () => {
 
     expect(await screen.findByText('Waiting for Instant Interac')).toBeTruthy();
     expect(screen.getByTestId('funding-payment-details')).toBeTruthy();
-    expect(screen.queryByTestId('funding-interac-payee')).toBeNull();
-    expect(screen.getByTestId('funding-interac-ref')).toHaveTextContent('CA1-APY-1');
+    expect(screen.getByTestId('funding-interac-collection-email')).toHaveTextContent(
+      'pay@palpeer.com',
+    );
+    expect(screen.getByTestId('funding-interac-ref')).toHaveTextContent('PPAPY1');
     expect(screen.getByTestId('funding-interac-email')).toHaveTextContent(
       'sesanelect@yahoo.com',
     );

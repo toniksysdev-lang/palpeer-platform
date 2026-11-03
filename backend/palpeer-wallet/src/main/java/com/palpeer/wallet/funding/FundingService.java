@@ -731,7 +731,8 @@ public class FundingService {
         var confirmed = rail.confirmFundingPayment(
                 blankToNull(tx.getProviderReference()),
                 blankToNull(tx.getIdempotencyKey()),
-                tx.getAmount());
+                tx.getAmount(),
+                extractInteracEmail(tx.getFundingInstructions()));
         if (confirmed.isEmpty()) {
             return toResponse(tx);
         }
@@ -835,11 +836,10 @@ public class FundingService {
                     .orElse(null);
         }
         if (ApayloPaymentRail.NAME.equals(tx.getProviderName())) {
-            // Request Money to the customer's Interac email — do not show merchant Autodeposit
-            // name or ipay@apaylo.com (neither is how Instant deposit is fulfilled).
+            // Autodeposit to merchant collection email (pay@palpeer.com).
             return new FundingPaymentDetails(
                     null,
-                    null,
+                    blankToNull(apayloProperties.getAccountId()),
                     "Interac",
                     null,
                     tx.getProviderReference(),
@@ -848,7 +848,7 @@ public class FundingService {
                     FundingPaymentDetails.METHOD_INTERAC_INSTANT,
                     extractInteracEmail(tx.getFundingInstructions()),
                     blankToNull(apayloProperties.getAplReference()),
-                    null);
+                    blankToNull(apayloProperties.getInteracCollectionEmail()));
         }
         return null;
     }
