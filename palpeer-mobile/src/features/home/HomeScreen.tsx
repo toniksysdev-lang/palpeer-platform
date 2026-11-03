@@ -172,16 +172,16 @@ export function HomeScreen() {
           testID="home-action-p2p"
         />
         <QuickAction
-          icon={ArrowDownToLine}
-          label="Withdraw"
-          onPress={() => moveMoney('withdraw')}
-          testID="home-action-withdraw"
-        />
-        <QuickAction
           icon={ArrowLeftRight}
           label="Transfer"
           onPress={() => moveMoney('transfer')}
           testID="home-action-transfer"
+        />
+        <QuickAction
+          icon={ArrowDownToLine}
+          label="Withdraw"
+          onPress={() => moveMoney('withdraw')}
+          testID="home-action-withdraw"
         />
       </QuickActionBar>
 
