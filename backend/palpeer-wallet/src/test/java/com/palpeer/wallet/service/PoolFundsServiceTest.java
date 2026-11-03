@@ -40,7 +40,8 @@ class PoolFundsServiceTest {
         when(apayloClient.isConfigured()).thenReturn(true);
         when(kudaClient.isConfigured()).thenReturn(true);
         when(korapayClient.isConfigured()).thenReturn(true);
-        when(apayloClient.getAccountBalance()).thenReturn(new BigDecimal("999.00"));
+        when(apayloClient.getMerchantBalances())
+                .thenReturn(new ApayloClient.MerchantBalance(new BigDecimal("999.00"), new BigDecimal("999.00")));
         ObjectNode data = objectMapper.createObjectNode();
         data.putObject("NGN").put("available_balance", "50.00").put("pending_balance", "0");
         when(korapayClient.getBalances()).thenReturn(data);

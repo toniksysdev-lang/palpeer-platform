@@ -79,6 +79,19 @@ public class PoolFundsService {
             }
         }
 
+        ApayloClient.MerchantBalance apayloBalances = readApayloBalances();
+        BigDecimal apayloLive = apayloBalances == null ? null : apayloBalances.available();
+        String apayloMessage = null;
+        if (apayloBalances != null
+                && apayloBalances.available() != null
+                && apayloBalances.available().signum() < 0
+                && apayloBalances.actual() != null) {
+            apayloMessage = "Apaylo AvailableBalance="
+                    + apayloBalances.available()
+                    + " (ActualBalance="
+                    + apayloBalances.actual()
+                    + "). Interac Send requires Available >= payout; top up the merchant wallet or ask Apaylo to clear the reserve/hold.";
+        }
         return new PoolFundsBalanceResponse(
                 providerCard(
                         ApayloPaymentRail.NAME,
@@ -88,8 +101,9 @@ public class PoolFundsService {
                         withdrawn,
                         instantExIn,
                         instantExOut,
-                        liveApaylo(),
-                        null),
+                        apayloLive,
+                        null,
+                        apayloMessage),
                 providerCard(
                         KorapayPaymentRail.NAME,
                         "NGN",
@@ -99,7 +113,8 @@ public class PoolFundsService {
                         instantExIn,
                         instantExOut,
                         korapayLive,
-                        korapayPending),
+                        korapayPending,
+                        null),
                 providerCard(
                         KudaPaymentRail.NAME,
                         "NGN",
@@ -109,6 +124,7 @@ public class PoolFundsService {
                         instantExIn,
                         instantExOut,
                         liveKuda(),
+                        null,
                         null));
     }
 
@@ -121,7 +137,8 @@ public class PoolFundsService {
             Map<String, BigDecimal> instantExIn,
             Map<String, BigDecimal> instantExOut,
             BigDecimal liveBalance,
-            BigDecimal pendingBalance) {
+            BigDecimal pendingBalance,
+            String message) {
         BigDecimal in = funded.getOrDefault(key(provider, currencyCode), BigDecimal.ZERO);
         BigDecimal out = withdrawn.getOrDefault(key(provider, currencyCode), BigDecimal.ZERO);
         // InstantEX attributed to the default rail for the currency (CAD→Apaylo, NGN→Kuda).
@@ -143,7 +160,7 @@ public class PoolFundsService {
                 paid,
                 liveBalance,
                 pendingBalance,
-                null);
+                message);
     }
 
     /**
@@ -222,12 +239,12 @@ public class PoolFundsService {
         }
     }
 
-    private BigDecimal liveApaylo() {
+    private ApayloClient.MerchantBalance readApayloBalances() {
         if (!apayloClient.isConfigured()) {
             return null;
         }
         try {
-            return apayloClient.getAccountBalance();
+            return apayloClient.getMerchantBalances();
         } catch (Exception ex) {
             log.warn("Apaylo live pool balance lookup failed: {}", ex.getMessage());
             return null;

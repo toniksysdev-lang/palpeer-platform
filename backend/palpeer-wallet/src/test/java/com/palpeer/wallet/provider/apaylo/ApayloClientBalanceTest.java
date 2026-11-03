@@ -2,26 +2,28 @@ package com.palpeer.wallet.provider.apaylo;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.math.BigDecimal;
+import com.palpeer.common.exception.BusinessException;
 import org.junit.jupiter.api.Test;
 
 class ApayloClientBalanceTest {
 
     @Test
-    void chooseUsableBalance_prefersNonNegativeAvailable() {
-        assertThat(ApayloClient.chooseUsableBalance(new BigDecimal("10.00"), new BigDecimal("17.00")))
-                .isEqualByComparingTo("10.00");
+    void isInsufficientFundsMessage_detectsApayloWalletError() {
+        assertThat(ApayloClient.isInsufficientFundsMessage("Insufficient funds in your wallet")).isTrue();
+        assertThat(ApayloClient.isInsufficientFundsMessage("Please enter details properly")).isFalse();
     }
 
     @Test
-    void chooseUsableBalance_fallsBackToActualWhenAvailableNegative() {
-        assertThat(ApayloClient.chooseUsableBalance(new BigDecimal("-1483.00"), new BigDecimal("17.00")))
-                .isEqualByComparingTo("17.00");
+    void toApayloBusinessException_mapsInsufficientFundsToInternalPaymentError() {
+        BusinessException ex =
+                ApayloClient.toApayloBusinessException("Insufficient funds in your wallet");
+        assertThat(ex.getCode()).isEqualTo("INTERNAL_PAYMENT_ERROR");
+        assertThat(ex.getStatus()).isEqualTo(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
     @Test
-    void chooseUsableBalance_keepsNegativeAvailableWhenActualMissing() {
-        assertThat(ApayloClient.chooseUsableBalance(new BigDecimal("-5.00"), null))
-                .isEqualByComparingTo("-5.00");
+    void toApayloBusinessException_keepsOtherErrorsAsApayloError() {
+        BusinessException ex = ApayloClient.toApayloBusinessException("Please enter security answer");
+        assertThat(ex.getCode()).isEqualTo("APAYLO_ERROR");
     }
 }

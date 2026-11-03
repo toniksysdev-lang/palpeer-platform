@@ -142,12 +142,37 @@ public class ApayloClient {
 
     private BusinessException apayloHttpError(RestClientResponseException ex) {
         String detail = extractErrorMessage(ex.getResponseBodyAsString());
-        return new BusinessException(
-                "APAYLO_ERROR",
+        return toApayloBusinessException(
                 detail == null || detail.isBlank()
                         ? "Apaylo request failed: " + ex.getStatusCode().value()
-                        : detail,
+                        : detail);
+    }
+
+    /**
+     * Apaylo rejects Send when AvailableBalance is insufficient — surface the same treasury error
+     * the pool guard uses so the mobile app does not show a generic provider failure.
+     */
+    static BusinessException toApayloBusinessException(String detail) {
+        if (isInsufficientFundsMessage(detail)) {
+            return new BusinessException(
+                    "INTERNAL_PAYMENT_ERROR",
+                    "Internal Payment Error, please contact support",
+                    HttpStatus.UNPROCESSABLE_ENTITY);
+        }
+        return new BusinessException(
+                "APAYLO_ERROR",
+                detail == null || detail.isBlank() ? "Apaylo returned an error" : detail,
                 HttpStatus.BAD_GATEWAY);
+    }
+
+    static boolean isInsufficientFundsMessage(String detail) {
+        if (detail == null || detail.isBlank()) {
+            return false;
+        }
+        String normalized = detail.toLowerCase();
+        return normalized.contains("insufficient funds")
+                || normalized.contains("insufficient balance")
+                || normalized.contains("not enough funds");
     }
 
     private String extractErrorMessage(String rawBody) {
@@ -167,14 +192,22 @@ public class ApayloClient {
     }
 
     /**
-     * Merchant wallet balance via {@code GET /Merchant/GetBalance}.
+     * Merchant wallet spendable balance via {@code GET /Merchant/GetBalance}.
      *
-     * <p>Uses {@code AvailableBalance} when it is non-negative. When Apaylo reports a negative
-     * AvailableBalance (seen after Autodeposit receives while ActualBalance still holds the cash),
-     * fall back to {@code ActualBalance} so CAD withdrawals are not blocked by a stale available
-     * figure.
+     * <p>Returns {@code AvailableBalance} only. Apaylo {@code SendInteracEtransfer} rejects with
+     * "Insufficient funds in your wallet" when Available is too low — even if {@code ActualBalance}
+     * is higher (e.g. after Autodeposit while a merchant reserve keeps Available negative). Pool
+     * liquidity and payouts must follow Available, not Actual.
      */
     public BigDecimal getAccountBalance() {
+        MerchantBalance balances = getMerchantBalances();
+        return balances == null ? null : balances.available();
+    }
+
+    /**
+     * Raw Available + Actual from Apaylo GetBalance. Null when Apaylo is not configured.
+     */
+    public MerchantBalance getMerchantBalances() {
         if (!isConfigured()) {
             return null;
         }
@@ -196,33 +229,19 @@ public class ApayloClient {
                 "ClearedBalance",
                 "AccountBalance",
                 "CurrentBalance");
-        BigDecimal balance = chooseUsableBalance(available, actual);
-        if (balance == null) {
+        if (available == null && actual == null) {
             log.warn("Apaylo balance response did not include a recognised balance field: {}", response);
-        } else if (available != null
-                && available.signum() < 0
-                && actual != null
-                && actual.compareTo(available) > 0) {
+        } else if (available != null && available.signum() < 0 && actual != null) {
             log.warn(
-                    "Apaylo AvailableBalance={} is negative; using ActualBalance={} for pool liquidity",
+                    "Apaylo AvailableBalance={} (ActualBalance={}); SendInterac requires Available >= amount",
                     available,
                     actual);
         }
-        return balance;
+        return new MerchantBalance(available, actual);
     }
 
-    /**
-     * Prefer non-negative AvailableBalance; otherwise use ActualBalance when present.
-     */
-    static BigDecimal chooseUsableBalance(BigDecimal available, BigDecimal actual) {
-        if (available != null && available.signum() >= 0) {
-            return available;
-        }
-        if (actual != null) {
-            return actual;
-        }
-        return available;
-    }
+    /** Apaylo merchant wallet balances (Available is what SendInterac spends). */
+    public record MerchantBalance(BigDecimal available, BigDecimal actual) {}
 
     /**
      * Base64(SHA-512(apiKey + sharedSecret + yyyy-MM-dd)) using UTC date, matching Apaylo docs.
@@ -302,10 +321,8 @@ public class ApayloClient {
                 message = text(response.path("Result"), "Message");
             }
             log.error("Apaylo {} returned IsError=true: {}", path, response);
-            throw new BusinessException(
-                    "APAYLO_ERROR",
-                    message == null || message.isBlank() ? "Apaylo returned an error" : message,
-                    HttpStatus.BAD_GATEWAY);
+            throw toApayloBusinessException(
+                    message == null || message.isBlank() ? "Apaylo returned an error" : message);
         }
         return response;
     }
