@@ -346,12 +346,7 @@ export function SignInPage() {
                       onChange={(e) => setRemember(e.target.checked)}
                       disabled={submitting}
                     />
-                    <span>
-                      Remember email
-                      <span className="block text-xs text-gray-500 dark:text-text-muted">
-                        Saves your email only. Sessions end after 5 minutes idle or when the browser closes.
-                      </span>
-                    </span>
+                    <span>Remember email</span>
                   </label>
                   <Link
                     to={`/forgot-password${email ? `?email=${encodeURIComponent(email)}` : ''}`}
