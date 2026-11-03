@@ -98,8 +98,7 @@ public class ApayloPaymentRail implements PaymentRailProvider {
             sb.append(" / ").append(apl);
         }
         sb.append(" if your bank asks for a message. Your Interac email: ")
-                .append(customerEmail.trim())
-                .append('.');
+                .append(customerEmail.trim());
         return sb.toString();
     }
 
@@ -199,35 +198,70 @@ public class ApayloPaymentRail implements PaymentRailProvider {
             String idempotencyKey,
             BigDecimal expectedAmount,
             String senderEmail) {
+        return confirmFundingPayment(providerReference, idempotencyKey, expectedAmount, senderEmail, Set.of());
+    }
+
+    public Optional<ConfirmedPayment> confirmFundingPayment(
+            String providerReference,
+            String idempotencyKey,
+            BigDecimal expectedAmount,
+            String senderEmail,
+            Set<String> claimedProviderReferences) {
         if (!isEnabled()) {
             return Optional.empty();
         }
+        Set<String> claimed = claimedProviderReferences == null ? Set.of() : claimedProviderReferences;
         LocalDate end = LocalDate.now(ZoneOffset.UTC);
         LocalDate start = end.minusDays(14);
-        if (notBlank(providerReference)) {
+        boolean memoOnlyRef = isAutodepositMemoReference(providerReference);
+        if (notBlank(providerReference) && !memoOnlyRef) {
             Optional<ConfirmedPayment> byRequest = findCompletedRequest(
                     providerReference.trim(), null, start, end, expectedAmount);
-            if (byRequest.isPresent()) {
+            if (byRequest.isPresent() && !isClaimed(claimed, byRequest.get().providerReference())) {
                 return byRequest;
             }
             Optional<ConfirmedPayment> byIncoming =
-                    findCompletedIncoming(providerReference.trim(), expectedAmount, null, start, end);
+                    findCompletedIncoming(providerReference.trim(), expectedAmount, null, claimed, start, end);
             if (byIncoming.isPresent()) {
                 return byIncoming;
             }
         }
-        if (notBlank(idempotencyKey)) {
+        if (notBlank(idempotencyKey) && !memoOnlyRef) {
             Optional<ConfirmedPayment> byUnique =
                     findCompletedRequest(null, idempotencyKey.trim(), start, end, expectedAmount);
-            if (byUnique.isPresent()) {
+            if (byUnique.isPresent() && !isClaimed(claimed, byUnique.get().providerReference())) {
                 return byUnique;
             }
         }
         // Autodeposit receives often have Description "-" and no merchant memo — match sender + amount.
         if (notBlank(senderEmail) && expectedAmount != null) {
-            return findCompletedIncoming(null, expectedAmount, senderEmail.trim(), start, end);
+            return findCompletedIncoming(null, expectedAmount, senderEmail.trim(), claimed, start, end);
         }
         return Optional.empty();
+    }
+
+    /** Memo refs like {@code PPABCDEF1234} are not Interac CA… references. */
+    static boolean isAutodepositMemoReference(String providerReference) {
+        if (!notBlank(providerReference)) {
+            return false;
+        }
+        String ref = providerReference.trim();
+        return ref.length() >= 3
+                && ref.toUpperCase(Locale.ROOT).startsWith("PP")
+                && !ref.toUpperCase(Locale.ROOT).startsWith("CA");
+    }
+
+    private static boolean isClaimed(Set<String> claimed, String providerReference) {
+        if (claimed == null || claimed.isEmpty() || !notBlank(providerReference)) {
+            return false;
+        }
+        String needle = providerReference.trim();
+        for (String claimedRef : claimed) {
+            if (notBlank(claimedRef) && claimedRef.trim().equalsIgnoreCase(needle)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** @deprecated Prefer {@link #confirmFundingPayment(String, String, BigDecimal, String)}. */
@@ -294,6 +328,7 @@ public class ApayloPaymentRail implements PaymentRailProvider {
             String providerReference,
             BigDecimal expectedAmount,
             String senderEmail,
+            Set<String> claimedProviderReferences,
             LocalDate start,
             LocalDate end) {
         JsonNode response =
@@ -312,14 +347,18 @@ public class ApayloPaymentRail implements PaymentRailProvider {
             if (!notBlank(providerReference) && notBlank(senderEmail) && !isAutodepositRow(row)) {
                 continue;
             }
-            return Optional.of(new ConfirmedPayment(firstNonBlank(
+            String settledRef = firstNonBlank(
                     firstText(
                             row,
                             "ReferenceNumber",
                             "TransactionReferenceNumber",
                             "InteracReferenceNumber",
                             "TransactionNumber"),
-                    providerReference)));
+                    providerReference);
+            if (isClaimed(claimedProviderReferences, settledRef)) {
+                continue;
+            }
+            return Optional.of(new ConfirmedPayment(settledRef));
         }
         return Optional.empty();
     }

@@ -32,6 +32,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -728,24 +729,52 @@ public class FundingService {
         if (rail == null || !rail.isEnabled()) {
             return toResponse(tx);
         }
+        java.util.Set<String> claimedRefs = fundingTransactionRepository
+                .findByProviderNameAndStatusOrderByCreatedAtDesc(
+                        ApayloPaymentRail.NAME, MoneyMovementStatus.SUCCESS)
+                .stream()
+                .map(FundingTransaction::getProviderReference)
+                .filter(ref -> ref != null && !ref.isBlank())
+                .map(String::trim)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
         var confirmed = rail.confirmFundingPayment(
                 blankToNull(tx.getProviderReference()),
                 blankToNull(tx.getIdempotencyKey()),
                 tx.getAmount(),
-                extractInteracEmail(tx.getFundingInstructions()));
+                extractInteracEmail(tx.getFundingInstructions()),
+                claimedRefs);
         if (confirmed.isEmpty()) {
             return toResponse(tx);
+        }
+        String settledRef = blankToNull(confirmed.get().providerReference());
+        if (settledRef != null) {
+            Optional<FundingTransaction> already =
+                    fundingTransactionRepository.findByProviderNameAndProviderReference(
+                            ApayloPaymentRail.NAME, settledRef);
+            if (already.isPresent() && !already.get().getId().equals(tx.getId())) {
+                log.warn(
+                        "Apaylo funding settle skipped; Interac ref already claimed. fundingId={} ref={} owner={}",
+                        tx.getId(),
+                        settledRef,
+                        already.get().getId());
+                return toResponse(tx);
+            }
         }
         log.info(
                 "Apaylo funding reconciled via search poll. fundingId={} amount={} ref={}",
                 tx.getId(),
                 tx.getAmount(),
-                confirmed.get().providerReference());
+                settledRef);
         FundingTransaction locked = fundingTransactionRepository
                 .findByIdForUpdate(tx.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Funding transaction not found"));
-        if (confirmed.get().providerReference() != null && !confirmed.get().providerReference().isBlank()) {
-            locked.setProviderReference(confirmed.get().providerReference().trim());
+        if (locked.getStatus() != MoneyMovementStatus.PENDING
+                && locked.getStatus() != MoneyMovementStatus.INITIATED
+                && locked.getStatus() != MoneyMovementStatus.PROCESSING) {
+            return toResponse(locked);
+        }
+        if (settledRef != null) {
+            locked.setProviderReference(settledRef);
             fundingTransactionRepository.save(locked);
         }
         return processInternal(locked);
@@ -853,20 +882,30 @@ public class FundingService {
         return null;
     }
 
-    private static String extractInteracEmail(String instructions) {
+    /**
+     * Payer Interac email embedded in funding instructions. Must not truncate at the first
+     * {@code .} (that used to turn {@code user@yahoo.com} into {@code user@yahoo} and break
+     * Autodeposit matching).
+     */
+    static String extractInteracEmail(String instructions) {
         if (instructions == null || instructions.isBlank()) {
             return null;
         }
         String marker = "Your Interac email:";
         int start = instructions.indexOf(marker);
-        if (start < 0) {
+        String haystack = start >= 0
+                ? instructions.substring(start + marker.length())
+                : instructions;
+        java.util.regex.Matcher matcher = INTERAC_EMAIL_PATTERN.matcher(haystack);
+        if (!matcher.find()) {
             return null;
         }
-        String rest = instructions.substring(start + marker.length()).trim();
-        int end = rest.indexOf('.');
-        String email = (end >= 0 ? rest.substring(0, end) : rest).trim();
-        return email.contains("@") ? email : null;
+        return matcher.group().trim().toLowerCase(java.util.Locale.ROOT);
     }
+
+    private static final java.util.regex.Pattern INTERAC_EMAIL_PATTERN = java.util.regex.Pattern.compile(
+            "[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}",
+            java.util.regex.Pattern.CASE_INSENSITIVE);
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
