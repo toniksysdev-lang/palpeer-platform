@@ -347,9 +347,9 @@ export function SignInPage() {
                       disabled={submitting}
                     />
                     <span>
-                      Remember session
+                      Remember email
                       <span className="block text-xs text-gray-500 dark:text-text-muted">
-                        Stay signed in after closing the browser
+                        Saves your email only. Sessions end after 15 minutes idle or when the browser closes.
                       </span>
                     </span>
                   </label>

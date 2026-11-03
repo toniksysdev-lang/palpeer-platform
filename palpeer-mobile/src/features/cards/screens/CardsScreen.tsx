@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useGetFeatureFlagsQuery } from '@/services/api/authApi';
 import { useGetCardsQuery } from '@/services/api/cardApi';
 import { toAppError } from '@/services/api/errors';
 
@@ -18,13 +19,49 @@ import { cardStatusLabel, cardStatusTone, cardTitle } from '../logic';
 
 export function CardsScreen() {
   const theme = useTheme();
-  const cards = useGetCardsQuery();
+  const flags = useGetFeatureFlagsQuery();
+  const cardsEnabled = flags.data?.virtualCardsEnabled !== false;
+  const cards = useGetCardsQuery(undefined, { skip: !cardsEnabled || flags.isLoading });
   const header = (
     <AppText variant="h1" accessibilityRole="header">
       Cards
     </AppText>
   );
   const issue = () => router.push('/cards/create');
+
+  if (flags.isLoading || (!flags.data && !flags.error)) {
+    return (
+      <Screen>
+        {header}
+        <Skeleton height={120} />
+        <Skeleton height={120} />
+      </Screen>
+    );
+  }
+
+  if (flags.error) {
+    return (
+      <Screen>
+        {header}
+        <ErrorState error={toAppError(flags.error)} onRetry={() => void flags.refetch()} />
+      </Screen>
+    );
+  }
+
+  if (!cardsEnabled) {
+    return (
+      <Screen>
+        {header}
+        <View testID="cards-coming-soon">
+          <EmptyState
+            icon={CreditCard}
+            title="This is coming"
+            message="Virtual cards aren't available yet."
+          />
+        </View>
+      </Screen>
+    );
+  }
 
   if (!cards.data) {
     return (

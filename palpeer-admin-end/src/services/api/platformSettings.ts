@@ -84,3 +84,20 @@ export async function updateRegistrationCountries(
     body: input,
   });
 }
+
+export type VirtualCardsSetting = {
+  enabled: boolean;
+};
+
+export async function getVirtualCardsSetting(): Promise<VirtualCardsSetting> {
+  return apiRequest<VirtualCardsSetting>('/admin/settings/virtual-cards');
+}
+
+export async function updateVirtualCardsSetting(
+  input: VirtualCardsSetting,
+): Promise<VirtualCardsSetting> {
+  return apiRequest<VirtualCardsSetting>('/admin/settings/virtual-cards', {
+    method: 'PUT',
+    body: input,
+  });
+}

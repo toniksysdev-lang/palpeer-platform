@@ -69,6 +69,9 @@ export const authApi = baseApi.injectEndpoints({
     getRegistrationCountries: build.query<string[], void>({
       query: () => ({ path: '/public/registration-countries', method: 'GET', public: true }),
     }),
+    getFeatureFlags: build.query<{ virtualCardsEnabled: boolean }, void>({
+      query: () => ({ path: '/public/feature-flags', method: 'GET', public: true }),
+    }),
     requestPasswordReset: build.mutation<OtpResendResponse, PasswordResetRequest>({
       query: (body) => ({
         path: '/auth/password-reset/request',
@@ -110,6 +113,7 @@ export const {
   useRequestPhoneOtpMutation,
   useVerifyPhoneOtpMutation,
   useGetRegistrationCountriesQuery,
+  useGetFeatureFlagsQuery,
   useRequestPasswordResetMutation,
   useGetSessionsQuery,
   useRevokeSessionMutation,

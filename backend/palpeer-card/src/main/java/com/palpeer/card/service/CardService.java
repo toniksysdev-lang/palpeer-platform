@@ -17,6 +17,7 @@ import com.palpeer.common.audit.AuditRecord;
 import com.palpeer.common.audit.AuditRecorder;
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
+import com.palpeer.common.settings.VirtualCardSettingService;
 import com.palpeer.currency.service.CurrencyService;
 import com.palpeer.wallet.domain.Wallet;
 import com.palpeer.wallet.repository.WalletRepository;
@@ -43,9 +44,11 @@ public class CardService {
     private final CurrencyService currencyService;
     private final WalletRepository walletRepository;
     private final AuditRecorder auditRecorder;
+    private final VirtualCardSettingService virtualCardSettingService;
 
     @Transactional
     public CardResponse issue(UUID userId, IssueCardRequest request) {
+        requireVirtualCardsEnabled();
         String currency = normalize(request.currencyCode());
         currencyService.requireExists(currency);
 
@@ -246,6 +249,15 @@ public class CardService {
                 .newValue("status=ACTIVE")
                 .build());
         return toAdminCardResponse(card);
+    }
+
+    private void requireVirtualCardsEnabled() {
+        if (!virtualCardSettingService.isEnabled()) {
+            throw new BusinessException(
+                    "VIRTUAL_CARDS_DISABLED",
+                    "Virtual cards are not available yet",
+                    HttpStatus.SERVICE_UNAVAILABLE);
+        }
     }
 
     private Card requireCard(UUID cardId) {

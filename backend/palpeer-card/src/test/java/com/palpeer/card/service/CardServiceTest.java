@@ -21,6 +21,7 @@ import com.palpeer.card.web.dto.CardTransactionResponse;
 import com.palpeer.card.web.dto.IssueCardRequest;
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
+import com.palpeer.common.settings.VirtualCardSettingService;
 import com.palpeer.currency.service.CurrencyService;
 import com.palpeer.wallet.domain.Wallet;
 import com.palpeer.wallet.repository.WalletRepository;
@@ -48,12 +49,14 @@ class CardServiceTest {
     @Mock private CurrencyService currencyService;
     @Mock private WalletRepository walletRepository;
     @Mock private com.palpeer.common.audit.AuditRecorder auditRecorder;
+    @Mock private VirtualCardSettingService virtualCardSettingService;
 
     @InjectMocks private CardService cardService;
 
     @Test
     void issue_persistsProviderResult() {
         UUID userId = UUID.randomUUID();
+        when(virtualCardSettingService.isEnabled()).thenReturn(true);
         when(cardProvider.providerName()).thenReturn("STUB");
         when(cardProvider.issueCard(any())).thenReturn(
                 new ProviderCardIssueResult("pc-1", "4242", "VISA", 12, 2030));
@@ -78,6 +81,7 @@ class CardServiceTest {
     void issue_rejectsWalletCurrencyMismatch() {
         UUID userId = UUID.randomUUID();
         UUID walletId = UUID.randomUUID();
+        when(virtualCardSettingService.isEnabled()).thenReturn(true);
         Wallet wallet = new Wallet();
         wallet.setId(walletId);
         wallet.setUserId(userId);
@@ -87,6 +91,16 @@ class CardServiceTest {
         assertThatThrownBy(() -> cardService.issue(userId, new IssueCardRequest("USD", walletId, null)))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Wallet currency");
+    }
+
+    @Test
+    void issue_rejectsWhenVirtualCardsDisabled() {
+        when(virtualCardSettingService.isEnabled()).thenReturn(false);
+
+        assertThatThrownBy(() ->
+                        cardService.issue(UUID.randomUUID(), new IssueCardRequest("USD", null, null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("not available");
     }
 
     @Test

@@ -113,7 +113,8 @@ public class SecurityConfig {
                                 "/api/v1/public/p2p-rates",
                                 "/api/v1/public/p2p-requests/*",
                                 "/api/v1/public/marketing-adverts",
-                                "/api/v1/public/registration-countries"
+                                "/api/v1/public/registration-countries",
+                                "/api/v1/public/feature-flags"
                         ).permitAll()
                         .requestMatchers("/api/v1/admin/**").hasAuthority("ROLE_ADMIN")
                         .anyRequest().authenticated()

@@ -1,9 +1,9 @@
 import { router } from 'expo-router';
-import { Check } from 'lucide-react-native';
+import { Check, CreditCard } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, Switch, View } from 'react-native';
 
-import { ErrorState } from '@/components/feedback/StateViews';
+import { EmptyState, ErrorState } from '@/components/feedback/StateViews';
 import { FormAlert } from '@/components/feedback/FormAlert';
 import { Screen } from '@/components/layout/Screen';
 import { StackHeader } from '@/components/layout/StackHeader';
@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
+import { useGetFeatureFlagsQuery } from '@/services/api/authApi';
 import { useIssueCardMutation } from '@/services/api/cardApi';
 import { useGetCurrenciesQuery } from '@/services/api/currencyApi';
 import { toAppError } from '@/services/api/errors';
@@ -30,8 +31,12 @@ import { CARDHOLDER_NAME_MAX, cardErrorMessage } from '../logic';
 export function IssueCardScreen() {
   const theme = useTheme();
   const toast = useToast();
-  const currencies = useGetCurrenciesQuery();
-  const wallets = useGetWalletsQuery();
+  const flags = useGetFeatureFlagsQuery();
+  const cardsEnabled = flags.data?.virtualCardsEnabled !== false;
+  const currencies = useGetCurrenciesQuery(undefined, {
+    skip: !cardsEnabled || flags.isLoading,
+  });
+  const wallets = useGetWalletsQuery(undefined, { skip: !cardsEnabled || flags.isLoading });
   const [issueCard, issueState] = useIssueCardMutation();
   const [currency, setCurrency] = useState<string | null>(null);
   const [linkWallet, setLinkWallet] = useState(false);
@@ -40,6 +45,39 @@ export function IssueCardScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const header = <StackHeader title="Issue a card" />;
+
+  if (flags.isLoading || (!flags.data && !flags.error)) {
+    return (
+      <Screen>
+        {header}
+        <Skeleton height={56} />
+        <Skeleton height={56} />
+      </Screen>
+    );
+  }
+
+  if (flags.error) {
+    return (
+      <Screen>
+        {header}
+        <ErrorState error={toAppError(flags.error)} onRetry={() => void flags.refetch()} />
+      </Screen>
+    );
+  }
+
+  if (!cardsEnabled) {
+    return (
+      <Screen>
+        {header}
+        <EmptyState
+          icon={CreditCard}
+          title="This is coming"
+          message="Virtual cards aren't available yet."
+        />
+      </Screen>
+    );
+  }
+
   const loadError = currencies.error ?? wallets.error;
 
   if (loadError && !(currencies.data && wallets.data)) {

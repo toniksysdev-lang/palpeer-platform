@@ -67,9 +67,13 @@ beforeEach(async () => {
   );
 });
 
+const FEATURE_FLAGS_ON = { 'GET /public/feature-flags': ok({ virtualCardsEnabled: true }) };
+const FEATURE_FLAGS_OFF = { 'GET /public/feature-flags': ok({ virtualCardsEnabled: false }) };
+
 describe('CardsScreen', () => {
   it('lists cards masked, labels test cards and keeps issuer ids out of the app', async () => {
     installFetchMock({
+      ...FEATURE_FLAGS_ON,
       'GET /cards': ok([card(), card({ id: 'card-2', lastFour: '1881', status: 'BLOCKED' })]),
     });
     const { store } = await renderWithProviders(<CardsScreen />);
@@ -84,16 +88,26 @@ describe('CardsScreen', () => {
   });
 
   it('shows an empty state that leads to issuing a card', async () => {
-    installFetchMock({ 'GET /cards': ok([]) });
+    installFetchMock({ ...FEATURE_FLAGS_ON, 'GET /cards': ok([]) });
     await renderWithProviders(<CardsScreen />);
 
     await fireEvent.press(await screen.findByText('Issue a card'));
     expect(router.push).toHaveBeenCalledWith('/cards/create');
   });
+
+  it('shows This is coming when virtual cards are disabled', async () => {
+    installFetchMock(FEATURE_FLAGS_OFF);
+    await renderWithProviders(<CardsScreen />);
+
+    expect(await screen.findByTestId('cards-coming-soon')).toBeTruthy();
+    expect(screen.getByText('This is coming')).toBeTruthy();
+    expect(screen.queryByText('Issue a card')).toBeNull();
+  });
 });
 
 describe('IssueCardScreen', () => {
   const routes = (extra: Record<string, unknown> = {}) => ({
+    ...FEATURE_FLAGS_ON,
     'GET /currencies': CURRENCIES,
     'GET /wallets': ok([wallet('w-cad', 'CAD', '10.00')]),
     ...extra,

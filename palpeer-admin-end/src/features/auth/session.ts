@@ -29,35 +29,18 @@ export function getOrCreateAdminDeviceId(): string {
   }
 }
 
-function store(remember: boolean): Storage {
-  return remember ? localStorage : sessionStorage;
-}
-
-function otherStore(remember: boolean): Storage {
-  return remember ? sessionStorage : localStorage;
-}
-
-function isRememberEnabled(): boolean {
-  return localStorage.getItem(REMEMBER_KEY) === 'true';
-}
-
 function clearTokenKeys(target: Storage) {
   target.removeItem(ACCESS_KEY);
   target.removeItem(REFRESH_KEY);
   target.removeItem(USER_KEY);
 }
 
-/** Drop tokens from the storage that must not own this session. */
-function purgeOppositeStore(remember: boolean) {
-  clearTokenKeys(otherStore(remember));
-}
-
-/** Last "Remember session" checkbox preference (defaults to false). */
+/** Last "Remember email" checkbox preference (defaults to false). */
 export function loadRememberPreference(): boolean {
-  return isRememberEnabled();
+  return localStorage.getItem(REMEMBER_KEY) === 'true';
 }
 
-/** Email saved when the operator last signed in with Remember session. */
+/** Email saved when the operator last signed in with Remember email. */
 export function loadRememberedEmail(): string | null {
   const email = localStorage.getItem(REMEMBER_EMAIL_KEY);
   return email && email.includes('@') ? email : null;
@@ -78,22 +61,19 @@ export type PersistedSession = {
 /**
  * Load the active admin session.
  *
- * Remembered sessions live only in localStorage (survive browser close).
- * Ephemeral sessions live only in sessionStorage (cleared when the browser session ends).
- * Tokens are never read across stores — that previously resurrected signed-in state after
- * closing the browser even when "Remember session" was off.
+ * Tokens always live in sessionStorage so closing the browser ends the session.
+ * Legacy localStorage tokens are purged on read. "Remember" only keeps the email.
  */
 export function loadPersistedSession(): PersistedSession | null {
-  const remember = isRememberEnabled();
-  purgeOppositeStore(remember);
+  // Security: never keep admin JWTs across browser restarts.
+  clearTokenKeys(localStorage);
 
-  const storage = store(remember);
-  const accessToken = storage.getItem(ACCESS_KEY);
-  const refreshToken = storage.getItem(REFRESH_KEY);
-  const userId = storage.getItem(USER_KEY);
+  const accessToken = sessionStorage.getItem(ACCESS_KEY);
+  const refreshToken = sessionStorage.getItem(REFRESH_KEY);
+  const userId = sessionStorage.getItem(USER_KEY);
 
   if (!accessToken || !refreshToken || !userId) {
-    clearTokenKeys(storage);
+    clearTokenKeys(sessionStorage);
     return null;
   }
 
@@ -102,7 +82,7 @@ export function loadPersistedSession(): PersistedSession | null {
     return null;
   }
 
-  return { userId, accessToken, refreshToken, remember };
+  return { userId, accessToken, refreshToken, remember: loadRememberPreference() };
 }
 
 export function persistSession(
@@ -116,25 +96,22 @@ export function persistSession(
   }
 
   const rememberedEmail = options?.email?.trim().toLowerCase() || loadRememberedEmail();
-  // Wipe both stores first so a flip between remember on/off cannot leave orphans.
   clearSession();
   localStorage.setItem(REMEMBER_KEY, String(remember));
   if (remember && rememberedEmail) {
     localStorage.setItem(REMEMBER_EMAIL_KEY, rememberedEmail);
   } else if (!remember) {
-    // Ephemeral login: do not keep a saved email that implies a durable session.
     localStorage.removeItem(REMEMBER_EMAIL_KEY);
   }
-  const storage = store(remember);
-  storage.setItem(ACCESS_KEY, tokens.accessToken);
-  storage.setItem(REFRESH_KEY, tokens.refreshToken);
-  storage.setItem(USER_KEY, tokens.userId);
-  purgeOppositeStore(remember);
+  // Tokens are always ephemeral (sessionStorage only).
+  sessionStorage.setItem(ACCESS_KEY, tokens.accessToken);
+  sessionStorage.setItem(REFRESH_KEY, tokens.refreshToken);
+  sessionStorage.setItem(USER_KEY, tokens.userId);
+  clearTokenKeys(localStorage);
 }
 
 export function persistRotatedTokens(tokens: AuthTokens) {
-  const remember = isRememberEnabled();
-  persistSession(tokens, remember);
+  persistSession(tokens, loadRememberPreference());
 }
 
 export function clearSession() {
@@ -144,14 +121,9 @@ export function clearSession() {
   // Keep REMEMBER_KEY / REMEMBER_EMAIL_KEY so the sign-in form can restore preference + email.
 }
 
-function tokenFromActiveStore(key: string): string | null {
-  const remember = isRememberEnabled();
-  purgeOppositeStore(remember);
-  return store(remember).getItem(key);
-}
-
 export function getAccessToken(): string | null {
-  const token = tokenFromActiveStore(ACCESS_KEY);
+  clearTokenKeys(localStorage);
+  const token = sessionStorage.getItem(ACCESS_KEY);
   if (!looksLikeJwt(token)) {
     if (token) clearSession();
     return null;
@@ -160,10 +132,14 @@ export function getAccessToken(): string | null {
 }
 
 export function getRefreshToken(): string | null {
-  const token = tokenFromActiveStore(REFRESH_KEY);
+  clearTokenKeys(localStorage);
+  const token = sessionStorage.getItem(REFRESH_KEY);
   if (!looksLikeJwt(token)) {
     if (token) clearSession();
     return null;
   }
   return token;
 }
+
+/** Idle timeout before the admin console forces sign-out (15 minutes). */
+export const ADMIN_IDLE_TIMEOUT_MS = 15 * 60 * 1000;

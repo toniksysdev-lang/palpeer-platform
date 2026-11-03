@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   BellRing,
+  CreditCard,
   Globe2,
   KeyRound,
   Monitor,
@@ -19,6 +20,7 @@ import { PoolFundThresholdSettings } from '@/features/settings/PoolFundThreshold
 import { RegistrationCountriesSettings } from '@/features/settings/RegistrationCountriesSettings';
 import { FundingUnverifiedLimitSettings } from '@/features/settings/FundingUnverifiedLimitSettings';
 import { WithdrawalUnverifiedLimitSettings } from '@/features/settings/WithdrawalUnverifiedLimitSettings';
+import { VirtualCardsSettings } from '@/features/settings/VirtualCardsSettings';
 import { SecuritySettings } from '@/features/settings/SecuritySettings';
 import type { ThemeMode } from '@/lib/theme';
 
@@ -36,6 +38,7 @@ type SettingsTab =
   | 'security'
   | 'pool-threshold'
   | 'registration-countries'
+  | 'virtual-cards'
   | 'pin-policy'
   | 'unverified-withdraw'
   | 'unverified-fund';
@@ -53,6 +56,12 @@ const TABS: { id: SettingsTab; label: string; icon: typeof Settings; manageOnly?
     id: 'registration-countries',
     label: 'Registration countries',
     icon: Globe2,
+    manageOnly: true,
+  },
+  {
+    id: 'virtual-cards',
+    label: 'Virtual cards',
+    icon: CreditCard,
     manageOnly: true,
   },
   {
@@ -249,6 +258,12 @@ export function SettingsPage() {
       {tab === 'registration-countries' && canManage ? (
         <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
           <RegistrationCountriesSettings />
+        </section>
+      ) : null}
+
+      {tab === 'virtual-cards' && canManage ? (
+        <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
+          <VirtualCardsSettings />
         </section>
       ) : null}
 

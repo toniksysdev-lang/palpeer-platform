@@ -10,6 +10,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { appConfig } from '@/config/env';
 import {
+  ADMIN_IDLE_TIMEOUT_MS,
   clearSession,
   getRefreshToken,
   loadPersistedSession,
@@ -99,6 +100,91 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setSessionExpiredHandler(null);
   }, [resetAnonymous]);
 
+  const logout = useCallback(async () => {
+    const refreshToken = getRefreshToken();
+    try {
+      if (refreshToken && !appConfig.useMockApi) {
+        await logoutRequest(refreshToken);
+      }
+    } catch {
+      // Always clear local session even if revoke fails.
+    } finally {
+      resetAnonymous();
+    }
+  }, [resetAnonymous]);
+
+  // Idle timeout + clear tokens when the browser tab/window is closing.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const forceIdleLogout = () => {
+      void logout().then(() => {
+        setSessionExpiredMessage('Signed out after inactivity. Please sign in again.');
+      });
+    };
+
+    const bumpIdle = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(forceIdleLogout, ADMIN_IDLE_TIMEOUT_MS);
+    };
+
+    const activityEvents: Array<keyof WindowEventMap> = [
+      'mousemove',
+      'mousedown',
+      'keydown',
+      'scroll',
+      'touchstart',
+      'click',
+    ];
+    for (const event of activityEvents) {
+      window.addEventListener(event, bumpIdle, { passive: true });
+    }
+    document.addEventListener('visibilitychange', bumpIdle);
+
+    const onPageHide = () => {
+      // sessionStorage already drops on browser close; also wipe any leftover tokens now.
+      const refreshToken = getRefreshToken();
+      clearSession();
+      if (refreshToken && !appConfig.useMockApi) {
+        try {
+          const base = appConfig.apiBaseUrl.replace(/\/$/, '');
+          const url = base.startsWith('http')
+            ? `${base}/auth/logout`
+            : `${window.location.origin}${base}/auth/logout`;
+          const body = JSON.stringify({ refreshToken });
+          if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+            const blob = new Blob([body], { type: 'application/json' });
+            navigator.sendBeacon(url, blob);
+          } else {
+            void fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body,
+              keepalive: true,
+              credentials: 'omit',
+            });
+          }
+        } catch {
+          // Best-effort revoke on close.
+        }
+      }
+    };
+    window.addEventListener('pagehide', onPageHide);
+
+    bumpIdle();
+
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      for (const event of activityEvents) {
+        window.removeEventListener(event, bumpIdle);
+      }
+      document.removeEventListener('visibilitychange', bumpIdle);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+  }, [status, logout]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -181,7 +267,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           : await loginRequest({
               email: input.email,
               password: input.password,
-              rememberMe: input.remember,
+              // Admin tokens stay in sessionStorage; never request a long-lived refresh.
+              rememberMe: false,
             });
 
       if (tokens.mfaRequired && tokens.mfaToken) {
@@ -222,19 +309,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
-
-  const logout = useCallback(async () => {
-    const refreshToken = getRefreshToken();
-    try {
-      if (refreshToken && !appConfig.useMockApi) {
-        await logoutRequest(refreshToken);
-      }
-    } catch {
-      // Always clear local session even if revoke fails.
-    } finally {
-      resetAnonymous();
-    }
-  }, [resetAnonymous]);
 
   const refreshMe = useCallback(async () => {
     if (appConfig.useMockApi) {
