@@ -388,10 +388,6 @@ export function SignInPage() {
               )}
             </button>
           </form>
-
-          <p className="mt-10 text-center text-xs text-text-muted lg:text-left">
-            Secure access to the Palpeer admin workspace
-          </p>
         </div>
       </main>
     </div>
