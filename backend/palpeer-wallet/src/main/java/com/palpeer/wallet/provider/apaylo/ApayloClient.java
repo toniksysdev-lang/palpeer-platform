@@ -168,7 +168,11 @@ public class ApayloClient {
 
     /**
      * Merchant wallet balance via {@code GET /Merchant/GetBalance}.
-     * Prefers {@code AvailableBalance} (funds usable for sends) over {@code ActualBalance}.
+     *
+     * <p>Uses {@code AvailableBalance} when it is non-negative. When Apaylo reports a negative
+     * AvailableBalance (seen after Autodeposit receives while ActualBalance still holds the cash),
+     * fall back to {@code ActualBalance} so CAD withdrawals are not blocked by a stale available
+     * figure.
      */
     public BigDecimal getAccountBalance() {
         if (!isConfigured()) {
@@ -182,10 +186,9 @@ public class ApayloClient {
                     message == null || message.isBlank() ? "Apaylo GetBalance returned an error" : message,
                     HttpStatus.BAD_GATEWAY);
         }
-        BigDecimal balance = firstDecimal(
+        BigDecimal available = firstDecimal(response, "AvailableBalance", "availableBalance");
+        BigDecimal actual = firstDecimal(
                 response,
-                "AvailableBalance",
-                "availableBalance",
                 "ActualBalance",
                 "actualBalance",
                 "Balance",
@@ -193,10 +196,32 @@ public class ApayloClient {
                 "ClearedBalance",
                 "AccountBalance",
                 "CurrentBalance");
+        BigDecimal balance = chooseUsableBalance(available, actual);
         if (balance == null) {
             log.warn("Apaylo balance response did not include a recognised balance field: {}", response);
+        } else if (available != null
+                && available.signum() < 0
+                && actual != null
+                && actual.compareTo(available) > 0) {
+            log.warn(
+                    "Apaylo AvailableBalance={} is negative; using ActualBalance={} for pool liquidity",
+                    available,
+                    actual);
         }
         return balance;
+    }
+
+    /**
+     * Prefer non-negative AvailableBalance; otherwise use ActualBalance when present.
+     */
+    static BigDecimal chooseUsableBalance(BigDecimal available, BigDecimal actual) {
+        if (available != null && available.signum() >= 0) {
+            return available;
+        }
+        if (actual != null) {
+            return actual;
+        }
+        return available;
     }
 
     /**
