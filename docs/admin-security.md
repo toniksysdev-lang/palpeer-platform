@@ -12,7 +12,7 @@
 | Authorization | OK (UI soft) | `can()` is UX-only; backend RBAC remains authoritative. Fine-grained menu hide needs `/admin/me` (CONTRACT_PENDING) |
 | Route guards | Hardened | `RequireAuth` requires `authenticated` **and** `isAdmin` |
 | Open redirect | Hardened | Post-login `from` sanitized to `/admin/**` only |
-| Token storage | Hardened | Tokens always in sessionStorage (browser close ends session). Idle logout after 15 minutes. “Remember email” only saves email. SPA cannot use httpOnly cookies without backend cookie auth |
+| Token storage | Hardened | Tokens always in sessionStorage (browser close ends session). Idle logout after 5 minutes. “Remember email” only saves email. SPA cannot use httpOnly cookies without backend cookie auth |
 | Token integrity | Hardened | Malformed JWT-shaped tokens are rejected/cleared |
 | Sensitive data | OK | No PAN/CVV; cards use `lastFour` only; no `dangerouslySetInnerHTML` |
 | Logging | OK | No token/password console logging |

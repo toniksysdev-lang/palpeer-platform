@@ -141,5 +141,5 @@ export function getRefreshToken(): string | null {
   return token;
 }
 
-/** Idle timeout before the admin console forces sign-out (15 minutes). */
-export const ADMIN_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+/** Idle timeout before the admin console forces sign-out (5 minutes). */
+export const ADMIN_IDLE_TIMEOUT_MS = 5 * 60 * 1000;

@@ -349,7 +349,7 @@ export function SignInPage() {
                     <span>
                       Remember email
                       <span className="block text-xs text-gray-500 dark:text-text-muted">
-                        Saves your email only. Sessions end after 15 minutes idle or when the browser closes.
+                        Saves your email only. Sessions end after 5 minutes idle or when the browser closes.
                       </span>
                     </span>
                   </label>
