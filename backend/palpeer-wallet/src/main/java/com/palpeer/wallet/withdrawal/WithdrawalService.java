@@ -205,6 +205,11 @@ public class WithdrawalService {
             found = withdrawalTransactionRepository
                     .findByProviderNameAndProviderReference(providerName, ref)
                     .orElse(null);
+            if (found == null && !ref.equals(ref.toUpperCase(Locale.ROOT))) {
+                found = withdrawalTransactionRepository
+                        .findByProviderNameAndProviderReference(providerName, ref.toUpperCase(Locale.ROOT))
+                        .orElse(null);
+            }
             if (found != null) {
                 break;
             }

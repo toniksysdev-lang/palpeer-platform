@@ -137,20 +137,21 @@ public class KudaPaymentRail implements PaymentRailProvider {
         }
         try {
             JsonNode data = kudaClient.queryTransferStatus(transferRequestRef.trim());
-            String statusCode = firstText(
-                    data, "statusCode", "StatusCode", "responseCode", "ResponseCode", "transactionStatus");
-            if (statusCode == null) {
-                // Some envelopes nest status under data; unwrap already applied — also check message.
-                String message = firstText(data, "message", "Message", "statusMessage", "StatusMessage");
-                if (message != null && message.toLowerCase(Locale.ROOT).contains("success")) {
-                    statusCode = "00";
-                }
-            }
-            if (statusCode == null) {
-                return Optional.empty();
-            }
-            String code = statusCode.trim();
-            if (!(code.equals("00") || code.equals("0") || code.equalsIgnoreCase("success"))) {
+            if (!isTransferSuccessPayload(data)) {
+                String observed = firstText(
+                        data,
+                        "statusCode",
+                        "StatusCode",
+                        "responseCode",
+                        "ResponseCode",
+                        "transactionStatus",
+                        "TransactionStatus",
+                        "status",
+                        "Status");
+                log.debug(
+                        "Kuda transfer TSQ not yet successful. ref={} status={}",
+                        transferRequestRef,
+                        observed);
                 return Optional.empty();
             }
             String txnRef = firstText(
@@ -171,6 +172,75 @@ public class KudaPaymentRail implements PaymentRailProvider {
                     ex.getMessage());
             return Optional.empty();
         }
+    }
+
+    /**
+     * Kuda success signals vary by environment/rail: {@code 00}/{@code 0}, {@code success},
+     * {@code Successful}, {@code Completed}, or a success message when no status code is present.
+     * Pending ({@code 01}) and failures must not settle.
+     */
+    static boolean isTransferSuccessPayload(JsonNode data) {
+        if (data == null || data.isNull() || data.isMissingNode()) {
+            return false;
+        }
+        String status = firstText(
+                data,
+                "statusCode",
+                "StatusCode",
+                "responseCode",
+                "ResponseCode",
+                "transactionStatus",
+                "TransactionStatus",
+                "status",
+                "Status");
+        if (isTransferSuccessStatus(status)) {
+            return true;
+        }
+        if (status != null && isTransferPendingOrFailedStatus(status)) {
+            return false;
+        }
+        String message = firstText(data, "message", "Message", "statusMessage", "StatusMessage");
+        return message != null && message.toLowerCase(Locale.ROOT).contains("success");
+    }
+
+    static boolean isTransferSuccessStatus(String raw) {
+        if (!notBlank(raw)) {
+            return false;
+        }
+        String code = raw.trim();
+        if (code.equals("00") || code.equals("0")) {
+            return true;
+        }
+        String normalized = code.toLowerCase(Locale.ROOT).replace('_', ' ').replace('-', ' ').trim();
+        return normalized.equals("success")
+                || normalized.equals("successful")
+                || normalized.equals("completed")
+                || normalized.equals("complete")
+                || normalized.equals("paid")
+                || normalized.startsWith("success");
+    }
+
+    static boolean isTransferPendingOrFailedStatus(String raw) {
+        if (!notBlank(raw)) {
+            return false;
+        }
+        String normalized = raw.trim().toLowerCase(Locale.ROOT);
+        if (normalized.equals("01")
+                || normalized.equals("1")
+                || normalized.equals("pending")
+                || normalized.equals("processing")
+                || normalized.equals("inprogress")
+                || normalized.equals("in progress")) {
+            return true;
+        }
+        return normalized.contains("fail")
+                || normalized.contains("declin")
+                || normalized.contains("reject")
+                || normalized.contains("cancel")
+                || normalized.contains("revers")
+                || normalized.equals("91")
+                || normalized.equals("k91")
+                || normalized.equals("k25");
     }
 
     public record ConfirmedTransferPayment(String providerReference) {}
@@ -484,12 +554,7 @@ public class KudaPaymentRail implements PaymentRailProvider {
                 if (!kudaClient.isSandboxMode()) {
                     try {
                         JsonNode status = kudaClient.queryTransferStatus(shortRef);
-                        String statusCode = firstText(
-                                status, "statusCode", "StatusCode", "responseCode", "ResponseCode");
-                        if (statusCode != null
-                                && (statusCode.equals("00")
-                                        || statusCode.equals("0")
-                                        || statusCode.equalsIgnoreCase("success"))) {
+                        if (isTransferSuccessPayload(status)) {
                             log.warn(
                                     "Kuda transfer call failed but TSQ reports success. ref={} cause={}",
                                     shortRef,
@@ -515,9 +580,17 @@ public class KudaPaymentRail implements PaymentRailProvider {
 
             // Prefer immediate settlement when Kuda already confirms the payout:
             // - Sandbox auto-settle flag
+            // - Transfer response itself reports success (00 / Successful / …)
             // - Live (and sandbox without auto): brief TRANSACTION_STATUS_QUERY so the app does
             //   not wait on Debit webhooks that are often delayed or missing.
             boolean settleNow = kudaClient.isSandboxMode() && properties.isAutoSandboxSettle();
+            if (!settleNow && isTransferSuccessPayload(response)) {
+                settleNow = true;
+                log.info(
+                        "Kuda NGN withdrawal settled from transfer response. requestRef={} kudaTxnRef={}",
+                        shortRef,
+                        kudaTxnRef);
+            }
             if (!settleNow) {
                 settleNow = confirmTransferSoon(shortRef);
             }

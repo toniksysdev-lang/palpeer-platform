@@ -230,26 +230,37 @@ public class PaymentWebhookController {
     private static java.util.List<String> kudaWithdrawalLookupRefs(
             JsonNode root, String clientRef, String txnRef) {
         java.util.LinkedHashSet<String> refs = new java.util.LinkedHashSet<>();
-        if (notBlank(clientRef)) {
-            refs.add(clientRef.trim());
-        }
-        if (notBlank(txnRef)) {
-            refs.add(txnRef.trim());
-        }
+        addWithdrawalRefVariants(refs, clientRef);
+        addWithdrawalRefVariants(refs, txnRef);
         String instrument = firstText(root, "instrumentNumber", "InstrumentNumber");
-        if (notBlank(instrument)) {
-            refs.add(instrument.trim());
-        }
+        addWithdrawalRefVariants(refs, instrument);
         String narration = firstText(root, "narrations", "Narrations", "narration", "message");
         if (notBlank(narration)) {
             java.util.regex.Matcher m =
                     java.util.regex.Pattern.compile("(?i)PALPEER\\s+WD\\s+([A-Fa-f0-9]{8,20})")
                             .matcher(narration);
             if (m.find()) {
-                refs.add(m.group(1).toUpperCase(Locale.ROOT));
+                addWithdrawalRefVariants(refs, m.group(1));
             }
         }
         return new java.util.ArrayList<>(refs);
+    }
+
+    /** Persist + lookup use uppercase short refs; Kuda may echo mixed case. */
+    private static void addWithdrawalRefVariants(java.util.Set<String> refs, String raw) {
+        if (!notBlank(raw)) {
+            return;
+        }
+        String trimmed = raw.trim();
+        refs.add(trimmed);
+        String upper = trimmed.toUpperCase(Locale.ROOT);
+        if (!upper.equals(trimmed)) {
+            refs.add(upper);
+        }
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        if (!lower.equals(trimmed) && !lower.equals(upper)) {
+            refs.add(lower);
+        }
     }
 
     private static BigDecimal parseKudaAmountNaira(String amountRaw) {

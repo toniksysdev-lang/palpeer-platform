@@ -193,6 +193,75 @@ class KudaPaymentRailTest {
     }
 
     @Test
+    void initiateWithdrawal_settlesWhenTsqReportsSuccessfulWord() {
+        properties.setAutoSandboxSettle(false);
+        properties.setClientAccountNumber("3002685563");
+        when(kudaClient.isConfigured()).thenReturn(true);
+        when(kudaClient.isSandboxMode()).thenReturn(false);
+        when(kudaClient.toKobo(new BigDecimal("500.00"))).thenReturn(50_000L);
+
+        ObjectNode enquiry = objectMapper.createObjectNode();
+        enquiry.put("SessionID", "sess-1");
+        enquiry.put("BeneficiaryName", "ADA LOVELACE");
+        when(kudaClient.invoke(eq("NAME_ENQUIRY"), anyMap())).thenReturn(enquiry);
+
+        ObjectNode transfer = objectMapper.createObjectNode();
+        transfer.put("transactionReference", "kuda-wd-live-2");
+        when(kudaClient.invoke(eq("SINGLE_FUND_TRANSFER"), anyMap(), any())).thenReturn(transfer);
+
+        ObjectNode tsq = objectMapper.createObjectNode();
+        tsq.put("transactionStatus", "Successful");
+        tsq.put("transactionReference", "kuda-wd-live-2");
+        when(kudaClient.queryTransferStatus(any())).thenReturn(tsq);
+
+        PaymentRailProvider.WithdrawalInitiation result =
+                rail.initiateWithdrawal(withdrawalRequest(new BigDecimal("500.00"), "999129:0123456789"));
+
+        assertThat(result.pendingExternalSettlement()).isFalse();
+    }
+
+    @Test
+    void initiateWithdrawal_settlesWhenTransferResponseAlreadySuccessful() {
+        properties.setAutoSandboxSettle(false);
+        properties.setClientAccountNumber("3002685563");
+        when(kudaClient.isConfigured()).thenReturn(true);
+        when(kudaClient.isSandboxMode()).thenReturn(false);
+        when(kudaClient.toKobo(new BigDecimal("500.00"))).thenReturn(50_000L);
+
+        ObjectNode enquiry = objectMapper.createObjectNode();
+        enquiry.put("SessionID", "sess-1");
+        enquiry.put("BeneficiaryName", "ADA LOVELACE");
+        when(kudaClient.invoke(eq("NAME_ENQUIRY"), anyMap())).thenReturn(enquiry);
+
+        ObjectNode transfer = objectMapper.createObjectNode();
+        transfer.put("transactionReference", "kuda-wd-live-3");
+        transfer.put("Status", "Successful");
+        when(kudaClient.invoke(eq("SINGLE_FUND_TRANSFER"), anyMap(), any())).thenReturn(transfer);
+
+        PaymentRailProvider.WithdrawalInitiation result =
+                rail.initiateWithdrawal(withdrawalRequest(new BigDecimal("500.00"), "999129:0123456789"));
+
+        assertThat(result.pendingExternalSettlement()).isFalse();
+        verify(kudaClient, never()).queryTransferStatus(any());
+    }
+
+    @Test
+    void isTransferSuccessPayload_acceptsCommonKudaSuccessShapes() {
+        ObjectNode code00 = objectMapper.createObjectNode().put("statusCode", "00");
+        ObjectNode successful = objectMapper.createObjectNode().put("transactionStatus", "Successful");
+        ObjectNode completed = objectMapper.createObjectNode().put("Status", "Completed");
+        ObjectNode pending = objectMapper.createObjectNode().put("statusCode", "01");
+        ObjectNode messageOnly =
+                objectMapper.createObjectNode().put("message", "Transaction was successful");
+
+        assertThat(KudaPaymentRail.isTransferSuccessPayload(code00)).isTrue();
+        assertThat(KudaPaymentRail.isTransferSuccessPayload(successful)).isTrue();
+        assertThat(KudaPaymentRail.isTransferSuccessPayload(completed)).isTrue();
+        assertThat(KudaPaymentRail.isTransferSuccessPayload(pending)).isFalse();
+        assertThat(KudaPaymentRail.isTransferSuccessPayload(messageOnly)).isTrue();
+    }
+
+    @Test
     void initiateWithdrawal_autoSandboxSettle_settlesImmediately() {
         properties.setAutoSandboxSettle(true);
         when(kudaClient.isConfigured()).thenReturn(true);
