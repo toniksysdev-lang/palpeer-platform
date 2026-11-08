@@ -5,7 +5,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
   View, Text, Pressable, ScrollView, TextInput, Image, Platform, Linking, Keyboard,
-  StatusBar, useWindowDimensions,
+  useWindowDimensions,
 } from 'react-native';
 import Svg, { SvgXml } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -158,6 +158,21 @@ const BORDER_W = ['borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBo
 
 function norm(c) { return typeof c === 'string' ? c.trim().toUpperCase() : c; }
 
+/** CSS `0 0 0 1px #C9D3CE` hairlines work on web; Android View ignores boxShadow — use border. */
+function applyHairlineShadow(out) {
+  const shadow = out.boxShadow;
+  if (typeof shadow !== 'string' || !shadow || shadow === 'none') return;
+  const m = shadow.match(
+    /^0(?:px)?\s+0(?:px)?\s+0(?:px)?\s+(\d+(?:\.\d+)?)px\s+(#[0-9A-Fa-f]{3,8}|rgba?\([^)]+\))$/,
+  );
+  if (!m) return;
+  const width = parseFloat(m[1]);
+  if (!(width > 0) || out.borderWidth != null) return;
+  out.borderWidth = width;
+  out.borderColor = m[2];
+  delete out.boxShadow;
+}
+
 // Light/dark + screen-fit scaling, applied to every style before it reaches React Native.
 function prep(style, dark, scale) {
   if (!style) return {};
@@ -176,6 +191,7 @@ function prep(style, dark, scale) {
     }
     out[k] = v;
   }
+  applyHairlineShadow(out);
   return out;
 }
 
@@ -624,12 +640,10 @@ export function Screen({ bg = '#F3F6F4', go, children }) {
   // Lock fit scale on first real layout (and on rotation). Keyboard / focus / browser
   // chrome must never recompute scale — that was shrinking Log in fields and text.
   const [fitLock, setFitLock] = useState(null);
-  // Real device safe-area only. Do not invent a web top inset — that painted a white/page
-  // strip under the phone-frame notch (landing/login dark headers looked like a white header).
-  const topInset = Math.max(
-    insets.top,
-    Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : 0,
-  );
+  // Match the :3333 web preview canvas: use SafeArea insets only.
+  // Do NOT also add StatusBar.currentHeight — on modern Android that double-counts the
+  // status bar, shrinks FIT_TO_SCREEN, and makes land/Main look unlike the iframe.
+  const topInset = insets.top;
   const headerProps = headerEntryRef.current.getProps ? headerEntryRef.current.getProps() : null;
   const hasHeader = !!headerProps;
   const availW = Math.max(0, width - insets.left - insets.right);
