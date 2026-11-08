@@ -44,6 +44,17 @@ export const accountCommands = {
     return apiRequest('/auth/otp/verify', { method: 'POST', body });
   },
 
+  requestNewDeviceOtp(): Promise<ApiResult<{ debugOtp?: string | null }>> {
+    return authorizedRequest('/auth/device/otp/request', { method: 'POST' });
+  },
+
+  verifyNewDeviceOtp(code: string): Promise<ApiResult<void>> {
+    return authorizedRequest('/auth/device/otp/verify', {
+      method: 'POST',
+      body: { code },
+    });
+  },
+
   confirmPasswordReset(body: PasswordResetConfirmRequest): Promise<ApiResult<void>> {
     return apiRequest('/auth/password-reset/confirm', { method: 'POST', body });
   },

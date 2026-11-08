@@ -22,7 +22,12 @@ export async function renderWithProviders(
 ) {
   const store = createStore();
   store.dispatch(
-    preferencesLoaded({ appearance, onboardingSeen: true, biometricUnlockPrompted: true }),
+    preferencesLoaded({
+      appearance,
+      language: 'en',
+      onboardingSeen: true,
+      biometricUnlockPrompted: true,
+    }),
   );
   prepareStore?.(store);
 

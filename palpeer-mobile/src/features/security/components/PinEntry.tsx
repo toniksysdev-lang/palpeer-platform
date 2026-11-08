@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { FormAlert } from '@/components/feedback/FormAlert';
 import { AppText } from '@/components/ui/AppText';
@@ -22,6 +22,8 @@ type Props = {
   statusMessage?: string | null;
   submitLabel?: string;
   loading?: boolean;
+  /** Shown under the dots while `loading` (auto-submit flows have no Proceed button). */
+  loadingLabel?: string;
   disabled?: boolean;
   /** When set, PIN length is fixed (Figma setup / verify uses 4). */
   length?: number;
@@ -47,6 +49,7 @@ export function PinEntry({
   statusMessage,
   submitLabel = 'Proceed',
   loading,
+  loadingLabel = 'Checking…',
   disabled,
   length = PIN_SETUP_LENGTH,
   autoSubmit = false,
@@ -56,6 +59,8 @@ export function PinEntry({
 }: Props) {
   const theme = useTheme();
   const [pin, setPin] = useState('');
+  /** Keep filled dots visible while verify/save runs (auto-submit clears `pin` on submit). */
+  const [busyDots, setBusyDots] = useState('');
   const pasteRef = useRef<TextInput>(null);
   const required = Math.max(PIN_MIN_LENGTH, Math.min(length, PIN_MAX_LENGTH));
   const submittedRef = useRef(false);
@@ -77,12 +82,16 @@ export function PinEntry({
   const submit = (value = pin) => {
     if (value.length < required || disabled || loading || submittedRef.current) return;
     submittedRef.current = true;
+    setBusyDots(value);
     setPin('');
     onSubmit(value);
   };
 
   useEffect(() => {
-    if (!loading && !disabled) submittedRef.current = false;
+    if (!loading && !disabled) {
+      submittedRef.current = false;
+      setBusyDots('');
+    }
   }, [loading, disabled]);
 
   useEffect(() => {
@@ -90,6 +99,9 @@ export function PinEntry({
     if (pin.length === required) submit(pin);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once when length is reached
   }, [autoSubmit, disabled, loading, pin, required]);
+
+  // Prefer busyDots as soon as submit fires so the 4th digit stays lit before parent sets loading.
+  const dotsValue = busyDots.length >= required ? busyDots : pin;
 
   return (
     <View style={styles.root} testID={testID}>
@@ -109,7 +121,7 @@ export function PinEntry({
           </View>
         ) : null}
 
-        <FormAlert message={error} testID={`${testID}-error`} />
+        <FormAlert message={loading ? null : error} testID={`${testID}-error`} />
 
         <Pressable
           style={styles.dotsWrap}
@@ -125,7 +137,7 @@ export function PinEntry({
           accessibilityHint="Long press to paste a PIN from the clipboard"
         >
           <PinDots
-            value={pin}
+            value={dotsValue}
             slots={required}
             statusMessage={statusMessage}
             testID={`${testID}-pad`}
@@ -146,9 +158,23 @@ export function PinEntry({
           />
         </Pressable>
 
+        {loading ? (
+          <View
+            style={styles.loadingRow}
+            accessibilityRole="progressbar"
+            accessibilityLabel={loadingLabel}
+            testID={`${testID}-loading`}
+          >
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <AppText tone="secondary" align="center" style={{ fontWeight: '700' }}>
+              {loadingLabel}
+            </AppText>
+          </View>
+        ) : null}
+
         {/* Figma PIN screens have no button under the dots — pad fills the bottom.
             Keep Proceed only when the caller needs a manual confirm. */}
-        {!autoSubmit ? (
+        {!autoSubmit && !loading ? (
           <Button
             label={submitLabel}
             shape="pill"
@@ -186,6 +212,12 @@ const styles = StyleSheet.create({
   /** Keep the 3×4 pad at full size; never let the header squeeze it. */
   padBlock: { width: '100%', flexShrink: 0 },
   dotsWrap: { width: '100%', position: 'relative' },
+  loadingRow: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
   hiddenPaste: {
     ...StyleSheet.absoluteFillObject,
     opacity: 0.02,

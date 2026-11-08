@@ -1,18 +1,9 @@
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, CheckCircle2, ImageIcon, RotateCcw, type LucideIcon } from 'lucide-react-native';
+import { CheckCircle2, type LucideIcon } from 'lucide-react-native';
 import { useState } from 'react';
-import { ActivityIndicator, Image, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, StyleSheet, Text, View } from 'react-native';
 
-import { Screen } from '@/components/layout/Screen';
-import { StackHeader } from '@/components/layout/StackHeader';
 import { useSensitiveScreen } from '@/hooks/useSensitiveScreen';
-import { FormAlert } from '@/components/feedback/FormAlert';
-import { AppText } from '@/components/ui/AppText';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Icon } from '@/components/ui/Icon';
-import { ProgressBar } from '@/components/ui/ProgressBar';
-import { useTheme } from '@/providers/ThemeProvider';
 import { logger } from '@/utils/logger';
 
 import { kycErrorMessage } from '../errors';
@@ -25,6 +16,8 @@ import {
 } from '../image';
 import { useKycUpload, type KycUploadTarget } from '../useKycUpload';
 import { CameraCapture } from './CameraCapture';
+import { DesignKycShell } from './DesignKycShell';
+import { KYC_D as D } from './designTokens';
 
 type Props = {
   kind: ImageKind;
@@ -57,11 +50,9 @@ export function CaptureFlow({
   allowLibrary,
   onUploaded,
   onExit,
-  icon = Camera,
   notice,
 }: Props) {
   useSensitiveScreen();
-  const theme = useTheme();
   const [phase, setPhase] = useState<Phase>({ name: 'intro' });
   const { state: upload, upload: send, reset } = useKycUpload(target);
 
@@ -135,15 +126,15 @@ export function CaptureFlow({
 
   if (phase.name === 'processing') {
     return (
-      <Screen>
-        <View
-          style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: theme.spacing.md }}
-          testID="capture-processing"
-        >
-          <ActivityIndicator color={theme.colors.primary} size="large" />
-          <AppText tone="secondary">Checking your photo...</AppText>
-        </View>
-      </Screen>
+      <DesignKycShell
+        onBack={onExit}
+        title="Checking your photo"
+        subtitle="One moment…"
+        centered
+        testID="capture-processing"
+      >
+        <ActivityIndicator color={D.green} size="large" />
+      </DesignKycShell>
     );
   }
 
@@ -152,39 +143,36 @@ export function CaptureFlow({
     const uploading = upload.status === 'uploading';
     const failed = upload.status === 'error' ? upload.error : null;
     const notAllowed = failed?.code === 'KYC_UPLOAD_NOT_ALLOWED';
+    const footer = notAllowed
+      ? [{ label: 'Back', onPress: onExit, testID: 'capture-exit' }]
+      : [
+          {
+            label: failed ? 'Try again' : 'Use this photo',
+            onPress: () => void submit(image),
+            loading: uploading,
+            disabled: uploading,
+            testID: 'capture-upload',
+          },
+          {
+            label: 'Retake',
+            onPress: retake,
+            variant: 'ghost' as const,
+            disabled: uploading,
+            testID: 'capture-retake',
+          },
+        ];
+
     return (
-      <Screen
-        scroll
-        footer={
-          <View style={{ gap: theme.spacing.sm }}>
-            {notAllowed ? (
-              <Button label="Back to verification" onPress={onExit} testID="capture-exit" />
-            ) : (
-              <Button
-                label={failed ? 'Try again' : 'Use this photo'}
-                onPress={() => void submit(image)}
-                loading={uploading}
-                disabled={uploading}
-                testID="capture-upload"
-              />
-            )}
-            <Button
-              label="Retake"
-              variant="ghost"
-              leftIcon={RotateCcw}
-              onPress={retake}
-              disabled={uploading}
-              testID="capture-retake"
-            />
-          </View>
-        }
-      >
-        <StackHeader title="Check your photo" onBack={uploading ? () => undefined : retake} />
-        <AppText tone="secondary">
-          {kind === 'document'
+      <DesignKycShell
+        onBack={uploading ? () => undefined : retake}
+        title="Check your photo"
+        subtitle={
+          kind === 'document'
             ? 'Make sure all four corners are visible, and the text is sharp with no glare.'
-            : 'Make sure your whole face is visible, in focus and well lit.'}
-        </AppText>
+            : 'Make sure your whole face is visible, in focus and well lit.'
+        }
+        footer={footer}
+      >
         <Image
           source={{ uri: image.uri }}
           accessibilityLabel={kind === 'document' ? 'Photo of your document' : 'Your selfie'}
@@ -193,91 +181,113 @@ export function CaptureFlow({
             width: '100%',
             aspectRatio: image.width > 0 && image.height > 0 ? image.width / image.height : 1,
             maxHeight: 420,
-            borderRadius: theme.radius.lg,
-            backgroundColor: theme.colors.surfaceMuted,
+            borderRadius: 18,
+            backgroundColor: D.field,
           }}
           testID="capture-preview"
         />
         {uploading ? (
-          <View style={{ gap: theme.spacing.xs }}>
-            <ProgressBar
-              value={upload.progress}
-              accessibilityLabel="Upload progress"
-              testID="upload-progress"
-            />
-            <AppText variant="caption" tone="secondary">
-              Uploading {Math.round(upload.progress * 100)}%
-            </AppText>
-          </View>
+          <Text style={styles.meta}>Uploading {Math.round(upload.progress * 100)}%</Text>
         ) : null}
-        {failed ? <FormAlert message={kycErrorMessage(failed)} testID="capture-error" /> : null}
-      </Screen>
+        {failed ? (
+          <Text style={styles.error} testID="capture-error" accessibilityRole="alert">
+            {kycErrorMessage(failed)}
+          </Text>
+        ) : null}
+      </DesignKycShell>
     );
   }
 
+  const footer = [
+    {
+      label: 'Take photo',
+      onPress: () => setPhase({ name: 'camera' }),
+      testID: 'capture-camera',
+    },
+    ...(allowLibrary
+      ? [
+          {
+            label: 'Choose from library',
+            onPress: () => void pickFromLibrary(),
+            variant: 'secondary' as const,
+            testID: 'capture-library',
+          },
+        ]
+      : []),
+  ];
+
   return (
-    <Screen
-      scroll
-      footer={
-        <View style={{ gap: theme.spacing.sm }}>
-          <Button
-            label="Take photo"
-            leftIcon={Camera}
-            onPress={() => setPhase({ name: 'camera' })}
-            testID="capture-camera"
-          />
-          {allowLibrary ? (
-            <Button
-              label="Choose from library"
-              variant="outline"
-              leftIcon={ImageIcon}
-              onPress={() => void pickFromLibrary()}
-              testID="capture-library"
-            />
-          ) : null}
-        </View>
-      }
+    <DesignKycShell
+      onBack={onExit}
+      title={title}
+      subtitle={subtitle}
+      listenText={[title, subtitle, ...tips, notice].filter(Boolean).join('. ')}
+      footer={footer}
     >
-      <StackHeader onBack={onExit} />
-      <View
-        style={{
-          width: 56,
-          height: 56,
-          borderRadius: theme.radius.pill,
-          backgroundColor: theme.colors.primarySoft,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Icon icon={icon} size="lg" color={theme.colors.primary} />
-      </View>
-      <View style={{ gap: theme.spacing.xs }}>
-        <AppText variant="h1" accessibilityRole="header">
-          {title}
-        </AppText>
-        <AppText tone="secondary">{subtitle}</AppText>
-      </View>
       {phase.warning ? (
-        <FormAlert tone="warning" message={phase.warning} testID="capture-warning" />
+        <Text style={styles.warn} testID="capture-warning" accessibilityRole="alert">
+          {phase.warning}
+        </Text>
       ) : null}
-      <Card variant="muted">
-        <View style={{ gap: theme.spacing.md }}>
-          {tips.map((tip) => (
-            <View
-              key={tip}
-              style={{ flexDirection: 'row', gap: theme.spacing.sm, alignItems: 'flex-start' }}
-            >
-              <Icon icon={CheckCircle2} size="sm" color={theme.colors.primary} />
-              <AppText style={{ flex: 1 }}>{tip}</AppText>
-            </View>
-          ))}
-        </View>
-      </Card>
-      {notice ? (
-        <AppText variant="caption" tone="muted">
-          {notice}
-        </AppText>
-      ) : null}
-    </Screen>
+      <View style={styles.tipsCard}>
+        {tips.map((tip) => (
+          <View key={tip} style={styles.tipRow}>
+            <CheckCircle2 color={D.green} size={20} strokeWidth={2.4} />
+            <Text style={styles.tipText}>{tip}</Text>
+          </View>
+        ))}
+      </View>
+      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+    </DesignKycShell>
   );
 }
+
+const styles = StyleSheet.create({
+  tipsCard: {
+    backgroundColor: D.white,
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    gap: 12,
+  },
+  tipRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  tipText: {
+    flex: 1,
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 16,
+    fontWeight: '600',
+    color: D.ink,
+    lineHeight: 22,
+  },
+  notice: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 14,
+    fontWeight: '600',
+    color: D.muted,
+    lineHeight: 20,
+  },
+  warn: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 16,
+    fontWeight: '700',
+    color: D.danger,
+    lineHeight: 22,
+  },
+  error: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 16,
+    fontWeight: '700',
+    color: D.danger,
+    lineHeight: 22,
+  },
+  meta: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 15,
+    fontWeight: '600',
+    color: D.secondary,
+  },
+});

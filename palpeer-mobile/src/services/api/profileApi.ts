@@ -17,6 +17,7 @@ export const profileApi = baseApi.injectEndpoints({
       invalidatesTags: ['Profile'],
     }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
 export const {

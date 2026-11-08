@@ -25,14 +25,16 @@ export async function enableBiometricUnlock(userId: string, label: string): Prom
   const registration = await buildRegistration();
   let result = await securityCommands.registerDevice(registration);
   if (!result.ok && result.error.code === 'DEVICE_EXISTS') {
+    // Same-install stale row: replace it. Another phone owning the account needs email OTP
+    // via Confirm it's you — do not silently take over from biometric settings.
     const list = await securityCommands.listDevices();
     if (!list.ok) return { status: 'error', error: list.error };
     const stale = findThisDevice(list.data ?? [], registration.deviceIdentifier);
     if (stale) {
       const removed = await securityCommands.deleteDevice(stale.id);
       if (!removed.ok) return { status: 'error', error: removed.error };
+      result = await securityCommands.registerDevice(registration);
     }
-    result = await securityCommands.registerDevice(registration);
   }
   if (!result.ok) return { status: 'error', error: result.error };
 

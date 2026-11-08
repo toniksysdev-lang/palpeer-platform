@@ -2,10 +2,10 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import { fail, installFetchMock, ok } from '@/tests/fetchMock';
 import { router, setSearchParams } from '@/tests/mocks/expoRouter';
-import { typeIntoNumberField } from '@/tests/numberPad';
 import { renderWithProviders } from '@/tests/render';
 
 import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
+import { MakeNewPasswordScreen } from '../screens/MakeNewPasswordScreen';
 import { ResetPasswordScreen } from '../screens/ResetPasswordScreen';
 
 jest.mock('expo-router', () => require('../../../tests/mocks/expoRouter'));
@@ -26,7 +26,7 @@ describe('ForgotPasswordScreen', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('requests a reset code and continues to the reset screen', async () => {
+  it('requests a reset code and continues to the check-email screen', async () => {
     const { calls } = installFetchMock({
       'POST /auth/password-reset/request': ok({ debugOtp: null }),
     });
@@ -74,38 +74,52 @@ describe('ForgotPasswordScreen', () => {
   });
 });
 
-describe('ResetPasswordScreen', () => {
+describe('ResetPasswordScreen (check my email)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     setSearchParams({ email: 'ada@example.com' });
   });
 
-  async function fill(code: string, password = 'new-password-1', confirm = password) {
-    await typeIntoNumberField('reset-code-cells', code);
-    await fireEvent.changeText(screen.getByTestId('reset-password'), password);
-    await fireEvent.changeText(screen.getByTestId('reset-confirm'), confirm);
-    await fireEvent.press(screen.getByTestId('reset-submit'));
-  }
-
   it('shows the neutral delivery message', async () => {
     installFetchMock({});
     await renderWithProviders(<ResetPasswordScreen />);
-    expect(screen.getByText(/If an account exists for ada@example.com/)).toBeTruthy();
+    expect(
+      screen.getByText(/If ada@example.com has an account, a code is coming/),
+    ).toBeTruthy();
   });
 
-  it('does not show a dev reset code even when a debug param is present', async () => {
-    setSearchParams({ email: 'ada@example.com', debugOtp: '112233' });
+  it('continues to make-new-password with the code', async () => {
     installFetchMock({});
     await renderWithProviders(<ResetPasswordScreen />);
-    expect(screen.queryByTestId('reset-debug-otp')).toBeNull();
-    expect(screen.queryByText(/Dev reset code/)).toBeNull();
+
+    await fireEvent.changeText(screen.getByTestId('reset-code'), '123456');
+    await fireEvent.press(screen.getByTestId('reset-submit'));
+    await waitFor(() =>
+      expect(router.push).toHaveBeenCalledWith({
+        pathname: '/make-new-password',
+        params: { email: 'ada@example.com', code: '123456' },
+      }),
+    );
+  });
+});
+
+describe('MakeNewPasswordScreen', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    setSearchParams({ email: 'ada@example.com', code: '123456' });
   });
 
-  it('confirms the reset and returns to sign in', async () => {
-    const { calls } = installFetchMock({ 'POST /auth/password-reset/confirm': ok() });
-    await renderWithProviders(<ResetPasswordScreen />);
+  async function fill(password = 'new-password-1', confirm = password) {
+    await fireEvent.changeText(screen.getByTestId('reset-password'), password);
+    await fireEvent.changeText(screen.getByTestId('reset-confirm'), confirm);
+    await fireEvent.press(screen.getByTestId('new-password-submit'));
+  }
 
-    await fill('123456');
+  it('confirms the reset and returns to log in', async () => {
+    const { calls } = installFetchMock({ 'POST /auth/password-reset/confirm': ok() });
+    await renderWithProviders(<MakeNewPasswordScreen />);
+
+    await fill();
     await waitFor(() =>
       expect(router.replace).toHaveBeenCalledWith({
         pathname: '/login',
@@ -121,18 +135,18 @@ describe('ResetPasswordScreen', () => {
 
   it('enforces the backend password length locally', async () => {
     const { calls } = installFetchMock({});
-    await renderWithProviders(<ResetPasswordScreen />);
+    await renderWithProviders(<MakeNewPasswordScreen />);
 
-    await fill('123456', 'short');
+    await fill('short');
     expect(await screen.findByText('Password must be at least 8 characters')).toBeTruthy();
     expect(calls).toHaveLength(0);
   });
 
-  it('shows an expired code on the code field', async () => {
+  it('shows an expired code on the form', async () => {
     installFetchMock({ 'POST /auth/password-reset/confirm': fail(400, 'OTP_EXPIRED') });
-    await renderWithProviders(<ResetPasswordScreen />);
+    await renderWithProviders(<MakeNewPasswordScreen />);
 
-    await fill('123456');
+    await fill();
     expect(await screen.findByText('This code has expired. Request a new one.')).toBeTruthy();
     expect(router.replace).not.toHaveBeenCalled();
   });

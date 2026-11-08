@@ -113,6 +113,7 @@ export default defineConfig(({ mode }) => {
     delete process.env.VITE_API_BASE_URL;
     delete process.env.VITE_WS_URL;
     delete process.env.VITE_APP_ENV;
+    delete process.env.VITE_DEV_PROXY_TARGET;
   }
 
   const fileEnv = loadEnv(mode, process.cwd(), '');
@@ -121,12 +122,15 @@ export default defineConfig(({ mode }) => {
     const localApi = fileEnv.VITE_API_BASE_URL || '/api/v1';
     const localWs = fileEnv.VITE_WS_URL || 'http://localhost:8085/ws';
     const localAppEnv = fileEnv.VITE_APP_ENV || 'development';
+    const localProxy = fileEnv.VITE_DEV_PROXY_TARGET?.trim() || 'http://127.0.0.1:8085';
     process.env.VITE_API_BASE_URL = localApi;
     process.env.VITE_WS_URL = localWs;
     process.env.VITE_APP_ENV = localAppEnv;
+    process.env.VITE_DEV_PROXY_TARGET = localProxy;
     fileEnv.VITE_API_BASE_URL = localApi;
     fileEnv.VITE_WS_URL = localWs;
     fileEnv.VITE_APP_ENV = localAppEnv;
+    fileEnv.VITE_DEV_PROXY_TARGET = localProxy;
   }
 
   const processEnv = Object.fromEntries(
@@ -183,6 +187,21 @@ export default defineConfig(({ mode }) => {
             proxy.on('proxyReq', (proxyReq) => {
               proxyReq.removeHeader('origin');
               proxyReq.removeHeader('referer');
+            });
+            // Default http-proxy errors are empty/HTML 5xx — map to JSON so the admin client
+            // can show a clear "backend on :8085" message instead of a generic parse failure.
+            proxy.on('error', (err, _req, res) => {
+              console.error(`[vite /api proxy → ${proxyTarget}]`, err?.message || err);
+              if (res && 'writeHead' in res && typeof res.writeHead === 'function' && !res.headersSent) {
+                res.writeHead(502, { 'Content-Type': 'application/json' });
+                res.end(
+                  JSON.stringify({
+                    success: false,
+                    message: 'Cannot reach the API server. Check that the backend is running on port 8085.',
+                    error: { code: 'API_UNREACHABLE', detail: String(err?.message || 'proxy_error') },
+                  }),
+                );
+              }
             });
           },
         },

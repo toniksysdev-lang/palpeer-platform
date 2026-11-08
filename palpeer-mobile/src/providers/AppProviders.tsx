@@ -42,6 +42,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  // Match BrandSplash / boot HTML so the provider shell never flashes a foreign color.
-  root: { flex: 1, backgroundColor: '#FFFFFF' },
+  // Design page colour — light-mode header / status-bar chrome must not flash white.
+  root: { flex: 1, backgroundColor: '#F3F6F4' },
 });

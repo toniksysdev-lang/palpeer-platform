@@ -157,8 +157,13 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
               onFocus?.(event);
             }}
             onBlur={onBlur}
-            style={[styles.input, theme.typography.body, { color: theme.colors.textPrimary }]}
-            maxFontSizeMultiplier={1.6}
+            style={[
+              styles.input,
+              theme.typography.body,
+              // Keep ≥16px so mobile browsers do not zoom the page on focus.
+              { color: theme.colors.textPrimary, fontSize: Math.max(16, theme.typography.body.fontSize ?? 16) },
+            ]}
+            maxFontSizeMultiplier={1}
             {...numberFieldTextInputProps}
           />
           {right}
@@ -199,8 +204,12 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
               setFocused(false);
               onBlur?.(event);
             }}
-            style={[styles.input, theme.typography.body, { color: theme.colors.textPrimary }]}
-            maxFontSizeMultiplier={1.6}
+            style={[
+              styles.input,
+              theme.typography.body,
+              { color: theme.colors.textPrimary, fontSize: Math.max(16, theme.typography.body.fontSize ?? 16) },
+            ]}
+            maxFontSizeMultiplier={1}
             {...rest}
           />
           {right}

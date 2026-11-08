@@ -33,7 +33,12 @@ export function useSignedOutWelcomeLanding(ready: boolean, isAuthenticated: bool
     }
     if (!ready || !navigatorReady) return;
 
-    if (pathname === '/welcome' || pathname === '/') {
+    // Design landing is `/` (Start artboard). Preserve design auth artboards too.
+    if (
+      pathname === '/welcome' ||
+      pathname === '/' ||
+      pathname.startsWith('/Start')
+    ) {
       settled.current = true;
       return;
     }
@@ -47,6 +52,6 @@ export function useSignedOutWelcomeLanding(ready: boolean, isAuthenticated: bool
     if (settled.current) return;
 
     settled.current = true;
-    router.replace('/welcome');
+    router.replace('/');
   }, [ready, isAuthenticated, navigatorReady, pathname]);
 }

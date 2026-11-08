@@ -3,6 +3,7 @@ import {
   BadgePercent,
   Banknote,
   Bell,
+  Building2,
   ClipboardList,
   CreditCard,
   FileBarChart2,
@@ -143,6 +144,13 @@ export const primaryNav: NavItem[] = [
     label: 'Marketing',
     path: '/admin/marketing',
     icon: Sparkles,
+    permission: 'promotions:write',
+  },
+  {
+    id: 'business-waitlist',
+    label: 'Business waitlist',
+    path: '/admin/business-waitlist',
+    icon: Building2,
     permission: 'promotions:write',
   },
   {

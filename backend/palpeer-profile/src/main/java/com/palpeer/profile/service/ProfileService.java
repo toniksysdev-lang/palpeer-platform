@@ -45,7 +45,8 @@ public class ProfileService {
                 .orElseThrow(() -> new ResourceNotFoundException("Profile not found"));
     }
 
-    private static final int MIN_AGE_YEARS = 18;
+    /** Matches mobile About me / personal info ({@code MIN_PROFILE_AGE_YEARS}). */
+    private static final int MIN_AGE_YEARS = 16;
 
     @Transactional
     public ProfileResponse update(UUID userId, UpdateProfileRequest request) {

@@ -15,6 +15,7 @@ import { formatRateValue } from '@/features/exchange/format';
 import { ExpiryCountdown } from '@/features/p2p/components/ExpiryCountdown';
 import { FlippableRateLine } from '@/features/p2p/components/FlippableRateLine';
 import { sellOrderAcceptPath } from '@/features/p2p/shareSellOrder';
+import { useT } from '@/i18n/useT';
 import { useTheme } from '@/providers/ThemeProvider';
 import {
   useGetPublicInstantRatesQuery,
@@ -28,11 +29,6 @@ import { formatDateTime } from '@/utils/datetime';
 import { formatMoney } from '@/utils/money';
 
 type RatesTab = 'p2p' | 'instant';
-
-const TABS: readonly { value: RatesTab; label: string }[] = [
-  { value: 'p2p', label: 'Live P2P Rate' },
-  { value: 'instant', label: 'InstantEX Rate' },
-];
 
 function PublicErrorState({ error, onRetry }: { error: AppError; onRetry?: () => void }) {
   return (
@@ -49,9 +45,14 @@ function PublicErrorState({ error, onRetry }: { error: AppError; onRetry?: () =>
  */
 export function ViewRatesScreen() {
   const theme = useTheme();
+  const t = useT();
   const [tab, setTab] = useState<RatesTab>('p2p');
   const p2p = useGetPublicP2PRatesQuery();
   const instant = useGetPublicInstantRatesQuery();
+  const tabs = [
+    { value: 'p2p' as const, label: t('rates.peopleOffers') },
+    { value: 'instant' as const, label: t('rates.palpeerRate') },
+  ];
 
   const refreshing =
     tab === 'p2p'
@@ -72,12 +73,10 @@ export function ViewRatesScreen() {
         />
       }
     >
-      <StackHeader title="View rates" />
-      <AppText tone="secondary">
-        Browse live P2P offers and InstantEX rates without signing in. Sign in to trade.
-      </AppText>
+      <StackHeader title={t('rates.title')} />
+      <AppText tone="secondary">{t('rates.subtitle')}</AppText>
       <SegmentedControl
-        options={TABS}
+        options={tabs}
         value={tab}
         onChange={setTab}
         accessibilityLabel="Rate source"

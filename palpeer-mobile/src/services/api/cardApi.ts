@@ -70,6 +70,7 @@ export const cardApi = baseApi.injectEndpoints({
       invalidatesTags: (result, _error, cardId) => cardTags(result, cardId),
     }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
 export const {

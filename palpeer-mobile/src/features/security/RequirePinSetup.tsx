@@ -9,9 +9,20 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useGetPinStatusQuery } from '@/services/api/securityApi';
 import { useAppSelector } from '@/store';
 
+const PIN_SETUP_PATH = '/StartPinSet';
+
+function onPinSetupPath(pathname: string | undefined): boolean {
+  if (!pathname) return false;
+  return (
+    pathname.includes('/StartPinSet') ||
+    pathname.includes('/StartPinAgain') ||
+    pathname.includes('/security/pin/set')
+  );
+}
+
 /**
- * After login, block the app until a transaction PIN is set. Redirects to set-PIN and
- * covers the UI so tabs / money screens are not usable in the meantime.
+ * After login, block the app until a transaction PIN is set. Redirects to the design
+ * StartPinSet screen and covers the UI so tabs / money screens are not usable in the meantime.
  */
 export function RequirePinSetup() {
   const theme = useTheme();
@@ -21,7 +32,7 @@ export function RequirePinSetup() {
   const pinStatus = useGetPinStatusQuery(undefined, { skip: !authenticated });
   const redirected = useRef(false);
 
-  const onSetPin = pathname?.includes('/security/pin/set') ?? false;
+  const onSetPin = onPinSetupPath(pathname);
   const needsPin =
     authenticated &&
     !locked &&
@@ -42,7 +53,7 @@ export function RequirePinSetup() {
     }
     if (onSetPin || redirected.current) return;
     redirected.current = true;
-    router.replace({ pathname: '/security/pin/set', params: { required: '1' } });
+    router.replace({ pathname: PIN_SETUP_PATH, params: { setupRequired: '1' } });
   }, [
     authenticated,
     locked,
@@ -76,7 +87,7 @@ export function RequirePinSetup() {
             shape="pill"
             onPress={() => {
               redirected.current = true;
-              router.replace({ pathname: '/security/pin/set', params: { required: '1' } });
+              router.replace({ pathname: PIN_SETUP_PATH, params: { setupRequired: '1' } });
             }}
             testID="require-pin-continue"
           />

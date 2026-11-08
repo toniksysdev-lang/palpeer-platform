@@ -73,6 +73,9 @@ export function resolveDeepLink(input: string | null | undefined): string | null
   }
   const shareMatch = path.match(new RegExp(`^/p2p/share/(${UUID})$`));
   if (shareMatch?.[1]) return `/p2p-share/${shareMatch[1]}`;
+  // Design Card screen (legacy /cards/:id still accepted as input).
+  const cardMatch = path.match(new RegExp(`^/cards/(${UUID})$`));
+  if (cardMatch?.[1]) return `/Card?id=${cardMatch[1]}`;
   return path;
 }
 

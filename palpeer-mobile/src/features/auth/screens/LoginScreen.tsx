@@ -16,6 +16,7 @@ import { TextLink } from '@/components/ui/TextLink';
 import { checkDeviceTrust } from '@/features/security/biometricUnlock';
 import { useSecretCommand } from '@/hooks/useSecretCommand';
 import { useSensitiveScreen } from '@/hooks/useSensitiveScreen';
+import { useT } from '@/i18n/useT';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { useGetSignupStatusMutation, useResendSignupEmailOtpMutation } from '@/services/api/authApi';
@@ -38,12 +39,22 @@ import {
 import { AuthLayout } from '../components/AuthLayout';
 import { GoogleSignInSection } from '../components/GoogleSignInSection';
 import { applyServerErrors, authErrorMessage } from '../errors';
+import { pendingHelpAfterLogin } from '../pendingHelpAfterLogin';
 import { loginSchema, type LoginForm } from '../schemas';
+
+function afterAuthNavigate() {
+  if (pendingHelpAfterLogin.take()) {
+    router.replace('/support');
+    return;
+  }
+  // Design Home (change map) — replaces former /(tabs) shell.
+  router.replace('/Main');
+}
 
 const NOTICES: Record<string, string> = {
   verified: 'Your account is ready. Sign in to continue.',
   exists: 'An account already exists for this phone. Sign in to continue.',
-  reset: 'Your password was reset. Sign in with your new password.',
+  reset: 'My password is changed. Log in.',
 };
 
 const SIGN_OUT_NOTICES: Record<SignOutReason, string> = {
@@ -57,6 +68,7 @@ const SIGN_OUT_NOTICES: Record<SignOutReason, string> = {
 export function LoginScreen() {
   useSensitiveScreen();
   const theme = useTheme();
+  const t = useT();
   const toast = useToast();
   const dispatch = useAppDispatch();
   const params = useLocalSearchParams<{ email?: string; notice?: string }>();
@@ -152,6 +164,7 @@ export function LoginScreen() {
     dispatch(biometricChanged(true));
     dispatch(appUnlocked());
     setBiometricBusy(false);
+    afterAuthNavigate();
   }, [biometricBusy, biometricLabel, dispatch, toast]);
 
   const continueEmailVerification = async (identifier: string) => {
@@ -202,6 +215,7 @@ export function LoginScreen() {
       const tokens = await login({ email: identifier, password: values.password });
       const sessionEmail = identifier.includes('@') ? identifier.toLowerCase() : null;
       await sessionManager.start(tokens, sessionEmail);
+      afterAuthNavigate();
     } catch (error) {
       const appError = toAppError(error);
       if (appError.code === 'EMAIL_NOT_VERIFIED') {
@@ -221,7 +235,7 @@ export function LoginScreen() {
 
   return (
     <AuthLayout
-      title="Login to your account"
+      title={t('login.title')}
       centered
       header={
         <View style={{ alignItems: 'center', marginBottom: theme.spacing.md }}>
@@ -283,14 +297,14 @@ export function LoginScreen() {
         )}
       />
       <TextLink
-        label="Forgot Password?"
+        label={t('login.forgot')}
         align="right"
         tone="info"
         onPress={() => router.push('/forgot-password')}
         testID="go-forgot-password"
       />
       <Button
-        label="Login"
+        label={t('login.submit')}
         loadingLabel="Signing in…"
         shape="pill"
         onPress={onSubmit}
@@ -300,7 +314,7 @@ export function LoginScreen() {
       />
       {biometricLabel ? (
         <Button
-          label="Login with Face ID or Fingerprint"
+          label={t('login.biometric')}
           leftIcon={Fingerprint}
           variant="primaryOutline"
           shape="pill"
@@ -313,19 +327,22 @@ export function LoginScreen() {
       ) : null}
       <GoogleSignInSection />
       <View style={styles.signUp}>
-        <AppText>Don&apos;t have an account? </AppText>
+        <AppText>{t('login.newHere')} </AppText>
         <TextLink
-          label="Sign up"
+          label={t('login.getStarted')}
           tone="info"
           onPress={() => router.push('/enter-phone')}
           testID="go-register"
         />
       </View>
       <TextLink
-        label="Need help?"
+        label={t('login.help')}
         align="center"
         tone="info"
-        onPress={() => router.push('/support')}
+        onPress={() => {
+          pendingHelpAfterLogin.request();
+          setFormError(t('login.helpGate'));
+        }}
         testID="go-support"
       />
     </AuthLayout>

@@ -17,7 +17,7 @@ import { markDeviceVerifiedForSession } from '../deviceSession';
 import { securityErrorMessage } from '../errors';
 
 const PIN_COPY =
-  "Set up your 4 digit pin to make your account more secure. You'll be asked to enter this pin when making transcations.";
+  "Set up your 4 digit pin to make your account more secure. You'll be asked to enter this pin when making transactions.";
 
 type Step =
   | { name: 'enter'; error?: string }
@@ -35,11 +35,11 @@ export function SetPinScreen() {
 
   const finish = () => {
     toast.show({ type: 'success', title: 'Transaction PIN set' });
-    // PIN reset depends on security questions — collect them before returning to the app.
+    // PIN reset depends on security questions — design StartQuestions before returning.
     router.replace({
-      pathname: '/security/questions',
+      pathname: '/StartQuestions',
       params: {
-        required: '1',
+        setupRequired: '1',
         ...(returnTo && typeof returnTo === 'string' ? { returnTo } : {}),
       },
     });

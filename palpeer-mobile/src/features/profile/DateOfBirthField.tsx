@@ -5,17 +5,29 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppText } from '@/components/ui/AppText';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
-import { useTheme } from '@/providers/ThemeProvider';
+import { maximumDateOfBirth, toDisplayDate, toIsoDate } from './schemas';
 
-import { toDisplayDate, toIsoDate } from './schemas';
+/** Palpeer Simple Home design tokens (About me / Start sheets). */
+const D = {
+  ink: '#0E1F19',
+  muted: '#5B6B64',
+  secondary: '#33453D',
+  body: '#46574F',
+  danger: '#B3231A',
+  green: '#0B6E4F',
+  field: '#E9EEEB',
+  page: '#F3F6F4',
+  white: '#FFFFFF',
+  overlay: 'rgba(14,31,25,0.55)',
+  border: '#DDE5E0',
+  font: "'Noto Sans', system-ui, sans-serif",
+} as const;
 
 type Props = {
   label: string;
@@ -82,19 +94,19 @@ function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
 
-/** Full-screen calendar sheet so the month grid is never clipped. */
+/** Full-screen calendar sheet styled like the design Start / More bottom sheets. */
 export function DateOfBirthField({
   label,
   value,
   onChange,
   error,
-  defaultPickerDate = new Date(),
-  maximumDate = new Date(),
+  defaultPickerDate = maximumDateOfBirth(),
+  /** Newest selectable DOB — must be at least 16 years ago. */
+  maximumDate = maximumDateOfBirth(),
   minimumDate,
   disabled = false,
   testID = 'personal-dob',
 }: Props) {
-  const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const [open, setOpen] = useState(false);
@@ -171,10 +183,8 @@ export function DateOfBirthField({
   const yearListMaxHeight = Math.min(windowHeight * 0.5, 360);
 
   return (
-    <View style={{ gap: theme.spacing.xs }}>
-      <AppText variant="body" tone="primary" style={{ fontWeight: '600' }}>
-        {label}
-      </AppText>
+    <View style={styles.fieldWrap}>
+      <Text style={styles.fieldLabel}>{label}</Text>
       <Pressable
         onPress={openPicker}
         disabled={disabled}
@@ -184,32 +194,20 @@ export function DateOfBirthField({
         accessibilityState={{ disabled }}
         testID={testID}
         style={[
-          theme.shadows.card,
-          {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: theme.spacing.sm,
-            paddingHorizontal: theme.spacing.md,
-            minHeight: 56,
-            borderRadius: theme.radius.lg,
-            borderWidth: 1,
-            borderColor: error ? theme.colors.danger : 'transparent',
-            backgroundColor: disabled ? theme.colors.surfaceMuted : theme.colors.surface,
-          },
+          styles.fieldButton,
+          error ? styles.fieldButtonError : null,
+          disabled ? styles.fieldButtonDisabled : null,
         ]}
       >
-        <Icon icon={Calendar} color={theme.colors.textMuted} />
-        <AppText
-          tone={empty || disabled ? 'muted' : 'primary'}
-          style={[theme.typography.body, { flex: 1, paddingVertical: 12 }]}
-        >
+        <Calendar size={22} color={D.muted} strokeWidth={2.2} />
+        <Text style={[styles.fieldValue, empty || disabled ? styles.fieldPlaceholder : null]}>
           {empty ? 'Select date of birth' : value}
-        </AppText>
+        </Text>
       </Pressable>
       {error ? (
-        <AppText variant="caption" tone="danger" accessibilityLiveRegion="polite">
+        <Text style={styles.errorText} accessibilityLiveRegion="polite">
           {error}
-        </AppText>
+        </Text>
       ) : null}
 
       <Modal
@@ -221,59 +219,52 @@ export function DateOfBirthField({
       >
         <View style={styles.modalRoot} testID={`${testID}-sheet`}>
           <Pressable
-            style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.overlay }]}
+            style={styles.overlay}
             onPress={closePicker}
             accessibilityRole="button"
             accessibilityLabel="Close date picker"
           />
           <View
-            style={{
-              maxHeight: sheetMaxHeight,
-              backgroundColor: theme.colors.surfaceElevated,
-              borderTopLeftRadius: theme.radius.xxl,
-              borderTopRightRadius: theme.radius.xxl,
-              paddingHorizontal: theme.spacing.xl,
-              paddingTop: theme.spacing.lg,
-              paddingBottom: Math.max(insets.bottom, theme.spacing.lg) + theme.spacing.md,
-              gap: theme.spacing.md,
-            }}
+            style={[
+              styles.sheet,
+              {
+                maxHeight: sheetMaxHeight,
+                paddingBottom: Math.max(insets.bottom, 16) + 8,
+              },
+            ]}
           >
-            <View style={styles.handleRow}>
-              <View
-                style={{
-                  width: 40,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: theme.colors.borderStrong,
-                }}
-              />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle} accessibilityRole="header">
+                {label}
+              </Text>
+              <Pressable
+                onPress={closePicker}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                style={styles.closeBtn}
+                testID={`${testID}-close`}
+              >
+                <Text style={styles.closeText}>Close</Text>
+              </Pressable>
             </View>
-            <AppText variant="h3">{label}</AppText>
 
             {mode === 'year' ? (
               <>
                 <View style={styles.monthHeader}>
-                  <AppText variant="bodyStrong">Select year</AppText>
+                  <Text style={styles.monthTitle}>Select year</Text>
                   <Pressable
                     onPress={() => setMode('calendar')}
                     accessibilityRole="button"
                     accessibilityLabel="Back to calendar"
                     testID={`${testID}-year-back`}
-                    style={{ padding: theme.spacing.sm }}
+                    style={styles.navHit}
                   >
-                    <AppText variant="body" tone="secondary">
-                      {MONTHS[month]}
-                    </AppText>
+                    <Text style={styles.linkText}>{MONTHS[month]}</Text>
                   </Pressable>
                 </View>
                 <ScrollView
                   style={{ maxHeight: yearListMaxHeight }}
-                  contentContainerStyle={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    gap: theme.spacing.sm,
-                    paddingBottom: theme.spacing.sm,
-                  }}
+                  contentContainerStyle={styles.yearGrid}
                   testID={`${testID}-year-list`}
                   showsVerticalScrollIndicator
                 >
@@ -287,26 +278,11 @@ export function DateOfBirthField({
                         accessibilityState={{ selected: active }}
                         accessibilityLabel={`Year ${y}`}
                         testID={`${testID}-year-${y}`}
-                        style={{
-                          width: '22%',
-                          minWidth: 72,
-                          flexGrow: 1,
-                          paddingVertical: theme.spacing.sm,
-                          borderRadius: theme.radius.md,
-                          alignItems: 'center',
-                          backgroundColor: active
-                            ? theme.colors.primary
-                            : theme.colors.surface,
-                          borderWidth: 1,
-                          borderColor: active ? theme.colors.primary : theme.colors.border,
-                        }}
+                        style={[styles.yearChip, active ? styles.yearChipOn : null]}
                       >
-                        <AppText
-                          variant="bodyStrong"
-                          tone={active ? 'inverse' : 'primary'}
-                        >
+                        <Text style={[styles.yearChipText, active ? styles.yearChipTextOn : null]}>
                           {y}
-                        </AppText>
+                        </Text>
                       </Pressable>
                     );
                   })}
@@ -323,38 +299,22 @@ export function DateOfBirthField({
                     accessibilityRole="button"
                     accessibilityLabel="Previous month"
                     testID={`${testID}-prev-month`}
-                    style={{ opacity: canGoPrev ? 1 : 0.35, padding: theme.spacing.sm }}
+                    style={{ opacity: canGoPrev ? 1 : 0.35, padding: 8 }}
                   >
-                    <Icon icon={ChevronLeft} color={theme.colors.textPrimary} />
+                    <ChevronLeft size={26} color={D.ink} strokeWidth={2.6} />
                   </Pressable>
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: theme.spacing.xs,
-                    }}
-                  >
-                    <AppText variant="bodyStrong">{MONTHS[month]}</AppText>
+                  <View style={styles.monthYearRow}>
+                    <Text style={styles.monthTitle}>{MONTHS[month]}</Text>
                     <Pressable
                       onPress={() => setMode('year')}
                       accessibilityRole="button"
                       accessibilityLabel={`Year ${year}. Change year`}
                       accessibilityHint="Opens a list of years"
                       testID={`${testID}-year-button`}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 2,
-                        paddingHorizontal: theme.spacing.sm,
-                        paddingVertical: theme.spacing.xs,
-                        borderRadius: theme.radius.md,
-                        backgroundColor: theme.colors.surface,
-                        borderWidth: 1,
-                        borderColor: theme.colors.border,
-                      }}
+                      style={styles.yearButton}
                     >
-                      <AppText variant="bodyStrong">{year}</AppText>
-                      <Icon icon={ChevronDown} size={16} color={theme.colors.textPrimary} />
+                      <Text style={styles.monthTitle}>{year}</Text>
+                      <ChevronDown size={18} color={D.ink} strokeWidth={2.6} />
                     </Pressable>
                   </View>
                   <Pressable
@@ -365,23 +325,17 @@ export function DateOfBirthField({
                     accessibilityRole="button"
                     accessibilityLabel="Next month"
                     testID={`${testID}-next-month`}
-                    style={{ opacity: canGoNext ? 1 : 0.35, padding: theme.spacing.sm }}
+                    style={{ opacity: canGoNext ? 1 : 0.35, padding: 8 }}
                   >
-                    <Icon icon={ChevronRight} color={theme.colors.textPrimary} />
+                    <ChevronRight size={26} color={D.ink} strokeWidth={2.6} />
                   </Pressable>
                 </View>
 
                 <View style={styles.weekRow}>
                   {WEEKDAYS.map((day) => (
-                    <AppText
-                      key={day}
-                      variant="caption"
-                      tone="muted"
-                      align="center"
-                      style={styles.dayCell}
-                    >
+                    <Text key={day} style={[styles.dayCell, styles.weekday]}>
                       {day}
-                    </AppText>
+                    </Text>
                   ))}
                 </View>
 
@@ -390,7 +344,7 @@ export function DateOfBirthField({
                     if (!date) {
                       return <View key={`empty-${index}`} style={styles.dayCell} />;
                     }
-                    const disabled =
+                    const dayDisabled =
                       date.getTime() > maxDay.getTime() ||
                       (minDay != null && date.getTime() < minDay.getTime());
                     const selectedDay = sameDay(date, draft);
@@ -398,33 +352,29 @@ export function DateOfBirthField({
                     return (
                       <Pressable
                         key={date.toISOString()}
-                        disabled={disabled}
+                        disabled={dayDisabled}
                         onPress={() => setDraft(date)}
                         accessibilityRole="button"
-                        accessibilityState={{ selected: selectedDay, disabled }}
+                        accessibilityState={{ selected: selectedDay, disabled: dayDisabled }}
                         accessibilityLabel={toDisplayFromDate(date)}
                         testID={`${testID}-day-${date.getDate()}`}
                         style={[
                           styles.dayCell,
-                          {
-                            borderRadius: theme.radius.md,
-                            backgroundColor: selectedDay
-                              ? theme.colors.primary
-                              : 'transparent',
-                            borderWidth: isToday && !selectedDay ? 1 : 0,
-                            borderColor: theme.colors.primary,
-                            opacity: disabled ? 0.35 : 1,
-                          },
+                          styles.dayHit,
+                          selectedDay ? styles.dayOn : null,
+                          isToday && !selectedDay ? styles.dayToday : null,
+                          dayDisabled ? styles.dayDisabled : null,
                         ]}
                       >
-                        <AppText
-                          variant="body"
-                          align="center"
-                          tone={selectedDay ? 'inverse' : 'primary'}
-                          style={{ fontWeight: selectedDay || isToday ? '700' : '400' }}
+                        <Text
+                          style={[
+                            styles.dayText,
+                            selectedDay ? styles.dayTextOn : null,
+                            (selectedDay || isToday) && styles.dayTextStrong,
+                          ]}
                         >
                           {date.getDate()}
-                        </AppText>
+                        </Text>
                       </Pressable>
                     );
                   })}
@@ -432,28 +382,25 @@ export function DateOfBirthField({
               </>
             )}
 
-            <AppText variant="caption" tone="secondary" align="center">
-              Selected {toDisplayFromDate(draft)}
-            </AppText>
+            <Text style={styles.selectedHint}>Selected {toDisplayFromDate(draft)}</Text>
 
-            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
-              <View style={{ flex: 1 }}>
-                <Button
-                  label="Cancel"
-                  variant="outline"
-                  shape="pill"
-                  onPress={closePicker}
-                  testID={`${testID}-cancel`}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Button
-                  label="Done"
-                  shape="pill"
-                  onPress={commit}
-                  testID={`${testID}-done`}
-                />
-              </View>
+            <View style={styles.actions}>
+              <Pressable
+                onPress={closePicker}
+                accessibilityRole="button"
+                testID={`${testID}-cancel`}
+                style={styles.cancelBtn}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={commit}
+                accessibilityRole="button"
+                testID={`${testID}-done`}
+                style={styles.doneBtn}
+              >
+                <Text style={styles.doneText}>Done</Text>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -463,18 +410,151 @@ export function DateOfBirthField({
 }
 
 const styles = StyleSheet.create({
+  fieldWrap: {
+    gap: 6,
+  },
+  fieldLabel: {
+    fontSize: 16,
+    lineHeight: 19,
+    fontWeight: '700',
+    color: D.ink,
+    fontFamily: D.font,
+  },
+  fieldButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    minHeight: 50,
+    borderRadius: 14,
+    backgroundColor: D.field,
+  },
+  fieldButtonError: {
+    borderWidth: 2,
+    borderColor: D.danger,
+  },
+  fieldButtonDisabled: {
+    opacity: 0.55,
+  },
+  fieldValue: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '700',
+    color: D.ink,
+    paddingVertical: 12,
+    fontFamily: D.font,
+  },
+  fieldPlaceholder: {
+    color: D.muted,
+  },
+  errorText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: D.danger,
+    fontFamily: D.font,
+  },
   modalRoot: {
     flex: 1,
     justifyContent: 'flex-end',
   },
-  handleRow: {
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: D.overlay,
+  },
+  sheet: {
+    backgroundColor: D.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    gap: 12,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  sheetTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: D.ink,
+    fontFamily: D.font,
+  },
+  closeBtn: {
+    minHeight: 48,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+  },
+  closeText: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: D.green,
+    fontFamily: D.font,
   },
   monthHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  monthYearRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  monthTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: D.ink,
+    fontFamily: D.font,
+  },
+  yearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: D.page,
+  },
+  navHit: {
+    padding: 8,
+  },
+  linkText: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: D.green,
+    fontFamily: D.font,
+  },
+  yearGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingBottom: 8,
+  },
+  yearChip: {
+    width: '22%',
+    minWidth: 72,
+    flexGrow: 1,
+    paddingVertical: 10,
+    borderRadius: 14,
+    alignItems: 'center',
+    backgroundColor: D.page,
+    borderWidth: 3,
+    borderColor: 'transparent',
+  },
+  yearChipOn: {
+    backgroundColor: D.white,
+    borderColor: D.green,
+  },
+  yearChipText: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: D.ink,
+    fontFamily: D.font,
+  },
+  yearChipTextOn: {
+    color: D.green,
   },
   weekRow: {
     flexDirection: 'row',
@@ -488,5 +568,78 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  weekday: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: D.muted,
+    fontFamily: D.font,
+  },
+  dayHit: {
+    borderRadius: 14,
+  },
+  dayOn: {
+    backgroundColor: D.green,
+  },
+  dayToday: {
+    borderWidth: 2,
+    borderColor: D.green,
+  },
+  dayDisabled: {
+    opacity: 0.35,
+  },
+  dayText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: D.ink,
+    fontFamily: D.font,
+    textAlign: 'center',
+  },
+  dayTextOn: {
+    color: D.white,
+  },
+  dayTextStrong: {
+    fontWeight: '800',
+  },
+  selectedHint: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: D.body,
+    textAlign: 'center',
+    fontFamily: D.font,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  cancelBtn: {
+    flex: 1,
+    minHeight: 56,
+    borderRadius: 18,
+    borderWidth: 3,
+    borderColor: D.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  cancelText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: D.ink,
+    fontFamily: D.font,
+  },
+  doneBtn: {
+    flex: 1,
+    minHeight: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: D.green,
+  },
+  doneText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: D.white,
+    fontFamily: D.font,
   },
 });

@@ -20,6 +20,17 @@ public interface BonusRepository extends JpaRepository<Bonus, UUID>, JpaSpecific
 
     List<Bonus> findByUserIdOrderByCreatedAtDesc(UUID userId);
 
+    @Query("""
+            SELECT b FROM Bonus b
+            WHERE b.userId = :userId
+              AND UPPER(b.currencyCode) = UPPER(:currencyCode)
+            ORDER BY b.createdAt DESC
+            """)
+    Page<Bonus> findByUserIdAndCurrencyCodeIgnoreCaseOrderByCreatedAtDesc(
+            @Param("userId") UUID userId,
+            @Param("currencyCode") String currencyCode,
+            Pageable pageable);
+
     List<Bonus> findByReferralIdAndUserIdAndStatus(UUID referralId, UUID userId, BonusStatus status);
 
     List<Bonus> findByUserIdAndStatusOrderByCreatedAtDesc(UUID userId, BonusStatus status);

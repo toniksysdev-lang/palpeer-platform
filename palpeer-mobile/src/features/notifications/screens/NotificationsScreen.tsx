@@ -9,6 +9,10 @@ import { StackHeader } from '@/components/layout/StackHeader';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
+import {
+  MessagesSectionControl,
+  type MessagesSection,
+} from '@/features/chat/components/MessagesSectionControl';
 import { useTheme } from '@/providers/ThemeProvider';
 import { toAppError } from '@/services/api/errors';
 import {
@@ -20,14 +24,37 @@ import { NotificationRow } from '../components/NotificationRow';
 import { uniqueNotifications } from '../logic';
 import { useOpenNotification } from '../useOpenNotification';
 
+type Props = {
+  /** When true, render as the Messages → Alerts section (no stack back header). */
+  embedded?: boolean;
+  messagesSection?: MessagesSection;
+  onMessagesSectionChange?: (section: MessagesSection) => void;
+};
+
 /** Newest first, 20 per page. There's no mark-all-read or delete in the backend (NT-2). */
-export function NotificationsScreen() {
+export function NotificationsScreen({
+  embedded = false,
+  messagesSection = 'alerts',
+  onMessagesSectionChange,
+}: Props = {}) {
   const theme = useTheme();
   const list = useGetNotificationsInfiniteQuery();
   const unread = useGetUnreadCountQuery();
   const open = useOpenNotification();
 
-  const header = (
+  const header = embedded && onMessagesSectionChange ? (
+    <View style={{ gap: theme.spacing.sm }}>
+      <MessagesSectionControl section={messagesSection} onChange={onMessagesSectionChange} />
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+        <IconButton
+          icon={Settings}
+          accessibilityLabel="Notification settings"
+          onPress={() => router.push('/notifications/settings')}
+          testID="notifications-settings"
+        />
+      </View>
+    </View>
+  ) : (
     <StackHeader
       title="Notifications"
       right={

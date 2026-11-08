@@ -167,7 +167,13 @@ export function NotificationSettingsScreen() {
   const thisRecord = rememberedId
     ? tokens.data.find((item) => item.id === rememberedId)
     : undefined;
-  const enabledHere = Boolean(thisRecord?.enabled) && permission.status === 'granted';
+  // Default ON: unset opt-out prefers On (even while the silent register runs).
+  const enabledHere =
+    optedOut === false &&
+    permission.status !== 'denied' &&
+    ((Boolean(thisRecord?.enabled) && permission.status === 'granted') ||
+      busy ||
+      !thisRecord);
   const others = tokens.data.filter((item) => item.id !== rememberedId);
 
   const removeOther = async () => {

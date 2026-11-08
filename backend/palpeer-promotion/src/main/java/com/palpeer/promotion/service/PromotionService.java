@@ -29,6 +29,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.palpeer.promotion.web.dto.ApplyReferralRequest;
 import com.palpeer.promotion.web.dto.BonusResponse;
 import com.palpeer.promotion.web.dto.CreatePromotionRequest;
+import com.palpeer.promotion.web.dto.LoyaltyPointsBalance;
+import com.palpeer.promotion.web.dto.LoyaltyPointsLedgerEntry;
 import com.palpeer.promotion.web.dto.P2PFeePromotionDiscount;
 import com.palpeer.promotion.web.dto.PromotionResponse;
 import com.palpeer.promotion.web.dto.ReferralResponse;
@@ -59,6 +61,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class PromotionService {
+
+    /** Product rule (change map): 100 loyalty points = CA$1. */
+    public static final int POINTS_PER_CAD = 100;
+    private static final String POINTS_CURRENCY = "CAD";
 
     private final PromotionRepository promotionRepository;
     private final ReferralRepository referralRepository;
@@ -226,6 +232,38 @@ public class PromotionService {
     @Transactional(readOnly = true)
     public Page<BonusResponse> myBonuses(UUID userId, Pageable pageable) {
         return bonusRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable).map(this::toBonus);
+    }
+
+    @Transactional(readOnly = true)
+    public LoyaltyPointsBalance myLoyaltyPointsBalance(UUID userId) {
+        BigDecimal unusedCad = BigDecimal.ZERO;
+        BigDecimal earnedCad = BigDecimal.ZERO;
+        BigDecimal usedCad = BigDecimal.ZERO;
+        for (Bonus bonus : bonusRepository.findByUserIdOrderByCreatedAtDesc(userId)) {
+            if (!isCadLoyaltyBonus(bonus)) {
+                continue;
+            }
+            earnedCad = earnedCad.add(bonus.getAmount());
+            if (bonus.getStatus() == BonusStatus.PENDING) {
+                unusedCad = unusedCad.add(bonus.getAmount());
+            } else if (bonus.getStatus() == BonusStatus.GRANTED || bonus.getStatus() == BonusStatus.CANCELLED) {
+                usedCad = usedCad.add(bonus.getAmount());
+            }
+        }
+        return new LoyaltyPointsBalance(
+                cadToPoints(unusedCad),
+                unusedCad,
+                cadToPoints(earnedCad),
+                cadToPoints(usedCad),
+                POINTS_PER_CAD,
+                POINTS_CURRENCY);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<LoyaltyPointsLedgerEntry> myLoyaltyPointsLedger(UUID userId, Pageable pageable) {
+        return bonusRepository
+                .findByUserIdAndCurrencyCodeIgnoreCaseOrderByCreatedAtDesc(userId, POINTS_CURRENCY, pageable)
+                .map(this::toLoyaltyPointsEntry);
     }
 
     @Transactional(readOnly = true)
@@ -810,6 +848,47 @@ public class PromotionService {
                 r.getStatus(),
                 r.getPromotionId(),
                 r.getCreatedAt());
+    }
+
+    private static boolean isCadLoyaltyBonus(Bonus bonus) {
+        if (bonus == null || bonus.getAmount() == null || bonus.getStatus() == BonusStatus.FAILED) {
+            return false;
+        }
+        String currency = bonus.getCurrencyCode();
+        return currency != null && POINTS_CURRENCY.equalsIgnoreCase(currency.trim());
+    }
+
+    private static long cadToPoints(BigDecimal cad) {
+        if (cad == null || cad.signum() <= 0) {
+            return 0L;
+        }
+        return cad.multiply(BigDecimal.valueOf(POINTS_PER_CAD))
+                .setScale(0, RoundingMode.HALF_EVEN)
+                .longValue();
+    }
+
+    private LoyaltyPointsLedgerEntry toLoyaltyPointsEntry(Bonus bonus) {
+        String status = bonus.getStatus() == null ? "PENDING" : bonus.getStatus().name();
+        String entryType = bonus.getStatus() == BonusStatus.PENDING ? "EARNED" : "USED";
+        String reason = bonus.getReason();
+        if (reason == null || reason.isBlank()) {
+            reason = bonus.getStatus() == BonusStatus.PENDING
+                    ? "Referral points"
+                    : bonus.getStatus() == BonusStatus.GRANTED
+                        ? "Credited to wallet"
+                        : "Applied to fee or cancelled";
+        }
+        return new LoyaltyPointsLedgerEntry(
+                bonus.getId(),
+                entryType,
+                cadToPoints(bonus.getAmount()),
+                bonus.getAmount(),
+                POINTS_CURRENCY,
+                reason,
+                status,
+                bonus.getReferralId(),
+                bonus.getPromotionId(),
+                bonus.getCreatedAt());
     }
 
     private BonusResponse toBonus(Bonus b) {

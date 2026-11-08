@@ -274,19 +274,57 @@ export function KycDetailPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">KYC case</p>
             <h1 className="mt-1 font-mono text-xl font-semibold text-text-primary">{kycCase.caseId}</h1>
             <p className="mt-2 text-sm text-text-secondary">
-              User{' '}
-              <Link
-                to={`/admin/users/${kycCase.userId}`}
-                className="font-mono text-xs text-primary hover:underline"
-              >
-                {kycCase.userId}
-              </Link>
+              {[kycCase.firstName, kycCase.lastName].filter(Boolean).join(' ').trim() || 'App user'}
+              {kycCase.email ? (
+                <>
+                  {' · '}
+                  <Link
+                    to={`/admin/users/${kycCase.userId}`}
+                    className="text-primary hover:underline"
+                  >
+                    {kycCase.email}
+                  </Link>
+                </>
+              ) : (
+                <>
+                  {' · '}
+                  <Link
+                    to={`/admin/users/${kycCase.userId}`}
+                    className="font-mono text-xs text-primary hover:underline"
+                  >
+                    {kycCase.userId}
+                  </Link>
+                </>
+              )}
             </p>
           </div>
           <StatusBadge status={kycCase.status} />
         </div>
 
-        <dl className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <dl className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div>
+            <dt className="text-xs text-text-muted">First name</dt>
+            <dd className="mt-1 text-sm text-text-primary">{kycCase.firstName?.trim() || '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-text-muted">Last name</dt>
+            <dd className="mt-1 text-sm text-text-primary">{kycCase.lastName?.trim() || '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-text-muted">Email</dt>
+            <dd className="mt-1 text-sm text-text-primary">
+              {kycCase.email ? (
+                <Link
+                  to={`/admin/users/${kycCase.userId}`}
+                  className="text-primary hover:underline"
+                >
+                  {kycCase.email}
+                </Link>
+              ) : (
+                '—'
+              )}
+            </dd>
+          </div>
           <div>
             <dt className="text-xs text-text-muted">Current status</dt>
             <dd className="mt-1 text-sm text-text-primary">{kycCase.status}</dd>
@@ -302,6 +340,17 @@ export function KycDetailPage() {
           <div>
             <dt className="text-xs text-text-muted">Last updated</dt>
             <dd className="mt-1 text-sm text-text-primary">{formatDateTime(kycCase.updatedAt)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-text-muted">User ID</dt>
+            <dd className="mt-1 font-mono text-xs text-text-primary">
+              <Link
+                to={`/admin/users/${kycCase.userId}`}
+                className="text-primary hover:underline"
+              >
+                {kycCase.userId}
+              </Link>
+            </dd>
           </div>
         </dl>
       </section>

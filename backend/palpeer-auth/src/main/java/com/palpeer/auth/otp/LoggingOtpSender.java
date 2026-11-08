@@ -75,10 +75,12 @@ public class LoggingOtpSender implements OtpSender {
 
     private void sendEmailOtp(String destination, OtpPurpose purpose, String code) {
         var rendered =
-                purpose == OtpPurpose.EMAIL_VERIFICATION
-                        ? PalpeerEmailTemplates.emailVerification(code)
-                        : PalpeerEmailTemplates.otp(
-                                purpose.name().toLowerCase().replace('_', ' '), code);
+                switch (purpose) {
+                    case EMAIL_VERIFICATION -> PalpeerEmailTemplates.emailVerification(code);
+                    case NEW_DEVICE -> PalpeerEmailTemplates.newDeviceVerification(code);
+                    default -> PalpeerEmailTemplates.otp(
+                            purpose.name().toLowerCase().replace('_', ' '), code);
+                };
         try {
             emailSender.send(destination, rendered.subject(), rendered.text(), rendered.html());
             log.info(

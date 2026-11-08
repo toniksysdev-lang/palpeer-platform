@@ -1,0 +1,1 @@
+export { MakeNewPasswordScreen as default } from '@/features/auth/screens/MakeNewPasswordScreen';

@@ -42,6 +42,7 @@ export const currencyApi = baseApi.injectEndpoints({
       keepUnusedDataFor: 15,
     }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
 export const {

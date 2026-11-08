@@ -82,14 +82,18 @@ export function isCapacityAiReply(text: string): boolean {
     value.includes('high traffic') ||
     value.includes('currently experiencing') ||
     value.includes('temporarily unavailable') ||
-    value.includes('too many requests');
+    value.includes('too many requests') ||
+    value.includes('technical difficulties') ||
+    value.includes('trouble reaching the ai');
   const agentOffer =
     value.includes('human agent') ||
     value.includes('live agent') ||
     value.includes('speak with an agent') ||
     value.includes('talk to an agent') ||
     value.includes('connect you with a human') ||
-    value.includes('connect you to a human');
+    value.includes('connect you to a human') ||
+    value.includes('chat with an agent') ||
+    value.includes('chat with a human');
   return highDemand && (agentOffer || value.includes('apolog'));
 }
 

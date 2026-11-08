@@ -128,12 +128,21 @@ function applyKey(payload: KeyPayload) {
 
 let blurTimer: ReturnType<typeof setTimeout> | null = null;
 
+function usesInAppNumberPad(el: HTMLElement): boolean {
+  return el.getAttribute('data-palpeer-number-pad') === '1';
+}
+
 function onFocusIn(event: FocusEvent) {
   const target = event.target;
   if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
   if (blurTimer) {
     clearTimeout(blurTimer);
     blurTimer = null;
+  }
+  // Number-pad fields use the in-app keypad only — never the preview soft keyboard.
+  if (usesInAppNumberPad(target) || (target.inputMode || '').toLowerCase() === 'none') {
+    notifyParent({ type: CLOSE });
+    return;
   }
   notifyParent({
     type: OPEN,

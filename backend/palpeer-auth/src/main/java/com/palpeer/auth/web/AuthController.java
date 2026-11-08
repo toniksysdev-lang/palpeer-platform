@@ -9,6 +9,7 @@ import com.palpeer.auth.web.dto.GoogleAuthRequest;
 import com.palpeer.auth.web.dto.LoginRequest;
 import com.palpeer.auth.web.dto.LogoutRequest;
 import com.palpeer.auth.web.dto.MfaVerifyRequest;
+import com.palpeer.auth.web.dto.NewDeviceOtpVerifyRequest;
 import com.palpeer.auth.web.dto.OtpResendRequest;
 import com.palpeer.auth.web.dto.OtpResendResponse;
 import com.palpeer.auth.web.dto.OtpVerifyRequest;
@@ -163,6 +164,24 @@ public class AuthController {
     public ApiResponse<Void> confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
         authService.confirmPasswordReset(request);
         return ApiResponse.ok("Password reset successful", null);
+    }
+
+    @PostMapping("/device/otp/request")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Email a verification code to trust this install as a new device")
+    public ApiResponse<OtpResendResponse> requestNewDeviceOtp(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ApiResponse.ok("OTP sent", authService.requestNewDeviceOtp(principal.getId()));
+    }
+
+    @PostMapping("/device/otp/verify")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Verify the new-device email code before opening the app")
+    public ApiResponse<Void> verifyNewDeviceOtp(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody NewDeviceOtpVerifyRequest request) {
+        authService.verifyNewDeviceOtp(principal.getId(), request.code());
+        return ApiResponse.ok("Device verified", null);
     }
 
     @PostMapping("/password/change")

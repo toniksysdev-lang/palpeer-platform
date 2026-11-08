@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { TextLink } from '@/components/ui/TextLink';
 import { PickerField, PickerSheet } from '@/features/exchange/components/PickerSheet';
 import { useNow } from '@/hooks/useNow';
+import { useT } from '@/i18n/useT';
 import { useTheme } from '@/providers/ThemeProvider';
 import { toAppError } from '@/services/api/errors';
 import {
@@ -47,6 +48,7 @@ function Loading() {
 /** Funding, withdrawals and exchanges from the backend feed, with its type and date filters. */
 export function ActivityScreen() {
   const theme = useTheme();
+  const t = useT();
   const now = useNow();
   const [type, setType] = useState<TypeFilter>('ALL');
   const [period, setPeriod] = useState<Period>('ALL');
@@ -102,8 +104,8 @@ export function ActivityScreen() {
         icon={ReceiptText}
         title="No activity yet"
         message="Funding, withdrawals and exchanges will appear here."
-        actionLabel="Go to wallets"
-        onAction={() => router.navigate('/wallets')}
+        actionLabel="Go to Home"
+        onAction={() => router.navigate('/')}
       />
     );
   } else {
@@ -149,7 +151,7 @@ export function ActivityScreen() {
         />
       }
     >
-      <StackHeader title="Activity" />
+      <StackHeader title={t('history.title')} />
 
       <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
         <View style={{ flex: 1 }}>

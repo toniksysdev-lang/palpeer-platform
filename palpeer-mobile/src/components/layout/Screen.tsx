@@ -1,8 +1,8 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   View,
@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets, type Edge } from 'react-native-safe-area-context';
 
+import { NUMBER_PAD_DOCK_HEIGHT } from '@/components/ui/NumberPad';
 import { NumberPadDock, useOptionalNumberPad } from '@/components/ui/NumberPadContext';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -42,11 +43,17 @@ function ScreenScrollBody({
   contentContainerStyle,
   refreshControl,
   onDismissPad,
+  scrollEnabled = true,
+  showScrollIndicator = false,
+  adjustKeyboardInsets = true,
 }: {
   children: ReactNode;
   contentContainerStyle: ViewStyle[];
   refreshControl?: React.ReactElement<RefreshControlProps>;
   onDismissPad: () => void;
+  scrollEnabled?: boolean;
+  showScrollIndicator?: boolean;
+  adjustKeyboardInsets?: boolean;
 }) {
   const focusScroll = useFocusScroll();
 
@@ -63,9 +70,11 @@ function ScreenScrollBody({
       // dismissing the keyboard/pad (confirm-password was untappable otherwise).
       keyboardShouldPersistTaps="always"
       keyboardDismissMode="on-drag"
-      automaticallyAdjustKeyboardInsets
+      automaticallyAdjustKeyboardInsets={adjustKeyboardInsets}
       refreshControl={refreshControl}
-      showsVerticalScrollIndicator={false}
+      showsVerticalScrollIndicator={showScrollIndicator}
+      scrollEnabled={scrollEnabled}
+      bounces={scrollEnabled}
       scrollEventThrottle={16}
       onScroll={onScroll}
       onScrollBeginDrag={onDismissPad}
@@ -89,8 +98,11 @@ export function Screen({
   const insideTabs = useInsideTabs();
   const numberPad = useOptionalNumberPad();
   const scrollRef = useRef<ScrollView>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const padOpen = !!numberPad?.active;
-  const avoidKeyboard = keyboardAware ?? scroll;
+  const keyboardOpen = keyboardHeight > 0;
+  // Allow scrolling whenever the in-app pad or system keyboard is up, even on non-scroll screens.
+  const allowScroll = scroll || padOpen || keyboardOpen || keyboardAware === true;
   const padding = padded ? theme.spacing.xl : 0;
   // Stack screens draw under the home indicator / Android navigation bar (edge-to-edge).
   const bottomInset = insideTabs || edges.includes('bottom') ? 0 : insets.bottom;
@@ -100,8 +112,37 @@ export function Screen({
   const dismissPad = () => {
     if (padOpen) numberPad?.close();
   };
+  // Overlay pad — only add scroll padding so the page canvas does not shrink.
+  // Inline hosts render the pad in-flow; no full-screen dismiss layer for those.
+  const overlayPad = padOpen && (numberPad?.inlineHosts ?? 0) === 0;
+  const padScrollInset = overlayPad ? NUMBER_PAD_DOCK_HEIGHT : 0;
+  const footerOffset = footer ? theme.spacing.md + footerBottomInset + 56 : 0;
+  // Arm the outside-tap layer only after the opening tap finishes — otherwise the same
+  // press that focused the field lands on the new overlay and immediately closes the pad.
+  const [dismissArmed, setDismissArmed] = useState(false);
+  useEffect(() => {
+    if (!overlayPad) {
+      setDismissArmed(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => setDismissArmed(true), 320);
+    return () => clearTimeout(timer);
+  }, [overlayPad]);
 
-  const body = scroll ? (
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const onShow = (event: KeyboardEvent) => setKeyboardHeight(event.endCoordinates?.height ?? 0);
+    const onHide = () => setKeyboardHeight(0);
+    const showSub = Keyboard.addListener(showEvent, onShow);
+    const hideSub = Keyboard.addListener(hideEvent, onHide);
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const body = (
     <FocusScrollProvider scrollRef={scrollRef}>
       <PadRevealOnOpen />
       <KeyboardRevealOnShow />
@@ -110,46 +151,30 @@ export function Screen({
           column,
           {
             padding,
-            paddingBottom: padding + (footer || padOpen ? 0 : bottomInset),
+            paddingBottom:
+              padding +
+              padScrollInset +
+              (footer && overlayPad ? footerOffset : 0) +
+              (footer || overlayPad ? 0 : bottomInset),
             gap: theme.spacing.lg,
             flexGrow: 1,
           },
         ]}
         refreshControl={refreshControl}
         onDismissPad={dismissPad}
+        scrollEnabled={allowScroll}
+        showScrollIndicator={false}
+        // Never auto-shrink the page when an input is focused.
+        adjustKeyboardInsets={false}
       >
         {children}
       </ScreenScrollBody>
     </FocusScrollProvider>
-  ) : (
-    <View
-      style={[
-        styles.flex,
-        column,
-        {
-          padding,
-          paddingBottom: padding + (footer || padOpen ? 0 : bottomInset),
-          gap: theme.spacing.lg,
-        },
-      ]}
-    >
-      {children}
-    </View>
   );
 
   const content = (
-    <>
+    <View style={styles.flex}>
       {body}
-      {/* Number pad sits above sticky footer actions (and the system home / nav bar). */}
-      <NumberPadDock
-        includeBottomInset={!footer}
-        contentStyle={[
-          column,
-          {
-            paddingHorizontal: padding,
-          },
-        ]}
-      />
       {footer ? (
         <View
           style={[
@@ -164,22 +189,46 @@ export function Screen({
           {footer}
         </View>
       ) : null}
-    </>
+      {overlayPad && dismissArmed ? (
+        <Pressable
+          testID="number-pad-dismiss"
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss number pad"
+          onPress={dismissPad}
+          style={[
+            styles.padDismiss,
+            footer ? { bottom: footerOffset + NUMBER_PAD_DOCK_HEIGHT } : { bottom: NUMBER_PAD_DOCK_HEIGHT },
+          ]}
+        />
+      ) : null}
+      {/* Overlay — must not sit in flex flow or the page shrinks when the pad opens. */}
+      <View
+        pointerEvents="box-none"
+        style={[
+          styles.padOverlay,
+          footer ? { bottom: footerOffset } : null,
+        ]}
+      >
+        <NumberPadDock
+          includeBottomInset={!footer}
+          contentStyle={[
+            column,
+            {
+              paddingHorizontal: padding,
+              alignSelf: 'center',
+              width: '100%',
+            },
+          ]}
+        />
+      </View>
+    </View>
   );
 
+  // No KeyboardAvoidingView — padding/height behaviors resize the page on focus.
+  // FocusScroll + scroll padding keep fields reachable above the keyboard/pad.
   return (
     <SafeAreaView edges={edges} style={[styles.flex, { backgroundColor: theme.colors.background }]}>
-      {avoidKeyboard ? (
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={0}
-        >
-          {content}
-        </KeyboardAvoidingView>
-      ) : (
-        content
-      )}
+      {content}
     </SafeAreaView>
   );
 }
@@ -226,4 +275,20 @@ function KeyboardRevealOnShow() {
   return null;
 }
 
-const styles = StyleSheet.create({ flex: { flex: 1 } });
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  padDismiss: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    zIndex: 19,
+  },
+  padOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 20,
+  },
+});

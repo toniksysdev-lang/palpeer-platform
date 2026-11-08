@@ -1,9 +1,10 @@
 package com.palpeer.admin.service;
 
+import com.palpeer.kyc.domain.KycStatus;
 import com.palpeer.kyc.service.KycService;
+import com.palpeer.kyc.web.dto.AdminKycCaseDetailResponse;
 import com.palpeer.kyc.web.dto.AdminKycCaseSummaryResponse;
 import com.palpeer.kyc.web.dto.KycStatusResponse;
-import com.palpeer.kyc.domain.KycStatus;
 import com.palpeer.profile.domain.Profile;
 import com.palpeer.profile.repository.ProfileRepository;
 import com.palpeer.user.domain.User;
@@ -19,7 +20,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** KYC list for admin with email + full name from user/profile. */
+/** KYC list/detail for admin with email + first/last name from user/profile. */
 @Service
 @RequiredArgsConstructor
 public class AdminKycQueryService {
@@ -32,6 +33,62 @@ public class AdminKycQueryService {
     public Page<AdminKycCaseSummaryResponse> listCases(KycStatus status, UUID userId, Pageable pageable) {
         Page<KycStatusResponse> page = kycService.listCases(status, userId, pageable);
         List<UUID> userIds = page.getContent().stream().map(KycStatusResponse::userId).distinct().toList();
+        IdentityMaps maps = loadIdentity(userIds);
+
+        return page.map(row -> {
+            Profile profile = maps.profiles().get(row.userId());
+            String firstName = blankToNull(profile == null ? null : profile.getFirstName());
+            String lastName = blankToNull(profile == null ? null : profile.getLastName());
+            return new AdminKycCaseSummaryResponse(
+                    row.caseId(),
+                    row.userId(),
+                    maps.emails().get(row.userId()),
+                    firstName,
+                    lastName,
+                    joinName(firstName, lastName),
+                    row.status(),
+                    row.rejectionReason(),
+                    row.createdAt(),
+                    row.updatedAt());
+        });
+    }
+
+    @Transactional(readOnly = true)
+    public AdminKycCaseDetailResponse getCase(UUID caseId) {
+        return withIdentity(kycService.adminGetCase(caseId));
+    }
+
+    @Transactional(readOnly = true)
+    public AdminKycCaseDetailResponse syncProvider(UUID caseId) {
+        return withIdentity(kycService.adminSyncProvider(caseId));
+    }
+
+    private AdminKycCaseDetailResponse withIdentity(AdminKycCaseDetailResponse detail) {
+        IdentityMaps maps = loadIdentity(List.of(detail.userId()));
+        Profile profile = maps.profiles().get(detail.userId());
+        return new AdminKycCaseDetailResponse(
+                detail.caseId(),
+                detail.userId(),
+                maps.emails().get(detail.userId()),
+                blankToNull(profile == null ? null : profile.getFirstName()),
+                blankToNull(profile == null ? null : profile.getLastName()),
+                detail.status(),
+                detail.rejectionReason(),
+                detail.createdAt(),
+                detail.updatedAt(),
+                detail.providerName(),
+                detail.providerClientId(),
+                detail.providerCheckId(),
+                detail.providerCheckType(),
+                detail.providerCheckStatus(),
+                detail.providerOutcome(),
+                detail.providerBreakdown(),
+                detail.liveIdentityCheck(),
+                detail.documents(),
+                detail.selfie());
+    }
+
+    private IdentityMaps loadIdentity(List<UUID> userIds) {
         Map<UUID, String> emails = new HashMap<>();
         if (!userIds.isEmpty()) {
             for (User user : userRepository.findAllById(userIds)) {
@@ -42,28 +99,10 @@ public class AdminKycQueryService {
                 ? Map.of()
                 : profileRepository.findByUserIdIn(userIds).stream()
                         .collect(Collectors.toMap(Profile::getUserId, p -> p, (a, b) -> a));
-
-        return page.map(row -> {
-            Profile profile = profiles.get(row.userId());
-            String fullName = fullName(profile);
-            return new AdminKycCaseSummaryResponse(
-                    row.caseId(),
-                    row.userId(),
-                    emails.get(row.userId()),
-                    fullName,
-                    row.status(),
-                    row.rejectionReason(),
-                    row.createdAt(),
-                    row.updatedAt());
-        });
+        return new IdentityMaps(emails, profiles);
     }
 
-    private static String fullName(Profile profile) {
-        if (profile == null) {
-            return null;
-        }
-        String first = blankToNull(profile.getFirstName());
-        String last = blankToNull(profile.getLastName());
+    private static String joinName(String first, String last) {
         if (first == null && last == null) {
             return null;
         }
@@ -82,4 +121,6 @@ public class AdminKycQueryService {
         }
         return value.trim();
     }
+
+    private record IdentityMaps(Map<UUID, String> emails, Map<UUID, Profile> profiles) {}
 }

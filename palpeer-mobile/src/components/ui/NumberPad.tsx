@@ -1,12 +1,15 @@
-import { ClipboardPaste, Delete } from 'lucide-react-native';
-import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+  type LayoutChangeEvent,
+} from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import { useTheme } from '@/providers/ThemeProvider';
-
 import { AppText } from './AppText';
-import { Icon } from './Icon';
 import { usePressScale } from './usePressScale';
 
 export type NumberPadBottomLeft = '' | '*' | '.';
@@ -26,36 +29,107 @@ type Props = {
   /** Fired when the bottom-left `*` key is pressed (OTP/PIN paste). */
   onAccessoryPress?: () => void;
   variant?: NumberPadVariant;
+  /**
+   * Design-to-device scale (390×844 fit). When omitted, derived from window width
+   * so the pad tracks phone size in the preview frame and on device.
+   */
+  scale?: number;
+  /**
+   * Shrink keys to fit the laid-out height (My phone number inline dock).
+   * Caps at the scaled design key height — never larger than the design pad.
+   */
+  fitHeight?: boolean;
   testID?: string;
 };
 
 type Key = string;
 
-const KEY_HEIGHT = 64;
-const ROW_GAP = 12;
-const COL_GAP = 12;
+/** Design artboard width used by FIT_TO_SCREEN. */
+const DESIGN_W = 390;
+
+/** Matches Palpeer Simple Home “Make my PIN” keypad. */
+export const NUMBER_PAD_KEY_HEIGHT = 76;
+export const NUMBER_PAD_ROW_GAP = 10;
+export const NUMBER_PAD_COL_GAP = 10;
+export const NUMBER_PAD_KEY_RADIUS = 18;
+/** Dock chrome above/below the 3×4 grid (theme spacing.md + lg). */
+export const NUMBER_PAD_DOCK_PADDING = 12 + 16;
+/** Total height reserved when the shared pad overlays the bottom of a screen (design units). */
+export const NUMBER_PAD_DOCK_HEIGHT =
+  NUMBER_PAD_KEY_HEIGHT * 4 + NUMBER_PAD_ROW_GAP * 3 + NUMBER_PAD_DOCK_PADDING;
+
+const KEY_FG = '#0E1F19';
+const KEY_BG = '#FFFFFF';
+const KEY_MUTED_BG = '#E0E7E3';
+
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+/** Scale factor from phone width so the pad tracks device / preview size. */
+export function numberPadScaleForWidth(width: number): number {
+  if (!(width > 0)) return 1;
+  return Math.min(1, Math.max(0.72, width / DESIGN_W));
+}
+
+export function numberPadMetrics(scale = 1) {
+  const s = scale > 0 ? scale : 1;
+  const keyHeight = Math.max(44, Math.round(NUMBER_PAD_KEY_HEIGHT * s));
+  const rowGap = Math.max(6, Math.round(NUMBER_PAD_ROW_GAP * s));
+  const colGap = Math.max(6, Math.round(NUMBER_PAD_COL_GAP * s));
+  const radius = Math.max(10, Math.round(NUMBER_PAD_KEY_RADIUS * s));
+  const dockPadding = Math.max(16, Math.round(NUMBER_PAD_DOCK_PADDING * s));
+  const digitFont = Math.max(20, Math.round(30 * s));
+  const actionFont = Math.max(14, Math.round(17 * s));
+  return {
+    keyHeight,
+    rowGap,
+    colGap,
+    radius,
+    dockPadding,
+    digitFont,
+    actionFont,
+    dockHeight: keyHeight * 4 + rowGap * 3 + dockPadding,
+  };
+}
 
 type PadKeyProps = {
   label: Key;
   disabled?: boolean;
+  muted?: boolean;
   pasteAction?: boolean;
+  /** Fixed height, or omit when the key should fill a flex row (fitHeight). */
+  height?: number;
+  radius: number;
+  digitFont: number;
+  actionFont: number;
   onPress: () => void;
   testID?: string;
 };
 
-function NumberPadKey({ label, disabled, pasteAction, onPress, testID }: PadKeyProps) {
-  const theme = useTheme();
-  const press = usePressScale(0.94);
+function NumberPadKey({
+  label,
+  disabled,
+  muted,
+  pasteAction,
+  height,
+  radius,
+  digitFont,
+  actionFont,
+  onPress,
+  testID,
+}: PadKeyProps) {
+  const press = usePressScale(0.96);
   const [pressed, setPressed] = useState(false);
   const inactive = !!disabled;
   const decorative = label === '*' && !pasteAction;
+  const text =
+    label === 'back' ? 'Delete' : pasteAction ? 'Paste' : label === '' ? '' : label;
+  const fontSize = label === 'back' || pasteAction ? actionFont : digitFont;
 
   return (
     <AnimatedPressable
       onPress={onPress}
       onPressIn={() => {
-        if (inactive || decorative) return;
+        if (inactive || decorative || !label) return;
         setPressed(true);
         press.onPressIn();
       }}
@@ -63,7 +137,7 @@ function NumberPadKey({ label, disabled, pasteAction, onPress, testID }: PadKeyP
         setPressed(false);
         press.onPressOut();
       }}
-      disabled={inactive || decorative}
+      disabled={inactive || decorative || !label}
       accessibilityRole="button"
       accessibilityLabel={
         label === 'back'
@@ -74,44 +148,41 @@ function NumberPadKey({ label, disabled, pasteAction, onPress, testID }: PadKeyP
               ? 'Paste code'
               : label
       }
-      accessibilityState={{ disabled: inactive || decorative }}
+      accessibilityState={{ disabled: inactive || decorative || !label }}
       testID={testID}
       style={[
         styles.key,
+        height != null ? { height } : styles.keyFill,
         {
-          borderColor: pressed ? theme.colors.borderStrong : theme.colors.border,
-          borderRadius: theme.radius.md,
-          backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.surface,
-          opacity: inactive ? 0.5 : 1,
+          borderRadius: radius,
+          backgroundColor: muted || pasteAction || label === 'back' ? KEY_MUTED_BG : KEY_BG,
+          opacity: inactive ? 0.5 : pressed ? 0.92 : 1,
         },
         press.animatedStyle,
       ]}
     >
-      {label === 'back' ? (
-        <Icon icon={Delete} size={28} color={theme.colors.textPrimary} strokeWidth={1.75} />
-      ) : pasteAction ? (
-        <Icon icon={ClipboardPaste} size={26} color={theme.colors.textPrimary} strokeWidth={1.75} />
-      ) : (
+      {text ? (
         <AppText
           align="center"
           style={{
-            fontSize: 32,
-            fontWeight: '500',
-            color: theme.colors.textPrimary,
-            lineHeight: 32,
+            fontSize,
+            fontWeight: '800',
+            color: KEY_FG,
+            lineHeight: fontSize + 2,
             ...(Platform.OS === 'android' ? { includeFontPadding: false } : null),
           }}
         >
-          {label}
+          {text}
         </AppText>
-      )}
+      ) : null}
     </AnimatedPressable>
   );
 }
 
 /**
- * Numeric keypad (1–9, bottom-left, 0, delete) with rounded key chrome.
- * Full-width 3×4 grid; digits and icons are centered in each key.
+ * Numeric keypad matching the design “Make my PIN” pad:
+ * white rounded keys, muted Delete, empty bottom-left (or . / Paste).
+ * Sizes track the phone width (and optional design scale) so the pad fits the device.
  */
 export function NumberPad({
   value,
@@ -120,15 +191,37 @@ export function NumberPad({
   disabled,
   bottomLeft = '*',
   onAccessoryPress,
+  scale: scaleProp,
+  fitHeight = false,
   testID,
 }: Props) {
+  const { width } = useWindowDimensions();
+  const scale = scaleProp ?? numberPadScaleForWidth(width);
+  const metrics = useMemo(() => numberPadMetrics(scale), [scale]);
+  const [fittedKeyHeight, setFittedKeyHeight] = useState<number | null>(null);
+
+  // fitHeight: rows share space equally (flex) so 1–3 are never clipped shorter than 4–0.
+  // Fixed height only when not fitting — or as a cap once measured.
+  const keyHeight = fitHeight ? undefined : metrics.keyHeight;
+  const digitFont =
+    fitHeight && fittedKeyHeight != null
+      ? Math.max(18, Math.min(metrics.digitFont, Math.round(fittedKeyHeight * 0.42)))
+      : metrics.digitFont;
+  const actionFont =
+    fitHeight && fittedKeyHeight != null
+      ? Math.max(12, Math.min(metrics.actionFont, Math.round(fittedKeyHeight * 0.28)))
+      : metrics.actionFont;
+
+  const pasteAction = bottomLeft === '*' && !!onAccessoryPress;
+  // Design pad leaves bottom-left blank unless decimal or paste is needed.
+  const leftKey: Key = bottomLeft === '.' ? '.' : pasteAction ? '*' : '';
+
   const rows: Key[][] = [
     ['1', '2', '3'],
     ['4', '5', '6'],
     ['7', '8', '9'],
-    [bottomLeft || '*', '0', 'back'],
+    [leftKey, '0', 'back'],
   ];
-  const pasteAction = bottomLeft === '*' && !!onAccessoryPress;
 
   const handlePress = (key: Key) => {
     if (disabled) return;
@@ -149,23 +242,58 @@ export function NumberPad({
     if (value.length < maxLength) onChange(value + key);
   };
 
+  const onGridLayout = (event: LayoutChangeEvent) => {
+    if (!fitHeight) return;
+    const h = event.nativeEvent.layout.height;
+    if (!(h > 0)) return;
+    // Track laid-out row height so fonts track the equal flex rows.
+    const next = Math.max(44, Math.floor((h - metrics.rowGap * 3) / 4));
+    setFittedKeyHeight((prev) => (prev === next ? prev : next));
+  };
+
   return (
     <View
-      style={[styles.grid, { rowGap: ROW_GAP }]}
+      style={[
+        styles.grid,
+        { rowGap: metrics.rowGap },
+        fitHeight ? styles.gridFill : null,
+      ]}
       testID={testID ? `${testID}-grid` : undefined}
       accessibilityLabel="Number pad"
+      onLayout={onGridLayout}
     >
       {rows.map((row, rowIndex) => (
-        <View key={`row-${rowIndex}`} style={[styles.row, { columnGap: COL_GAP }]}>
-          {row.map((key) =>
+        <View
+          key={`row-${rowIndex}`}
+          style={[
+            styles.row,
+            { columnGap: metrics.colGap },
+            fitHeight ? styles.rowFill : null,
+            // Cap each flex row so keys never grow past the design key height.
+            fitHeight && fittedKeyHeight != null
+              ? { maxHeight: Math.min(metrics.keyHeight, fittedKeyHeight) }
+              : fitHeight
+                ? { maxHeight: metrics.keyHeight }
+                : null,
+          ]}
+        >
+          {row.map((key, colIndex) =>
             key === '' ? (
-              <View key={`blank-${rowIndex}`} style={styles.keySlot} />
+              <View
+                key={`blank-${rowIndex}-${colIndex}`}
+                style={[styles.keySlot, keyHeight != null ? { height: keyHeight } : styles.keyFill]}
+              />
             ) : (
               <NumberPadKey
                 key={`${key}-${rowIndex}`}
                 label={key}
                 disabled={disabled}
+                muted={key === 'back'}
                 pasteAction={key === '*' && pasteAction}
+                height={keyHeight}
+                radius={metrics.radius}
+                digitFont={digitFont}
+                actionFont={actionFont}
                 onPress={() => handlePress(key)}
                 testID={
                   testID
@@ -186,20 +314,35 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'stretch',
   },
+  gridFill: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minHeight: 0,
+    // Equal flex rows fill the slot — do not clip (that shaved the 1–3 row).
+    justifyContent: 'space-between',
+  },
   row: {
     flexDirection: 'row',
     width: '100%',
     alignItems: 'stretch',
   },
+  rowFill: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minHeight: 44,
+  },
   keySlot: {
     flex: 1,
-    height: KEY_HEIGHT,
   },
   key: {
     flex: 1,
-    height: KEY_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: 0,
+  },
+  keyFill: {
+    alignSelf: 'stretch',
+    minHeight: 0,
   },
 });

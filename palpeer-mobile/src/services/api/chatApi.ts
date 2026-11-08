@@ -95,6 +95,7 @@ export const chatApi = baseApi.injectEndpoints({
       },
     }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
 function later(current: string | null, next: string | null): string | null {

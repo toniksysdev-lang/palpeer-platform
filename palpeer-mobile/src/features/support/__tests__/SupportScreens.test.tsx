@@ -8,6 +8,7 @@ import { router } from '@/tests/mocks/expoRouter';
 import { renderWithProviders } from '@/tests/render';
 
 import { FAQ_SECTIONS, searchFaq } from '../faq';
+import { CommonQuestionsScreen } from '../screens/CommonQuestionsScreen';
 import { HelpCenterScreen } from '../screens/HelpCenterScreen';
 
 jest.mock('expo-router', () => require('../../../tests/mocks/expoRouter'));
@@ -51,28 +52,36 @@ describe('HelpCenterScreen', () => {
     setSupport(NONE);
   });
 
-  it('expands an answer on tap and filters by search', async () => {
+  async function openContactUs() {
+    await renderWithProviders(<HelpCenterScreen />);
+    await fireEvent.press(screen.getByTestId('support-contact-us'));
+  }
+
+  it('opens Get help choices matching the design sheets', async () => {
     setSupport(NONE);
     await renderWithProviders(<HelpCenterScreen />);
 
-    expect(screen.queryByTestId('faq-forgot-pin-answer')).toBeNull();
-    await fireEvent.press(screen.getByTestId('faq-forgot-pin'));
-    expect(screen.getByTestId('faq-forgot-pin-answer')).toBeTruthy();
-    await fireEvent.press(screen.getByTestId('faq-forgot-pin'));
-    expect(screen.queryByTestId('faq-forgot-pin-answer')).toBeNull();
+    expect(screen.getByText('Get help')).toBeTruthy();
+    expect(screen.getByTestId('support-live-chat')).toBeTruthy();
+    expect(screen.getByTestId('support-common-questions')).toBeTruthy();
+    expect(screen.getByTestId('support-contact-us')).toBeTruthy();
 
-    await fireEvent.changeText(screen.getByTestId('help-search'), 'bonus');
-    expect(screen.getByTestId('faq-bonus-pending-answer')).toBeTruthy();
-    expect(screen.queryByTestId('faq-forgot-pin')).toBeNull();
+    await fireEvent.press(screen.getByTestId('support-live-chat'));
+    expect(router.push).toHaveBeenCalledWith('/support/live-chat');
+  });
 
-    await fireEvent.changeText(screen.getByTestId('help-search'), 'zebra');
-    expect(screen.getByText('No matching answers')).toBeTruthy();
+  it('opens the Common questions design screen', async () => {
+    setSupport(NONE);
+    await renderWithProviders(<HelpCenterScreen />);
+    await fireEvent.press(screen.getByTestId('support-common-questions'));
+    expect(router.push).toHaveBeenCalledWith('/support/common-questions');
   });
 
   it('shows support@palpeer.com and omits phone when unset', async () => {
     setSupport(NONE);
-    await renderWithProviders(<HelpCenterScreen />);
+    await openContactUs();
 
+    expect(screen.getByText('Contact us')).toBeTruthy();
     expect(screen.getByTestId('support-email')).toBeTruthy();
     expect(screen.getByText('support@palpeer.com')).toBeTruthy();
     expect(screen.queryByTestId('support-phone')).toBeNull();
@@ -81,7 +90,7 @@ describe('HelpCenterScreen', () => {
 
   it('opens a support email with app details but no account data', async () => {
     setSupport(CONFIGURED);
-    await renderWithProviders(<HelpCenterScreen />);
+    await openContactUs();
 
     await fireEvent.press(screen.getByTestId('support-email'));
     const url = openURL.mock.calls[0]?.[0] as string;
@@ -99,12 +108,42 @@ describe('HelpCenterScreen', () => {
   it('shows the address when no email app can open it', async () => {
     setSupport(CONFIGURED);
     openURL.mockRejectedValue(new Error('no handler'));
-    await renderWithProviders(<HelpCenterScreen />);
+    await openContactUs();
 
     await fireEvent.press(screen.getByTestId('support-email'));
     expect(
       await screen.findByText('No email app found. Write to help@palpeer.example.'),
     ).toBeTruthy();
+  });
+});
+
+describe('CommonQuestionsScreen', () => {
+  it('shows Getting started questions, expands answers, and opens Tonia chat', async () => {
+    await renderWithProviders(<CommonQuestionsScreen />);
+
+    expect(screen.getByTestId('common-questions-screen')).toBeTruthy();
+    expect(screen.getByText('Common questions')).toBeTruthy();
+    expect(screen.getByTestId('common-questions-search')).toBeTruthy();
+    expect(screen.getByTestId('common-questions-cat-getting-started')).toBeTruthy();
+    expect(screen.getByText('What is Palpeer?')).toBeTruthy();
+    expect(screen.queryByTestId('faq-what-is-palpeer-answer')).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('faq-what-is-palpeer'));
+    expect(screen.getByTestId('faq-what-is-palpeer-answer')).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByTestId('common-questions-search'), 'business');
+    expect(screen.getByTestId('faq-business-account')).toBeTruthy();
+    expect(screen.queryByTestId('faq-what-is-palpeer')).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('common-questions-chat-tonia'));
+    expect(router.push).toHaveBeenCalledWith('/support/live-chat');
+  });
+
+  it('filters by category chip', async () => {
+    await renderWithProviders(<CommonQuestionsScreen />);
+    await fireEvent.press(screen.getByTestId('common-questions-cat-add-money'));
+    expect(screen.getByText('How do I add money?')).toBeTruthy();
+    expect(screen.queryByText('What is Palpeer?')).toBeNull();
   });
 });
 

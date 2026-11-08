@@ -50,6 +50,28 @@ class PalpeerEmailTemplatesTest {
     }
 
     @Test
+    void newDeviceVerificationUsesConfirmCopyAndCode() {
+        var email = PalpeerEmailTemplates.newDeviceVerification("482913");
+
+        assertTrue(email.subject().toLowerCase().contains("device"));
+        assertTrue(email.html().contains("Confirm this device"));
+        assertTrue(email.html().contains("482913"));
+        assertTrue(email.html().contains(EmailBrand.BG));
+        assertTrue(email.text().contains("482913"));
+        assertFalse(email.html().contains("<script"));
+    }
+
+    @Test
+    void otpNewDeviceDelegatesToNewDeviceTemplate() {
+        var viaOtp = PalpeerEmailTemplates.otp("new device", "482913");
+        var direct = PalpeerEmailTemplates.newDeviceVerification("482913");
+
+        assertTrue(viaOtp.subject().equals(direct.subject()));
+        assertTrue(viaOtp.html().equals(direct.html()));
+        assertTrue(viaOtp.text().equals(direct.text()));
+    }
+
+    @Test
     void notificationTemplateEscapesUserContent() {
         var email = PalpeerEmailTemplates.notification(
                 "Funds arrived", "You received <b>100</b> CAD.\n\nThanks for using Palpeer.");

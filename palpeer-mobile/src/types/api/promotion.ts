@@ -60,3 +60,30 @@ export type BonusCurrencySummary = {
   unusedAmount: Money;
   usedAmount: Money;
 };
+
+/** Product rule: 100 loyalty points = CA$1 (`PromotionService.POINTS_PER_CAD`). */
+export const LOYALTY_POINTS_PER_CAD = 100;
+
+/** VERIFIED: `LoyaltyPointsBalance` from `GET /promotions/points/mine/balance`. */
+export type LoyaltyPointsBalance = {
+  balancePoints: number;
+  balanceCad: Money;
+  earnedPoints: number;
+  usedPoints: number;
+  pointsPerCad: number;
+  currencyCode: string;
+};
+
+/** VERIFIED: `LoyaltyPointsLedgerEntry` from `GET /promotions/points/mine`. */
+export type LoyaltyPointsLedgerEntry = {
+  id: Uuid;
+  entryType: 'EARNED' | 'USED' | string;
+  points: number;
+  cadAmount: Money;
+  currencyCode: string;
+  reason: string | null;
+  status: BonusStatus | string;
+  referralId: Uuid | null;
+  promotionId: Uuid | null;
+  createdAt: IsoInstant;
+};

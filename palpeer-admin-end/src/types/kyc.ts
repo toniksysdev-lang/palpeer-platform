@@ -41,6 +41,9 @@ export type KycSelfieMetadata = {
 export type AdminKycCaseDetail = {
   caseId: string;
   userId: string;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   status: string;
   rejectionReason?: string | null;
   createdAt?: string | null;

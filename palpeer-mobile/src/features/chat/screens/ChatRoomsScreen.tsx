@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { badgeLabel } from '@/features/notifications/logic';
+import { useT } from '@/i18n/useT';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useGetChatRoomsQuery, useGetChatUnreadCountQuery } from '@/services/api/chatApi';
 import { toAppError } from '@/services/api/errors';
@@ -18,11 +19,27 @@ import { useGetMyOrdersQuery } from '@/services/api/p2pApi';
 import { palette } from '@/theme/colors';
 import { formatDateTime } from '@/utils/datetime';
 
+import {
+  MessagesSectionControl,
+  type MessagesSection,
+} from '../components/MessagesSectionControl';
 import { orderPairLabel } from '../logic';
 
+type Props = {
+  /** When true, show Messages tab chrome (title + Price talks / Alerts). */
+  embedded?: boolean;
+  messagesSection?: MessagesSection;
+  onMessagesSectionChange?: (section: MessagesSection) => void;
+};
+
 /** One conversation per P2P order or negotiation, with per-room unread badges. */
-export function ChatRoomsScreen() {
+export function ChatRoomsScreen({
+  embedded = false,
+  messagesSection = 'talks',
+  onMessagesSectionChange,
+}: Props = {}) {
   const theme = useTheme();
+  const t = useT();
   const rooms = useGetChatRoomsQuery();
   const unread = useGetChatUnreadCountQuery();
   const orders = useGetMyOrdersQuery();
@@ -48,9 +65,7 @@ export function ChatRoomsScreen() {
   } else {
     body = rooms.data.map((room) => {
       const order = orders.data?.find((item) => item.id === room.p2pOrderId);
-      const title = room.negotiationId
-        ? 'Negotiation chat'
-        : orderPairLabel(order);
+      const title = room.negotiationId ? 'Negotiation chat' : orderPairLabel(order);
       const unreadText = badgeLabel(room.unreadCount);
       return (
         <Card
@@ -118,9 +133,13 @@ export function ChatRoomsScreen() {
         />
       }
     >
-      <AppText variant="h1" accessibilityRole="header">
-        Messages
-      </AppText>
+      {embedded && onMessagesSectionChange ? (
+        <MessagesSectionControl section={messagesSection} onChange={onMessagesSectionChange} />
+      ) : (
+        <AppText variant="h1" accessibilityRole="header">
+          {t('nav.messages')}
+        </AppText>
+      )}
       {rooms.error && rooms.data ? (
         <FormAlert tone="warning" message="Couldn't refresh. Pull down to try again." />
       ) : null}

@@ -1,4 +1,5 @@
 const { defineConfig } = require('eslint/config');
+const typescriptEslint = require('@typescript-eslint/eslint-plugin');
 const expoConfig = require('eslint-config-expo/flat');
 const prettierRecommended = require('eslint-plugin-prettier/recommended');
 
@@ -11,6 +12,14 @@ module.exports = defineConfig([
   {
     rules: {
       'no-console': ['error', { allow: ['warn', 'error'] }],
+    },
+  },
+  {
+    files: ['**/*.{ts,tsx}'],
+    plugins: {
+      '@typescript-eslint': typescriptEslint,
+    },
+    rules: {
       '@typescript-eslint/no-explicit-any': 'error',
     },
   },

@@ -3,7 +3,10 @@
  * Serves the phone-frame preview shell that embeds Expo web (default :8081).
  *
  *   node web-emulator/server.cjs
- *   node web-emulator/server.cjs --port=3100 --app=http://localhost:8081
+ *   node web-emulator/server.cjs --port=3100 --app=http://localhost:8082
+ *
+ * Palpeer Expo web defaults to :8082 so it does not collide with other local
+ * emulators that commonly bind :8081 (e.g. AEARA Expenses).
  */
 const http = require('http');
 const fs = require('fs');
@@ -17,7 +20,7 @@ const args = Object.fromEntries(
 );
 
 const PORT = Number(args.port || process.env.PREVIEW_PORT || 3333);
-const APP_URL = args.app || process.env.EXPO_WEB_URL || 'http://localhost:8081';
+const APP_URL = args.app || process.env.EXPO_WEB_URL || 'http://localhost:8082';
 const ROOT = __dirname;
 
 const server = http.createServer((req, res) => {
@@ -26,7 +29,7 @@ const server = http.createServer((req, res) => {
     let html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
     // Bake the Expo URL into the page so iframe and status ping match.
     html = html.replace(
-      "const APP_URL = new URLSearchParams(location.search).get('app') || 'http://localhost:8081';",
+      "const APP_URL = new URLSearchParams(location.search).get('app') || 'http://localhost:8082';",
       `const APP_URL = new URLSearchParams(location.search).get('app') || ${JSON.stringify(APP_URL)};`,
     );
     res.writeHead(200, {

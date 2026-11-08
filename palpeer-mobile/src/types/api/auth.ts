@@ -82,15 +82,19 @@ export type SignupStatusResponse = {
 export type SignupStatusRequest = { phone: string };
 
 /** VERIFIED: `OtpPurpose`. */
-export type OtpPurpose = 'EMAIL_VERIFICATION' | 'PHONE_VERIFICATION' | 'PASSWORD_RESET';
+export type OtpPurpose =
+  | 'EMAIL_VERIFICATION'
+  | 'PHONE_VERIFICATION'
+  | 'PASSWORD_RESET'
+  | 'NEW_DEVICE';
 
 /** VERIFIED: `OtpChannel`. */
 export type OtpChannel = 'EMAIL' | 'SMS';
 
-/** VERIFIED: `OtpVerifyRequest`. `PASSWORD_RESET` is rejected by this endpoint. */
+/** VERIFIED: `OtpVerifyRequest`. `PASSWORD_RESET` / `NEW_DEVICE` are rejected by this endpoint. */
 export type OtpVerifyRequest = {
   email: string;
-  purpose: Exclude<OtpPurpose, 'PASSWORD_RESET'>;
+  purpose: Exclude<OtpPurpose, 'PASSWORD_RESET' | 'NEW_DEVICE'>;
   channel: OtpChannel;
   code: string;
 };

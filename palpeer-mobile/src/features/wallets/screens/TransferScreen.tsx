@@ -208,7 +208,12 @@ export function TransferScreen() {
               message="A transaction PIN is required to transfer."
               testID="transfer-no-pin"
             />
-            <TextLink label="Set up a PIN" onPress={() => router.push('/security/pin/set')} />
+            <TextLink
+              label="Set up a PIN"
+              onPress={() =>
+                router.push({ pathname: '/StartPinSet', params: { setupRequired: '1' } })
+              }
+            />
           </View>
         ) : null}
       </Screen>

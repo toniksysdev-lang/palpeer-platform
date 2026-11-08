@@ -8,6 +8,8 @@ export const mockUsersCatalog: AdminUserSummary[] = [
   {
     id: 'u-1',
     email: 'operator@palpeer.local',
+    firstName: 'Ops',
+    lastName: 'Lead',
     phone: '+10000000001',
     status: 'ACTIVE',
     enabled: true,
@@ -18,6 +20,8 @@ export const mockUsersCatalog: AdminUserSummary[] = [
   {
     id: 'u-2',
     email: 'member@palpeer.local',
+    firstName: 'Maya',
+    lastName: 'Member',
     phone: '+10000000002',
     status: 'PENDING_VERIFICATION',
     enabled: true,
@@ -28,6 +32,8 @@ export const mockUsersCatalog: AdminUserSummary[] = [
   {
     id: 'u-3',
     email: 'trader@palpeer.local',
+    firstName: 'Tunde',
+    lastName: 'Trader',
     phone: null,
     status: 'ACTIVE',
     enabled: true,
@@ -38,6 +44,8 @@ export const mockUsersCatalog: AdminUserSummary[] = [
   {
     id: 'u-4',
     email: 'suspended@palpeer.local',
+    firstName: 'Sam',
+    lastName: 'Suspended',
     phone: '+10000000004',
     status: 'SUSPENDED',
     enabled: false,
@@ -48,6 +56,8 @@ export const mockUsersCatalog: AdminUserSummary[] = [
   {
     id: 'u-5',
     email: 'closed@palpeer.local',
+    firstName: null,
+    lastName: null,
     phone: null,
     status: 'CLOSED',
     enabled: false,

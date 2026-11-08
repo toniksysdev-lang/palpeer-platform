@@ -15,7 +15,12 @@ import { localAuth } from '@/tests/mocks/localAuthentication';
 import { renderWithProviders } from '@/tests/render';
 
 import { OfferBiometricUnlock } from '../OfferBiometricUnlock';
-import { LOCK_AFTER_BACKGROUND_MS, useAppLockLifecycle } from '../lock/useAppLockLifecycle';
+import {
+  IDLE_LOGOUT_MS,
+  LOCK_AFTER_BACKGROUND_MS,
+  markUserActive,
+  useAppLockLifecycle,
+} from '../lock/useAppLockLifecycle';
 import { LockScreen } from '../lock/LockScreen';
 import { DevicesScreen } from '../screens/DevicesScreen';
 import { SecurityHubScreen } from '../screens/SecurityHubScreen';
@@ -194,6 +199,7 @@ describe('post-login biometric offer', () => {
         store.dispatch(
           preferencesLoaded({
             appearance: 'light',
+            language: 'en',
             onboardingSeen: true,
             biometricUnlockPrompted: false,
           }),
@@ -261,6 +267,7 @@ describe('post-login biometric offer', () => {
         store.dispatch(
           preferencesLoaded({
             appearance: 'light',
+            language: 'en',
             onboardingSeen: true,
             biometricUnlockPrompted: true,
           }),
@@ -329,12 +336,13 @@ describe('LockScreen', () => {
     const { calls } = installFetchMock({});
     const { store } = await renderLocked();
 
-    expect(await screen.findByText(/locked after too many attempts/)).toBeTruthy();
+    expect(await screen.findByText(/I was logged out/)).toBeTruthy();
+    expect(await screen.findByText(/Too many tries/)).toBeTruthy();
     expect(store.getState().appLock.locked).toBe(true);
     expect(calls).toHaveLength(0);
   });
 
-  it('offers signing in with the password instead without clearing biometric login', async () => {
+  it('offers logging in again without clearing biometric login', async () => {
     localAuth.nextResults = [{ success: false, error: 'user_cancel' }];
     installFetchMock({
       'GET /security/devices': ok([device('d-1', THIS_DEVICE)]),
@@ -348,11 +356,32 @@ describe('LockScreen', () => {
         screen.getByTestId('lock-use-password').props.accessibilityState?.disabled,
       ).toBeFalsy(),
     );
+    expect(screen.getByText('Log in again')).toBeTruthy();
+    expect(screen.getByTestId('lock-use-pin')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('lock-use-password'));
     await waitFor(() => expect(dismiss).toHaveBeenCalled());
     expect(signOut).not.toHaveBeenCalled();
     expect(await secureStorage.getBiometricUserId()).toBe('u-1');
     expect(await secureStorage.loadSession()).not.toBeNull();
+  });
+
+  it('unlocks with PIN when Face or Fingerprint is cancelled', async () => {
+    localAuth.nextResults = [{ success: false, error: 'user_cancel' }];
+    installFetchMock({
+      'GET /security/devices': ok([device('d-1', THIS_DEVICE)]),
+      'POST /security/pin/verify': ok(),
+    });
+    const { store } = await renderLocked();
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('lock-use-pin').props.accessibilityState?.disabled,
+      ).toBeFalsy(),
+    );
+    await fireEvent.press(screen.getByTestId('lock-use-pin'));
+    expect(await screen.findByTestId('lock-screen-pin')).toBeTruthy();
+    await enterPin('lock-pin-entry', '1234');
+    await waitFor(() => expect(store.getState().appLock.locked).toBe(false));
   });
 });
 
@@ -364,6 +393,7 @@ describe('lock timing', () => {
   }
 
   it('re-locks only after a long enough trip to the background', async () => {
+    await startSession();
     let handler: ((state: AppStateStatus) => void) | undefined;
     jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
       handler = listener as (state: AppStateStatus) => void;
@@ -372,6 +402,7 @@ describe('lock timing', () => {
     const now = jest.spyOn(Date, 'now');
     const { store } = await renderWithProviders(<LockProbe />);
     await act(async () => {
+      store.dispatch(sessionStarted({ userId: 'u-1', email: 'ada@example.com' }));
       store.dispatch(biometricRestored(true));
       store.dispatch(appUnlocked());
     });
@@ -390,12 +421,46 @@ describe('lock timing', () => {
     now.mockRestore();
   });
 
-  it('never locks when biometric unlock is off', async () => {
+  it('locks after 3 minutes of foreground inactivity', async () => {
+    await startSession();
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({
+      remove: jest.fn(),
+    }) as unknown as ReturnType<typeof AppState.addEventListener>);
+    Object.defineProperty(AppState, 'currentState', {
+      configurable: true,
+      get: () => 'active',
+    });
+    jest.useFakeTimers();
+    const now = jest.spyOn(Date, 'now');
+    now.mockReturnValue(1_000);
+    markUserActive();
+    const { store } = await renderWithProviders(<LockProbe />);
+    await act(async () => {
+      store.dispatch(sessionStarted({ userId: 'u-1', email: 'ada@example.com' }));
+      store.dispatch(appUnlocked());
+    });
+
+    now.mockReturnValue(1_000 + IDLE_LOGOUT_MS - 1_000);
+    await act(async () => {
+      jest.advanceTimersByTime(5_000);
+    });
+    expect(screen.getByTestId('locked').props.children).toBe('false');
+
+    now.mockReturnValue(1_000 + IDLE_LOGOUT_MS);
+    await act(async () => {
+      jest.advanceTimersByTime(5_000);
+    });
+    expect(screen.getByTestId('locked').props.children).toBe('true');
+    now.mockRestore();
+    jest.useRealTimers();
+  });
+
+  it('locks on inactivity even when biometric unlock is off', async () => {
     const { store } = await renderWithProviders(<AppText>x</AppText>);
     await act(async () => {
       store.dispatch(appLocked());
     });
-    expect(store.getState().appLock.locked).toBe(false);
+    expect(store.getState().appLock.locked).toBe(true);
   });
 
   it('locks on cold start before the session restore finishes', async () => {

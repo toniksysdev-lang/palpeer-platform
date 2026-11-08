@@ -180,14 +180,14 @@ public class AdminController {
     @PreAuthorize("hasAuthority('kyc:read')")
     @Operation(summary = "KYC case detail with document/selfie and ComplyCube live-check metadata")
     public ApiResponse<AdminKycCaseDetailResponse> getKycCase(@PathVariable UUID caseId) {
-        return ApiResponse.ok(kycService.adminGetCase(caseId));
+        return ApiResponse.ok(adminKycQueryService.getCase(caseId));
     }
 
     @PostMapping("/kyc/cases/{caseId}/sync-provider")
     @PreAuthorize("hasAuthority('kyc:read')")
     @Operation(summary = "Refresh ComplyCube identity check status for a KYC case")
     public ApiResponse<AdminKycCaseDetailResponse> syncKycProvider(@PathVariable UUID caseId) {
-        return ApiResponse.ok(kycService.adminSyncProvider(caseId));
+        return ApiResponse.ok(adminKycQueryService.syncProvider(caseId));
     }
 
     @GetMapping("/kyc/cases/{caseId}/documents/{documentId}/content")

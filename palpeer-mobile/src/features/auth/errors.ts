@@ -15,6 +15,8 @@ const MESSAGES: Record<string, string> = {
   GOOGLE_ACCOUNT_CONFLICT: 'This email is linked to a different Google account.',
   EMAIL_ALREADY_REGISTERED: 'An account with this email already exists.',
   USERNAME_TAKEN: 'That username is already taken.',
+  INVALID_USERNAME:
+    'Username must be 3–32 characters: letters, numbers, and underscores only.',
   PHONE_ALREADY_REGISTERED: 'An account with this phone number already exists. Sign in instead.',
   SIGNUP_INCOMPLETE: 'Registration is incomplete for this phone. Continue where you left off.',
   EMAIL_ALREADY_VERIFIED: 'Your email is already verified. Sign in to continue.',
@@ -35,6 +37,7 @@ const MESSAGES: Record<string, string> = {
 const FIELD_FOR_CODE: Record<string, string> = {
   EMAIL_ALREADY_REGISTERED: 'email',
   USERNAME_TAKEN: 'username',
+  INVALID_USERNAME: 'username',
   PHONE_ALREADY_REGISTERED: 'phone',
   OTP_INVALID: 'code',
   OTP_EXPIRED: 'code',
@@ -44,8 +47,22 @@ const FIELD_FOR_CODE: Record<string, string> = {
   INVALID_CURRENT_PASSWORD: 'currentPassword',
 };
 
+const GENERIC_VALIDATION_MESSAGES = new Set(['Validation failed', 'Request validation failed']);
+
 export function authErrorMessage(error: AppError): string {
-  return (error.code && MESSAGES[error.code]) || error.message;
+  if (error.code && MESSAGES[error.code]) return MESSAGES[error.code];
+
+  // Bean Validation returns a generic envelope; prefer the field message (e.g. username rules).
+  const fieldEntries = Object.entries(error.fieldErrors);
+  if (fieldEntries.length > 0) {
+    if (error.fieldErrors.username) return error.fieldErrors.username;
+    if (fieldEntries.length === 1) return fieldEntries[0][1];
+    if (GENERIC_VALIDATION_MESSAGES.has(error.message) || error.code === 'VALIDATION_FAILED') {
+      return fieldEntries.map(([, message]) => message).join(' ');
+    }
+  }
+
+  return error.message;
 }
 
 /**

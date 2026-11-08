@@ -29,6 +29,8 @@ export const mockUsersPage: SpringPage<AdminUserSummary> = pageOf(
     {
       id: 'u-1',
       email: 'operator@palpeer.local',
+      firstName: 'Ops',
+      lastName: 'Lead',
       phone: '+10000000001',
       status: 'ACTIVE',
       enabled: true,
@@ -39,6 +41,8 @@ export const mockUsersPage: SpringPage<AdminUserSummary> = pageOf(
     {
       id: 'u-2',
       email: 'member@palpeer.local',
+      firstName: 'Maya',
+      lastName: 'Member',
       phone: null,
       status: 'PENDING_VERIFICATION',
       enabled: true,

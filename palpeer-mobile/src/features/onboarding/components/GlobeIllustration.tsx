@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { Image, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -22,7 +22,15 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 
-type Props = { size?: number };
+type Props = {
+  size?: number;
+  /**
+   * ISO-3166 alpha-2 codes to show as flag badges.
+   * When omitted, shows the built-in corridor set (CA, US, GB, GH, NG, KE).
+   * When an empty array, shows no flags.
+   */
+  countries?: readonly string[];
+};
 
 /** Flag art drawn in a unit space (clipped to a circle of radius 1), scaled into place. */
 type FlagArt = () => ReactNode;
@@ -93,46 +101,81 @@ const FLAGS = {
   ),
 } satisfies Record<string, FlagArt>;
 
-/** Badge positions (centre x, centre y, radius) in the 200×200 artboard. */
-const BADGES: [keyof typeof FLAGS, number, number, number][] = [
-  ['CA', 55, 48, 13],
-  ['US', 40, 82, 13],
-  ['GB', 158, 50, 14],
-  ['GH', 170, 82, 12],
-  ['NG', 128, 108, 13],
-  ['KE', 172, 110, 12],
-];
+type FlagCode = keyof typeof FLAGS;
+
+const DEFAULT_CODES: FlagCode[] = ['CA', 'US', 'GB', 'GH', 'NG', 'KE'];
+
+/** Globe diameter as a fraction of the outer frame — leaves a clear ring for flags. */
+const GLOBE_FRAC = 0.6;
+/** Flag radius as a fraction of the outer frame. */
+const FLAG_R_FRAC = 0.07;
+/** Extra gap between globe edge and flag edge — close, but not touching. */
+const FLAG_GAP_FRAC = 0.016;
+
+type Badge = { code: string; left: number; top: number; diameter: number };
+
+function normalizeIso2List(countries: readonly string[] | undefined): string[] {
+  if (countries == null) return [...DEFAULT_CODES];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of countries) {
+    const code = raw.trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(code) || seen.has(code)) continue;
+    seen.add(code);
+    out.push(code);
+  }
+  return out;
+}
+
+/** Evenly space flags on a ring outside the globe (they do not rotate with it). */
+function badgesFor(countries: readonly string[] | undefined, size: number): Badge[] {
+  const codes = normalizeIso2List(countries);
+  if (codes.length === 0) return [];
+
+  const cx = size / 2;
+  const cy = size / 2;
+  const globeR = (size * GLOBE_FRAC) / 2;
+  const flagR = size * FLAG_R_FRAC;
+  const ringR = globeR + flagR + size * FLAG_GAP_FRAC;
+  const n = codes.length;
+
+  return codes.map((code, i) => {
+    // Start at top, go clockwise so flags read evenly around the globe.
+    const angle = -Math.PI / 2 + (i / n) * Math.PI * 2;
+    return {
+      code,
+      left: cx + Math.cos(angle) * ringR - flagR,
+      top: cy + Math.sin(angle) * ringR - flagR,
+      diameter: flagR * 2,
+    };
+  });
+}
 
 function FlagBadge({
   code,
-  cx,
-  cy,
-  r,
-  size,
+  left,
+  top,
+  diameter,
   delayMs,
 }: {
-  code: keyof typeof FLAGS;
-  cx: number;
-  cy: number;
-  r: number;
-  size: number;
+  code: string;
+  left: number;
+  top: number;
+  diameter: number;
   delayMs: number;
 }) {
-  const scale = size / 200;
-  const diameter = r * 2 * scale;
-  const left = cx * scale - diameter / 2;
-  const top = cy * scale - diameter / 2;
-
+  const drawn = FLAGS[code as FlagCode];
   const bob = useSharedValue(0);
   const pulse = useSharedValue(1);
+  const spin = useSharedValue(0);
 
   useEffect(() => {
     bob.value = withDelay(
       delayMs,
       withRepeat(
         withSequence(
-          withTiming(-4, { duration: 900, easing: Easing.inOut(Easing.sin) }),
-          withTiming(4, { duration: 900, easing: Easing.inOut(Easing.sin) }),
+          withTiming(-3, { duration: 900, easing: Easing.inOut(Easing.sin) }),
+          withTiming(3, { duration: 900, easing: Easing.inOut(Easing.sin) }),
         ),
         -1,
         true,
@@ -142,17 +185,32 @@ function FlagBadge({
       delayMs,
       withRepeat(
         withSequence(
-          withTiming(1.08, { duration: 1100, easing: Easing.inOut(Easing.quad) }),
+          withTiming(1.1, { duration: 1100, easing: Easing.inOut(Easing.quad) }),
           withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.quad) }),
         ),
         -1,
         true,
       ),
     );
-  }, [bob, delayMs, pulse]);
+    spin.value = withDelay(
+      delayMs,
+      withRepeat(
+        withSequence(
+          withTiming(8, { duration: 1600, easing: Easing.inOut(Easing.sin) }),
+          withTiming(-8, { duration: 1600, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        true,
+      ),
+    );
+  }, [bob, delayMs, pulse, spin]);
 
   const style = useAnimatedStyle(() => ({
-    transform: [{ translateY: bob.value }, { scale: pulse.value }],
+    transform: [
+      { translateY: bob.value },
+      { scale: pulse.value },
+      { rotate: `${spin.value}deg` },
+    ],
   }));
 
   return (
@@ -169,25 +227,44 @@ function FlagBadge({
         style,
       ]}
     >
-      <Svg width={diameter} height={diameter} viewBox="-1.12 -1.12 2.24 2.24">
-        <Defs>
-          <ClipPath id={`flag-${code}`}>
-            <Circle cx={0} cy={0} r={1} />
-          </ClipPath>
-        </Defs>
-        <Circle cx={0} cy={0} r={1.12} fill="#FFFFFF" />
-        <G clipPath={`url(#flag-${code})`}>{FLAGS[code]()}</G>
-      </Svg>
+      {drawn ? (
+        <Svg width={diameter} height={diameter} viewBox="-1.12 -1.12 2.24 2.24">
+          <Defs>
+            <ClipPath id={`flag-${code}`}>
+              <Circle cx={0} cy={0} r={1} />
+            </ClipPath>
+          </Defs>
+          <Circle cx={0} cy={0} r={1.12} fill="#FFFFFF" />
+          <G clipPath={`url(#flag-${code})`}>{drawn()}</G>
+        </Svg>
+      ) : (
+        <View
+          style={[
+            styles.remoteFlag,
+            { width: diameter, height: diameter, borderRadius: diameter / 2 },
+          ]}
+        >
+          <Image
+            source={{ uri: `https://flagcdn.com/w80/${code.toLowerCase()}.png` }}
+            accessibilityLabel={`${code} flag`}
+            style={{ width: diameter * 0.72, height: diameter * 0.5, borderRadius: 2 }}
+            resizeMode="cover"
+          />
+        </View>
+      )}
     </Animated.View>
   );
 }
 
 /**
- * Globe with the flags of the currencies' home countries.
- * Globe spins slowly; flags bob and pulse with a staggered delay.
+ * Globe with registration-country flags.
+ * Globe spins slowly; flags sit on a ring outside it and bob / pulse / tilt.
  */
-export function GlobeIllustration({ size = 220 }: Props) {
+export function GlobeIllustration({ size = 220, countries }: Props) {
   const rotation = useSharedValue(0);
+  const globeSize = size * GLOBE_FRAC;
+  const globeOffset = (size - globeSize) / 2;
+  const badges = useMemo(() => badgesFor(countries, size), [countries, size]);
 
   useEffect(() => {
     rotation.value = withRepeat(
@@ -207,8 +284,19 @@ export function GlobeIllustration({ size = 220 }: Props) {
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      <Animated.View style={[{ width: size, height: size }, globeStyle]}>
-        <Svg width={size} height={size} viewBox="0 0 200 200">
+      <Animated.View
+        style={[
+          {
+            position: 'absolute',
+            width: globeSize,
+            height: globeSize,
+            left: globeOffset,
+            top: globeOffset,
+          },
+          globeStyle,
+        ]}
+      >
+        <Svg width={globeSize} height={globeSize} viewBox="0 0 200 200">
           <Defs>
             <RadialGradient id="ocean" cx="38%" cy="32%" r="75%">
               <Stop offset="0" stopColor="#7FD6F2" />
@@ -216,11 +304,11 @@ export function GlobeIllustration({ size = 220 }: Props) {
               <Stop offset="1" stopColor="#0B5E93" />
             </RadialGradient>
             <ClipPath id="globe">
-              <Circle cx={100} cy={96} r={72} />
+              <Circle cx={100} cy={100} r={88} />
             </ClipPath>
           </Defs>
 
-          <Circle cx={100} cy={96} r={72} fill="url(#ocean)" />
+          <Circle cx={100} cy={100} r={88} fill="url(#ocean)" />
           <G clipPath="url(#globe)" fill="#2E9E6B">
             <Path d="M20,52 C34,34 62,30 78,40 C86,46 80,58 70,62 C62,66 66,78 58,84 C50,90 40,84 36,76 C30,66 18,64 20,52 Z" />
             <Path d="M58,92 C66,90 74,98 76,110 C78,124 70,140 62,156 C58,164 52,160 52,150 C52,136 48,124 50,112 C51,102 52,94 58,92 Z" />
@@ -229,25 +317,24 @@ export function GlobeIllustration({ size = 220 }: Props) {
           </G>
           <Circle
             cx={100}
-            cy={96}
-            r={72}
+            cy={100}
+            r={88}
             fill="none"
             stroke="#0A4F7C"
             strokeOpacity={0.35}
             strokeWidth={1.5}
           />
-          <Ellipse cx={74} cy={60} rx={26} ry={14} fill="#FFFFFF" opacity={0.18} />
+          <Ellipse cx={74} cy={64} rx={26} ry={14} fill="#FFFFFF" opacity={0.18} />
         </Svg>
       </Animated.View>
 
-      {BADGES.map(([code, cx, cy, r], index) => (
+      {badges.map((badge, index) => (
         <FlagBadge
-          key={code}
-          code={code}
-          cx={cx}
-          cy={cy}
-          r={r}
-          size={size}
+          key={badge.code}
+          code={badge.code}
+          left={badge.left}
+          top={badge.top}
+          diameter={badge.diameter}
           delayMs={index * 180}
         />
       ))}
@@ -258,6 +345,14 @@ export function GlobeIllustration({ size = 220 }: Props) {
 const styles = StyleSheet.create({
   flag: {
     position: 'absolute',
+    overflow: 'hidden',
+  },
+  remoteFlag: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
     overflow: 'hidden',
   },
 });

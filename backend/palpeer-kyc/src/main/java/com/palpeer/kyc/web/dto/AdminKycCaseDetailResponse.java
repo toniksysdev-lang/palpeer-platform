@@ -11,6 +11,9 @@ import java.util.UUID;
 public record AdminKycCaseDetailResponse(
         UUID caseId,
         UUID userId,
+        String email,
+        String firstName,
+        String lastName,
         KycStatus status,
         String rejectionReason,
         Instant createdAt,

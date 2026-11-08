@@ -69,15 +69,24 @@ describe('sessionManager', () => {
     expect(await secureStorage.loadSession()).not.toBeNull();
   });
 
-  it('restores optimistically while offline and clears on rejection', async () => {
+  it('stays signed out while offline but keeps the refresh token for a later retry', async () => {
     await secureStorage.saveSession({ refreshToken: 'refresh-0', userId: 'u-1', email: 'a@b.c' });
     fetchMock.mockRejectedValueOnce(new TypeError('Network request failed'));
-    await expect(sessionManager.restore()).resolves.toBe('authenticated');
-    expect(listener.onStarted).toHaveBeenCalledWith({ userId: 'u-1', email: 'a@b.c' });
+    await expect(sessionManager.restore()).resolves.toBe('unauthenticated');
+    expect(listener.onStarted).not.toHaveBeenCalled();
+    expect(await secureStorage.loadSession()).not.toBeNull();
 
     fetchMock.mockResolvedValueOnce(jsonResponse(401, { success: false, timestamp: '' }));
     await expect(sessionManager.restore()).resolves.toBe('unauthenticated');
     expect(await secureStorage.loadSession()).toBeNull();
+  });
+
+  it('restores when refresh succeeds', async () => {
+    await secureStorage.saveSession({ refreshToken: 'refresh-0', userId: 'u-1', email: 'a@b.c' });
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, tokens(1)));
+    await expect(sessionManager.restore()).resolves.toBe('authenticated');
+    expect(listener.onStarted).toHaveBeenCalledWith({ userId: 'u-1', email: 'a@b.c' });
+    expect(sessionManager.getAccessToken()).toBe('access-1');
   });
 
   it('returns unauthenticated without a network call when nothing is stored', async () => {

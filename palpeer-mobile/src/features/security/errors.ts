@@ -17,6 +17,12 @@ const MESSAGES: Record<string, string> = {
   SECURITY_QUESTIONS_MIN: 'Choose at least 2 questions.',
   SECURITY_QUESTIONS_DUPLICATE: 'Choose a different question for each answer.',
   DEVICE_EXISTS: 'This device is already registered.',
+  OTP_INVALID: 'That code did not work. Try again.',
+  OTP_EXPIRED: 'That code expired. Resend a new one.',
+  OTP_NOT_FOUND: 'No active code. Tap Resend code.',
+  OTP_MAX_ATTEMPTS: 'Too many tries. Resend a new code.',
+  OTP_EMAIL_FAILED: 'Could not send the email. Try again shortly.',
+  EMAIL_REQUIRED: 'Add an email before verifying a new device.',
 };
 
 export function isPinLocked(error: AppError): boolean {

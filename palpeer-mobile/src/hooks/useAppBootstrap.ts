@@ -12,6 +12,7 @@ import { logger } from '@/utils/logger';
 
 const DEFAULT_PREFERENCES = {
   appearance: 'light' as const,
+  language: 'en' as const,
   onboardingSeen: false,
   biometricUnlockPrompted: false,
 };

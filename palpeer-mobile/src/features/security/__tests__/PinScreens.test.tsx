@@ -71,8 +71,8 @@ describe('PIN screens', () => {
 
       await waitFor(() =>
         expect(router.replace).toHaveBeenCalledWith({
-          pathname: '/security/questions',
-          params: { required: '1' },
+          pathname: '/StartQuestions',
+          params: { setupRequired: '1' },
         }),
       );
       expect(calls[0]).toMatchObject({ method: 'POST', body: { pin: '4829' } });
@@ -126,7 +126,10 @@ describe('PIN screens', () => {
       await renderWithProviders(<ForgotPinScreen />);
       expect(await screen.findByTestId('forgot-no-questions')).toBeTruthy();
       await fireEvent.press(screen.getByTestId('forgot-setup-questions'));
-      expect(router.replace).toHaveBeenCalledWith('/security/questions');
+      expect(router.replace).toHaveBeenCalledWith({
+        pathname: '/StartQuestions',
+        params: { setupRequired: '1' },
+      });
     });
 
     async function fillAnswers() {

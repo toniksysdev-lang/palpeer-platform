@@ -1,23 +1,48 @@
 import { router, usePathname } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AppText } from '@/components/ui/AppText';
-import { Button } from '@/components/ui/Button';
-import { useTheme } from '@/providers/ThemeProvider';
+import { SIMPLE_HOME as D } from '@/design/simpleHomeTokens';
 import {
   useGetPinStatusQuery,
   useGetSecurityQuestionsQuery,
 } from '@/services/api/securityApi';
 import { useAppSelector } from '@/store';
 
+const QUESTIONS_PATH = '/StartQuestions';
+
+function onQuestionsPath(pathname: string | undefined): boolean {
+  if (!pathname) return false;
+  return (
+    pathname.includes('/StartQuestions') ||
+    pathname.includes('/StartPinSet') ||
+    pathname.includes('/StartPinAgain') ||
+    pathname.includes('/StartBio') ||
+    pathname.includes('/security/questions')
+  );
+}
+
+function onPinSetupPath(pathname: string | undefined): boolean {
+  if (!pathname) return false;
+  return (
+    pathname.includes('/StartPinSet') ||
+    pathname.includes('/StartPinAgain') ||
+    pathname.includes('/security/pin/set')
+  );
+}
+
 /**
  * After PIN is set, require security questions so PIN reset stays available. Blocks the rest
- * of the app until answers are saved.
+ * of the app until answers are saved. Uses the design StartQuestions screen.
  */
 export function RequireSecurityQuestions() {
-  const theme = useTheme();
   const authenticated = useAppSelector((state) => state.session.status === 'authenticated');
   const locked = useAppSelector((state) => state.appLock.locked);
   const pathname = usePathname();
@@ -27,8 +52,8 @@ export function RequireSecurityQuestions() {
   });
   const redirected = useRef(false);
 
-  const onQuestions = pathname?.includes('/security/questions') ?? false;
-  const onSetPin = pathname?.includes('/security/pin/set') ?? false;
+  const onQuestions = onQuestionsPath(pathname);
+  const onSetPin = onPinSetupPath(pathname);
   const needsQuestions =
     authenticated &&
     !locked &&
@@ -56,7 +81,7 @@ export function RequireSecurityQuestions() {
     }
     if (onQuestions || onSetPin || redirected.current) return;
     redirected.current = true;
-    router.replace({ pathname: '/security/questions', params: { required: '1' } });
+    router.replace({ pathname: QUESTIONS_PATH, params: { setupRequired: '1' } });
   }, [
     authenticated,
     locked,
@@ -74,29 +99,33 @@ export function RequireSecurityQuestions() {
 
   return (
     <SafeAreaView
-      style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.background }]}
+      style={[StyleSheet.absoluteFill, styles.page]}
       accessibilityViewIsModal
       testID="require-questions-gate"
     >
-      <View style={[styles.body, { padding: theme.spacing.xxl, gap: theme.spacing.lg }]}>
-        <AppText variant="h3" align="center">
-          Set security questions
-        </AppText>
-        <AppText tone="secondary" align="center">
-          Answer a few security questions so you can reset your PIN if you forget it.
-        </AppText>
+      <View style={styles.body}>
+        <Text style={styles.title} accessibilityRole="header">
+          My 2 security questions
+        </Text>
+        <Text style={styles.subtitle}>
+          Choose 2 questions only you can answer, so you can reset your PIN if you forget it. Small
+          or capital letters do not matter.
+        </Text>
         {questions.isLoading || questions.isFetching ? (
-          <ActivityIndicator color={theme.colors.primary} />
+          <ActivityIndicator color={D.green} />
         ) : (
-          <Button
-            label="Continue"
-            shape="pill"
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Continue"
             onPress={() => {
               redirected.current = true;
-              router.replace({ pathname: '/security/questions', params: { required: '1' } });
+              router.replace({ pathname: QUESTIONS_PATH, params: { setupRequired: '1' } });
             }}
             testID="require-questions-continue"
-          />
+            style={({ pressed }) => [styles.cta, pressed && { opacity: 0.92 }]}
+          >
+            <Text style={styles.ctaLabel}>Continue</Text>
+          </Pressable>
         )}
       </View>
     </SafeAreaView>
@@ -104,5 +133,39 @@ export function RequireSecurityQuestions() {
 }
 
 const styles = StyleSheet.create({
-  body: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  page: { backgroundColor: D.page },
+  body: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'stretch',
+    paddingHorizontal: 24,
+    gap: 16,
+  },
+  title: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: D.ink,
+    lineHeight: 34,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: D.secondary,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  cta: {
+    marginTop: 8,
+    minHeight: 68,
+    borderRadius: 20,
+    backgroundColor: D.green,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaLabel: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: D.white,
+  },
 });

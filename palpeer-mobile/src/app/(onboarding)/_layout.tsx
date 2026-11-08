@@ -19,6 +19,7 @@ export default function OnboardingLayout() {
       <Stack.Screen name="verify-email" />
       <Stack.Screen name="forgot-password" />
       <Stack.Screen name="reset-password" />
+      <Stack.Screen name="make-new-password" />
     </Stack>
   );
 }

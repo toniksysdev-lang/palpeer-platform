@@ -91,7 +91,9 @@ export function ForgotPinScreen() {
           <View style={{ gap: theme.spacing.sm }}>
             <Button
               label="Set up security questions"
-              onPress={() => router.replace('/security/questions')}
+              onPress={() =>
+                router.replace({ pathname: '/StartQuestions', params: { setupRequired: '1' } })
+              }
               testID="forgot-setup-questions"
             />
             <Button label="Back" variant="outline" onPress={() => router.back()} />

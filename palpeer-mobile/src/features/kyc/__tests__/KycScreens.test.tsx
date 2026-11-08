@@ -1,14 +1,23 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+﻿import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import type { ReactElement } from 'react';
 
 import { sessionManager } from '@/services/auth/session';
 import { secureStorage } from '@/services/storage/secureStorage';
 import { fail, installFetchMock, ok } from '@/tests/fetchMock';
 import { router } from '@/tests/mocks/expoRouter';
 import { renderWithProviders } from '@/tests/render';
+import { sessionStarted } from '@/store/slices/sessionSlice';
 
 import { DocumentTypeScreen } from '../screens/DocumentTypeScreen';
 import { KycHubScreen } from '../screens/KycHubScreen';
 import { KycSubmitScreen } from '../screens/KycSubmitScreen';
+
+const SESSION = {
+  userId: 'u-1',
+  accessToken: 'access-0',
+  refreshToken: 'refresh-0',
+  tokenType: 'Bearer' as const,
+};
 
 jest.mock('expo-router', () => require('../../../tests/mocks/expoRouter'));
 
@@ -69,16 +78,22 @@ function kycRoutes(
 beforeEach(async () => {
   jest.clearAllMocks();
   await secureStorage.clearAll();
-  await sessionManager.start(
-    { userId: 'u-1', accessToken: 'access-0', refreshToken: 'refresh-0', tokenType: 'Bearer' },
-    'ada@example.com',
-  );
+  await sessionManager.start(SESSION, 'ada@example.com');
 });
+
+/** Test store is separate from the global session listener — seed auth for useEnsureProfile. */
+async function renderAuthed(ui: ReactElement) {
+  return renderWithProviders(ui, {
+    prepareStore: (store) => {
+      store.dispatch(sessionStarted({ userId: SESSION.userId, email: 'ada@example.com' }));
+    },
+  });
+}
 
 describe('KycHubScreen', () => {
   it('starts with the document step', async () => {
     installFetchMock(kycRoutes('NOT_STARTED'));
-    await renderWithProviders(<KycHubScreen />);
+    await renderAuthed(<KycHubScreen />);
 
     expect(await screen.findByText('Live identity verification')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('kyc-next'));
@@ -87,16 +102,16 @@ describe('KycHubScreen', () => {
 
   it('moves to the selfie and then submit as uploads land', async () => {
     installFetchMock(kycRoutes('IN_PROGRESS', { hasDocument: true, hasSelfie: true }));
-    await renderWithProviders(<KycHubScreen />);
+    await renderAuthed(<KycHubScreen />);
 
-    expect(await screen.findByText('Review and submit')).toBeTruthy();
+    expect(await screen.findByTestId('kyc-step-submit')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('kyc-next'));
     expect(router.push).toHaveBeenCalledWith('/kyc/submit');
   });
 
   it('shows review in progress without upload steps', async () => {
     installFetchMock(kycRoutes('UNDER_REVIEW', { hasDocument: true, hasSelfie: true }));
-    await renderWithProviders(<KycHubScreen />);
+    await renderAuthed(<KycHubScreen />);
 
     expect(await screen.findByText('Live check in progress')).toBeTruthy();
     expect(screen.getByTestId('kyc-check-again')).toBeTruthy();
@@ -108,7 +123,7 @@ describe('KycHubScreen', () => {
     installFetchMock(
       kycRoutes('REJECTED', { hasDocument: true, hasSelfie: true }, 'Document expired'),
     );
-    await renderWithProviders(<KycHubScreen />);
+    await renderAuthed(<KycHubScreen />);
 
     expect(await screen.findByText('Reason: Document expired')).toBeTruthy();
     expect(screen.getByText('Upload a new document')).toBeTruthy();
@@ -116,7 +131,7 @@ describe('KycHubScreen', () => {
 
   it('shows the verified state', async () => {
     installFetchMock(kycRoutes('APPROVED', { hasDocument: true, hasSelfie: true }));
-    await renderWithProviders(<KycHubScreen />);
+    await renderAuthed(<KycHubScreen />);
 
     expect(await screen.findByText("You're verified")).toBeTruthy();
     expect(screen.queryByTestId('kyc-next')).toBeNull();
@@ -129,7 +144,7 @@ describe('KycHubScreen', () => {
       'GET /kyc/status': [fail(500, 'INTERNAL_ERROR'), routes['GET /kyc/status']],
       'GET /kyc/progress': routes['GET /kyc/progress'],
     });
-    await renderWithProviders(<KycHubScreen />);
+    await renderAuthed(<KycHubScreen />);
 
     await fireEvent.press(await screen.findByText('Try again'));
     expect(await screen.findByText('Live identity verification')).toBeTruthy();
@@ -137,8 +152,9 @@ describe('KycHubScreen', () => {
 
   it('prompts to complete personal information when the profile is incomplete', async () => {
     installFetchMock(kycRoutes('NOT_STARTED'));
-    await renderWithProviders(<KycHubScreen />);
+    await renderAuthed(<KycHubScreen />);
 
+    expect(await screen.findByText('Live identity verification')).toBeTruthy();
     expect(await screen.findByTestId('kyc-profile-prompt')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('kyc-profile-prompt'));
     expect(router.push).toHaveBeenCalledWith('/profile/personal');
@@ -153,7 +169,7 @@ describe('DocumentTypeScreen', () => {
         documentTypes: ['DRIVING_LICENSE', 'PASSPORT'],
       }),
     );
-    await renderWithProviders(<DocumentTypeScreen />);
+    await renderAuthed(<DocumentTypeScreen />);
 
     expect(await screen.findByTestId('doc-type-uploaded-DRIVING_LICENSE')).toBeTruthy();
     expect(screen.getByTestId('doc-type-uploaded-PASSPORT')).toBeTruthy();
@@ -163,7 +179,7 @@ describe('DocumentTypeScreen', () => {
 
   it('navigates to capture for a chosen type', async () => {
     installFetchMock(kycRoutes('NOT_STARTED'));
-    await renderWithProviders(<DocumentTypeScreen />);
+    await renderAuthed(<DocumentTypeScreen />);
 
     await fireEvent.press(await screen.findByTestId('doc-type-NATIONAL_ID'));
     expect(router.push).toHaveBeenCalledWith({
@@ -180,8 +196,10 @@ describe('KycSubmitScreen', () => {
   }
 
   it('validates the form before calling the API', async () => {
-    const { calls } = installFetchMock(kycRoutes('IN_PROGRESS', { hasDocument: true }));
-    await renderWithProviders(<KycSubmitScreen />);
+    const { calls } = installFetchMock(
+      kycRoutes('IN_PROGRESS', { hasDocument: true, hasSelfie: true }),
+    );
+    await renderAuthed(<KycSubmitScreen />);
 
     await fireEvent.changeText(await screen.findByTestId('kyc-dob'), '1990-13-01');
     await fireEvent.press(screen.getByTestId('kyc-submit'));
@@ -202,7 +220,7 @@ describe('KycSubmitScreen', () => {
         providerCheckId: 'y',
       }),
     });
-    await renderWithProviders(<KycSubmitScreen />);
+    await renderAuthed(<KycSubmitScreen />);
 
     await fillNames();
     await fireEvent.changeText(screen.getByTestId('kyc-country'), 'ng');
@@ -221,7 +239,7 @@ describe('KycSubmitScreen', () => {
       ...kycRoutes('IN_PROGRESS', { hasDocument: true, hasSelfie: true }),
       'POST /kyc/verification/start': fail(503, 'KYC_PROVIDER_DISABLED', 'Provider disabled'),
     });
-    await renderWithProviders(<KycSubmitScreen />);
+    await renderAuthed(<KycSubmitScreen />);
 
     await fillNames();
     await fireEvent.press(screen.getByTestId('kyc-submit'));
@@ -232,7 +250,7 @@ describe('KycSubmitScreen', () => {
 
   it('points to the document step when no document is on file', async () => {
     installFetchMock(kycRoutes('IN_PROGRESS', { hasDocument: false }));
-    await renderWithProviders(<KycSubmitScreen />);
+    await renderAuthed(<KycSubmitScreen />);
 
     expect(await screen.findByTestId('kyc-submit-no-document')).toBeTruthy();
     await fireEvent.press(screen.getByText('Add identity document'));
@@ -241,7 +259,7 @@ describe('KycSubmitScreen', () => {
 
   it('does not offer the form once the case is under review', async () => {
     installFetchMock(kycRoutes('UNDER_REVIEW', { hasDocument: true, hasSelfie: true }));
-    await renderWithProviders(<KycSubmitScreen />);
+    await renderAuthed(<KycSubmitScreen />);
 
     expect(await screen.findByTestId('kyc-submit-closed')).toBeTruthy();
     expect(screen.queryByTestId('kyc-first-name')).toBeNull();

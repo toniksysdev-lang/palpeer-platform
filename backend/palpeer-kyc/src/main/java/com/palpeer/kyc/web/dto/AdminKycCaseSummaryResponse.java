@@ -9,6 +9,8 @@ public record AdminKycCaseSummaryResponse(
         UUID caseId,
         UUID userId,
         String email,
+        String firstName,
+        String lastName,
         String fullName,
         KycStatus status,
         String rejectionReason,

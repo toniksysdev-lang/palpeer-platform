@@ -42,7 +42,7 @@ const STEP_ROUTES = {
 export function KycHubScreen() {
   const theme = useTheme();
   const status = useGetKycStatusQuery();
-  const { profile } = useEnsureProfile();
+  const { profile, loading: profileLoading } = useEnsureProfile();
   const phase = status.data ? kycPhase(status.data.status) : null;
   const progress = useGetKycProgressQuery(undefined, {
     pollingInterval: phase === 'reviewing' ? REVIEW_POLL_MS : 0,
@@ -69,7 +69,7 @@ export function KycHubScreen() {
     );
   }
 
-  if (!status.data || !progress.data || !phase) {
+  if (!status.data || !progress.data || !phase || profileLoading) {
     return (
       <Screen>
         {header}

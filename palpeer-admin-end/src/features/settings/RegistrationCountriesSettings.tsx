@@ -5,7 +5,7 @@ import { useToast } from '@/app/providers/ToastProvider';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { countryFlag, countryName, WORLD_COUNTRIES } from '@/lib/worldCountries';
 import {
   getRegistrationCountries,
@@ -40,6 +40,16 @@ export function RegistrationCountriesSettings() {
   const addableCountries = useMemo(
     () => WORLD_COUNTRIES.filter((c) => !configured.includes(c.iso2)),
     [configured],
+  );
+
+  const addableOptions = useMemo(
+    () =>
+      addableCountries.map((c) => ({
+        value: c.iso2,
+        label: `${c.flag} ${c.name} (${c.iso2})`,
+        keywords: `${c.name} ${c.iso2}`,
+      })),
+    [addableCountries],
   );
 
   const saveMutation = useMutation({
@@ -107,18 +117,14 @@ export function RegistrationCountriesSettings() {
 
       <div className="flex flex-col gap-3 rounded-[0.6rem] border border-border bg-surface-secondary/30 p-3 sm:flex-row sm:items-end">
         <div className="min-w-0 flex-1">
-          <Select
+          <SearchableSelect
             label="Add country"
             value={addIso2}
-            onChange={(e) => setAddIso2(e.target.value)}
-          >
-            <option value="">Select a country…</option>
-            {addableCountries.map((c) => (
-              <option key={c.iso2} value={c.iso2}>
-                {c.flag} {c.name} ({c.iso2})
-              </option>
-            ))}
-          </Select>
+            onChange={setAddIso2}
+            options={addableOptions}
+            placeholder="Search by country or code…"
+            emptyMessage="No matching countries."
+          />
         </div>
         <Button type="button" variant="secondary" onClick={addCountry} disabled={!addIso2}>
           <Plus className="h-4 w-4" aria-hidden />

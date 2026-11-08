@@ -51,10 +51,50 @@ public final class PalpeerEmailTemplates {
         return new RenderedEmail(subject, html, text);
     }
 
+    /** New-device login: prove inbox ownership before trusting the install. */
+    public static RenderedEmail newDeviceVerification(String code) {
+        String subject = "Confirm this device on Palpeer";
+
+        String html = EmailLayout.wrap(
+                "Your Palpeer new-device code is " + code,
+                subject,
+                EmailLayout.heading("Confirm this device")
+                        + EmailLayout.paragraph(
+                                "We noticed a sign-in from a device we don’t recognize yet. Enter"
+                                        + " this one-time code in the app to continue.")
+                        + EmailLayout.otpCodeBox(code)
+                        + EmailLayout.paragraph(
+                                "The code expires in 10 minutes. For your security, don’t share it"
+                                        + " with anyone.")
+                        + EmailLayout.mutedNote(
+                                "If this wasn’t you, lock your account from any earlier new-device"
+                                        + " alert email, or contact support.")
+                        + EmailLayout.primaryButton(EmailBrand.APP_OPEN_CTA, EmailBrand.APP_OPEN_URL));
+
+        String text =
+                """
+                Palpeer — Confirm this device
+
+                We noticed a sign-in from a device we don’t recognize yet. Enter this code in the app:
+
+                %s
+
+                This code expires in 10 minutes. If this wasn’t you, contact support.
+
+                %s
+                """
+                        .formatted(code, EmailBrand.APP_OPEN_URL);
+
+        return new RenderedEmail(subject, html, text);
+    }
+
     public static RenderedEmail otp(String purposeLabel, String code) {
         String normalized = purposeLabel == null ? "" : purposeLabel.toLowerCase();
         if (normalized.equals("email verification")) {
             return emailVerification(code);
+        }
+        if (normalized.equals("new device")) {
+            return newDeviceVerification(code);
         }
 
         String subject = switch (normalized) {

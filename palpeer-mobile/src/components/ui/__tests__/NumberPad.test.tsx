@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react-native';
+import { act, fireEvent, screen } from '@testing-library/react-native';
 import { useState } from 'react';
 
 import { NumberPadDock } from '@/components/ui/NumberPadContext';
@@ -18,24 +18,26 @@ describe('NumberPad', () => {
 
     await renderWithProviders(<Harness />);
     expect(screen.getByTestId('pad-grid')).toBeTruthy();
-    for (const key of ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '*', 'back']) {
+    // Design pad: digits + Delete; bottom-left stays blank unless decimal/paste is needed.
+    for (const key of ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'back']) {
       expect(screen.getByTestId(`pad-key-${key}`)).toBeTruthy();
     }
+    expect(screen.queryByTestId('pad-key-*')).toBeNull();
   });
 
-  it('accepts digits and deletes; * is decorative', async () => {
+  it('accepts digits and deletes; blank bottom-left is ignored', async () => {
     function Harness() {
       const [value, setValue] = useState('');
       return (
         <>
-          <NumberPad value={value} onChange={setValue} bottomLeft="*" testID="pad" />
+          <NumberPad value={value} onChange={setValue} bottomLeft="" testID="pad" />
           <Input label="Mirror" value={value} onChangeText={setValue} testID="mirror" />
         </>
       );
     }
 
     await renderWithProviders(<Harness />);
-    await typeOnNumberPad('508*', 'pad');
+    await typeOnNumberPad('508', 'pad');
     expect(screen.getByTestId('mirror').props.value).toBe('508');
     await fireEvent.press(screen.getByTestId('pad-key-back'));
     expect(screen.getByTestId('mirror').props.value).toBe('50');
@@ -81,7 +83,8 @@ describe('NumberPad', () => {
     expect(screen.queryByTestId('number-pad-dock-grid')).toBeNull();
     await typeIntoNumberField('code', '9042');
     expect(screen.getByTestId('code').props.value).toBe('9042');
-    expect(screen.getByTestId('number-pad-dock-key-*')).toBeTruthy();
+    // Digits mode: blank bottom-left (no *), Delete on the right — Make-my-PIN layout.
+    expect(screen.queryByTestId('number-pad-dock-key-*')).toBeNull();
     expect(screen.getByTestId('number-pad-dock-key-back')).toBeTruthy();
   });
 
@@ -106,5 +109,41 @@ describe('NumberPad', () => {
     await typeIntoNumberField('amount', '99.5');
     expect(screen.getByTestId('amount').props.value).toBe('99.5');
     expect(screen.getByTestId('number-pad-dock-key-dot')).toBeTruthy();
+  });
+
+  it('closes when the dismiss layer outside the pad is pressed', async () => {
+    jest.useFakeTimers();
+    try {
+      const { Screen } = require('@/components/layout/Screen');
+      function Harness() {
+        const [value, setValue] = useState('');
+        return (
+          <Screen scroll>
+            <Input
+              label="Code"
+              value={value}
+              onChangeText={setValue}
+              numberPad="digits"
+              numberPadMaxLength={4}
+              testID="code"
+            />
+          </Screen>
+        );
+      }
+
+      await renderWithProviders(<Harness />);
+      await fireEvent(screen.getByTestId('code'), 'focus');
+      expect(screen.getByTestId('number-pad-dock-grid')).toBeTruthy();
+      // Dismiss overlay is armed after the opening tap finishes.
+      expect(screen.queryByTestId('number-pad-dismiss')).toBeNull();
+      await act(async () => {
+        jest.advanceTimersByTime(320);
+      });
+      expect(screen.getByTestId('number-pad-dismiss')).toBeTruthy();
+      await fireEvent.press(screen.getByTestId('number-pad-dismiss'));
+      expect(screen.queryByTestId('number-pad-dock-grid')).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

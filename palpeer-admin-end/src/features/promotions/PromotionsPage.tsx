@@ -76,6 +76,34 @@ function splitCurrencyCodes(raw?: string | null): string[] {
   ];
 }
 
+/** Product rule: 100 loyalty points = CA$1 (mobile points ledger). */
+const LOYALTY_POINTS_PER_CAD = 100;
+
+function cadToLoyaltyPoints(cad?: string | number | null): string {
+  if (cad == null || cad === '') return '';
+  const n = typeof cad === 'number' ? cad : Number.parseFloat(String(cad));
+  if (!Number.isFinite(n)) return '';
+  return String(Math.round(n * LOYALTY_POINTS_PER_CAD));
+}
+
+function loyaltyPointsToCad(points?: string): string {
+  if (!points?.trim()) return '';
+  const n = Number.parseFloat(points);
+  if (!Number.isFinite(n)) return '';
+  return String(n / LOYALTY_POINTS_PER_CAD);
+}
+
+function formatBonusOrPoints(row: PromotionSummary): string {
+  if (row.bonusAmount == null) return '—';
+  const amount = formatDecimal(row.bonusAmount);
+  const currency = (row.bonusCurrencyCode ?? '').trim();
+  if (row.promotionType === 'REFERRAL' && (!currency || currency.toUpperCase().includes('CAD'))) {
+    const pts = cadToLoyaltyPoints(row.bonusAmount);
+    return pts ? `${pts} pts (${amount} CAD)` : `${amount} ${currency}`.trim();
+  }
+  return `${amount} ${currency}`.trim();
+}
+
 function parseEligibility(raw?: string | null): PromotionEligibility {
   if (!raw) return {};
   try {
@@ -119,6 +147,7 @@ export function PromotionsPage() {
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
   const [bonusAmount, setBonusAmount] = useState('');
+  const [loyaltyPoints, setLoyaltyPoints] = useState('');
   const [bonusCurrencies, setBonusCurrencies] = useState<string[]>([]);
   const [referrerRequiresInviteeTrade, setReferrerRequiresInviteeTrade] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -132,6 +161,7 @@ export function PromotionsPage() {
   const [editStartsAt, setEditStartsAt] = useState('');
   const [editEndsAt, setEditEndsAt] = useState('');
   const [editBonusAmount, setEditBonusAmount] = useState('');
+  const [editLoyaltyPoints, setEditLoyaltyPoints] = useState('');
   const [editBonusCurrencies, setEditBonusCurrencies] = useState<string[]>([]);
   const [editReferrerRequiresInviteeTrade, setEditReferrerRequiresInviteeTrade] = useState(false);
   const [editEligibilityBase, setEditEligibilityBase] = useState<PromotionEligibility>({});
@@ -188,6 +218,9 @@ export function PromotionsPage() {
     setEditStartsAt(isoToLocal(row.startsAt));
     setEditEndsAt(isoToLocal(row.endsAt));
     setEditBonusAmount(row.bonusAmount != null ? String(row.bonusAmount) : '');
+    setEditLoyaltyPoints(
+      row.promotionType === 'REFERRAL' ? cadToLoyaltyPoints(row.bonusAmount) : '',
+    );
     setEditBonusCurrencies(splitCurrencyCodes(row.bonusCurrencyCode));
     const eligibility = parseEligibility(row.eligibilityJson);
     setEditEligibilityBase(eligibility);
@@ -257,6 +290,7 @@ export function PromotionsPage() {
       setTitle('');
       setDescription('');
       setBonusAmount('');
+      setLoyaltyPoints('');
       setBonusCurrencies([]);
       setReferrerRequiresInviteeTrade(false);
       setStartsAt('');
@@ -459,11 +493,8 @@ export function PromotionsPage() {
       },
       {
         id: 'bonus',
-        header: 'Bonus',
-        cell: (row) =>
-          row.bonusAmount != null
-            ? `${formatDecimal(row.bonusAmount)} ${row.bonusCurrencyCode ?? ''}`.trim()
-            : '—',
+        header: 'Bonus / points',
+        cell: (row) => formatBonusOrPoints(row),
       },
       {
         id: 'window',
@@ -504,7 +535,15 @@ export function PromotionsPage() {
               <h1 className="text-xl font-semibold text-text-primary">Promotions</h1>
             </div>
             <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-              View active promotions and create new ones.
+              View active promotions and create new ones. Referral promotions set loyalty points
+              (100 pts = CA$1) that appear on the mobile points ledger.
+            </p>
+            <p className="mt-2 text-sm text-text-secondary">
+              Settle or inspect bonus inventory under{' '}
+              <Link to="/admin/referrals?tab=bonuses" className="text-primary hover:underline">
+                Referrals → Bonuses
+              </Link>
+              .
             </p>
           </div>
         </div>
@@ -602,13 +641,28 @@ export function PromotionsPage() {
                 value={editEndsAt}
                 onChange={(event) => setEditEndsAt(event.target.value)}
               />
-              <Input
-                label="Bonus amount"
-                value={editBonusAmount}
-                onChange={(event) => setEditBonusAmount(event.target.value)}
-                inputMode="decimal"
-                placeholder="Optional"
-              />
+              {editPromotionType === 'REFERRAL' ? (
+                <Input
+                  label="Loyalty points per referral"
+                  value={editLoyaltyPoints}
+                  onChange={(event) => {
+                    const next = event.target.value.replace(/[^\d]/g, '');
+                    setEditLoyaltyPoints(next);
+                    setEditBonusAmount(loyaltyPointsToCad(next));
+                    setEditBonusCurrencies(['CAD']);
+                  }}
+                  inputMode="numeric"
+                  placeholder="100"
+                />
+              ) : (
+                <Input
+                  label="Bonus amount"
+                  value={editBonusAmount}
+                  onChange={(event) => setEditBonusAmount(event.target.value)}
+                  inputMode="decimal"
+                  placeholder="Optional"
+                />
+              )}
               <div className="space-y-1.5">
                 <Select
                   label="Bonus currency"
@@ -622,6 +676,7 @@ export function PromotionsPage() {
                   }}
                   error={editErrors.bonusCurrencyCode}
                   className="min-h-[7.5rem] py-2"
+                  disabled={editPromotionType === 'REFERRAL'}
                 >
                   {currencyOptions.map((currency) => (
                     <option key={currency.code} value={currency.code}>
@@ -631,8 +686,11 @@ export function PromotionsPage() {
                   ))}
                 </Select>
                 <p className="text-xs text-text-muted">
-                  Hold Ctrl/Cmd to select multiple. Selected:{' '}
-                  {editBonusCurrencies.length > 0 ? editBonusCurrencies.join(', ') : 'none'}
+                  {editPromotionType === 'REFERRAL'
+                    ? `${LOYALTY_POINTS_PER_CAD} points = CA$1. Saved as CAD bonus amount ${editBonusAmount || '—'}.`
+                    : `Hold Ctrl/Cmd to select multiple. Selected: ${
+                        editBonusCurrencies.length > 0 ? editBonusCurrencies.join(', ') : 'none'
+                      }`}
                 </p>
               </div>
               {editPromotionType === 'REFERRAL' ? (
@@ -667,7 +725,8 @@ export function PromotionsPage() {
       <section className="rounded-[0.6rem] border border-border bg-surface p-5 shadow-card">
         <h3 className="text-base font-semibold text-text-primary">Create promotion</h3>
         <p className="mt-1 text-sm text-text-secondary">
-          Bonus amounts are saved exactly as entered.
+          For referral promotions, set loyalty points (100 pts = CA$1); other types use a bonus
+          amount in the chosen currency.
         </p>
         {!canWrite ? (
           <div className="mt-4">
@@ -694,7 +753,14 @@ export function PromotionsPage() {
             <Select
               label="Type"
               value={promotionType}
-              onChange={(event) => setPromotionType(event.target.value as PromotionType)}
+              onChange={(event) => {
+                const next = event.target.value as PromotionType;
+                setPromotionType(next);
+                if (next === 'REFERRAL') {
+                  setBonusCurrencies(['CAD']);
+                  if (loyaltyPoints) setBonusAmount(loyaltyPointsToCad(loyaltyPoints));
+                }
+              }}
             >
               {PROMOTION_TYPES.map((type) => (
                 <option key={type} value={type}>
@@ -720,13 +786,28 @@ export function PromotionsPage() {
               value={endsAt}
               onChange={(event) => setEndsAt(event.target.value)}
             />
-            <Input
-              label="Bonus amount"
-              value={bonusAmount}
-              onChange={(event) => setBonusAmount(event.target.value)}
-              inputMode="decimal"
-              placeholder="Optional"
-            />
+            {promotionType === 'REFERRAL' ? (
+              <Input
+                label="Loyalty points per referral"
+                value={loyaltyPoints}
+                onChange={(event) => {
+                  const next = event.target.value.replace(/[^\d]/g, '');
+                  setLoyaltyPoints(next);
+                  setBonusAmount(loyaltyPointsToCad(next));
+                  setBonusCurrencies(['CAD']);
+                }}
+                inputMode="numeric"
+                placeholder="100"
+              />
+            ) : (
+              <Input
+                label="Bonus amount"
+                value={bonusAmount}
+                onChange={(event) => setBonusAmount(event.target.value)}
+                inputMode="decimal"
+                placeholder="Optional"
+              />
+            )}
             <div className="space-y-1.5">
               <Select
                 label="Bonus currency"
@@ -740,6 +821,7 @@ export function PromotionsPage() {
                 }}
                 error={errors.bonusCurrencyCode}
                 className="min-h-[7.5rem] py-2"
+                disabled={promotionType === 'REFERRAL'}
               >
                 {currencyOptions.map((currency) => (
                   <option key={currency.code} value={currency.code}>
@@ -749,8 +831,11 @@ export function PromotionsPage() {
                 ))}
               </Select>
               <p className="text-xs text-text-muted">
-                Hold Ctrl/Cmd to select multiple. Selected:{' '}
-                {bonusCurrencies.length > 0 ? bonusCurrencies.join(', ') : 'none'}
+                {promotionType === 'REFERRAL'
+                  ? `${LOYALTY_POINTS_PER_CAD} points = CA$1. Saved as CAD bonus amount ${bonusAmount || '—'}.`
+                  : `Hold Ctrl/Cmd to select multiple. Selected: ${
+                      bonusCurrencies.length > 0 ? bonusCurrencies.join(', ') : 'none'
+                    }`}
               </p>
             </div>
             {promotionType === 'REFERRAL' ? (

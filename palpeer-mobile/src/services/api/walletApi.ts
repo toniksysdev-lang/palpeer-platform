@@ -16,12 +16,15 @@ import type {
 
 import { baseApi } from './baseApi';
 import { jsonDecimal } from './json';
+import { NOTIFICATION_LIST, NOTIFICATION_UNREAD } from './notificationApi';
 import { TRANSACTION_HISTORY, TRANSACTION_SUMMARY } from './transactionApi';
 
 const WALLET_LIST = { type: 'Wallet' as const, id: 'LIST' };
 const RECENT = { type: 'Transaction' as const, id: 'RECENT' };
 /** Every list a new or finished money movement shows up in. */
 const ACTIVITY = [RECENT, TRANSACTION_HISTORY, TRANSACTION_SUMMARY];
+/** Funding/withdrawal publish UserNotifyEvent → Messages → Alerts must refetch with History. */
+const ALERTS = [NOTIFICATION_LIST, NOTIFICATION_UNREAD];
 
 export const LEDGER_PAGE_SIZE = 20;
 
@@ -87,11 +90,11 @@ export const walletApi = baseApi.injectEndpoints({
         },
         idempotencyKey,
       }),
-      // Pending funding only needs activity lists; SUCCESS (e.g. sandbox auto-settle) updates balances now.
+      // Pending funding updates History + Alerts; SUCCESS also refreshes wallet balances.
       invalidatesTags: (result, error, { walletId }) => {
         if (error) return [];
-        if (result?.status === 'SUCCESS') return walletBalanceTags(walletId);
-        return ACTIVITY;
+        if (result?.status === 'SUCCESS') return [...walletBalanceTags(walletId), ...ALERTS];
+        return [...ACTIVITY, ...ALERTS];
       },
     }),
     getFunding: build.query<FundingTransactionResponse, string>({
@@ -116,6 +119,7 @@ export const walletApi = baseApi.injectEndpoints({
           : [
               WALLET_LIST,
               ...ACTIVITY,
+              ...ALERTS,
               { type: 'Wallet', id: walletId },
               { type: 'Wallet', id: `LEDGER-${walletId}` },
             ],
@@ -170,6 +174,7 @@ export const walletApi = baseApi.injectEndpoints({
       }),
     }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
 export const {
@@ -180,6 +185,7 @@ export const {
   useGetRecentTransactionsQuery,
   useCreateFundingMutation,
   useGetFundingQuery,
+  useLazyGetFundingQuery,
   useCreateWithdrawalMutation,
   useGetWithdrawalQuery,
   useGetWithdrawalBanksQuery,
@@ -192,6 +198,7 @@ export function walletBalanceTags(walletId: string) {
   return [
     WALLET_LIST,
     ...ACTIVITY,
+    ...ALERTS,
     { type: 'Wallet' as const, id: walletId },
     { type: 'Wallet' as const, id: `LEDGER-${walletId}` },
   ];

@@ -136,7 +136,55 @@ export function isAppError(value: unknown): value is AppError {
   );
 }
 
+function isAbortLike(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const name = 'name' in value ? String((value as { name?: unknown }).name ?? '') : '';
+  const message =
+    'message' in value ? String((value as { message?: unknown }).message ?? '') : '';
+  return (
+    name === 'AbortError' ||
+    name === 'CanceledError' ||
+    /aborted|abort|cancell?ed/i.test(message)
+  );
+}
+
+/**
+ * Normalises RTK Query `unwrap()` rejections and other thrown values into {@link AppError}.
+ * Custom baseQuery errors are plain {@link AppError}s; aborted requests and SerializedError
+ * shapes must not collapse to the opaque "Something went wrong" copy.
+ */
 export function toAppError(value: unknown): AppError {
   if (isAppError(value)) return value;
+
+  // RTK sometimes nests the baseQuery error under `data` / `error`.
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    if (isAppError(record.data)) return record.data;
+    if (isAppError(record.error)) return record.error;
+    if (isAbortLike(value)) {
+      return createAppError('timeout', {
+        message: FALLBACK_MESSAGES.timeout,
+      });
+    }
+    if (typeof record.message === 'string' && record.message.trim()) {
+      if (isAbortLike(record)) {
+        return createAppError('timeout', { message: FALLBACK_MESSAGES.timeout });
+      }
+      // SerializedError from an unexpected throw — keep the message when it is usable.
+      if (record.name === 'Error' || record.name === 'TypeError' || record.name === 'SerializedError') {
+        return createAppError('unknown', { message: record.message });
+      }
+    }
+  }
+
+  if (typeof Error !== 'undefined' && value instanceof Error) {
+    if (isAbortLike(value)) {
+      return createAppError('timeout', { message: FALLBACK_MESSAGES.timeout });
+    }
+    if (value.message.trim()) {
+      return createAppError('unknown', { message: value.message });
+    }
+  }
+
   return createAppError('unknown');
 }

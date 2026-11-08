@@ -9,9 +9,14 @@ export { Card } from './Card';
 export { Icon } from './Icon';
 export { IconButton } from './IconButton';
 export { Input, type InputProps, type NumberPadMode } from './Input';
-export { NumberPad, type NumberPadBottomLeft } from './NumberPad';
+export {
+  NumberPad,
+  NUMBER_PAD_DOCK_HEIGHT,
+  type NumberPadBottomLeft,
+} from './NumberPad';
 export {
   NumberPadDock,
+  NumberPadInlineDock,
   NumberPadProvider,
   useNumberPad,
   useNumberPadField,

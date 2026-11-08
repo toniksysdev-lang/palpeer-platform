@@ -13,13 +13,13 @@ describe('personal info date helpers', () => {
     expect(toDisplayDate('1990-04-21')).toBe('21/04/1990');
   });
 
-  it('defaults an empty profile DOB to 18 years before today', () => {
+  it('defaults an empty profile DOB to 16 years before today', () => {
     const today = new Date(2026, 9, 17);
-    expect(defaultDateOfBirthDisplay(18, today)).toBe('17/10/2008');
-    expect(profileToFormDefaults(null).dateOfBirth).toBe(defaultDateOfBirthDisplay(18));
+    expect(defaultDateOfBirthDisplay(16, today)).toBe('17/10/2010');
+    expect(profileToFormDefaults(null).dateOfBirth).toBe(defaultDateOfBirthDisplay(16));
   });
 
-  it('rejects dates of birth under 18', () => {
+  it('rejects dates of birth under 16', () => {
     const parsed = personalInfoSchema.safeParse({
       firstName: 'Ada',
       lastName: 'Lovelace',

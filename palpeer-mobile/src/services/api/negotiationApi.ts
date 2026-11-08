@@ -73,6 +73,7 @@ export const negotiationApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, _error, id) => [{ type: 'Negotiation', id }, MINE],
     }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
 /** Cache entries that change once a P2P request is accepted and leaves the marketplace. */

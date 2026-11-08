@@ -120,11 +120,23 @@ public class SecurityController {
 
     @PostMapping("/devices")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Register biometric device")
+    @Operation(summary = "Register biometric device (one enabled device per account)")
     public ApiResponse<DeviceResponse> registerDevice(
             @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody RegisterDeviceRequest request) {
         return ApiResponse.ok("Device registered", deviceService.register(principal.getId(), request));
+    }
+
+    @PostMapping("/devices/takeover")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(
+            summary =
+                    "Replace other trusted devices with this install after new-device email OTP")
+    public ApiResponse<DeviceResponse> takeoverDevice(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody RegisterDeviceRequest request) {
+        return ApiResponse.ok(
+                "Device registered", deviceService.registerAfterOtp(principal.getId(), request));
     }
 
     @GetMapping("/devices")

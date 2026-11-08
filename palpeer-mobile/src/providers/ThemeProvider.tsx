@@ -7,7 +7,7 @@ import { buildTheme, type ColorSchemeName, type Theme } from '@/theme';
 
 const ThemeContext = createContext<Theme>(buildTheme('light'));
 
-function resolveScheme(
+export function resolveScheme(
   appearance: 'system' | 'light' | 'dark',
   systemScheme: string | null | undefined,
 ): ColorSchemeName {
@@ -22,7 +22,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const appearance = useAppSelector((state) => state.preferences.appearance);
 
   const scheme = useMemo(
-    () => resolveScheme(appearance, systemScheme),
+    (): ColorSchemeName => resolveScheme(appearance, systemScheme),
     [appearance, systemScheme],
   );
 

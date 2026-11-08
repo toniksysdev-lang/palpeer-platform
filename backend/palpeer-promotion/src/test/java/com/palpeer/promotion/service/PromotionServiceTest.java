@@ -347,4 +347,32 @@ class PromotionServiceTest {
         assertThat(rows.get(0).unusedAmount()).isEqualByComparingTo("100.50");
         assertThat(rows.get(0).usedAmount()).isEqualByComparingTo("25.00");
     }
+
+    @Test
+    void myLoyaltyPointsBalance_convertsCadBonusesAt100PointsPerCad() {
+        UUID userId = UUID.randomUUID();
+        Bonus pending = new Bonus();
+        pending.setCurrencyCode("CAD");
+        pending.setAmount(new BigDecimal("1.00"));
+        pending.setStatus(BonusStatus.PENDING);
+        Bonus used = new Bonus();
+        used.setCurrencyCode("CAD");
+        used.setAmount(new BigDecimal("0.50"));
+        used.setStatus(BonusStatus.CANCELLED);
+        Bonus ngn = new Bonus();
+        ngn.setCurrencyCode("NGN");
+        ngn.setAmount(new BigDecimal("5000"));
+        ngn.setStatus(BonusStatus.PENDING);
+        when(bonusRepository.findByUserIdOrderByCreatedAtDesc(userId))
+                .thenReturn(List.of(pending, used, ngn));
+
+        var balance = promotionService.myLoyaltyPointsBalance(userId);
+
+        assertThat(balance.pointsPerCad()).isEqualTo(100);
+        assertThat(balance.currencyCode()).isEqualTo("CAD");
+        assertThat(balance.balancePoints()).isEqualTo(100L);
+        assertThat(balance.balanceCad()).isEqualByComparingTo("1.00");
+        assertThat(balance.earnedPoints()).isEqualTo(150L);
+        assertThat(balance.usedPoints()).isEqualTo(50L);
+    }
 }

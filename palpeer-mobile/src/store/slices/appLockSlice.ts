@@ -23,7 +23,8 @@ const appLockSlice = createSlice({
       if (!action.payload) state.locked = false;
     },
     appLocked(state) {
-      if (state.biometricEnabled) state.locked = true;
+      // Idle / Timeout gate — lock for every signed-in session (biometrics optional to unlock).
+      state.locked = true;
     },
     appUnlocked(state) {
       state.locked = false;

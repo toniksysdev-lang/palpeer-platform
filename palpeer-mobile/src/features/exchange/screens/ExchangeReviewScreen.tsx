@@ -227,7 +227,9 @@ export function ExchangeReviewScreen() {
       {pinStatus.data && !pinStatus.data.pinSet ? (
         <TextLink
           label="Set up a PIN to confirm exchanges"
-          onPress={() => router.push('/security/pin/set')}
+          onPress={() =>
+            router.push({ pathname: '/StartPinSet', params: { setupRequired: '1' } })
+          }
         />
       ) : null}
     </Screen>

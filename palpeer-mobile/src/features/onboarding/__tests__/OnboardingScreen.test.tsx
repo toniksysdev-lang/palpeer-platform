@@ -17,6 +17,7 @@ async function renderWelcome() {
       store.dispatch(
         preferencesLoaded({
           appearance: 'light',
+          language: 'en',
           onboardingSeen: false,
           biometricUnlockPrompted: false,
         }),
@@ -35,13 +36,11 @@ describe('OnboardingScreen (welcome)', () => {
     await renderWelcome();
 
     expect(screen.getByLabelText('PALPEER')).toBeTruthy();
-    expect(
-      screen.getByText('Exchange currencies with ease and confidence, anytime, anywhere.'),
-    ).toBeTruthy();
+    expect(screen.getByText('Change my money. Easy and safe.')).toBeTruthy();
 
-    expect(screen.getByText('View Best Rate Now')).toBeTruthy();
+    expect(screen.getByText('See best rate now')).toBeTruthy();
     expect(screen.getByText('Get started')).toBeTruthy();
-    expect(screen.getByText('Already have an account?', { exact: false })).toBeTruthy();
+    expect(screen.getByText('I have an account. Log in')).toBeTruthy();
   });
 
   it('Get started opens registration', async () => {

@@ -118,7 +118,7 @@ export function SecurityHubScreen() {
         <Card
           variant="outlined"
           padding="md"
-          onPress={() => router.push('/security/questions')}
+          onPress={() => router.push('/StartQuestions')}
           accessibilityLabel="Security questions"
           testID="hub-questions"
         >

@@ -1,5 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ReceiptText } from 'lucide-react-native';
+import {
+  ArrowDownToLine,
+  ArrowLeftRight,
+  ArrowUpFromLine,
+  Plus,
+  ReceiptText,
+} from 'lucide-react-native';
 import { RefreshControl, View } from 'react-native';
 
 import { Screen } from '@/components/layout/Screen';
@@ -10,6 +16,7 @@ import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { useT } from '@/i18n/useT';
 import { useTheme } from '@/providers/ThemeProvider';
 import { baseApi } from '@/services/api/baseApi';
 import { toAppError } from '@/services/api/errors';
@@ -33,6 +40,7 @@ const RECENT_LIMIT = 50;
 
 export function WalletDetailScreen() {
   const theme = useTheme();
+  const t = useT();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { format } = useMoneyFormat();
   const dispatch = useAppDispatch();
@@ -118,38 +126,50 @@ export function WalletDetailScreen() {
         </View>
       </Card>
 
-      <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
-        <View style={{ flex: 1 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+        <View style={{ flexGrow: 1, flexBasis: '40%' }}>
           <Button
-            label="Fund"
+            label={t('home.add')}
             size="md"
-            leftIcon={ArrowDownLeft}
+            leftIcon={Plus}
             disabled={!railAvailable}
             onPress={() => router.push({ pathname: '/wallet/[id]/fund', params: { id: data.id } })}
             testID="wallet-fund"
           />
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={{ flexGrow: 1, flexBasis: '40%' }}>
           <Button
-            label="Withdraw"
+            label={t('home.send')}
             size="md"
             variant="outline"
-            leftIcon={ArrowUpRight}
-            disabled={!railAvailable}
+            leftIcon={ArrowUpFromLine}
             onPress={() =>
-              router.push({ pathname: '/wallet/[id]/withdraw', params: { id: data.id } })
+              router.push({ pathname: '/wallet/[id]/transfer', params: { id: data.id } })
             }
-            testID="wallet-withdraw"
+            testID="wallet-transfer"
           />
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={{ flexGrow: 1, flexBasis: '40%' }}>
           <Button
-            label="Exchange"
+            label={t('home.change')}
             size="md"
             variant="outline"
             leftIcon={ArrowLeftRight}
             onPress={() => router.navigate({ pathname: '/exchange', params: { from: data.id } })}
             testID="wallet-exchange"
+          />
+        </View>
+        <View style={{ flexGrow: 1, flexBasis: '40%' }}>
+          <Button
+            label={t('home.takeOut')}
+            size="md"
+            variant="outline"
+            leftIcon={ArrowDownToLine}
+            disabled={!railAvailable}
+            onPress={() =>
+              router.push({ pathname: '/wallet/[id]/withdraw', params: { id: data.id } })
+            }
+            testID="wallet-withdraw"
           />
         </View>
       </View>

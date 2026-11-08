@@ -1,60 +1,50 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { View, type TextInput } from 'react-native';
+import { View } from 'react-native';
+import { z } from 'zod';
 
 import { FormAlert } from '@/components/feedback/FormAlert';
-import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
-import { OtpInput } from '@/components/ui/OtpInput';
-import { PasswordInput } from '@/components/ui/PasswordInput';
+import { Input } from '@/components/ui/Input';
 import { TextLink } from '@/components/ui/TextLink';
-import { useSecretCommand } from '@/hooks/useSecretCommand';
-import { useSensitiveScreen } from '@/hooks/useSensitiveScreen';
-import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { useResendOtpMutation } from '@/services/api/authApi';
 import { toAppError } from '@/services/api/errors';
-import { accountCommands } from '@/services/auth/accountCommands';
 
 import { AuthLayout } from '../components/AuthLayout';
-import { applyServerErrors, authErrorMessage } from '../errors';
-import { resetPasswordSchema, type ResetPasswordForm } from '../schemas';
+import { authErrorMessage } from '../errors';
+import { OTP_LENGTH, otpSchema } from '../schemas';
 import { useResendCooldown } from '../useResendCooldown';
 
+type CheckCodeForm = z.infer<typeof otpSchema>;
+
+/** Password reset step 2 — check email / enter the 6-digit code (one field). */
 export function ResetPasswordScreen() {
-  useSensitiveScreen();
-  const theme = useTheme();
   const toast = useToast();
   const params = useLocalSearchParams<{ email?: string }>();
   const email = typeof params.email === 'string' ? params.email : '';
-  const [confirmReset] = useSecretCommand(accountCommands.confirmPasswordReset);
   const [resendOtp, { isLoading: resending }] = useResendOtpMutation();
   const [formError, setFormError] = useState<string | null>(null);
-  const cooldown = useResendCooldown(60);
-  const passwordRef = useRef<TextInput>(null);
-  const confirmRef = useRef<TextInput>(null);
+  const cooldown = useResendCooldown(45);
 
   const {
     control,
     handleSubmit,
-    setError,
     setValue,
     formState: { isSubmitting },
-  } = useForm<ResetPasswordForm>({
-    resolver: zodResolver(resetPasswordSchema),
-    defaultValues: { code: '', newPassword: '', confirmPassword: '' },
+  } = useForm<CheckCodeForm>({
+    resolver: zodResolver(otpSchema),
+    defaultValues: { code: '' },
   });
 
-  const onSubmit = handleSubmit(async (values) => {
+  const onSubmit = handleSubmit((values) => {
     setFormError(null);
-    try {
-      await confirmReset({ email, code: values.code, newPassword: values.newPassword });
-      router.replace({ pathname: '/login', params: { email, notice: 'reset' } });
-    } catch (error) {
-      setFormError(applyServerErrors(error, setError, ['code', 'newPassword']));
-    }
+    router.push({
+      pathname: '/make-new-password',
+      params: { email, code: values.code },
+    });
   });
 
   const resend = async () => {
@@ -77,99 +67,52 @@ export function ResetPasswordScreen() {
     return (
       <AuthLayout title="Reset link incomplete">
         <FormAlert message="Start the password reset again so we know which account to update." />
-        <Button label="Reset password" onPress={() => router.replace('/forgot-password')} />
+        <Button label="I forgot my password" onPress={() => router.replace('/forgot-password')} />
       </AuthLayout>
     );
   }
 
   return (
-    <AuthLayout
-      title="Reset your password"
-      subtitle="Use the 6-digit code from your email, then choose a new password."
-    >
-      <FormAlert
-        tone="info"
-        message={`If an account exists for ${email}, a reset code is on its way. It expires in 10 minutes.`}
-      />
+    <AuthLayout title="Check my email" subtitle={`If ${email} has an account, a code is coming. It ends in 10 minutes.`}>
       <FormAlert message={formError} testID="reset-error" />
 
       <Controller
         control={control}
         name="code"
         render={({ field, fieldState }) => (
-          <OtpInput
+          <Input
+            label="Code"
+            placeholder={`${OTP_LENGTH} numbers`}
             value={field.value}
-            onChangeText={field.onChange}
-            onComplete={() => passwordRef.current?.focus()}
+            onChangeText={(text) => field.onChange(text.replace(/\D/g, '').slice(0, OTP_LENGTH))}
+            onBlur={field.onBlur}
             error={fieldState.error?.message}
+            numberPad="digits"
+            numberPadMaxLength={OTP_LENGTH}
+            autoComplete="one-time-code"
+            textContentType="oneTimeCode"
+            maxLength={OTP_LENGTH}
+            returnKeyType="go"
+            onSubmitEditing={onSubmit}
             testID="reset-code"
           />
         )}
       />
       <View style={{ alignItems: 'center' }}>
         <TextLink
-          label={cooldown.canResend ? 'Send a new code' : `Resend in ${cooldown.remaining}s`}
+          label={cooldown.canResend ? 'Send code again' : `Send code again (${cooldown.remaining}s)`}
           onPress={resend}
           disabled={!cooldown.canResend || resending}
           testID="reset-resend"
         />
       </View>
-
-      <Controller
-        control={control}
-        name="newPassword"
-        render={({ field, fieldState }) => (
-          <PasswordInput
-            ref={passwordRef}
-            label="New password"
-            placeholder="At least 8 characters"
-            hint="8 to 128 characters."
-            value={field.value}
-            onChangeText={field.onChange}
-            onBlur={field.onBlur}
-            error={fieldState.error?.message}
-            autoComplete="new-password"
-            textContentType="newPassword"
-            returnKeyType="next"
-            onSubmitEditing={() => confirmRef.current?.focus()}
-            testID="reset-password"
-          />
-        )}
+      <Button
+        label="Continue"
+        loadingLabel="Checking…"
+        onPress={onSubmit}
+        loading={isSubmitting}
+        testID="reset-submit"
       />
-      <Controller
-        control={control}
-        name="confirmPassword"
-        render={({ field, fieldState }) => (
-          <PasswordInput
-            ref={confirmRef}
-            label="Confirm new password"
-            placeholder="Re-enter your new password"
-            value={field.value}
-            onChangeText={field.onChange}
-            onBlur={field.onBlur}
-            error={fieldState.error?.message}
-            // Avoid two adjacent new-password fields confusing browser autofill into
-            // a non-editable confirm box; still treated as a password field.
-            autoComplete="password"
-            textContentType="password"
-            returnKeyType="go"
-            onSubmitEditing={onSubmit}
-            testID="reset-confirm"
-          />
-        )}
-      />
-      <AppText variant="caption" tone="muted">
-        Resetting your password signs you out on all devices.
-      </AppText>
-      <View style={{ gap: theme.spacing.sm }}>
-        <Button
-          label="Reset password"
-          loadingLabel="Resetting…"
-          onPress={onSubmit}
-          loading={isSubmitting}
-          testID="reset-submit"
-        />
-      </View>
     </AuthLayout>
   );
 }

@@ -107,10 +107,18 @@ export function UsersPage() {
     () => [
       {
         id: 'email',
-        header: 'Email',
-        cell: (row) => (
-          <span className="font-medium text-text-primary">{row.email || '—'}</span>
-        ),
+        header: 'User',
+        cell: (row) => {
+          const name = [row.firstName, row.lastName].filter(Boolean).join(' ').trim();
+          return (
+            <div className="min-w-0">
+              <div className="truncate font-medium text-text-primary">{row.email || '—'}</div>
+              {name ? (
+                <div className="truncate text-xs text-text-secondary">{name}</div>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         id: 'phone',

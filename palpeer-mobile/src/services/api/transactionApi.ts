@@ -55,6 +55,7 @@ export const transactionApi = baseApi.injectEndpoints({
       providesTags: [TRANSACTION_SUMMARY],
     }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
 export const {

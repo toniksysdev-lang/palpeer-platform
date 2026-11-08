@@ -57,6 +57,7 @@ export const notificationApi = baseApi.injectEndpoints({
       invalidatesTags: [PUSH_TOKENS],
     }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
 export const {

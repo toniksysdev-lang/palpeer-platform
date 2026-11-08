@@ -7,6 +7,8 @@ import java.util.UUID;
 public record AdminUserSummaryResponse(
         UUID id,
         String email,
+        String firstName,
+        String lastName,
         String phone,
         UserStatus status,
         boolean enabled,

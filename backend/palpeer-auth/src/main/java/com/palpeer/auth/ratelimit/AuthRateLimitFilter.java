@@ -34,7 +34,9 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             "/api/v1/auth/otp/phone/request",
             "/api/v1/auth/otp/phone/verify",
             "/api/v1/auth/signup/resend-email-otp",
-            "/api/v1/auth/signup/change-email");
+            "/api/v1/auth/signup/change-email",
+            "/api/v1/auth/device/otp/request",
+            "/api/v1/auth/device/otp/verify");
     private static final Set<String> PASSWORD_RESET_PATHS = Set.of(
             "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm");
     private static final Set<String> REGISTER_PATHS = Set.of("/api/v1/auth/register");

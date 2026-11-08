@@ -82,4 +82,22 @@ describe('errorFromResponse', () => {
     expect(isAppError(new Error('x'))).toBe(false);
     expect(toAppError('boom').kind).toBe('unknown');
   });
+
+  it('maps aborted requests to timeout instead of opaque unknown', () => {
+    const aborted = new Error('The operation was aborted.');
+    aborted.name = 'AbortError';
+    expect(toAppError(aborted).kind).toBe('timeout');
+    expect(toAppError({ name: 'AbortError', message: 'aborted' }).kind).toBe('timeout');
+  });
+
+  it('unwraps nested RTK error payloads', () => {
+    const inner = errorFromResponse(409, {
+      success: false,
+      message: 'Phone already registered',
+      error: { code: 'PHONE_ALREADY_REGISTERED' },
+      timestamp: '',
+    }, null);
+    expect(toAppError({ status: 'CUSTOM_ERROR', data: inner })).toEqual(inner);
+    expect(toAppError({ error: inner })).toEqual(inner);
+  });
 });

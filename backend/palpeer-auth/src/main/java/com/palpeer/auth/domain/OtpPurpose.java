@@ -10,5 +10,7 @@ package com.palpeer.auth.domain;
 public enum OtpPurpose {
     EMAIL_VERIFICATION,
     PHONE_VERIFICATION,
-    PASSWORD_RESET
+    PASSWORD_RESET,
+    /** Authenticated new-device login: email code before the install is trusted. */
+    NEW_DEVICE
 }

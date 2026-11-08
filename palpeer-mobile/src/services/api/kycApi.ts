@@ -26,6 +26,7 @@ export const kycApi = baseApi.injectEndpoints({
       invalidatesTags: ['KycStatus'],
     }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
 export const { useGetKycStatusQuery, useGetKycProgressQuery, useStartKycVerificationMutation } =

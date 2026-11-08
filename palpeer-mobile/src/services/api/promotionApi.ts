@@ -3,6 +3,8 @@ import type {
   ApplyReferralRequest,
   BonusCurrencySummary,
   BonusResponse,
+  LoyaltyPointsBalance,
+  LoyaltyPointsLedgerEntry,
   PromotionResponse,
   ReferralResponse,
 } from '@/types/api/promotion';
@@ -10,10 +12,12 @@ import type {
 import { baseApi } from './baseApi';
 
 export const BONUSES_PAGE_SIZE = 20;
+export const POINTS_PAGE_SIZE = 20;
 
 const MY_CODE = { type: 'Referral' as const, id: 'MY_CODE' };
 const MY_REFERRALS = { type: 'Referral' as const, id: 'MINE' };
 const BONUSES = { type: 'Bonus' as const, id: 'MINE' };
+const POINTS = { type: 'Bonus' as const, id: 'POINTS' };
 
 function withoutLedgerId(raw: BonusResponse & { ledgerEntryId?: unknown }): BonusResponse {
   const { ledgerEntryId: _ledger, ...bonus } = raw;
@@ -40,7 +44,7 @@ export const promotionApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, error) =>
         error
           ? []
-          : [BONUSES, MY_REFERRALS, MY_CODE, { type: 'Wallet' as const, id: 'LIST' }],
+          : [BONUSES, POINTS, MY_REFERRALS, MY_CODE, { type: 'Wallet' as const, id: 'LIST' }],
     }),
     getMyBonuses: build.infiniteQuery<SpringPage<BonusResponse>, void, number>({
       infiniteQueryOptions: {
@@ -73,7 +77,38 @@ export const promotionApi = baseApi.injectEndpoints({
       },
       providesTags: [BONUSES],
     }),
+    getMyLoyaltyPointsBalance: build.query<LoyaltyPointsBalance, void>({
+      query: () => ({ path: '/promotions/points/mine/balance' }),
+      transformResponse: (raw: unknown): LoyaltyPointsBalance => {
+        const r = (raw ?? {}) as Record<string, unknown>;
+        return {
+          balancePoints: Number(r.balancePoints ?? 0) || 0,
+          balanceCad: String(r.balanceCad ?? '0'),
+          earnedPoints: Number(r.earnedPoints ?? 0) || 0,
+          usedPoints: Number(r.usedPoints ?? 0) || 0,
+          pointsPerCad: Number(r.pointsPerCad ?? 100) || 100,
+          currencyCode: String(r.currencyCode ?? 'CAD').trim().toUpperCase() || 'CAD',
+        };
+      },
+      providesTags: [POINTS, BONUSES],
+    }),
+    getMyLoyaltyPointsLedger: build.infiniteQuery<
+      SpringPage<LoyaltyPointsLedgerEntry>,
+      void,
+      number
+    >({
+      infiniteQueryOptions: {
+        initialPageParam: 0,
+        getNextPageParam: (lastPage) => (lastPage.last ? undefined : lastPage.number + 1),
+      },
+      query: ({ pageParam }) => ({
+        path: '/promotions/points/mine',
+        query: { page: pageParam, size: POINTS_PAGE_SIZE },
+      }),
+      providesTags: [POINTS, BONUSES],
+    }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
 export const {
@@ -83,4 +118,6 @@ export const {
   useApplyReferralMutation,
   useGetMyBonusesInfiniteQuery,
   useGetMyBonusSummaryQuery,
+  useGetMyLoyaltyPointsBalanceQuery,
+  useGetMyLoyaltyPointsLedgerInfiniteQuery,
 } = promotionApi;

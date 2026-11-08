@@ -1,16 +1,39 @@
+import {
+  NotoSans_400Regular,
+  NotoSans_500Medium,
+  NotoSans_600SemiBold,
+  NotoSans_700Bold,
+  NotoSans_800ExtraBold,
+  useFonts,
+} from '@expo-google-fonts/noto-sans';
 import { Stack } from 'expo-router';
 
-import { useTheme } from '@/providers/ThemeProvider';
+import { LookContext } from '@/design/dc/runtime';
+import { DARK_PAGE } from '@/design/dc/theme';
+import { useAppearance } from '@/hooks/useAppearance';
 
+/** ComplyCube capture / submit — Simple Home look (matches design Start KYC). */
 export default function KycLayout() {
-  const theme = useTheme();
+  const { dark } = useAppearance();
+  const [fontsLoaded] = useFonts({
+    NotoSans_400Regular,
+    NotoSans_500Medium,
+    NotoSans_600SemiBold,
+    NotoSans_700Bold,
+    NotoSans_800ExtraBold,
+  });
+
+  if (!fontsLoaded) return null;
+
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        animation: 'slide_from_right',
-        contentStyle: { backgroundColor: theme.colors.background },
-      }}
-    />
+    <LookContext.Provider value={{ dark }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'slide_from_right',
+          contentStyle: { backgroundColor: dark ? DARK_PAGE : '#F3F6F4' },
+        }}
+      />
+    </LookContext.Provider>
   );
 }

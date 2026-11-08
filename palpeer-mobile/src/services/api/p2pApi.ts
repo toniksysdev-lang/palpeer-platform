@@ -180,11 +180,13 @@ export const p2pApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, _error, id) => [{ type: 'P2POrder', id }, ORDERS],
     }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
 export const {
   useGetP2PRateBoundsQuery,
   useGetP2PFeeEstimateQuery,
+  useLazyGetP2PFeeEstimateQuery,
   useGetOpenRequestsQuery,
   useGetMyRequestsQuery,
   useGetRequestQuery,

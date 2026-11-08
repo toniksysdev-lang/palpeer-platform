@@ -65,7 +65,8 @@ export type ThemeColors = {
 };
 
 export const lightColors: ThemeColors = {
-  background: palette.neutral25,
+  // Match Simple Home page chrome (#F3F6F4) — never a white status-bar / header band.
+  background: '#F3F6F4',
   surface: palette.neutral0,
   surfaceElevated: palette.neutral0,
   surfaceMuted: palette.neutral50,

@@ -87,26 +87,40 @@ export function KycPage() {
         ),
       },
       {
-        id: 'fullName',
-        header: 'Full name',
+        id: 'userId',
+        header: 'User',
+        cell: (row) => {
+          const name =
+            [row.firstName, row.lastName].filter(Boolean).join(' ').trim() ||
+            row.fullName?.trim() ||
+            '';
+          return (
+            <div className="min-w-[12rem]">
+              <Link
+                to={`/admin/users/${row.userId}`}
+                className="text-sm font-medium text-primary hover:underline"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {row.email || '—'}
+              </Link>
+              {name ? <p className="truncate text-xs text-text-secondary">{name}</p> : null}
+              <p className="font-mono text-[11px] text-text-muted">{row.userId}</p>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'firstName',
+        header: 'First name',
         cell: (row) => (
-          <span className="text-sm text-text-primary">{row.fullName?.trim() || '—'}</span>
+          <span className="text-sm text-text-primary">{row.firstName?.trim() || '—'}</span>
         ),
       },
       {
-        id: 'userId',
-        header: 'User',
+        id: 'lastName',
+        header: 'Last name',
         cell: (row) => (
-          <div className="min-w-[12rem]">
-            <Link
-              to={`/admin/users/${row.userId}`}
-              className="text-sm text-primary hover:underline"
-              onClick={(event) => event.stopPropagation()}
-            >
-              {row.email || '—'}
-            </Link>
-            <p className="font-mono text-[11px] text-text-muted">{row.userId}</p>
-          </div>
+          <span className="text-sm text-text-primary">{row.lastName?.trim() || '—'}</span>
         ),
       },
       {

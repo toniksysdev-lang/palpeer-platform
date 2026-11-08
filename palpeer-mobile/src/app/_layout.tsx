@@ -10,11 +10,15 @@ import { Platform, View } from 'react-native';
 import { OfflineBanner } from '@/components/feedback/OfflineBanner';
 import { BrandSplash } from '@/features/auth/components/BrandSplash';
 import { OfferBiometricUnlock } from '@/features/security/OfferBiometricUnlock';
+import { RequireProfileSetup } from '@/features/profile/RequireProfileSetup';
 import { RequireNewDevicePin } from '@/features/security/RequireNewDevicePin';
 import { RequirePinSetup } from '@/features/security/RequirePinSetup';
 import { RequireSecurityQuestions } from '@/features/security/RequireSecurityQuestions';
 import { LockScreen } from '@/features/security/lock/LockScreen';
-import { useAppLockLifecycle } from '@/features/security/lock/useAppLockLifecycle';
+import {
+  markUserActive,
+  useAppLockLifecycle,
+} from '@/features/security/lock/useAppLockLifecycle';
 import { useAppSwitcherPrivacy } from '@/features/security/lock/useAppSwitcherPrivacy';
 import { useApplyPendingReferral } from '@/features/promotions/useApplyPendingReferral';
 import { useAppBootstrap } from '@/hooks/useAppBootstrap';
@@ -108,7 +112,17 @@ function RootNavigator() {
   }
 
   return (
-    <>
+    <View
+      style={{ flex: 1 }}
+      onStartShouldSetResponderCapture={() => {
+        markUserActive();
+        return false;
+      }}
+      onMoveShouldSetResponderCapture={() => {
+        markUserActive();
+        return false;
+      }}
+    >
       <StatusBar style={theme.scheme === 'dark' ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
@@ -116,9 +130,12 @@ function RootNavigator() {
           contentStyle: { backgroundColor: theme.colors.background },
         }}
       >
-        {/* Always first: forces Welcome (not Login) when signed out. */}
+        {/* Always first: design landing at `/`. */}
         <Stack.Screen name="index" />
+        {/* Design UI artboards (Start*, Main, Change, Send, …) — change map. */}
+        <Stack.Screen name="(design)" />
         <Stack.Protected guard={isAuthenticated}>
+          {/* Legacy API-backed stacks kept for deep links / progressive wiring. */}
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="profile" />
           <Stack.Screen name="kyc" />
@@ -132,14 +149,13 @@ function RootNavigator() {
           <Stack.Screen name="cards" />
           <Stack.Screen name="notifications" />
           <Stack.Screen name="referrals" />
+          <Stack.Screen name="loyalty" />
           <Stack.Screen name="promotions" />
           <Stack.Screen name="settings" />
         </Stack.Protected>
         <Stack.Protected guard={!isAuthenticated}>
-          {/* One unsigned group; its initialRouteName is Welcome (not Login). */}
           <Stack.Screen name="(onboarding)" />
         </Stack.Protected>
-        {/* Public, but must stay last: a guarded-out `/` falls back to the first allowed screen. */}
         <Stack.Screen name="view-rates" />
         <Stack.Screen name="support" />
         <Stack.Screen name="p2p-share/[id]" />
@@ -148,9 +164,10 @@ function RootNavigator() {
       {isAuthenticated ? <RequirePinSetup /> : null}
       {isAuthenticated ? <RequireNewDevicePin /> : null}
       {isAuthenticated ? <RequireSecurityQuestions /> : null}
+      {isAuthenticated ? <RequireProfileSetup /> : null}
       {isAuthenticated ? <OfferBiometricUnlock /> : null}
       {isAuthenticated && locked ? <LockScreen /> : null}
-    </>
+    </View>
   );
 }
 

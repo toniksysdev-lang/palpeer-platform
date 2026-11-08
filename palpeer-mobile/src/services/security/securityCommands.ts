@@ -39,6 +39,10 @@ export const securityCommands = {
   registerDevice(body: RegisterDeviceRequest): Promise<ApiResult<DeviceResponse>> {
     return authorizedRequest('/security/devices', { method: 'POST', body });
   },
+  /** After new-device email OTP — replaces other trusted devices (one device at a time). */
+  takeoverDevice(body: RegisterDeviceRequest): Promise<ApiResult<DeviceResponse>> {
+    return authorizedRequest('/security/devices/takeover', { method: 'POST', body });
+  },
   listDevices(): Promise<ApiResult<DeviceResponse[]>> {
     return authorizedRequest('/security/devices');
   },

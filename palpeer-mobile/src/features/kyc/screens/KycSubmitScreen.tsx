@@ -1,26 +1,29 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { View, type TextInput } from 'react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type TextInputProps,
+  type TextInput as TextInputType,
+} from 'react-native';
 
-import { Screen } from '@/components/layout/Screen';
-import { StackHeader } from '@/components/layout/StackHeader';
-import { FormAlert } from '@/components/feedback/FormAlert';
-import { ErrorState } from '@/components/feedback/StateViews';
-import { AppText } from '@/components/ui/AppText';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { TextLink } from '@/components/ui/TextLink';
 import { useEnsureProfile } from '@/features/profile/useEnsureProfile';
-import { useTheme } from '@/providers/ThemeProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { toAppError } from '@/services/api/errors';
 import { useGetKycProgressQuery, useStartKycVerificationMutation } from '@/services/api/kycApi';
 
+import { DesignKycShell } from '../components/DesignKycShell';
+import { KYC_D as D } from '../components/designTokens';
 import { isLivePhotoRejected, isVerificationUnavailable, kycErrorMessage } from '../errors';
 import { canUpload } from '../kycState';
+import { safeKycReturnTo } from '../returnTo';
 import { kycSubmitSchema, toStartVerificationRequest, type KycSubmitForm } from '../schemas';
 
 type Alert = {
@@ -32,16 +35,55 @@ type Alert = {
 
 const FIELDS = ['firstName', 'lastName', 'dateOfBirth', 'issuingCountry'] as const;
 
+type FieldProps = {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  onBlur?: () => void;
+  error?: string;
+  hint?: string;
+  placeholder?: string;
+  testID?: string;
+} & Omit<TextInputProps, 'value' | 'onChangeText' | 'onBlur' | 'style' | 'placeholderTextColor'>;
+
+const Field = React.forwardRef<TextInputType, FieldProps>(function Field(
+  { label, value, onChangeText, onBlur, error, hint, placeholder, testID, ...rest },
+  ref,
+) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput
+        ref={ref}
+        value={value}
+        onChangeText={onChangeText}
+        onBlur={onBlur}
+        placeholder={placeholder}
+        placeholderTextColor={D.muted}
+        style={[styles.input, error ? styles.inputError : null]}
+        testID={testID}
+        {...rest}
+      />
+      {error ? (
+        <Text style={styles.warn}>{error}</Text>
+      ) : hint ? (
+        <Text style={styles.hint}>{hint}</Text>
+      ) : null}
+    </View>
+  );
+});
+
 export function KycSubmitScreen() {
-  const theme = useTheme();
   const toast = useToast();
+  const { returnTo: returnToParam } = useLocalSearchParams<{ returnTo?: string }>();
+  const returnTo = safeKycReturnTo(returnToParam, '');
   const progress = useGetKycProgressQuery();
   const { profile } = useEnsureProfile();
   const [start, { isLoading }] = useStartKycVerificationMutation();
   const [alert, setAlert] = useState<Alert | null>(null);
-  const lastNameRef = useRef<TextInput>(null);
-  const dobRef = useRef<TextInput>(null);
-  const countryRef = useRef<TextInput>(null);
+  const lastNameRef = useRef<TextInputType>(null);
+  const dobRef = useRef<TextInputType>(null);
+  const countryRef = useRef<TextInputType>(null);
 
   const { control, handleSubmit, setError, reset } = useForm<KycSubmitForm>({
     resolver: zodResolver(kycSubmitSchema),
@@ -58,14 +100,28 @@ export function KycSubmitScreen() {
     });
   }, [profile, reset]);
 
-  const goToHub = () => router.dismissTo('/kyc');
+  const goToHub = () => {
+    if (returnTo) {
+      router.replace(returnTo as Href);
+      return;
+    }
+    router.dismissTo('/kyc');
+  };
+
+  const goAfterStart = () => {
+    if (returnTo) {
+      router.replace(returnTo as Href);
+      return;
+    }
+    router.dismissTo('/kyc');
+  };
 
   const onSubmit = handleSubmit(async (values) => {
     setAlert(null);
     const result = await start(toStartVerificationRequest(values));
     if ('data' in result && result.data) {
       toast.show({ type: 'success', title: 'Live verification started' });
-      goToHub();
+      goAfterStart();
       return;
     }
     const error = toAppError(result.error);
@@ -91,97 +147,101 @@ export function KycSubmitScreen() {
     }
   });
 
-  const header = <StackHeader title="Start live verification" onBack={goToHub} />;
-
   if (progress.error && !progress.data) {
     return (
-      <Screen>
-        {header}
-        <ErrorState error={toAppError(progress.error)} onRetry={() => void progress.refetch()} />
-      </Screen>
+      <DesignKycShell
+        onBack={goToHub}
+        title="Start live verification"
+        subtitle={toAppError(progress.error).message}
+        centered
+        footer={[{ label: 'Try again', onPress: () => void progress.refetch() }]}
+      />
     );
   }
 
   if (!progress.data) {
     return (
-      <Screen>
-        {header}
-        <View style={{ gap: theme.spacing.md }} testID="kyc-submit-loading">
-          <Skeleton height={56} />
-          <Skeleton height={56} />
-        </View>
-      </Screen>
+      <DesignKycShell
+        onBack={goToHub}
+        title="Start live verification"
+        subtitle="Loading…"
+        centered
+        testID="kyc-submit-loading"
+      >
+        <ActivityIndicator color={D.green} size="large" />
+      </DesignKycShell>
     );
   }
 
   if (!canUpload(progress.data.status)) {
     return (
-      <Screen footer={<Button label="Back to verification" onPress={goToHub} />}>
-        {header}
-        <FormAlert
-          tone="info"
-          message="Your verification has already been submitted. We'll show the result on the verification page."
-          testID="kyc-submit-closed"
-        />
-      </Screen>
+      <DesignKycShell
+        onBack={goToHub}
+        title="Start live verification"
+        subtitle="Your verification has already been submitted. We'll show the result on the verification page."
+        centered
+        testID="kyc-submit-closed"
+        footer={[{ label: 'Back', onPress: goToHub }]}
+      />
     );
   }
 
-  return (
-    <Screen
-      scroll
-      keyboardAware
-      footer={
-        <Button
-          label="Start live verification"
-          onPress={onSubmit}
-          loading={isLoading}
-          loadingLabel="Starting…"
-          disabled={!progress.data.hasDocument || !progress.data.hasSelfie}
-          testID="kyc-submit"
-        />
-      }
-    >
-      {header}
-      <AppText tone="secondary">
-        Enter your name exactly as it appears on your document. We&apos;ll send your ID and live
-        photo to ComplyCube for identity verification.
-      </AppText>
+  const ready = progress.data.hasDocument && progress.data.hasSelfie;
 
+  return (
+    <DesignKycShell
+      onBack={goToHub}
+      title="Start live verification"
+      subtitle="Enter your name exactly as it appears on your document. We'll send your ID and live photo to ComplyCube for identity verification."
+      footer={[
+        {
+          label: 'Start live verification',
+          onPress: onSubmit,
+          loading: isLoading,
+          disabled: !ready,
+          testID: 'kyc-submit',
+        },
+      ]}
+    >
       {!progress.data.hasDocument ? (
-        <View style={{ gap: theme.spacing.xs }}>
-          <FormAlert
-            message="Upload a photo of your identity document before submitting."
-            testID="kyc-submit-no-document"
-          />
-          <TextLink
-            label="Add identity document"
-            onPress={() => router.push('/kyc/document-type')}
-          />
+        <View style={styles.alertBlock}>
+          <Text style={styles.warn} testID="kyc-submit-no-document">
+            Upload a photo of your identity document before submitting.
+          </Text>
+          <Pressable onPress={() => router.push('/kyc/document-type')}>
+            <Text style={styles.link}>Add identity document</Text>
+          </Pressable>
         </View>
       ) : null}
       {progress.data.hasDocument && !progress.data.hasSelfie ? (
-        <View style={{ gap: theme.spacing.xs }}>
-          <FormAlert
-            tone="warning"
-            message="A live photo of your face is required for identity verification."
-            testID="kyc-submit-no-selfie"
-          />
-          <TextLink label="Take a live photo" onPress={() => router.push('/kyc/selfie')} />
+        <View style={styles.alertBlock}>
+          <Text style={styles.warn} testID="kyc-submit-no-selfie">
+            A live photo of your face is required for identity verification.
+          </Text>
+          <Pressable onPress={() => router.push('/kyc/selfie')}>
+            <Text style={styles.link}>Take a live photo</Text>
+          </Pressable>
         </View>
       ) : null}
 
       {alert ? (
-        <View style={{ gap: theme.spacing.xs }}>
-          <FormAlert tone={alert.tone} message={alert.message} testID="kyc-submit-alert" />
+        <View style={styles.alertBlock}>
+          <Text
+            style={alert.tone === 'info' ? styles.info : styles.warn}
+            testID="kyc-submit-alert"
+            accessibilityRole="alert"
+          >
+            {alert.message}
+          </Text>
           {alert.addDocument ? (
-            <TextLink
-              label="Add identity document"
-              onPress={() => router.push('/kyc/document-type')}
-            />
+            <Pressable onPress={() => router.push('/kyc/document-type')}>
+              <Text style={styles.link}>Add identity document</Text>
+            </Pressable>
           ) : null}
           {alert.retakeSelfie ? (
-            <TextLink label="Retake live photo" onPress={() => router.push('/kyc/selfie')} />
+            <Pressable onPress={() => router.push('/kyc/selfie')}>
+              <Text style={styles.link}>Retake live photo</Text>
+            </Pressable>
           ) : null}
         </View>
       ) : null}
@@ -190,7 +250,7 @@ export function KycSubmitScreen() {
         control={control}
         name="firstName"
         render={({ field, fieldState }) => (
-          <Input
+          <Field
             label="First name"
             value={field.value}
             onChangeText={field.onChange}
@@ -209,7 +269,7 @@ export function KycSubmitScreen() {
         control={control}
         name="lastName"
         render={({ field, fieldState }) => (
-          <Input
+          <Field
             ref={lastNameRef}
             label="Last name"
             value={field.value}
@@ -229,7 +289,7 @@ export function KycSubmitScreen() {
         control={control}
         name="dateOfBirth"
         render={({ field, fieldState }) => (
-          <Input
+          <Field
             ref={dobRef}
             label="Date of birth (optional)"
             placeholder="YYYY-MM-DD"
@@ -250,7 +310,7 @@ export function KycSubmitScreen() {
         control={control}
         name="issuingCountry"
         render={({ field, fieldState }) => (
-          <Input
+          <Field
             ref={countryRef}
             label="Issuing country (optional)"
             placeholder="e.g. NG"
@@ -268,6 +328,57 @@ export function KycSubmitScreen() {
           />
         )}
       />
-    </Screen>
+    </DesignKycShell>
   );
 }
+
+const styles = StyleSheet.create({
+  alertBlock: { gap: 8 },
+  field: { gap: 6 },
+  label: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 15,
+    fontWeight: '700',
+    color: D.secondary,
+  },
+  input: {
+    minHeight: 56,
+    borderRadius: 16,
+    backgroundColor: D.white,
+    paddingHorizontal: 14,
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 18,
+    fontWeight: '600',
+    color: D.ink,
+  },
+  inputError: {
+    borderWidth: 2,
+    borderColor: D.danger,
+  },
+  hint: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 14,
+    fontWeight: '600',
+    color: D.muted,
+  },
+  warn: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 16,
+    fontWeight: '700',
+    color: D.danger,
+    lineHeight: 22,
+  },
+  info: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 16,
+    fontWeight: '700',
+    color: D.secondary,
+    lineHeight: 22,
+  },
+  link: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 16,
+    fontWeight: '800',
+    color: D.green,
+  },
+});

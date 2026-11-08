@@ -239,6 +239,7 @@ export function UserDetailPage() {
   const hasChanges =
     (statusDraft !== '' && statusDraft !== user.status) ||
     (enabledDraft !== '' && (enabledDraft === 'true') !== user.enabled);
+  const displayName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
 
   return (
     <div className="space-y-5">
@@ -257,6 +258,9 @@ export function UserDetailPage() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">User</p>
             <h1 className="mt-1 text-2xl font-semibold text-text-primary">{user.email}</h1>
+            {displayName ? (
+              <p className="mt-1 text-base font-medium text-text-secondary">{displayName}</p>
+            ) : null}
             <p className="mt-1 font-mono text-xs text-text-muted">{user.id}</p>
           </div>
           <div className="flex flex-wrap gap-2">

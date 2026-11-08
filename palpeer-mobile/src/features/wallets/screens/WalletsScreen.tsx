@@ -3,10 +3,12 @@ import { Plus, Wallet } from 'lucide-react-native';
 import { RefreshControl, View } from 'react-native';
 
 import { Screen } from '@/components/layout/Screen';
+import { StackHeader } from '@/components/layout/StackHeader';
 import { EmptyState, ErrorState } from '@/components/feedback/StateViews';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { useT } from '@/i18n/useT';
 import { useTheme } from '@/providers/ThemeProvider';
 import { toAppError } from '@/services/api/errors';
 import { useGetWalletsQuery } from '@/services/api/walletApi';
@@ -14,27 +16,25 @@ import { useGetWalletsQuery } from '@/services/api/walletApi';
 import { StaleDataNotice } from '../components/StaleDataNotice';
 import { WalletCard } from '../components/WalletCard';
 
+/** Former Wallet tab — now “All my money” from Home (design change map). */
 export function WalletsScreen() {
   const theme = useTheme();
+  const t = useT();
   const wallets = useGetWalletsQuery();
   const createWallet = () => router.push('/wallet/create');
 
   const header = (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.sm }}>
-      <AppText variant="h1" accessibilityRole="header" style={{ flex: 1 }}>
-        Wallets
-      </AppText>
+    <View style={{ gap: theme.spacing.sm }}>
+      <StackHeader title={t('wallets.title')} />
       {wallets.data && wallets.data.length > 0 ? (
-        <View style={{ marginTop: theme.spacing.xxxl }}>
-          <Button
-            label="Create Wallet"
-            leftIcon={Plus}
-            size="md"
-            fullWidth={false}
-            onPress={createWallet}
-            testID="wallets-create"
-          />
-        </View>
+        <Button
+          label={t('wallets.create')}
+          leftIcon={Plus}
+          size="md"
+          shape="pill"
+          onPress={createWallet}
+          testID="wallets-create"
+        />
       ) : null}
     </View>
   );
@@ -55,7 +55,7 @@ export function WalletsScreen() {
         icon={Wallet}
         title="No Wallets Available"
         message="Create a new wallet to get started"
-        actionLabel="Create wallet"
+        actionLabel={t('wallets.create')}
         onAction={createWallet}
       />
     );

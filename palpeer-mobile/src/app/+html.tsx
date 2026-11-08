@@ -63,10 +63,19 @@ export default function Root({ children }: PropsWithChildren) {
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1, shrink-to-fit=no"
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, shrink-to-fit=no, viewport-fit=cover"
         />
         <ScrollViewStyleReset />
-        <style dangerouslySetInnerHTML={{ __html: bootSplashCss }} />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `${bootSplashCss}
+/* Prefer no text inflation; input font-size floor is enforced in DC.Input / Input.tsx. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}`,
+          }}
+        />
       </head>
       <body>
         <div id="palpeer-boot-splash" aria-hidden="true">

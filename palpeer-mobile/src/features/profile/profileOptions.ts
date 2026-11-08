@@ -124,22 +124,41 @@ export const STATES_BY_COUNTRY: Record<string, PickerOption[]> = {
   ],
 };
 
+/** Design change map — “Where does my money come from?” */
 export const SOURCE_OF_INCOME_OPTIONS: PickerOption[] = [
-  { key: 'EMPLOYMENT', title: 'Employment' },
-  { key: 'SELF_EMPLOYMENT', title: 'Self-employment' },
-  { key: 'BUSINESS', title: 'Business' },
-  { key: 'INVESTMENTS', title: 'Investments' },
-  { key: 'PENSION', title: 'Pension / retirement' },
-  { key: 'FAMILY_SUPPORT', title: 'Family support' },
+  { key: 'EMPLOYMENT', title: 'My job' },
+  { key: 'BUSINESS', title: 'My business' },
+  { key: 'PENSION', title: 'Pension' },
+  { key: 'SAVINGS', title: 'Savings' },
+  { key: 'INVESTMENTS', title: 'Investment' },
+  { key: 'FAMILY_SUPPORT', title: 'Family or gift' },
   { key: 'OTHER', title: 'Other' },
 ];
 
+/** Stored keys stay stable; labels follow CAD ranges from the change map. */
 export const MONTHLY_TX_OPTIONS: PickerOption[] = [
-  { key: '0_2000', title: '0 – 2,000' },
-  { key: '2001_5000', title: '2,001 – 5,000' },
-  { key: '5001_10000', title: '5,001 – 10,000' },
-  { key: '10001_25000', title: '10,001 – 25,000' },
-  { key: '25001_PLUS', title: '25,001+' },
+  { key: '0_2000', title: 'CA$1 to CA$2,000' },
+  { key: '2001_5000', title: 'CA$2,001 to CA$5,000' },
+  { key: '5001_10000', title: 'CA$5,001 to CA$10,000' },
+  { key: '10001_25000', title: 'CA$10,001 to CA$30,000' },
+  { key: '25001_PLUS', title: 'More than CA$30,000' },
+];
+
+/**
+ * About me — job types (stored in `sourceOfIncome` until a dedicated occupation field exists).
+ * Titles are shown in the My job dropdown.
+ */
+export const JOB_OPTIONS: PickerOption[] = [
+  { key: 'EMPLOYMENT', title: 'Employed — salary or wages' },
+  { key: 'SELF_EMPLOYMENT', title: 'Self-employed or freelance' },
+  { key: 'BUSINESS', title: 'Business owner' },
+  { key: 'TRADE', title: 'Skilled trade or technician' },
+  { key: 'HEALTH_EDU', title: 'Healthcare, teaching or public service' },
+  { key: 'STUDENT', title: 'Student' },
+  { key: 'HOMEMAKER', title: 'Homemaker or caregiver' },
+  { key: 'PENSION', title: 'Retired or on pension' },
+  { key: 'UNEMPLOYED', title: 'Looking for work' },
+  { key: 'OTHER', title: 'Other job type' },
 ];
 
 export function optionTitle(options: readonly PickerOption[], key: string | null | undefined): string {

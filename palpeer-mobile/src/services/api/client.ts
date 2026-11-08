@@ -95,6 +95,11 @@ export async function apiRequest<T>(
     options.timeoutMs ?? appConfig.requestTimeoutMs,
   );
   const onExternalAbort = () => controller.abort();
+  // If RTK already cancelled this call, do not start fetch with a doomed signal.
+  if (options.signal?.aborted) {
+    clearTimeout(timeout);
+    return { ok: false, error: createAppError('timeout', { requestId }) };
+  }
   options.signal?.addEventListener('abort', onExternalAbort);
 
   try {
@@ -126,7 +131,9 @@ export async function apiRequest<T>(
       message: envelope?.message ?? null,
     };
   } catch (error) {
-    if (controller.signal.aborted && !options.signal?.aborted) {
+    // RTK aborts in-flight work via `options.signal`; our timeout uses `controller` alone.
+    // Both must surface as timeout — not opaque "unknown" after unwrap() throws AbortError.
+    if (controller.signal.aborted || options.signal?.aborted) {
       return { ok: false, error: createAppError('timeout', { requestId }) };
     }
     logger.warn('API network error', { path, requestId, error });

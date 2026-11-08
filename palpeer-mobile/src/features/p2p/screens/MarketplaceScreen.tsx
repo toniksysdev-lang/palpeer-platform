@@ -1,11 +1,12 @@
 import { router } from 'expo-router';
-import { History, MessageCircle, Plus, Search, Store } from 'lucide-react-native';
+import { Plus, Search, Store } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { RefreshControl, View } from 'react-native';
 
 import { Screen } from '@/components/layout/Screen';
 import { EmptyState, ErrorState } from '@/components/feedback/StateViews';
 import { FormAlert } from '@/components/feedback/FormAlert';
+import { AppModal } from '@/components/ui/AppModal';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
@@ -14,12 +15,20 @@ import { Input } from '@/components/ui/Input';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { PickerField, PickerSheet } from '@/features/exchange/components/PickerSheet';
+import { usePinPrompt } from '@/features/security/PinPromptProvider';
 import { useNow } from '@/hooks/useNow';
+import { useT } from '@/i18n/useT';
+import { useToast } from '@/providers/ToastProvider';
 import { useTheme } from '@/providers/ThemeProvider';
 import { toAppError } from '@/services/api/errors';
-import { useGetOpenRequestsQuery } from '@/services/api/p2pApi';
+import { useCancelRequestMutation, useGetOpenRequestsQuery } from '@/services/api/p2pApi';
 import { useAppSelector } from '@/store';
 
+
+import {
+  PalpeerRatePopup,
+  type PalpeerRateOfferSummary,
+} from '../components/PalpeerRatePopup';
 import { RequestCard } from '../components/RequestCard';
 import {
   activeFilterCount,
@@ -42,11 +51,17 @@ const SIDE_OPTIONS: readonly { value: SideFilter; label: string }[] = [
 /** Open requests from every user. Filters and sorting run on the device (P-4). */
 export function MarketplaceScreen() {
   const theme = useTheme();
+  const toast = useToast();
+  const t = useT();
   const now = useNow();
+  const { requestPin } = usePinPrompt();
   const userId = useAppSelector((state) => state.session.userId);
   const requests = useGetOpenRequestsQuery();
+  const [cancelRequest] = useCancelRequestMutation();
   const [filters, setFilters] = useState<MarketplaceFilters>(DEFAULT_FILTERS);
   const [picker, setPicker] = useState<'currency' | 'sort' | null>(null);
+  const [seenRateOffers, setSeenRateOffers] = useState(() => new Set<string>());
+  const [doneOffer, setDoneOffer] = useState<PalpeerRateOfferSummary | null>(null);
 
   const list = requests.data;
   const visible = useMemo(() => (list ? filterRequests(list, filters) : []), [list, filters]);
@@ -55,42 +70,64 @@ export function MarketplaceScreen() {
     setFilters((current) => ({ ...current, ...changes }));
   const filtering = activeFilterCount(filters) > 0 || filters.search.trim() !== '';
 
+  /** Seller's own open offer within 30 minutes of expiry → Palpeer rate popup. */
+  const rateOffer = useMemo((): PalpeerRateOfferSummary | null => {
+    if (!list || !userId) return null;
+    const mine = list.find(
+      (row) =>
+        row.userId === userId &&
+        row.status === 'OPEN' &&
+        row.side === 'SELL' &&
+        !!row.expiresAt,
+    );
+    if (!mine?.expiresAt) return null;
+    const sellerRate = Number(mine.rate);
+    const amountLeft = Number(mine.amount);
+    if (!Number.isFinite(sellerRate) || !Number.isFinite(amountLeft)) return null;
+    // Prototype uses a slightly better admin rate than the seller's posted rate.
+    const palpeerRate = Math.max(sellerRate * 1.02, sellerRate + 1);
+    return {
+      id: mine.id,
+      sellerRate,
+      palpeerRate,
+      amountLeft,
+      sourceCurrency: mine.baseCurrencyCode,
+      targetCurrency: mine.quoteCurrencyCode,
+      expiresAt: mine.expiresAt,
+    };
+  }, [list, userId, now]);
+
   const createRequest = () => router.push('/p2p/create');
 
-  const headerAction = (
-    icon: typeof MessageCircle,
-    label: string,
-    onPress: () => void,
-    testID: string,
-    filled = false,
-  ) => (
-    <View style={{ alignItems: 'center', gap: 2, minWidth: 52 }}>
-      <IconButton
-        icon={icon}
-        accessibilityLabel={label}
-        onPress={onPress}
-        variant={filled ? 'filled' : 'plain'}
-        testID={testID}
-      />
-      <AppText
-        variant="caption"
-        tone="secondary"
-        numberOfLines={1}
-        style={{ fontSize: 11, lineHeight: 13 }}
-      >
-        {label}
-      </AppText>
-    </View>
-  );
+  const acceptPalpeerRate = async (offer: PalpeerRateOfferSummary): Promise<boolean> => {
+    const confirmed = await requestPin({
+      title: t('palpeerRate.pinTitle'),
+      message: t('palpeerRate.pinMessage'),
+    });
+    if (!confirmed) return false;
+
+    const result = await cancelRequest(offer.id);
+    if ('error' in result) {
+      toast.show({ type: 'error', title: t('palpeerRate.failed') });
+      return false;
+    }
+
+    setDoneOffer(offer);
+    return true;
+  };
 
   const header = (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
       <AppText variant="h1" accessibilityRole="header" style={{ flex: 1 }}>
-        P2P
+        {t('p2p.choosePerson')}
       </AppText>
-      {headerAction(MessageCircle, 'Chat', () => router.push('/chat'), 'p2p-messages')}
-      {headerAction(History, 'History', () => router.push('/p2p/history'), 'p2p-history')}
-      {headerAction(Plus, 'Create', createRequest, 'p2p-create', true)}
+      <IconButton
+        icon={Plus}
+        accessibilityLabel="Make my offer"
+        onPress={createRequest}
+        variant="filled"
+        testID="p2p-create"
+      />
     </View>
   );
 
@@ -110,9 +147,9 @@ export function MarketplaceScreen() {
     body = (
       <EmptyState
         icon={Store}
-        title="No open requests"
-        message="Be the first to post a request to buy or sell a currency."
-        actionLabel="Create request"
+        title="No open offers"
+        message="Be the first to post an offer to buy or sell a currency."
+        actionLabel="Make my offer"
         onAction={createRequest}
       />
     );
@@ -236,6 +273,34 @@ export function MarketplaceScreen() {
         onClose={() => setPicker(null)}
         testID="p2p-sort-picker"
       />
+      <PalpeerRatePopup
+        offer={rateOffer}
+        seenOfferIds={seenRateOffers}
+        onSeen={(id) => setSeenRateOffers((current) => new Set(current).add(id))}
+        onAccept={acceptPalpeerRate}
+      />
+      <AppModal
+        visible={!!doneOffer}
+        onClose={() => setDoneOffer(null)}
+        title={t('palpeerRate.doneTitle')}
+        testID="palpeer-rate-done"
+      >
+        <AppText tone="secondary">
+          {t('palpeerRate.doneBody', {
+            amount: doneOffer
+              ? `${doneOffer.sourceCurrency}${doneOffer.amountLeft.toLocaleString()}`
+              : '',
+          })}
+        </AppText>
+        <Button
+          label={t('palpeerRate.changeNow')}
+          onPress={() => {
+            setDoneOffer(null);
+            router.push('/exchange');
+          }}
+          testID="palpeer-rate-change-now"
+        />
+      </AppModal>
     </Screen>
   );
 }

@@ -103,6 +103,7 @@ export const authApi = baseApi.injectEndpoints({
       invalidatesTags: [SESSIONS],
     }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
 export const {

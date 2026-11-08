@@ -373,7 +373,12 @@ export function WithdrawScreen() {
               message="A transaction PIN is required to withdraw."
               testID="withdraw-no-pin"
             />
-            <TextLink label="Set up a PIN" onPress={() => router.push('/security/pin/set')} />
+            <TextLink
+              label="Set up a PIN"
+              onPress={() =>
+                router.push({ pathname: '/StartPinSet', params: { setupRequired: '1' } })
+              }
+            />
           </View>
         ) : null}
       </Screen>

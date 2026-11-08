@@ -40,6 +40,7 @@ export const securityApi = baseApi.injectEndpoints({
       invalidatesTags: [{ type: 'Security', id: 'DEVICES' }],
     }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
 export const {

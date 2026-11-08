@@ -11,17 +11,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Screen } from '@/components/layout/Screen';
-import { StackHeader } from '@/components/layout/StackHeader';
-import { EmptyState } from '@/components/feedback/StateViews';
 import { AppText } from '@/components/ui/AppText';
-import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/providers/ThemeProvider';
 import { logger } from '@/utils/logger';
 
 import { cropCapturedToOverlay } from '../cropToOverlay';
 import type { CapturedImage } from '../image';
+import { DesignKycShell } from './DesignKycShell';
+import { KYC_D as D } from './designTokens';
 import {
   captureWebCameraFrame,
   openWebCameraStream,
@@ -159,36 +157,40 @@ function WebCameraCapture({
   };
 
   if (phase === 'gate' || phase === 'error') {
+    const title = phase === 'error' ? 'Camera access is off' : 'Allow camera access';
+    const subtitle =
+      errorMessage ??
+      'Palpeer needs your camera for this photo. Your browser will ask for permission when you continue.';
     return (
-      <Screen>
-        <StackHeader onBack={onCancel} />
-        <View style={styles.center} testID={phase === 'error' ? 'camera-unavailable' : 'camera-permission'}>
-          <EmptyState
-            icon={CameraOff}
-            title={phase === 'error' ? 'Camera access is off' : 'Allow camera access'}
-            message={
-              errorMessage ??
-              'PALPEER needs your camera for this photo. Your browser will ask for permission when you continue.'
-            }
-          />
-          <View style={{ gap: theme.spacing.sm, alignSelf: 'stretch' }}>
-            <Button
-              label={phase === 'error' ? 'Try again' : 'Allow camera'}
-              onPress={() => void startCamera()}
-              loading={requesting}
-              testID={phase === 'error' ? 'camera-retry' : 'camera-allow'}
-            />
-            {onUseLibrary ? (
-              <Button
-                label="Choose from library instead"
-                variant="ghost"
-                onPress={onUseLibrary}
-                testID="camera-use-library"
-              />
-            ) : null}
-          </View>
+      <DesignKycShell
+        onBack={onCancel}
+        title={title}
+        subtitle={subtitle}
+        centered
+        testID={phase === 'error' ? 'camera-unavailable' : 'camera-permission'}
+        footer={[
+          {
+            label: phase === 'error' ? 'Try again' : 'Allow camera',
+            onPress: () => void startCamera(),
+            loading: requesting,
+            testID: phase === 'error' ? 'camera-retry' : 'camera-allow',
+          },
+          ...(onUseLibrary
+            ? [
+                {
+                  label: 'Choose from library instead',
+                  onPress: onUseLibrary,
+                  variant: 'ghost' as const,
+                  testID: 'camera-use-library',
+                },
+              ]
+            : []),
+        ]}
+      >
+        <View style={styles.iconWrap}>
+          <CameraOff color={D.green} size={36} strokeWidth={2.2} />
         </View>
-      </Screen>
+      </DesignKycShell>
     );
   }
 
@@ -337,88 +339,93 @@ function NativeCameraCapture({
 
   if (!permission) {
     return (
-      <Screen>
-        <View style={styles.center}>
-          <ActivityIndicator color={theme.colors.primary} />
-        </View>
-      </Screen>
+      <DesignKycShell onBack={onCancel} title="Camera" subtitle="Getting ready…" centered>
+        <ActivityIndicator color={D.green} size="large" />
+      </DesignKycShell>
     );
   }
 
   if (!permission.granted) {
     const blocked = !permission.canAskAgain;
     return (
-      <Screen>
-        <StackHeader onBack={onCancel} />
-        <View style={styles.center} testID="camera-permission">
-          <EmptyState
-            icon={CameraOff}
-            title={blocked ? 'Camera access is off' : 'Allow camera access'}
-            message={
-              blocked
-                ? 'Turn on camera access for PALPEER in your phone settings to take this photo.'
-                : 'PALPEER needs your camera to photograph your ID and take a selfie. Photos are only used for identity verification.'
-            }
-          />
-          <View style={{ gap: theme.spacing.sm, alignSelf: 'stretch' }}>
-            {blocked ? (
-              <Button
-                label="Open settings"
-                onPress={() => {
+      <DesignKycShell
+        onBack={onCancel}
+        title={blocked ? 'Camera access is off' : 'Allow camera access'}
+        subtitle={
+          blocked
+            ? 'Turn on camera access for Palpeer in your phone settings to take this photo.'
+            : 'Palpeer needs your camera to photograph your ID and take a live photo. Photos are only used for identity verification.'
+        }
+        centered
+        testID="camera-permission"
+        footer={[
+          blocked
+            ? {
+                label: 'Open settings',
+                onPress: () => {
                   Linking.openSettings().catch((error: unknown) =>
                     logger.warn('Could not open settings', { error }),
                   );
-                }}
-                testID="camera-open-settings"
-              />
-            ) : (
-              <Button
-                label="Allow camera"
-                onPress={() => void allowCamera()}
-                loading={requesting}
-                testID="camera-allow"
-              />
-            )}
-            {onUseLibrary ? (
-              <Button
-                label="Choose from library instead"
-                variant="ghost"
-                onPress={onUseLibrary}
-                testID="camera-use-library"
-              />
-            ) : null}
-          </View>
+                },
+                testID: 'camera-open-settings',
+              }
+            : {
+                label: 'Allow camera',
+                onPress: () => void allowCamera(),
+                loading: requesting,
+                testID: 'camera-allow',
+              },
+          ...(onUseLibrary
+            ? [
+                {
+                  label: 'Choose from library instead',
+                  onPress: onUseLibrary,
+                  variant: 'ghost' as const,
+                  testID: 'camera-use-library',
+                },
+              ]
+            : []),
+        ]}
+      >
+        <View style={styles.iconWrap}>
+          <CameraOff color={D.green} size={36} strokeWidth={2.2} />
         </View>
-      </Screen>
+      </DesignKycShell>
     );
   }
 
   if (mountError) {
     return (
-      <Screen>
-        <StackHeader onBack={onCancel} />
-        <View style={styles.center} testID="camera-unavailable">
-          <EmptyState
-            icon={CameraOff}
-            title="Camera unavailable"
-            message="We couldn't start the camera. Close other apps using it and try again."
-          />
-          <View style={{ gap: theme.spacing.sm, alignSelf: 'stretch' }}>
-            <Button
-              label="Try again"
-              variant="outline"
-              onPress={() => {
-                setMountError(false);
-                setReady(false);
-              }}
-              testID="camera-retry"
-            />
-            {onUseLibrary ? (
-              <Button label="Choose from library instead" variant="ghost" onPress={onUseLibrary} />
-            ) : null}
-          </View>
+      <DesignKycShell
+        onBack={onCancel}
+        title="Camera unavailable"
+        subtitle="We couldn't start the camera. Close other apps using it and try again."
+        centered
+        testID="camera-unavailable"
+        footer={[
+          {
+            label: 'Try again',
+            onPress: () => {
+              setMountError(false);
+              setReady(false);
+            },
+            testID: 'camera-retry',
+          },
+          ...(onUseLibrary
+            ? [
+                {
+                  label: 'Choose from library instead',
+                  onPress: onUseLibrary,
+                  variant: 'ghost' as const,
+                },
+              ]
+            : []),
+        ]}
+      >
+        <View style={styles.iconWrap}>
+          <CameraOff color={D.green} size={36} strokeWidth={2.2} />
         </View>
-      </Screen>
+      </DesignKycShell>
     );
   }
 
@@ -555,6 +562,15 @@ const styles = StyleSheet.create({
     height: 76,
     borderRadius: 38,
     borderWidth: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrap: {
+    alignSelf: 'center',
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    backgroundColor: D.soft,
     alignItems: 'center',
     justifyContent: 'center',
   },

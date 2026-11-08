@@ -1,4 +1,5 @@
-import { MessageCircle, Send, Sparkles, UserRound } from 'lucide-react-native';
+import { router } from 'expo-router';
+import { ChevronLeft, Volume2 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -6,18 +7,26 @@ import {
   FlatList,
   Keyboard,
   Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
   TextInput,
   View,
   type KeyboardEvent,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { StackHeader } from '@/components/layout/StackHeader';
-import { FormAlert } from '@/components/feedback/FormAlert';
-import { AppText } from '@/components/ui/AppText';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
-import { useTheme } from '@/providers/ThemeProvider';
+import { SIMPLE_HOME as D } from '@/design/simpleHomeTokens';
+
+const HELPER_NAME = 'Tonia';
+const HELPER_SUBTITLE = 'Palpeer helper. A person can join.';
+const QUICK_CHIPS = [
+  { id: 'fees', label: 'Fees', prompt: 'What are the fees?' },
+  { id: 'add', label: 'Add money', prompt: 'How do I add money?' },
+  { id: 'withdraw', label: 'Withdraw', prompt: 'How do I withdraw money?' },
+  { id: 'changing', label: 'Changing', prompt: 'How do I change money?' },
+] as const;
 import {
   autoAssignAgent,
   getAgentsOnline,
@@ -31,7 +40,7 @@ import {
 import { formatClockTime } from '@/utils/datetime';
 
 import { SupportTicketForm } from '../components/SupportTicketForm';
-import { answerHowToFromFaq } from '../faq';
+import { answerHowToFromFaq, localAssistantTopicsHint } from '../faq';
 import {
   answerAccountQuestion,
   isCapacityAiReply,
@@ -52,19 +61,49 @@ type ChatMessage = {
   escalationPrompt?: boolean;
   /** Show the public support-ticket form (no live agent available). */
   ticketForm?: boolean;
+  /** Welcome message: show design quick-reply chips under the bubble. */
+  quickChips?: boolean;
 };
 
 type Mode = 'ai' | 'agent';
 
 function greeting(firstName: string | null): string {
   const name = firstName?.trim();
-  return name
-    ? `Hi ${name}, I'm Toniks, Palpeer's AI assistant.\nHow may I help you? I can also connect you to a live agent if needed.`
-    : "Hi, I'm Toniks, Palpeer's AI assistant.\nHow may I help you? I can also connect you to a live agent if needed.";
+  const who = name || 'there';
+  return `Hi ${who}, I am ${HELPER_NAME}, your Palpeer helper. Ask me about fees, rates, adding, changing, sending or withdrawing money. Say 'talk to a person' any time.`;
+}
+
+function wantsPerson(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  return (
+    t.includes('talk to a person') ||
+    t.includes('talk to person') ||
+    t.includes('live agent') ||
+    t.includes('human agent') ||
+    t === 'agent' ||
+    t === 'person'
+  );
+}
+
+function speak(text: string, onDone: () => void) {
+  try {
+    const synth = (globalThis as { speechSynthesis?: SpeechSynthesis }).speechSynthesis;
+    if (!synth) {
+      onDone();
+      return;
+    }
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-NG';
+    u.onend = onDone;
+    u.onerror = onDone;
+    synth.speak(u);
+  } catch {
+    onDone();
+  }
 }
 
 export function LiveChatScreen() {
-  const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { email, firstName, snapshot, refreshAccount, ready } = useLiveChatContext();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -76,6 +115,7 @@ export function LiveChatScreen() {
   const [awaitingEscalation, setAwaitingEscalation] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [speaking, setSpeaking] = useState(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const inputRef = useRef<TextInput>(null);
   const sessionRef = useRef<string | null>(null);
@@ -83,6 +123,8 @@ export function LiveChatScreen() {
   const snapshotRef = useRef(snapshot);
   const seenRemoteIds = useRef<Set<string>>(new Set());
   const bootedRef = useRef(false);
+  /** After Support AI returns a capacity/rate-limit stub, stay on local How-Tos for this session. */
+  const remoteAiDegradedRef = useRef(false);
   // Safe-area bottom can grow with the keyboard; keep the resting inset for closed-keyboard padding.
   const restingBottomInset = useRef(insets.bottom);
 
@@ -141,6 +183,7 @@ export function LiveChatScreen() {
     setAwaitingEscalation(false);
     setSessionId(null);
     seenRemoteIds.current = new Set();
+    remoteAiDegradedRef.current = false;
 
     // Show the greeting immediately — don't wait on the support API round-trip.
     push({
@@ -148,6 +191,7 @@ export function LiveChatScreen() {
       text: greeting(firstName),
       sender: 'ai',
       createdAt: new Date().toISOString(),
+      quickChips: true,
     });
     setBooting(false);
 
@@ -244,7 +288,7 @@ export function LiveChatScreen() {
 
       push({
         id: `no-agent-${Date.now()}`,
-        text: "There isn't a live agent online right now. Please fill out the support form below and our team will follow up via tickets. You can also keep chatting with Toniks.",
+        text: `There isn't a live agent online right now. Please fill out the support form below and our team will follow up via tickets. You can also keep chatting with ${HELPER_NAME}.`,
         sender: 'ai',
         createdAt: new Date().toISOString(),
         ticketForm: true,
@@ -254,8 +298,8 @@ export function LiveChatScreen() {
     }
   };
 
-  const send = async () => {
-    const text = draft.trim();
+  const sendText = async (raw: string) => {
+    const text = raw.trim();
     if (!text || sending || booting || !sessionId || awaitingEscalation) return;
 
     setDraft('');
@@ -266,6 +310,11 @@ export function LiveChatScreen() {
       sender: 'user',
       createdAt: new Date().toISOString(),
     });
+
+    if (mode === 'ai' && wantsPerson(text)) {
+      await escalateToAgent();
+      return;
+    }
 
     const loadingId = `loading-${Date.now()}`;
     if (mode === 'ai') {
@@ -314,8 +363,10 @@ export function LiveChatScreen() {
         return;
       }
 
-      // Product how-tos from Help Center — avoid the overloaded remote AI when we can.
-      const howToAnswer = answerHowToFromFaq(text);
+      // Product how-tos from Help Center — preferred path (remote Support AI is often rate-limited).
+      const howToAnswer =
+        answerHowToFromFaq(text) ??
+        (remoteAiDegradedRef.current ? answerHowToFromFaq(text, { loose: true }) : null);
       if (howToAnswer) {
         setMessages((prev) => prev.filter((m) => m.id !== loadingId));
         push({
@@ -327,22 +378,42 @@ export function LiveChatScreen() {
         return;
       }
 
+      if (remoteAiDegradedRef.current) {
+        setMessages((prev) => prev.filter((m) => m.id !== loadingId));
+        push({
+          id: `ai-local-degraded-${Date.now()}`,
+          text: localAssistantTopicsHint(),
+          sender: 'ai',
+          createdAt: new Date().toISOString(),
+          escalationPrompt: true,
+        });
+        setAwaitingEscalation(true);
+        return;
+      }
+
+      // Slim context only — the full How-To guide is answered locally above and
+      // large prompts make OpenAI TPM / rate limits worse on the support API.
       const result = await sendAiGuestChat({
         message: text,
         sessionId,
         userEmail: email,
-        context: buildLiveChatContext(activeSnapshot),
+        context: buildLiveChatContext({ ...activeSnapshot, includeOperationalGuide: false }),
       });
 
       setMessages((prev) => prev.filter((m) => m.id !== loadingId));
 
       if (!result.ok) {
+        remoteAiDegradedRef.current = true;
+        const fallback =
+          answerHowToFromFaq(text, { loose: true }) ?? localAssistantTopicsHint();
         push({
-          id: `err-${Date.now()}`,
-          text: result.error,
-          sender: 'system',
+          id: `ai-fallback-${Date.now()}`,
+          text: fallback,
+          sender: 'ai',
           createdAt: new Date().toISOString(),
+          escalationPrompt: true,
         });
+        setAwaitingEscalation(true);
         return;
       }
 
@@ -356,14 +427,15 @@ export function LiveChatScreen() {
         reply = answerAccountQuestion(fallbackKind, activeSnapshot);
       }
 
-      // Capacity stubs from the Support AI — answer locally or offer a clean escalation.
+      // Capacity stubs from the Support AI — answer locally or offer topics + agent.
       const capacityStub = isCapacityAiReply(reply);
-      const capacityFaq = capacityStub ? answerHowToFromFaq(text) : null;
       if (capacityStub) {
+        remoteAiDegradedRef.current = true;
         reply =
-          capacityFaq ??
-          "I'm having trouble reaching the AI service right now. I can connect you with a live agent, or you can try asking again in a moment.";
+          answerHowToFromFaq(text, { loose: true }) ?? localAssistantTopicsHint();
       }
+
+      const answeredFromLocalKnowledge = capacityStub && reply !== localAssistantTopicsHint();
 
       push({
         id: `ai-${Date.now()}`,
@@ -373,7 +445,7 @@ export function LiveChatScreen() {
       });
 
       if (
-        (result.shouldEscalate || (capacityStub && !capacityFaq)) &&
+        (result.shouldEscalate || (capacityStub && !answeredFromLocalKnowledge)) &&
         !isMissingAccountAiReply(result.text)
       ) {
         push({
@@ -390,319 +462,327 @@ export function LiveChatScreen() {
     }
   };
 
-  const connecting = !sessionId && !bootError && !booting;
-  const headerDetail = mode === 'agent'
-    ? 'Live agent'
-    : awaitingEscalation
-      ? 'Choose how to continue'
-      : connecting
-        ? 'Connecting…'
-        : 'AI assistant';
+  const send = () => void sendText(draft);
+
+  const helperTitle = mode === 'agent' ? 'Live agent' : HELPER_NAME;
+  const helperSubtitle =
+    mode === 'agent'
+      ? 'A person from Palpeer will reply here.'
+      : connectingLabel(!!sessionId, !!bootError, booting, awaitingEscalation);
 
   const canSend = !sending && !booting && !!sessionId && !awaitingEscalation && !!draft.trim();
   // Lift the whole chat (messages + composer) above the keyboard. Edge-to-edge Android often
   // keeps the window full-height, so pad by measured overlap rather than KeyboardAvoidingView.
   const keyboardLift = keyboardHeight > 0 ? keyboardHeight : 0;
   const composerBottomPad =
-    theme.spacing.sm + (keyboardHeight > 0 ? 0 : restingBottomInset.current);
+    10 + (keyboardHeight > 0 ? 0 : restingBottomInset.current);
+
+  const onListen = () => {
+    if (speaking) {
+      try {
+        (globalThis as { speechSynthesis?: SpeechSynthesis }).speechSynthesis?.cancel();
+      } catch {
+        /* ignore */
+      }
+      setSpeaking(false);
+      return;
+    }
+    const spoken = [helperTitle, helperSubtitle, greeting(firstName)].join('. ');
+    setSpeaking(true);
+    speak(spoken, () => setSpeaking(false));
+  };
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: theme.colors.background }}
-      edges={['top']}
-      testID="live-chat-screen"
-    >
-      <View style={{ flex: 1, paddingBottom: keyboardLift }}>
-        <View style={{ flex: 1 }}>
-          <View style={{ paddingHorizontal: theme.spacing.xl }}>
-            <StackHeader title="Live chat" />
-          </View>
-
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: theme.spacing.sm,
-              paddingHorizontal: theme.spacing.xl,
-              paddingBottom: theme.spacing.sm,
-              borderBottomWidth: 1,
-              borderBottomColor: theme.colors.border,
-            }}
+    <SafeAreaView style={styles.safe} edges={['top']} testID="live-chat-screen">
+      <View style={[styles.flex, { paddingBottom: keyboardLift }]}>
+        <View style={styles.header}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.backPill, pressed && styles.pressed]}
           >
-            <Icon
-              icon={mode === 'agent' ? UserRound : Sparkles}
-              color={theme.colors.primary}
-              size="md"
-            />
-            <View style={{ flex: 1 }}>
-              <AppText variant="bodyStrong">
-                {mode === 'agent' ? 'Live agent' : 'AI assistant'}
-              </AppText>
-              <AppText variant="caption" tone="secondary">
-                {headerDetail}
-              </AppText>
+            <ChevronLeft color={D.ink} size={22} strokeWidth={2.6} />
+            <Text style={styles.backLabel}>Back</Text>
+          </Pressable>
+
+          <View style={styles.helperBlock} accessibilityRole="header">
+            <View style={styles.avatar}>
+              <Text style={styles.avatarLetter}>
+                {mode === 'agent' ? 'A' : HELPER_NAME.charAt(0)}
+              </Text>
             </View>
-            {mode === 'ai' ? (
-              <Button
-                label="Talk to agent"
-                variant="outline"
-                size="md"
-                fullWidth={false}
-                onPress={() => void escalateToAgent()}
-                disabled={sending || booting || !sessionId}
-                testID="live-chat-escalate"
-              />
-            ) : null}
+            <View style={styles.helperText}>
+              <Text style={styles.helperName} numberOfLines={1}>
+                {helperTitle}
+              </Text>
+              <Text style={styles.helperSubtitle} numberOfLines={2}>
+                {helperSubtitle}
+              </Text>
+            </View>
           </View>
 
-          <View style={{ flex: 1, minHeight: 0 }}>
-            {bootError ? (
-              <View style={{ padding: theme.spacing.xl, gap: theme.spacing.md, flex: 1 }}>
-                <FormAlert tone="danger" message={bootError} testID="live-chat-boot-error" />
-                <Button
-                  label="Try again"
-                  onPress={() => {
-                    bootedRef.current = true;
-                    setBooting(true);
-                    void boot();
-                  }}
-                  testID="live-chat-retry"
-                />
-              </View>
-            ) : booting ? (
-              <View
-                style={{
-                  flex: 1,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: theme.spacing.md,
-                }}
-                testID="live-chat-booting"
-              >
-                <ActivityIndicator color={theme.colors.primary} />
-                <AppText tone="secondary">Starting chat…</AppText>
-              </View>
-            ) : (
-              <FlatList
-                ref={listRef}
-                testID="live-chat-messages"
-                style={{ flex: 1 }}
-                data={messages}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={{
-                  paddingHorizontal: theme.spacing.xl,
-                  paddingVertical: theme.spacing.md,
-                  gap: theme.spacing.sm,
-                  flexGrow: 1,
-                }}
-                keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="interactive"
-                onContentSizeChange={scrollToComposer}
-                ListEmptyComponent={
-                  <View
-                    style={{
-                      alignItems: 'center',
-                      marginTop: theme.spacing.xxl,
-                      gap: theme.spacing.sm,
-                    }}
-                  >
-                    <Icon icon={MessageCircle} color={theme.colors.textMuted} size="lg" />
-                    <AppText tone="secondary">Start the conversation</AppText>
-                  </View>
-                }
-                renderItem={({ item }) => (
-                  <LiveChatBubble
-                    message={item}
-                    ticketPrefill={{
-                      fullName:
-                        [snapshot.profile?.firstName, snapshot.profile?.lastName]
-                          .filter(Boolean)
-                          .join(' ')
-                          .trim() || firstName,
-                      email,
-                      subject: 'Support request from chat',
-                    }}
-                    onTalkToAgent={() => void escalateToAgent()}
-                    onContinueAi={() => setAwaitingEscalation(false)}
-                    onTicketSubmitted={(ticket) => {
-                      push({
-                        id: `ticket-ok-${Date.now()}`,
-                        text: ticket.ticketNumber
-                          ? `Thanks — ticket ${ticket.ticketNumber} was submitted. Our team will follow up by email.`
-                          : 'Thanks — your support ticket was submitted. Our team will follow up by email.',
-                        sender: 'system',
-                        createdAt: new Date().toISOString(),
-                      });
-                    }}
-                  />
-                )}
-              />
-            )}
-          </View>
-
-          {!bootError ? (
-            <View
-              style={{
-                borderTopWidth: 1,
-                borderTopColor: theme.colors.border,
-                paddingHorizontal: theme.spacing.xl,
-                paddingTop: theme.spacing.sm,
-                paddingBottom: composerBottomPad,
-                gap: theme.spacing.xs,
-                backgroundColor: theme.colors.background,
-              }}
-              testID="live-chat-composer"
-            >
-              {awaitingEscalation ? (
-                <AppText variant="caption" tone="secondary">
-                  Choose an option above, or tap Talk to agent.
-                </AppText>
-              ) : connecting ? (
-                <AppText variant="caption" tone="secondary" testID="live-chat-connecting">
-                  Connecting to the AI assistant…
-                </AppText>
-              ) : null}
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: theme.spacing.sm }}>
-                <TextInput
-                  ref={inputRef}
-                  value={draft}
-                  onChangeText={setDraft}
-                  placeholder={mode === 'agent' ? 'Message the agent…' : 'Ask the AI assistant…'}
-                  placeholderTextColor={theme.colors.textMuted}
-                  editable={!sending && !booting && !!sessionId && !awaitingEscalation}
-                  multiline
-                  onFocus={() => {
-                    scrollToComposer();
-                    if (Platform.OS === 'android') {
-                      setTimeout(scrollToComposer, 80);
-                    }
-                  }}
-                  style={{
-                    flex: 1,
-                    minHeight: 44,
-                    maxHeight: 120,
-                    borderWidth: 1,
-                    borderColor: theme.colors.border,
-                    borderRadius: theme.radius.lg,
-                    paddingHorizontal: theme.spacing.md,
-                    paddingVertical: theme.spacing.sm,
-                    color: theme.colors.textPrimary,
-                    backgroundColor: theme.colors.surface,
-                  }}
-                  testID="live-chat-input"
-                />
-                <Button
-                  label="Send"
-                  leftIcon={Send}
-                  size="md"
-                  fullWidth={false}
-                  onPress={() => void send()}
-                  disabled={!canSend}
-                  loading={sending}
-                  testID="live-chat-send"
-                />
-              </View>
-            </View>
-          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={speaking ? 'Stop listening' : 'Listen to this screen'}
+            onPress={onListen}
+            style={({ pressed }) => [styles.listenCircle, pressed && styles.pressed]}
+          >
+            <Volume2 color={D.white} size={22} strokeWidth={2.2} />
+          </Pressable>
         </View>
+
+        <View style={styles.flex}>
+          {bootError ? (
+            <View style={styles.errorBody} testID="live-chat-boot-error">
+              <Text style={styles.errorText} accessibilityRole="text">
+                {bootError}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Try again"
+                onPress={() => {
+                  bootedRef.current = true;
+                  setBooting(true);
+                  void boot();
+                }}
+                testID="live-chat-retry"
+                style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
+              >
+                <Text style={styles.primaryBtnLabel}>Try again</Text>
+              </Pressable>
+            </View>
+          ) : booting ? (
+            <View style={styles.centerBody} testID="live-chat-booting">
+              <ActivityIndicator color={D.green} size="large" />
+              <Text style={styles.helperSubtitle}>Starting chat…</Text>
+            </View>
+          ) : (
+            <FlatList
+              ref={listRef}
+              testID="live-chat-messages"
+              style={styles.flex}
+              data={messages}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.threadContent}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              onContentSizeChange={scrollToComposer}
+              ListEmptyComponent={
+                <View style={styles.empty}>
+                  <Text style={styles.helperSubtitle}>Start the conversation</Text>
+                </View>
+              }
+              renderItem={({ item }) => (
+                <LiveChatBubble
+                  message={item}
+                  ticketPrefill={{
+                    fullName:
+                      [snapshot.profile?.firstName, snapshot.profile?.lastName]
+                        .filter(Boolean)
+                        .join(' ')
+                        .trim() || firstName,
+                    email,
+                    subject: 'Support request from chat',
+                  }}
+                  onQuickChip={(prompt) => void sendText(prompt)}
+                  onTalkToAgent={() => void escalateToAgent()}
+                  onContinueAi={() => setAwaitingEscalation(false)}
+                  chipsDisabled={sending || booting || !sessionId || awaitingEscalation}
+                  onTicketSubmitted={(ticket) => {
+                    push({
+                      id: `ticket-ok-${Date.now()}`,
+                      text: ticket.ticketNumber
+                        ? `Thanks — ticket ${ticket.ticketNumber} was submitted. Our team will follow up by email.`
+                        : 'Thanks — your support ticket was submitted. Our team will follow up by email.',
+                      sender: 'system',
+                      createdAt: new Date().toISOString(),
+                    });
+                  }}
+                />
+              )}
+            />
+          )}
+        </View>
+
+        {!bootError ? (
+          <View
+            style={[styles.composer, { paddingBottom: composerBottomPad }]}
+            testID="live-chat-composer"
+          >
+            {awaitingEscalation ? (
+              <Text style={styles.composerHint}>Choose an option above, or ask for a person.</Text>
+            ) : !sessionId && !booting ? (
+              <Text style={styles.composerHint} testID="live-chat-connecting">
+                Connecting…
+              </Text>
+            ) : null}
+            <View style={styles.composerRow}>
+              <TextInput
+                ref={inputRef}
+                value={draft}
+                onChangeText={setDraft}
+                placeholder="Type a message"
+                placeholderTextColor={D.muted}
+                editable={!sending && !booting && !!sessionId && !awaitingEscalation}
+                multiline
+                onFocus={() => {
+                  scrollToComposer();
+                  if (Platform.OS === 'android') {
+                    setTimeout(scrollToComposer, 80);
+                  }
+                }}
+                style={styles.input}
+                testID="live-chat-input"
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Send"
+                accessibilityState={{ disabled: !canSend, busy: sending }}
+                disabled={!canSend}
+                onPress={send}
+                testID="live-chat-send"
+                style={({ pressed }) => [
+                  styles.sendBtn,
+                  !canSend && styles.sendBtnDisabled,
+                  pressed && canSend && styles.pressed,
+                ]}
+              >
+                {sending ? (
+                  <ActivityIndicator color={D.white} />
+                ) : (
+                  <Text style={styles.sendBtnLabel}>Send</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
       </View>
     </SafeAreaView>
   );
 }
 
+function connectingLabel(
+  hasSession: boolean,
+  bootError: boolean,
+  booting: boolean,
+  awaitingEscalation: boolean,
+): string {
+  if (awaitingEscalation) return 'Choose how to continue';
+  if (bootError) return 'Could not start chat';
+  if (booting || !hasSession) return 'Connecting…';
+  return HELPER_SUBTITLE;
+}
+
 function LiveChatBubble({
   message,
   ticketPrefill,
+  onQuickChip,
+  chipsDisabled,
   onTalkToAgent,
   onContinueAi,
   onTicketSubmitted,
 }: {
   message: ChatMessage;
   ticketPrefill?: { fullName?: string | null; email?: string | null; subject?: string | null };
+  onQuickChip?: (prompt: string) => void;
+  chipsDisabled?: boolean;
   onTalkToAgent: () => void;
   onContinueAi: () => void;
   onTicketSubmitted?: (ticket: { ticketNumber?: string }) => void;
 }) {
-  const theme = useTheme();
   const mine = message.sender === 'user';
   const system = message.sender === 'system';
 
   if (system) {
     return (
-      <View style={{ alignItems: 'center', paddingVertical: theme.spacing.xs }}>
-        <AppText variant="caption" tone="secondary" style={{ textAlign: 'center' }}>
-          {message.text}
-        </AppText>
+      <View style={styles.systemRow}>
+        <Text style={styles.systemText}>{message.text}</Text>
       </View>
     );
   }
 
+  const bg = mine ? D.green : D.white;
+  const ink = mine ? D.white : D.ink;
+  const whoLabel = message.sender === 'agent' ? 'Agent' : HELPER_NAME;
+
   return (
     <View
-      style={{
-        alignSelf: mine ? 'flex-end' : 'flex-start',
-        maxWidth: message.ticketForm ? '100%' : '85%',
-        width: message.ticketForm ? '100%' : undefined,
-        gap: theme.spacing.xs,
-      }}
+      style={[
+        styles.bubbleWrap,
+        {
+          alignSelf: mine ? 'flex-end' : 'flex-start',
+          maxWidth: message.ticketForm ? '100%' : mine ? '82%' : '92%',
+          width: message.ticketForm ? '100%' : undefined,
+        },
+      ]}
     >
-      {!mine ? (
-        <AppText variant="caption" tone="muted">
-          {message.sender === 'agent' ? 'Agent' : 'Toniks'}
-        </AppText>
-      ) : null}
-      <View
-        style={{
-          backgroundColor: mine
-            ? theme.colors.primary
-            : message.sender === 'agent'
-              ? theme.colors.primarySoft
-              : theme.colors.surface,
-          borderWidth: mine ? 0 : 1,
-          borderColor: theme.colors.border,
-          borderRadius: theme.radius.lg,
-          paddingHorizontal: theme.spacing.md,
-          paddingVertical: theme.spacing.sm,
-          gap: theme.spacing.xxs,
-        }}
-      >
+      {!mine ? <Text style={styles.who}>{whoLabel}</Text> : null}
+      <View style={[styles.bubble, { backgroundColor: bg }]}>
         {message.loading ? (
-          <ActivityIndicator color={theme.colors.textMuted} />
+          <ActivityIndicator color={D.muted} />
         ) : (
           <>
-            <AppText style={{ color: mine ? theme.colors.onPrimary : theme.colors.textPrimary }} selectable>
+            <Text style={[styles.bubbleText, { color: ink }]} selectable>
               {message.text}
-            </AppText>
-            <AppText
-              variant="caption"
-              style={{
-                color: mine ? theme.colors.onPrimary : theme.colors.textMuted,
-                alignSelf: 'flex-end',
-                opacity: 0.85,
-              }}
+            </Text>
+            <Text
+              style={[
+                styles.bubbleTime,
+                { color: mine ? D.white : D.muted, opacity: mine ? 0.85 : 1 },
+              ]}
             >
               {formatClockTime(message.createdAt) ?? ''}
-            </AppText>
+            </Text>
           </>
         )}
       </View>
+      {message.quickChips ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipRow}
+          testID="live-chat-quick-chips"
+        >
+          {QUICK_CHIPS.map((chip) => (
+            <Pressable
+              key={chip.id}
+              accessibilityRole="button"
+              accessibilityLabel={chip.label}
+              disabled={chipsDisabled}
+              onPress={() => onQuickChip?.(chip.prompt)}
+              testID={`live-chat-chip-${chip.id}`}
+              style={({ pressed }) => [
+                styles.chip,
+                chipsDisabled && styles.chipDisabled,
+                pressed && !chipsDisabled && styles.pressed,
+              ]}
+            >
+              <Text style={styles.chipLabel}>{chip.label}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
       {message.escalationPrompt ? (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
-          <Button
-            label="Talk to agent"
-            size="md"
-            fullWidth={false}
+        <View style={styles.choiceRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Talk to a person"
             onPress={onTalkToAgent}
             testID="live-chat-choose-agent"
-          />
-          <Button
-            label="Continue with AI"
-            size="md"
-            fullWidth={false}
-            variant="outline"
+            style={({ pressed }) => [styles.choicePrimary, pressed && styles.pressed]}
+          >
+            <Text style={styles.choicePrimaryLabel}>Talk to a person</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Continue with ${HELPER_NAME}`}
             onPress={onContinueAi}
             testID="live-chat-choose-ai"
-          />
+            style={({ pressed }) => [styles.choiceOutline, pressed && styles.pressed]}
+          >
+            <Text style={styles.choiceOutlineLabel}>Keep chatting</Text>
+          </Pressable>
         </View>
       ) : null}
       {message.ticketForm ? (
@@ -715,3 +795,277 @@ function LiveChatBubble({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: D.page,
+  },
+  flex: { flex: 1, minHeight: 0 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 10,
+    gap: 10,
+  },
+  backPill: {
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: D.white,
+    paddingLeft: 8,
+    paddingRight: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  backLabel: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 17,
+    fontWeight: '700',
+    color: D.ink,
+  },
+  helperBlock: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: D.green,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarLetter: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 20,
+    fontWeight: '800',
+    color: D.white,
+  },
+  helperText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  helperName: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 18,
+    fontWeight: '800',
+    color: D.ink,
+    lineHeight: 22,
+  },
+  helperSubtitle: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 13,
+    fontWeight: '600',
+    color: D.secondary,
+    lineHeight: 17,
+  },
+  listenCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: D.green,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressed: { opacity: 0.88 },
+  errorBody: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    gap: 14,
+  },
+  errorText: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 18,
+    fontWeight: '700',
+    color: D.danger,
+    lineHeight: 24,
+  },
+  centerBody: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+  },
+  threadContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+    gap: 14,
+    flexGrow: 1,
+  },
+  empty: {
+    alignItems: 'center',
+    marginTop: 40,
+  },
+  composer: {
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    gap: 8,
+    backgroundColor: D.page,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: D.border,
+  },
+  composerHint: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 14,
+    fontWeight: '600',
+    color: D.secondary,
+  },
+  composerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+  },
+  input: {
+    flex: 1,
+    minHeight: 52,
+    maxHeight: 120,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 26,
+    backgroundColor: D.white,
+    color: D.ink,
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  sendBtn: {
+    minHeight: 52,
+    minWidth: 88,
+    borderRadius: 26,
+    backgroundColor: D.green,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  sendBtnDisabled: {
+    backgroundColor: D.greenDisabled,
+  },
+  sendBtnLabel: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 17,
+    fontWeight: '800',
+    color: D.white,
+  },
+  primaryBtn: {
+    minHeight: 68,
+    borderRadius: 20,
+    backgroundColor: D.green,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  primaryBtnLabel: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 22,
+    fontWeight: '800',
+    color: D.white,
+  },
+  systemRow: {
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  systemText: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 15,
+    fontWeight: '600',
+    color: D.secondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  bubbleWrap: {
+    gap: 8,
+  },
+  who: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 15,
+    fontWeight: '800',
+    color: D.green,
+  },
+  bubble: {
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 6,
+  },
+  bubbleText: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 17,
+    fontWeight: '600',
+    lineHeight: 24,
+  },
+  bubbleTime: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 12,
+    fontWeight: '600',
+    alignSelf: 'flex-end',
+  },
+  chipRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 2,
+  },
+  chip: {
+    minHeight: 40,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: D.green,
+    backgroundColor: D.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipDisabled: {
+    opacity: 0.55,
+  },
+  chipLabel: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 15,
+    fontWeight: '800',
+    color: D.green,
+  },
+  choiceRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  choicePrimary: {
+    minHeight: 48,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: D.green,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  choicePrimaryLabel: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 16,
+    fontWeight: '800',
+    color: D.white,
+  },
+  choiceOutline: {
+    minHeight: 48,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: D.green,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: D.white,
+  },
+  choiceOutlineLabel: {
+    fontFamily: Platform.select({ web: D.font, default: undefined }),
+    fontSize: 16,
+    fontWeight: '800',
+    color: D.green,
+  },
+});

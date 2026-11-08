@@ -112,6 +112,24 @@ async function parseResponse<T>(response: Response): Promise<ApiResponse<T>> {
   try {
     return JSON.parse(text) as ApiResponse<T>;
   } catch {
+    // Vite proxy returns empty/HTML when :8085 is down; VPNs/extensions sometimes inject HTML too.
+    const looksLikeHtml = /^\s*</.test(text);
+    const proxyDown =
+      response.status === 502 || response.status === 503 || response.status === 504 || !text.trim();
+    if (proxyDown) {
+      throw new ApiClientError(
+        response.status,
+        'API_UNREACHABLE',
+        'Cannot reach the API server. Check that the backend is running on port 8085.',
+      );
+    }
+    if (looksLikeHtml) {
+      throw new ApiClientError(
+        response.status,
+        'INVALID_RESPONSE',
+        'Blocked or unexpected HTML from the API route. Disable VPN/extensions for localhost and retry.',
+      );
+    }
     throw new ApiClientError(response.status, 'INVALID_RESPONSE', 'Unexpected server response.');
   }
 }

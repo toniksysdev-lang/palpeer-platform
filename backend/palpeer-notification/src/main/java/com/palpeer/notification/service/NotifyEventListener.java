@@ -13,8 +13,11 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * Delivers {@link UserNotifyEvent} / {@link BroadcastPushEvent} after the source transaction commits
- * so failed money movements never notify. Delivery is {@link Async} so HTTP callers are not blocked
- * by push/email fan-out.
+ * so failed money movements never notify.
+ *
+ * <p>{@link UserNotifyEvent} runs synchronously after commit so the in-app Alerts row exists before
+ * the HTTP response returns (mobile History can otherwise refresh while Messages → Alerts still
+ * shows a stale empty inbox). Broadcast fan-out stays {@link Async}.
  */
 @Slf4j
 @Component
@@ -23,8 +26,7 @@ public class NotifyEventListener {
 
     private final NotificationService notificationService;
 
-    @Async
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onUserNotify(UserNotifyEvent event) {
         if (event == null || event.userId() == null) {
             return;
@@ -49,7 +51,7 @@ public class NotifyEventListener {
     }
 
     @Async
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onBroadcastPush(BroadcastPushEvent event) {
         if (event == null) {
             return;

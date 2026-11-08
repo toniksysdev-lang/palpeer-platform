@@ -27,7 +27,7 @@ export function toDisplayDate(iso: string | null | undefined): string {
 }
 
 /** Minimum age required for personal information / account profile. */
-export const MIN_PROFILE_AGE_YEARS = 18;
+export const MIN_PROFILE_AGE_YEARS = 16;
 
 /** Default calendar / form DOB: today minus `years` (local calendar date). */
 export function defaultDateOfBirth(

@@ -494,6 +494,9 @@ public class KycService {
         return new AdminKycCaseDetailResponse(
                 kycCase.getId(),
                 kycCase.getUserId(),
+                null,
+                null,
+                null,
                 kycCase.getStatus(),
                 kycCase.getRejectionReason(),
                 kycCase.getCreatedAt(),

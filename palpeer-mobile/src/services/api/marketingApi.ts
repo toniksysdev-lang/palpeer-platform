@@ -9,6 +9,7 @@ export const marketingApi = baseApi.injectEndpoints({
       providesTags: [{ type: 'MarketingAdvert', id: 'ACTIVE' }],
     }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
 export const { useGetMarketingAdvertsQuery } = marketingApi;

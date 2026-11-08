@@ -42,8 +42,8 @@ export function ForgotPasswordScreen() {
 
   return (
     <AuthLayout
-      title="Reset your password"
-      subtitle="Enter the email on your account and we'll send you a 6-digit reset code."
+      title="I forgot my password"
+      subtitle="Enter the email on your account. We'll send a 6-digit code if it matches."
     >
       <FormAlert message={formError} testID="forgot-error" />
       <Controller
@@ -51,7 +51,7 @@ export function ForgotPasswordScreen() {
         name="email"
         render={({ field, fieldState }) => (
           <Input
-            label="Email address"
+            label="My email"
             placeholder="you@example.com"
             value={field.value}
             onChangeText={field.onChange}
@@ -69,7 +69,7 @@ export function ForgotPasswordScreen() {
         )}
       />
       <Button
-        label="Send reset code"
+        label="Send my code"
         loadingLabel="Sending…"
         onPress={onSubmit}
         loading={isLoading || isSubmitting}

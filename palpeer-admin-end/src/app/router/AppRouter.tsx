@@ -22,6 +22,7 @@ import { PlatformFeesPage } from '@/features/platform-fees/PlatformFeesPage';
 import { P2PDetailPage } from '@/features/p2p/P2PDetailPage';
 import { P2PPage } from '@/features/p2p/P2PPage';
 import { PermissionsPage } from '@/features/permissions/PermissionsPage';
+import { BusinessWaitlistPage } from '@/features/business-waitlist/BusinessWaitlistPage';
 import { MarketingPage } from '@/features/marketing/MarketingPage';
 import { PromotionsPage } from '@/features/promotions/PromotionsPage';
 import { RatesPage } from '@/features/rates/RatesPage';
@@ -251,6 +252,14 @@ export function AppRouter() {
           element={
             <RequirePermission permission="promotions:write">
               <MarketingPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="business-waitlist"
+          element={
+            <RequirePermission permission="promotions:write">
+              <BusinessWaitlistPage />
             </RequirePermission>
           }
         />

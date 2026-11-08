@@ -7,6 +7,8 @@ import com.palpeer.promotion.web.dto.ApplyReferralRequest;
 import com.palpeer.promotion.web.dto.BonusCurrencySummary;
 import com.palpeer.promotion.web.dto.BonusResponse;
 import com.palpeer.promotion.web.dto.CreatePromotionRequest;
+import com.palpeer.promotion.web.dto.LoyaltyPointsBalance;
+import com.palpeer.promotion.web.dto.LoyaltyPointsLedgerEntry;
 import com.palpeer.promotion.web.dto.PromotionResponse;
 import com.palpeer.promotion.web.dto.ReferralResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -86,5 +88,20 @@ public class PromotionController {
     public ApiResponse<List<BonusCurrencySummary>> myBonusSummary(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ApiResponse.ok(promotionService.myBonusSummary(principal.getId()));
+    }
+
+    @GetMapping("/points/mine/balance")
+    @Operation(summary = "Loyalty points balance (100 points = CA$1 from unused CAD bonuses)")
+    public ApiResponse<LoyaltyPointsBalance> myPointsBalance(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ApiResponse.ok(promotionService.myLoyaltyPointsBalance(principal.getId()));
+    }
+
+    @GetMapping("/points/mine")
+    @Operation(summary = "Loyalty points ledger (CAD referral bonuses as points)")
+    public ApiResponse<Page<LoyaltyPointsLedgerEntry>> myPointsLedger(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ApiResponse.ok(promotionService.myLoyaltyPointsLedger(principal.getId(), pageable));
     }
 }

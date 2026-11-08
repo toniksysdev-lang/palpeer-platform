@@ -29,6 +29,7 @@ class AdminUserServiceTest {
 
     @Mock private UserRepository userRepository;
     @Mock private com.palpeer.admin.repository.AdminUserRepository adminUserRepository;
+    @Mock private com.palpeer.profile.repository.ProfileRepository profileRepository;
     @Mock private com.palpeer.common.audit.AuditRecorder auditRecorder;
     @Mock private com.palpeer.common.storage.ObjectStorage objectStorage;
     @Mock private EntityManager entityManager;
@@ -45,6 +46,7 @@ class AdminUserServiceTest {
         user.setEnabled(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(profileRepository.findByUserId(userId)).thenReturn(Optional.empty());
 
         var response = adminUserService.updateUser(userId, new UpdateUserAdminRequest(UserStatus.SUSPENDED, null));
 

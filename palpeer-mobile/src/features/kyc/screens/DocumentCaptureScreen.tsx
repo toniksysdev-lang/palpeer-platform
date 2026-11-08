@@ -1,33 +1,42 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { IdCard } from 'lucide-react-native';
 
-import { Screen } from '@/components/layout/Screen';
-import { StackHeader } from '@/components/layout/StackHeader';
-import { EmptyState } from '@/components/feedback/StateViews';
 import { useToast } from '@/providers/ToastProvider';
 import { kycApi } from '@/services/api/kycApi';
 import { useAppDispatch } from '@/store';
 
 import { CaptureFlow } from '../components/CaptureFlow';
+import { DesignKycShell } from '../components/DesignKycShell';
 import { documentTypeLabel, isKycDocumentType, KYC_DOCUMENT_TYPES } from '../kycState';
+import { kycHref, safeKycReturnTo } from '../returnTo';
 
 export function DocumentCaptureScreen() {
-  const { type } = useLocalSearchParams<{ type?: string }>();
+  const { type, returnTo: returnToParam } = useLocalSearchParams<{
+    type?: string;
+    returnTo?: string;
+  }>();
   const toast = useToast();
   const dispatch = useAppDispatch();
+  const returnTo = safeKycReturnTo(returnToParam, '');
 
   if (!isKycDocumentType(type)) {
     return (
-      <Screen>
-        <StackHeader />
-        <EmptyState
-          icon={IdCard}
-          title="Choose a document type"
-          message="Pick which document you're photographing first."
-          actionLabel="Choose document"
-          onAction={() => router.replace('/kyc/document-type')}
-        />
-      </Screen>
+      <DesignKycShell
+        onBack={() =>
+          router.canGoBack()
+            ? router.back()
+            : router.replace((returnTo || '/kyc') as Href)
+        }
+        title="Choose a document type"
+        subtitle="Pick which document you're photographing first."
+        centered
+        footer={[
+          {
+            label: 'Choose document',
+            onPress: () => router.replace('/kyc/document-type'),
+          },
+        ]}
+      />
     );
   }
 
@@ -38,7 +47,15 @@ export function DocumentCaptureScreen() {
     const progress = await dispatch(
       kycApi.endpoints.getKycProgress.initiate(undefined, { forceRefetch: true, subscribe: false }),
     );
-    router.replace(progress.data && !progress.data.hasSelfie ? '/kyc/selfie' : '/kyc');
+    if (progress.data && !progress.data.hasSelfie) {
+      router.replace(kycHref('/kyc/selfie', returnTo || undefined) as Href);
+      return;
+    }
+    if (returnTo) {
+      router.replace(returnTo as Href);
+      return;
+    }
+    router.replace('/kyc');
   };
 
   return (
@@ -56,8 +73,12 @@ export function DocumentCaptureScreen() {
       cameraHint="Fit the document inside the frame"
       allowLibrary
       onUploaded={() => void onUploaded()}
-      onExit={() => (router.canGoBack() ? router.back() : router.replace('/kyc'))}
-      notice="Your photo is sent securely and used only to verify your identity."
+      onExit={() =>
+        router.canGoBack()
+          ? router.back()
+          : router.replace((returnTo || '/kyc') as Href)
+      }
+      notice="Your photo is sent securely and used only to verify your identity with ComplyCube."
     />
   );
 }

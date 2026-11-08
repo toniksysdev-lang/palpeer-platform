@@ -35,10 +35,9 @@ describe('LoginScreen', () => {
     await renderWithProviders(<LoginScreen />);
 
     expect(screen.getByLabelText('PALPEER')).toBeTruthy();
-    expect(screen.getByText('Login to your account')).toBeTruthy();
-    expect(screen.getByText('Forgot Password?')).toBeTruthy();
-    expect(screen.getByText('Login')).toBeTruthy();
-    expect(screen.getByText('Need help?')).toBeTruthy();
+    expect(screen.getByTestId('login-submit')).toBeTruthy();
+    expect(screen.getByText('I forgot my password')).toBeTruthy();
+    expect(screen.getByText('I need help')).toBeTruthy();
     expect(screen.queryByTestId('login-biometric')).toBeNull();
 
     await fireEvent.press(screen.getByTestId('go-register'));
@@ -46,7 +45,8 @@ describe('LoginScreen', () => {
     await fireEvent.press(screen.getByTestId('go-forgot-password'));
     expect(router.push).toHaveBeenCalledWith('/forgot-password');
     await fireEvent.press(screen.getByTestId('go-support'));
-    expect(router.push).toHaveBeenCalledWith('/support');
+    expect(router.push).not.toHaveBeenCalledWith('/support');
+    expect(screen.getByText('Log in to get help.')).toBeTruthy();
   });
 
   it('offers fingerprint login when biometric unlock is set up for a parked session', async () => {

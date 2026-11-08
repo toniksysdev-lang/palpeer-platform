@@ -59,6 +59,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.util.HtmlUtils;
 
 @Slf4j
@@ -487,12 +489,68 @@ public class AuthService {
         return pair;
     }
 
+    /**
+     * Sends an email OTP so the signed-in user can trust this install. Public OTP endpoints
+     * reject {@link OtpPurpose#NEW_DEVICE}; callers must be authenticated.
+     */
+    @Transactional
+    public OtpResendResponse requestNewDeviceOtp(UUID userId) {
+        User user = userRepository
+                .findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (user.getEmail() == null || user.getEmail().isBlank()) {
+            throw new BusinessException(
+                    "EMAIL_REQUIRED", "Add an email before verifying a new device", HttpStatus.BAD_REQUEST);
+        }
+        String code = issueOtp(user, OtpPurpose.NEW_DEVICE, OtpChannel.EMAIL);
+        auditRecorder.record(AuditRecord.builder("SECURITY_NEW_DEVICE_OTP_SEND")
+                .entity("User:" + user.getId())
+                .userRef(user.getId())
+                .newValue("channel=EMAIL")
+                .build());
+        return new OtpResendResponse(authProperties.getOtp().isLogCode() ? code : null);
+    }
+
+    @Transactional
+    public void verifyNewDeviceOtp(UUID userId, String code) {
+        User user = userRepository
+                .findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        OtpChallenge challenge = otpChallengeRepository
+                .findFirstByUserIdAndPurposeAndConsumedFalseOrderByCreatedAtDesc(
+                        user.getId(), OtpPurpose.NEW_DEVICE)
+                .orElseThrow(() -> new BusinessException(
+                        "OTP_NOT_FOUND", "No active new-device OTP", HttpStatus.BAD_REQUEST));
+
+        assertChallengeUsable(challenge, OtpChannel.EMAIL);
+        if (!TokenHashing.sha256(code.trim()).equals(challenge.getCodeHash())) {
+            challenge.setAttemptCount(challenge.getAttemptCount() + 1);
+            otpChallengeRepository.save(challenge);
+            throw new BusinessException("OTP_INVALID", "Invalid OTP code", HttpStatus.BAD_REQUEST);
+        }
+
+        challenge.setConsumed(true);
+        challenge.setConsumedAt(Instant.now());
+        otpChallengeRepository.save(challenge);
+        auditRecorder.record(AuditRecord.builder("SECURITY_NEW_DEVICE_OTP_VERIFY")
+                .entity("User:" + user.getId())
+                .userRef(user.getId())
+                .newValue("purpose=NEW_DEVICE")
+                .build());
+    }
+
     @Transactional
     public void verifyOtp(OtpVerifyRequest request) {
         if (request.purpose() == OtpPurpose.PASSWORD_RESET) {
             throw new BusinessException(
                     "OTP_PURPOSE_INVALID",
                     "Password-reset OTP must be confirmed via password-reset/confirm",
+                    HttpStatus.BAD_REQUEST);
+        }
+        if (request.purpose() == OtpPurpose.NEW_DEVICE) {
+            throw new BusinessException(
+                    "OTP_PURPOSE_INVALID",
+                    "New-device OTP must be confirmed via device/otp/verify",
                     HttpStatus.BAD_REQUEST);
         }
 
@@ -527,12 +585,19 @@ public class AuthService {
                 .build());
 
         if (firstEmailVerification) {
-            sendWelcomeEmail(user);
+            // Send after commit so slow/failing SMTP cannot roll back OTP verification.
+            scheduleWelcomeEmail(user);
         }
     }
 
     @Transactional
     public OtpResendResponse resendOtp(OtpResendRequest request) {
+        if (request.purpose() == OtpPurpose.NEW_DEVICE) {
+            throw new BusinessException(
+                    "OTP_PURPOSE_INVALID",
+                    "New-device OTP must be requested via device/otp/request",
+                    HttpStatus.BAD_REQUEST);
+        }
         if (request.purpose() == OtpPurpose.PASSWORD_RESET) {
             // Avoid account enumeration: unknown emails still return 200 with no debugOtp.
             String code = userRepository
@@ -1064,7 +1129,7 @@ public class AuthService {
         switch (purpose) {
             case EMAIL_VERIFICATION -> user.setEmailVerified(true);
             case PHONE_VERIFICATION -> user.setPhoneVerified(true);
-            case PASSWORD_RESET -> {
+            case PASSWORD_RESET, NEW_DEVICE -> {
                 // no verification flag change
             }
         }
@@ -1075,16 +1140,35 @@ public class AuthService {
         }
     }
 
+    private void scheduleWelcomeEmail(User user) {
+        UUID userId = user.getId();
+        String email = user.getEmail();
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            sendWelcomeEmail(userId, email);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                sendWelcomeEmail(userId, email);
+            }
+        });
+    }
+
     private void sendWelcomeEmail(User user) {
+        sendWelcomeEmail(user.getId(), user.getEmail());
+    }
+
+    private void sendWelcomeEmail(UUID userId, String email) {
         try {
-            var rendered = PalpeerEmailTemplates.welcome(user.getEmail());
-            emailSender.send(user.getEmail(), rendered.subject(), rendered.text(), rendered.html());
-            log.info("Welcome email sent [userId={}, email={}]", user.getId(), user.getEmail());
+            var rendered = PalpeerEmailTemplates.welcome(email);
+            emailSender.send(email, rendered.subject(), rendered.text(), rendered.html());
+            log.info("Welcome email sent [userId={}, email={}]", userId, email);
         } catch (RuntimeException ex) {
             log.warn(
                     "Welcome email failed [userId={}, email={}]: {}",
-                    user.getId(),
-                    user.getEmail(),
+                    userId,
+                    email,
                     ex.getMessage());
         }
     }

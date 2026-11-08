@@ -62,6 +62,7 @@ export const exchangeApi = baseApi.injectEndpoints({
       providesTags: (_result, _error, id) => [{ type: 'Transaction', id: `EXCHANGE-${id}` }],
     }),
   }),
+  overrideExisting: process.env.NODE_ENV !== 'production',
 });
 
 export const {

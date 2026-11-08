@@ -8,7 +8,7 @@
       :root {
         --bezel: #111418;
         --bezel-edge: #2a3038;
-        --screen: #ffffff;
+        --screen: #f3f6f4;
         --desk: #e8ece9;
         --ink: #1b2420;
         --muted: #63706a;
@@ -186,7 +186,7 @@
         justify-content: center;
         gap: 24px;
         padding: 24px;
-        background: #ffffff;
+        background: #f3f6f4;
         pointer-events: none;
         transition: opacity 140ms ease-out;
       }
@@ -380,7 +380,7 @@
         </p>
 
         <div class="links">
-          <a id="open-raw" href="http://localhost:8081" target="_blank" rel="noreferrer">Open raw Expo web</a>
+          <a id="open-raw" href="http://localhost:8082" target="_blank" rel="noreferrer">Open raw Expo web</a>
           <a href="http://localhost:8085/swagger-ui.html" target="_blank" rel="noreferrer">Backend Swagger</a>
           <a href="http://localhost:5173" target="_blank" rel="noreferrer">Admin console</a>
         </div>
@@ -421,11 +421,17 @@
     </div>
 
     <script>
-      const APP_URL = new URLSearchParams(location.search).get('app') || 'http://localhost:8081';
+      const APP_URL = new URLSearchParams(location.search).get('app') || 'http://localhost:8082';
       const devices = [
         { id: 'pixel8', name: 'Pixel 8', detail: '412 × 915', w: 412, h: 915 },
         { id: 'iphone15', name: 'iPhone 15', detail: '393 × 852', w: 393, h: 852 },
         { id: 'iphoneSE', name: 'iPhone SE', detail: '375 × 667', w: 375, h: 667 },
+        { id: 'galaxyS24', name: 'Galaxy S24', detail: '360 × 780', w: 360, h: 780 },
+        { id: 'galaxyS24Ultra', name: 'Galaxy S24 Ultra', detail: '384 × 824', w: 384, h: 824 },
+        { id: 'galaxyS21', name: 'Galaxy S21', detail: '360 × 800', w: 360, h: 800 },
+        { id: 'galaxyA54', name: 'Galaxy A54', detail: '412 × 915', w: 412, h: 915 },
+        { id: 'galaxyZFlip5', name: 'Galaxy Z Flip5', detail: '360 × 748', w: 360, h: 748 },
+        { id: 'galaxyZFold5', name: 'Galaxy Z Fold5 (cover)', detail: '344 × 882', w: 344, h: 882 },
         { id: 'fold', name: 'Tall phone', detail: '360 × 800', w: 360, h: 800 },
       ];
 

@@ -1,8 +1,7 @@
-import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen } from '@testing-library/react-native';
 
 import { sessionManager } from '@/services/auth/session';
 import { secureStorage } from '@/services/storage/secureStorage';
-import { biometricRestored } from '@/store/slices/appLockSlice';
 import { sessionStarted } from '@/store/slices/sessionSlice';
 import { fail, installFetchMock, ok } from '@/tests/fetchMock';
 import { router } from '@/tests/mocks/expoRouter';
@@ -86,7 +85,7 @@ describe('ProfileScreen', () => {
 
     expect(await screen.findByText('Not started')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('profile-personal'));
-    expect(router.push).toHaveBeenCalledWith('/profile/personal');
+    expect(router.push).toHaveBeenCalledWith('/StartDetails');
     await fireEvent.press(screen.getByTestId('profile-kyc'));
     expect(router.push).toHaveBeenCalledWith('/kyc');
     await fireEvent.press(screen.getByTestId('profile-cards'));
@@ -94,22 +93,25 @@ describe('ProfileScreen', () => {
     await fireEvent.press(screen.getByTestId('profile-notifications'));
     expect(router.push).toHaveBeenCalledWith('/notifications/settings');
     await fireEvent.press(screen.getByTestId('profile-referrals'));
-    expect(router.push).toHaveBeenCalledWith('/referrals');
+    expect(router.push).toHaveBeenCalledWith('/InviteFriends');
+    await fireEvent.press(screen.getByTestId('profile-points'));
+    expect(router.push).toHaveBeenCalledWith('/MyPoints');
     await fireEvent.press(screen.getByTestId('profile-bonuses'));
-    expect(router.push).toHaveBeenCalledWith('/referrals/bonuses');
+    expect(router.push).toHaveBeenCalledWith('/MyBonuses');
   });
 
   it('links to security, privacy, settings, promotions and help', async () => {
     installFetchMock({ ...KYC, 'GET /profiles/me': ok(emptyProfile) });
     await renderWithProviders(<ProfileScreen />);
 
-    const expected = {
+    const expected: Record<string, string> = {
       'profile-security': '/security',
       'profile-privacy': '/settings/privacy',
       'profile-settings': '/settings',
-      'profile-promotions': '/promotions',
+      'profile-points': '/MyPoints',
+      'profile-promotions': '/MyPromotions',
       'profile-live-chat': '/support/live-chat',
-      'profile-support': '/support',
+      'profile-support': '/MoreHelp',
     };
     for (const [testID, path] of Object.entries(expected)) {
       await fireEvent.press(await screen.findByTestId(testID));
@@ -117,43 +119,18 @@ describe('ProfileScreen', () => {
     }
   });
 
-  it('signs out after confirmation', async () => {
-    installFetchMock({
-      ...KYC,
-      'GET /profiles/me': ok(emptyProfile),
-      'POST /auth/logout': ok(),
-    });
-    const signOut = jest.spyOn(sessionManager, 'signOut');
+  it('opens Get help from More and keeps Sign out under Settings', async () => {
+    installFetchMock({ ...KYC, 'GET /profiles/me': ok(emptyProfile) });
     await renderWithProviders(<ProfileScreen />);
 
-    await fireEvent.press(await screen.findByTestId('profile-sign-out'));
-    expect(signOut).not.toHaveBeenCalled();
-    await fireEvent.press(await screen.findByTestId('confirm-dialog-confirm'));
-    await waitFor(() => expect(signOut).toHaveBeenCalled());
-  });
-
-  it('parks the session for fingerprint login when biometrics are enabled', async () => {
-    installFetchMock({ ...KYC, 'GET /profiles/me': ok(emptyProfile) });
-    await secureStorage.saveSession({
-      refreshToken: 'refresh-parked',
-      userId: 'u-1',
-      email: 'ada@example.com',
-    });
-    await secureStorage.setBiometricUserId('u-1');
-    const dismiss = jest.spyOn(sessionManager, 'dismissToLogin');
-    const signOut = jest.spyOn(sessionManager, 'signOut');
-    await renderWithProviders(<ProfileScreen />, {
-      prepareStore: (store) => {
-        store.dispatch(sessionStarted({ userId: 'u-1', email: 'ada@example.com' }));
-        store.dispatch(biometricRestored(true));
-      },
-    });
-
-    await fireEvent.press(await screen.findByTestId('profile-sign-out'));
-    await fireEvent.press(await screen.findByTestId('confirm-dialog-confirm'));
-    await waitFor(() => expect(dismiss).toHaveBeenCalled());
-    expect(signOut).not.toHaveBeenCalled();
-    expect(await secureStorage.loadSession()).not.toBeNull();
-    expect(await secureStorage.getBiometricUserId()).toBe('u-1');
+    expect(screen.queryByTestId('profile-sign-out')).toBeNull();
+    expect(await screen.findByText('More')).toBeTruthy();
+    expect(screen.getAllByText('Language').length).toBeGreaterThan(0);
+    expect(screen.getByText('English')).toBeTruthy();
+    expect(screen.getByText('French')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('profile-support'));
+    expect(router.push).toHaveBeenCalledWith('/MoreHelp');
+    await fireEvent.press(screen.getByTestId('profile-settings'));
+    expect(router.push).toHaveBeenCalledWith('/settings');
   });
 });

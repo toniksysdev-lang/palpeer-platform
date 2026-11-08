@@ -95,3 +95,44 @@ export function describeDestination(currencyCode: string, reference: string | nu
   }
   return reference;
 }
+
+/**
+ * Label/value rows for the account that received a withdrawal (History / receipt detail).
+ * Optional `bankName` resolves NGN bank codes from GET /withdrawals/banks.
+ */
+export function destinationAccountRows(
+  currencyCode: string,
+  reference: string | null | undefined,
+  bankName?: string | null,
+): [string, string][] {
+  if (!reference) return [['To', 'My bank']];
+  if (currencyCode === 'CAD') {
+    if (EFT_PATTERN.test(reference)) {
+      const [institution, transit, account = ''] = reference.split(/[:|;-]/);
+      return [
+        ['Method', 'Bank transfer (EFT)'],
+        ['Institution', institution],
+        ['Transit', transit],
+        ['Account', account],
+      ];
+    }
+    if (reference.includes('@')) {
+      return [
+        ['Method', 'Interac e-Transfer'],
+        ['Email', reference],
+      ];
+    }
+    return [
+      ['Method', 'Interac e-Transfer'],
+      ['Phone', reference],
+    ];
+  }
+  if (currencyCode === 'NGN') {
+    const [bankCode, accountNumber = ''] = reference.split(/[:|;]/);
+    return [
+      ['Bank', bankName?.trim() || `Bank ${bankCode}`],
+      ['Account number', accountNumber],
+    ];
+  }
+  return [['To', reference]];
+}

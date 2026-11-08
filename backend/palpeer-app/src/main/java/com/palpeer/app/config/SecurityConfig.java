@@ -97,6 +97,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/otp/phone/verify",
                                 "/api/v1/auth/password-reset/request",
                                 "/api/v1/auth/password-reset/confirm",
+                                "/api/v1/public/business-account-interest",
                                 "/secure/account-lock/**"
                         ).permitAll()
                         // Share bridge + App Link association files (GET and HEAD for verifiers).

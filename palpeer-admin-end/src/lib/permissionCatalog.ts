@@ -161,7 +161,12 @@ export const PERMISSION_MODULES: CatalogModule[] = [
   {
     id: 'promotions',
     label: 'Promotions, marketing & referrals',
-    covers: ['/admin/promotions', '/admin/marketing', '/admin/referrals'],
+    covers: [
+      '/admin/promotions',
+      '/admin/marketing',
+      '/admin/business-waitlist',
+      '/admin/referrals',
+    ],
     actions: [
       action('promotions:read', 'read', 'Read', 'View promotions, ads, and referrals'),
       action('promotions:write', 'edit', 'Edit', 'Create or update promotions and marketing'),

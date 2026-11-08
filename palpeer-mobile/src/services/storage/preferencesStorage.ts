@@ -1,11 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type { AppearancePreference, PreferencesState } from '@/store/slices/preferencesSlice';
+import type {
+  AppearancePreference,
+  AppLanguage,
+  PreferencesState,
+} from '@/store/slices/preferencesSlice';
 import { logger } from '@/utils/logger';
 
 /** Non-sensitive UI preferences only. Tokens and identity live in secureStorage. */
 const KEYS = {
   appearance: 'palpeer.pref.appearance',
+  language: 'palpeer.pref.language',
   onboardingSeen: 'palpeer.pref.onboardingSeen',
   biometricUnlockPrompted: 'palpeer.pref.biometricUnlockPrompted',
   /** ISO2 chosen on phone signup — seeds Complete profile Country. */
@@ -18,14 +23,16 @@ const KEYS = {
 } as const;
 
 const APPEARANCES: readonly AppearancePreference[] = ['system', 'light', 'dark'];
+const LANGUAGES: readonly AppLanguage[] = ['en', 'fr'];
 
 export type StoredPreferences = Omit<PreferencesState, 'loaded'>;
 
 export const preferencesStorage = {
   async load(): Promise<StoredPreferences> {
     try {
-      const [appearance, onboardingSeen, biometricUnlockPrompted] = await Promise.all([
+      const [appearance, language, onboardingSeen, biometricUnlockPrompted] = await Promise.all([
         AsyncStorage.getItem(KEYS.appearance),
+        AsyncStorage.getItem(KEYS.language),
         AsyncStorage.getItem(KEYS.onboardingSeen),
         AsyncStorage.getItem(KEYS.biometricUnlockPrompted),
       ]);
@@ -34,17 +41,30 @@ export const preferencesStorage = {
           appearance && (APPEARANCES as readonly string[]).includes(appearance)
             ? (appearance as AppearancePreference)
             : 'light',
+        language:
+          language && (LANGUAGES as readonly string[]).includes(language)
+            ? (language as AppLanguage)
+            : 'en',
         onboardingSeen: onboardingSeen === 'true',
         biometricUnlockPrompted: biometricUnlockPrompted === 'true',
       };
     } catch (error) {
       logger.warn('Preferences load failed', { error });
-      return { appearance: 'light', onboardingSeen: false, biometricUnlockPrompted: false };
+      return {
+        appearance: 'light',
+        language: 'en',
+        onboardingSeen: false,
+        biometricUnlockPrompted: false,
+      };
     }
   },
 
   async setAppearance(value: AppearancePreference): Promise<void> {
     await AsyncStorage.setItem(KEYS.appearance, value);
+  },
+
+  async setLanguage(value: AppLanguage): Promise<void> {
+    await AsyncStorage.setItem(KEYS.language, value);
   },
 
   async setOnboardingSeen(): Promise<void> {

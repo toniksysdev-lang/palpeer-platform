@@ -1,4 +1,4 @@
-import { FAQ_SECTIONS, searchFaq } from '../faq';
+import { FAQ_SECTIONS, answerHowToFromFaq, searchFaq } from '../faq';
 import { formatOperationalGuideForAi, OPERATIONAL_HOW_TOS } from '../operationalHowTos';
 
 describe('OPERATIONAL_HOW_TOS', () => {
@@ -49,5 +49,11 @@ describe('FAQ mirrors operational How-Tos', () => {
     expect(searchFaq('bonus').flatMap((s) => s.items.map((i) => i.id))).toContain(
       'bonus-pending',
     );
+  });
+
+  it('answers common Live Chat phrasings from local How-Tos', () => {
+    expect(answerHowToFromFaq('How do I add money?')).toMatch(/add money|fund|wallet/i);
+    expect(answerHowToFromFaq('I forgot my PIN')).toMatch(/PIN|reset/i);
+    expect(answerHowToFromFaq('top up my wallet', { loose: true })).toBeTruthy();
   });
 });

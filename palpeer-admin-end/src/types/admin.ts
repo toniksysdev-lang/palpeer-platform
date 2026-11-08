@@ -13,6 +13,8 @@ export type SpringPage<T> = {
 export type AdminUserSummary = {
   id: string;
   email: string;
+  firstName?: string | null;
+  lastName?: string | null;
   phone?: string | null;
   status: string;
   enabled: boolean;
@@ -25,6 +27,8 @@ export type KycCaseSummary = {
   caseId: string;
   userId: string;
   email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   fullName?: string | null;
   status: string;
   rejectionReason?: string | null;

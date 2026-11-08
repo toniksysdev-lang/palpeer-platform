@@ -18,7 +18,7 @@ describe('resolveDeepLink', () => {
     [`https://palpeer-api.onrender.com/p2p/share/${ID}`, `/p2p-share/${ID}`],
     [`palpeer://negotiation/${ID}`, `/negotiation/${ID}`],
     [`palpeer://chat/${ID}`, `/chat/${ID}`],
-    [`palpeer://cards/${ID}`, `/cards/${ID}`],
+    [`palpeer://cards/${ID}`, `/Card?id=${ID}`],
     [`palpeer://notifications/${ID}`, `/notifications/${ID}`],
     ['palpeer://notifications', '/notifications'],
     ['palpeer://kyc', '/kyc'],

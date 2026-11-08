@@ -9,6 +9,8 @@ import com.palpeer.common.audit.AuditRecorder;
 import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
 import com.palpeer.common.storage.ObjectStorage;
+import com.palpeer.profile.domain.Profile;
+import com.palpeer.profile.repository.ProfileRepository;
 import com.palpeer.user.domain.User;
 import com.palpeer.user.domain.UserStatus;
 import com.palpeer.user.repository.UserRepository;
@@ -20,7 +22,9 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -37,6 +41,7 @@ public class AdminUserService {
 
     private final UserRepository userRepository;
     private final AdminUserRepository adminUserRepository;
+    private final ProfileRepository profileRepository;
     private final AuditRecorder auditRecorder;
     private final ObjectStorage objectStorage;
     private final EntityManager entityManager;
@@ -44,9 +49,10 @@ public class AdminUserService {
     @Transactional(readOnly = true)
     public Page<AdminUserSummaryResponse> listUsers(
             String email, UserStatus status, Instant registeredFrom, Instant registeredTo, Pageable pageable) {
-        return userRepository
-                .findAll(filter(email, status, registeredFrom, registeredTo), pageable)
-                .map(this::toSummary);
+        Page<User> page =
+                userRepository.findAll(filter(email, status, registeredFrom, registeredTo), pageable);
+        Map<UUID, Profile> profiles = profilesFor(page.getContent());
+        return page.map((user) -> toSummary(user, profiles.get(user.getId())));
     }
 
     /** Excludes accounts linked to {@code admin_users}; operator accounts are managed under /admin/admins. */
@@ -92,12 +98,13 @@ public class AdminUserService {
     }
 
     public AdminUserSummaryResponse summarize(User user) {
-        return toSummary(user);
+        return toSummary(user, profileRepository.findByUserId(user.getId()).orElse(null));
     }
 
     @Transactional(readOnly = true)
     public AdminUserSummaryResponse getUser(UUID userId) {
-        return toSummary(requireUser(userId));
+        User user = requireUser(userId);
+        return toSummary(user, profileRepository.findByUserId(userId).orElse(null));
     }
 
     @Transactional
@@ -129,7 +136,7 @@ public class AdminUserService {
                 .oldValue(oldValue)
                 .newValue("status=" + user.getStatus() + ";enabled=" + user.isEnabled())
                 .build());
-        return toSummary(user);
+        return toSummary(user, profileRepository.findByUserId(userId).orElse(null));
     }
 
     /**
@@ -393,10 +400,21 @@ public class AdminUserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 
-    private AdminUserSummaryResponse toSummary(User user) {
+    private Map<UUID, Profile> profilesFor(List<User> users) {
+        if (users.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> ids = users.stream().map(User::getId).toList();
+        return profileRepository.findByUserIdIn(ids).stream()
+                .collect(Collectors.toMap(Profile::getUserId, (profile) -> profile, (a, b) -> a));
+    }
+
+    private AdminUserSummaryResponse toSummary(User user, Profile profile) {
         return new AdminUserSummaryResponse(
                 user.getId(),
                 user.getEmail(),
+                profile != null ? profile.getFirstName() : null,
+                profile != null ? profile.getLastName() : null,
                 user.getPhone(),
                 user.getStatus(),
                 user.isEnabled(),

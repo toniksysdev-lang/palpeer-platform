@@ -98,12 +98,19 @@ export const sessionManager = {
     if (!stored) return 'unauthenticated';
 
     const outcome = await performRefresh();
-    if (outcome.status === 'refreshed' || outcome.status === 'unreachable') {
-      if (outcome.status === 'unreachable') {
-        logger.warn('Session restore deferred: server unreachable', { kind: outcome.error.kind });
-      }
+    if (outcome.status === 'refreshed') {
       listener?.onStarted({ userId: stored.userId, email: stored.email });
       return 'authenticated';
+    }
+    if (outcome.status === 'unreachable') {
+      // Keep the refresh token on disk for a later retry, but do NOT mark the UI authenticated
+      // without an access token. That combination produced endless 403s on /profiles/me (and a
+      // frozen/blank web preview) whenever cold start hit the API before it was ready.
+      logger.warn('Session restore deferred: server unreachable; staying signed out until refresh works', {
+        kind: outcome.error.kind,
+      });
+      accessToken = null;
+      return 'unauthenticated';
     }
     accessToken = null;
     await secureStorage.clearSession();

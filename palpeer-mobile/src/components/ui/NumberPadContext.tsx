@@ -32,12 +32,17 @@ type NumberPadApi = {
   open: (field: NumberPadField) => void;
   sync: (field: NumberPadField) => void;
   close: (id?: string) => void;
+  /** Pages that render {@link NumberPadInlineDock} claim the pad so the screen dock stays hidden. */
+  inlineHosts: number;
+  registerInlineHost: () => void;
+  unregisterInlineHost: () => void;
 };
 
 const NumberPadContext = createContext<NumberPadApi | null>(null);
 
 export function NumberPadProvider({ children }: { children: ReactNode }) {
   const [active, setActive] = useState<NumberPadField | null>(null);
+  const [inlineHosts, setInlineHosts] = useState(0);
 
   const open = useCallback((field: NumberPadField) => {
     setActive(field);
@@ -70,7 +75,18 @@ export function NumberPadProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const api = useMemo(() => ({ active, open, sync, close }), [active, open, sync, close]);
+  const registerInlineHost = useCallback(() => {
+    setInlineHosts((count) => count + 1);
+  }, []);
+
+  const unregisterInlineHost = useCallback(() => {
+    setInlineHosts((count) => Math.max(0, count - 1));
+  }, []);
+
+  const api = useMemo(
+    () => ({ active, open, sync, close, inlineHosts, registerInlineHost, unregisterInlineHost }),
+    [active, open, sync, close, inlineHosts, registerInlineHost, unregisterInlineHost],
+  );
 
   return <NumberPadContext.Provider value={api}>{children}</NumberPadContext.Provider>;
 }
@@ -101,6 +117,11 @@ type BindOptions = {
    */
   autoFocus?: boolean;
   disabled?: boolean;
+  /**
+   * Stable pad field id (e.g. design Input `id="rate"`) so an inline dock can target this field.
+   * Defaults to a React useId() value.
+   */
+  padKey?: string;
 };
 
 /**
@@ -115,9 +136,11 @@ export function useNumberPadField({
   onAccessoryPress,
   autoFocus = false,
   disabled = false,
+  padKey,
 }: BindOptions) {
   const pad = useOptionalNumberPad();
-  const id = useId();
+  const reactId = useId();
+  const id = padKey && String(padKey).trim() ? String(padKey).trim() : reactId;
   const active = pad?.active?.id === id;
 
   // Keep a stable onChange identity so parent re-renders don't churn `field` / sync loops.
@@ -174,6 +197,9 @@ export function NumberPadDock({
   testID = 'number-pad-dock',
   contentStyle,
   includeBottomInset = true,
+  host = 'screen',
+  scale,
+  fitHeight = false,
 }: {
   testID?: string;
   /** Applied only while the pad is visible so inactive screens don't reserve empty space. */
@@ -183,16 +209,31 @@ export function NumberPadDock({
    * pad can sit directly above that footer without double padding.
    */
   includeBottomInset?: boolean;
+  /**
+   * `screen` = shared dock at the layout edge (skipped while an inline host is mounted).
+   * `inline` = in-flow dock under page content (e.g. below terms on My phone number).
+   */
+  host?: 'screen' | 'inline';
+  /** Design-to-device scale so key sizes track the phone frame. */
+  scale?: number;
+  /** Shrink keys to the dock's laid-out height (My phone number). */
+  fitHeight?: boolean;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const insideTabs = useInsideTabs();
   const pad = useOptionalNumberPad();
   if (!pad?.active) return null;
+  // Prefer an in-page dock when present — but screens should overlay the pad so layout
+  // size stays stable (inline hosts are opt-in and rare).
+  if (host === 'screen' && pad.inlineHosts > 0) return null;
 
   const { active } = pad;
   // Tab bar already clears the system nav; stack screens must pad the dock themselves.
   const bottomSafe = includeBottomInset && !insideTabs ? insets.bottom : 0;
+  const padScale = scale != null && scale > 0 ? scale : 1;
+  const padTop = Math.max(8, Math.round(theme.spacing.md * padScale));
+  const padBottom = Math.max(10, Math.round(theme.spacing.lg * padScale)) + bottomSafe;
 
   return (
     <View
@@ -201,10 +242,16 @@ export function NumberPadDock({
         contentStyle,
         {
           gap: 0,
-          paddingTop: theme.spacing.md,
-          paddingBottom: theme.spacing.lg + bottomSafe,
+          paddingTop: padTop,
+          paddingBottom: padBottom,
           borderTopWidth: 0,
-          backgroundColor: theme.colors.background,
+          flexShrink: fitHeight ? 1 : 0,
+          flexGrow: fitHeight ? 1 : 0,
+          minHeight: fitHeight ? 0 : undefined,
+          // Match design page chrome behind the Make-my-PIN style pad.
+          backgroundColor: '#F3F6F4',
+          // Keep a little air under Continue when this dock is in-flow.
+          marginTop: fitHeight ? 2 : undefined,
         },
       ]}
     >
@@ -212,11 +259,44 @@ export function NumberPadDock({
         value={active.value}
         onChange={active.onChange}
         maxLength={active.maxLength}
-        bottomLeft={active.bottomLeft || '*'}
+        bottomLeft={active.bottomLeft || (active.onAccessoryPress ? '*' : '')}
         onAccessoryPress={active.onAccessoryPress}
         variant="phone"
+        scale={scale}
+        fitHeight={fitHeight}
         testID={testID}
       />
     </View>
+  );
+}
+
+/**
+ * In-flow number pad host. Mount under static page copy (e.g. terms text) so the pad
+ * appears below that content without shrinking fields above. Claims the pad away from
+ * the screen-level dock for as long as this host is mounted.
+ */
+export function NumberPadInlineDock({
+  testID = 'number-pad-dock',
+  contentStyle,
+  includeBottomInset = false,
+}: {
+  testID?: string;
+  contentStyle?: StyleProp<ViewStyle>;
+  includeBottomInset?: boolean;
+}) {
+  const pad = useOptionalNumberPad();
+  useEffect(() => {
+    if (!pad) return undefined;
+    pad.registerInlineHost();
+    return () => pad.unregisterInlineHost();
+  }, [pad]);
+
+  return (
+    <NumberPadDock
+      host="inline"
+      testID={testID}
+      contentStyle={contentStyle}
+      includeBottomInset={includeBottomInset}
+    />
   );
 }
