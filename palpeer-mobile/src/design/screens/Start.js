@@ -28,6 +28,24 @@ const DCLogic = DC.DCLogic;
 /** National phone field on My phone number — store digits, show formatted, max 10. */
 const PHONE_MAX_DIGITS = 10;
 
+/** Soft boundary so a Reanimated/SVG glitch on Android cannot blank the whole Start land. */
+class GlobeSafe extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { ok: true };
+  }
+  static getDerivedStateFromError() {
+    return { ok: false };
+  }
+  componentDidCatch() {}
+  render() {
+    if (!this.state.ok) {
+      return <View style={{ width: this.props.size, height: this.props.size }} />;
+    }
+    return this.props.children;
+  }
+}
+
 /** Globe sized to the current phone via design scale (raw RN View skips DC.prep). */
 function LandingGlobe({ countries }) {
   const scale = DC.useDesignScale();
@@ -35,7 +53,9 @@ function LandingGlobe({ countries }) {
   const wrap = Math.round(340 * scale);
   return (
     <View style={{ width: wrap, height: size, alignItems: 'center', justifyContent: 'center', flexShrink: 1 }}>
-      <GlobeIllustration size={size} countries={countries} />
+      <GlobeSafe size={size}>
+        <GlobeIllustration size={size} countries={countries} />
+      </GlobeSafe>
     </View>
   );
 }

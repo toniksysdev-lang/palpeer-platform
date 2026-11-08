@@ -1,10 +1,19 @@
 import '../../global.css';
 import '@/boot/previewSoftKeyboard';
+import '@/design/dc/shims';
 
+import {
+  NotoSans_400Regular,
+  NotoSans_500Medium,
+  NotoSans_600SemiBold,
+  NotoSans_700Bold,
+  NotoSans_800ExtraBold,
+  useFonts,
+} from '@expo-google-fonts/noto-sans';
 import { Stack, type SuspenseFallbackProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 
 import { OfflineBanner } from '@/components/feedback/OfflineBanner';
@@ -72,18 +81,34 @@ function RootNavigator() {
   const theme = useTheme();
   const isAuthenticated = useAppSelector((state) => state.session.status === 'authenticated');
   const locked = useAppSelector((state) => state.appLock.locked);
+  const [fontsLoaded] = useFonts({
+    NotoSans_400Regular,
+    NotoSans_500Medium,
+    NotoSans_600SemiBold,
+    NotoSans_700Bold,
+    NotoSans_800ExtraBold,
+  });
+  const [fontsTimedOut, setFontsTimedOut] = useState(false);
   useAppLockLifecycle();
   useAppSwitcherPrivacy(isAuthenticated);
   useSignedOutWelcomeLanding(ready, isAuthenticated);
   useApplyPendingReferral();
 
   useEffect(() => {
-    if (ready) {
+    const timer = setTimeout(() => setFontsTimedOut(true), 2_500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const fontsReady = fontsLoaded || fontsTimedOut;
+  const bootReady = ready && fontsReady;
+
+  useEffect(() => {
+    if (bootReady) {
       notifyPreviewSplashDone();
       // BrandSplash already requested hide onLayout; this covers the ready path if paint raced.
       hideNativeSplash();
     }
-  }, [ready]);
+  }, [bootReady]);
 
   // Absolute cap only — normal path hides on BrandSplash onLayout (not a blind early timer).
   useEffect(() => {
@@ -93,16 +118,17 @@ function RootNavigator() {
     return () => clearTimeout(timer);
   }, []);
 
-  if (!ready) {
+  if (!bootReady) {
     // Preview iframe: parent overlay is the splash — avoid a second in-app splash.
     if (isWebPreviewFrame()) {
       return <View style={{ flex: 1, backgroundColor: palette.neutral0 }} testID="boot-placeholder" />;
     }
-    // One splash only: keep native splash until BrandSplash (logo + progress) has laid out.
+    // Keep BrandSplash until session + design fonts are ready (avoids blank post-splash on APK).
     return (
       <View
         style={{ flex: 1, backgroundColor: palette.neutral0 }}
         onLayout={() => {
+          // Native splash can hide once BrandSplash has painted; stay on BrandSplash until bootReady.
           hideNativeSplash();
         }}
       >

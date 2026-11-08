@@ -420,10 +420,17 @@ export function Img({ src, s, alt }) {
   const a = alt ? { accessible: true, accessibilityRole: 'image', accessibilityLabel: alt } : {};
   if (asset.svg) {
     const xml = asset.svg.replace('<svg ', `<svg preserveAspectRatio="${fit}" `);
+    // Explicit height — Android often lays out height:undefined SVG wrappers as 0px.
+    const svgH =
+      typeof view.height === 'number'
+        ? view.height
+        : typeof view.width === 'number' && asset.ratio
+          ? view.width / asset.ratio
+          : '100%';
     return (
       <View style={outer} {...a}>
-        <View style={{ ...inner, flex: 1, width: '100%', height: undefined, overflow: 'hidden' }}>
-          <SvgXml xml={xml} width="100%" height="100%" />
+        <View style={{ ...inner, flex: 1, width: '100%', height: svgH === '100%' ? undefined : svgH, minHeight: typeof svgH === 'number' ? svgH : undefined, overflow: 'hidden' }}>
+          <SvgXml xml={xml} width="100%" height={typeof svgH === 'number' ? svgH : '100%'} />
         </View>
       </View>
     );
@@ -778,7 +785,9 @@ export function Screen({ bg = '#F3F6F4', go, children }) {
                     style={{ flex: 1 }}
                     contentContainerStyle={{
                       flexGrow: 1,
-                      minHeight: hasHeader ? undefined : canvasH,
+                      // Explicit phone canvas height so Android does not collapse flex children
+                      // inside ScrollView (web preview lays out fine without this).
+                      minHeight: canvasH,
                       paddingBottom: padScrollInset + (keyboardOpen ? Math.min(keyboardHeight, canvasH * 0.45) : 0),
                     }}
                     keyboardShouldPersistTaps="handled"
@@ -786,6 +795,8 @@ export function Screen({ bg = '#F3F6F4', go, children }) {
                     // Never auto-shrink insets on focus — that was resizing Log in and other forms.
                     automaticallyAdjustKeyboardInsets={false}
                     showsVerticalScrollIndicator={false}
+                    // Android defaults this true and clips globe / SVG / absolute design layers.
+                    removeClippedSubviews={false}
                     // Tab screens (Main menu) pin the footer; page body scrolls inside the screen.
                     scrollEnabled={canScroll || !hasDock}
                     bounces={canScroll}

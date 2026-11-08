@@ -2,4 +2,6 @@
 import 'react-native-gesture-handler';
 // Hold native splash before expo-router boots (avoids a blank / "Bundling…" frame).
 import './src/boot/preventSplashAutoHide';
+// Design Listen / clipboard / look shims before any Start screen mounts.
+import './src/design/dc/shims';
 import 'expo-router/entry';

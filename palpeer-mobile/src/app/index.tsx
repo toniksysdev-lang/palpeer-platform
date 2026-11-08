@@ -1,5 +1,3 @@
-import '@/design/dc/shims';
-
 import {
   NotoSans_400Regular,
   NotoSans_500Medium,
@@ -9,8 +7,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/noto-sans';
 import { Redirect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { useCallback } from 'react';
 
 import { useLiveStart } from '@/design/bridge/useLiveStart';
 import { useGo } from '@/design/dc/route';
@@ -20,27 +17,22 @@ import { useAppearance } from '@/hooks/useAppearance';
 import { useAppSelector } from '@/store';
 
 /**
- * App entry — design landing (change map). Signed-in users go to design Home (`/Main`).
- * Dark/Light on this screen sets App look for the whole app.
+ * App entry — same design Start landing as http://localhost:3333/?route=/.
+ * Signed-in users go to design Home (`/Main`).
+ * Fonts are loaded in root `_layout`; this keeps a soft useFonts call for HMR.
  */
 export default function Index() {
   const isAuthenticated = useAppSelector((state) => state.session.status === 'authenticated');
   const { scheme, dark, setAppearance } = useAppearance();
-  const [fontsLoaded] = useFonts({
+  useFonts({
     NotoSans_400Regular,
     NotoSans_500Medium,
     NotoSans_600SemiBold,
     NotoSans_700Bold,
     NotoSans_800ExtraBold,
   });
-  const [fontsTimedOut, setFontsTimedOut] = useState(false);
   const live = useLiveStart();
   const go = useGo();
-
-  useEffect(() => {
-    const timer = setTimeout(() => setFontsTimedOut(true), 2_500);
-    return () => clearTimeout(timer);
-  }, []);
 
   const onLookChange = useCallback(
     (next: 'dark' | 'light') => {
@@ -50,9 +42,6 @@ export default function Index() {
   );
 
   if (isAuthenticated) return <Redirect href="/Main" />;
-  if (!fontsLoaded && !fontsTimedOut) {
-    return <View style={{ flex: 1, backgroundColor: dark ? '#081410' : '#F3F6F4' }} />;
-  }
 
   return (
     <LookContext.Provider value={{ dark }}>
