@@ -1,3 +1,5 @@
+import '@/design/dc/shims';
+
 import {
   NotoSans_400Regular,
   NotoSans_500Medium,

@@ -23,7 +23,7 @@ describe('resolveDeepLink', () => {
     ['palpeer://notifications', '/notifications'],
     ['palpeer://kyc', '/kyc'],
     ['palpeer://promotions', '/promotions'],
-    ['palpeer://activity', '/activity'],
+    ['palpeer://activity', '/History'],
   ])('allows %s', (input, expected) => {
     expect(resolveDeepLink(input)).toBe(expected);
   });

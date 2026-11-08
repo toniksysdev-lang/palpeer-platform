@@ -403,7 +403,7 @@ export function CreateRequestScreen() {
       return;
     }
     setReviewOpen(false);
-    router.replace('/(tabs)/p2p');
+    router.replace('/People');
   };
 
   const SummaryRow = ({ label, value }: { label: string; value: string }) => (

@@ -179,7 +179,7 @@ describe('CreateRequestScreen', () => {
     expect(await screen.findByTestId('p2p-create-review')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('p2p-create-confirm'));
 
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/(tabs)/p2p'));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/People'));
     const [post] = callsTo(calls, 'POST', '/p2p/requests');
     // Amount must stay within wallet balance; rate keeps up to 12 decimals; no expiry/notes.
     expect(post?.rawBody).toBe(
@@ -252,20 +252,20 @@ describe('CreateRequestScreen', () => {
     await renderWithProviders(<CreateRequestScreen />, signedIn);
 
     await fireEvent.press(await screen.findByTestId('p2p-create-currency-switch'));
-    // Rate unit follows the sell currency so You receive = amount × rate.
+    // Rate unit follows the sell currency so You receive = amount � rate.
     expect(screen.getByTestId('p2p-create-base')).toHaveTextContent(/NGN/);
     expect(screen.getByTestId('p2p-create-rate-unit')).toHaveTextContent(/NGN/);
     expect(screen.getByTestId('p2p-create-rate-switch')).toHaveTextContent(/^1 NGN/);
     expect(screen.getByTestId('p2p-create-rate-hint')).toHaveTextContent(
       /Enter CAD per 1 NGN\. NGN stays fixed at 1/,
     );
-    // Enter rate first (CAD per NGN), then amount — avoids pad focus races.
+    // Enter rate first (CAD per NGN), then amount � avoids pad focus races.
     await typeIntoNumberField('p2p-create-rate', '0.001');
     await typeIntoNumberField('p2p-create-amount', '100000');
     await typeIntoNumberField('p2p-create-min-order', '1000');
     expect(await screen.findByTestId('p2p-create-receive-amount')).toHaveTextContent(/100\.00 CAD/);
     expect(screen.getByTestId('p2p-create-receive-equation')).toHaveTextContent(
-      /100,000 NGN × 0\.001 = 100 CAD/,
+      /100,000 NGN � 0\.001 = 100 CAD/,
     );
     await fireEvent.press(screen.getByTestId('p2p-create-submit'));
     await fireEvent.press(await screen.findByTestId('p2p-create-confirm'));
@@ -295,20 +295,20 @@ describe('CreateRequestScreen', () => {
     await renderWithProviders(<CreateRequestScreen />, signedIn);
 
     await fireEvent.press(await screen.findByTestId('p2p-create-currency-switch'));
-    // Default unit = sell NGN; dropdown → CAD-anchored entry, type 980 NGN per 1 CAD
+    // Default unit = sell NGN; dropdown ? CAD-anchored entry, type 980 NGN per 1 CAD
     await fireEvent.press(screen.getByTestId('p2p-create-rate-unit'));
     await fireEvent.press(await screen.findByTestId('p2p-rate-unit-sheet-option-CAD'));
     expect(screen.getByTestId('p2p-create-rate-unit')).toHaveTextContent(/CAD/);
     await typeIntoNumberField('p2p-create-rate', '980');
     expect(screen.getByTestId('p2p-create-rate')).toHaveTextContent(/980/);
 
-    // Flip entry unit to NGN — shows 1/980 (12 dp)
+    // Flip entry unit to NGN � shows 1/980 (12 dp)
     await fireEvent.press(screen.getByTestId('p2p-create-rate-unit'));
     await fireEvent.press(await screen.findByTestId('p2p-rate-unit-sheet-option-NGN'));
     expect(screen.getByTestId('p2p-create-rate-unit')).toHaveTextContent(/NGN/);
     expect(screen.getByTestId('p2p-create-rate')).toHaveTextContent(/0\.001020408163/);
 
-    // Flip back — exact typed value restored (not 980.0000002548)
+    // Flip back � exact typed value restored (not 980.0000002548)
     await fireEvent.press(screen.getByTestId('p2p-create-rate-unit'));
     await fireEvent.press(await screen.findByTestId('p2p-rate-unit-sheet-option-CAD'));
     expect(screen.getByTestId('p2p-create-rate-unit')).toHaveTextContent(/CAD/);
@@ -357,7 +357,7 @@ describe('CreateRequestScreen', () => {
     expect(submit.props.accessibilityState?.disabled).toBe(true);
 
     await typeIntoNumberField('p2p-create-rate', '1500');
-    // Minimum order is required — still disabled while empty.
+    // Minimum order is required � still disabled while empty.
     expect(screen.getByTestId('p2p-create-submit').props.accessibilityState?.disabled).toBe(true);
 
     await typeIntoNumberField('p2p-create-min-order', '5');
@@ -402,14 +402,14 @@ describe('CreateRequestScreen', () => {
     await renderWithProviders(<CreateRequestScreen />, signedIn);
 
     await fireEvent.press(await screen.findByTestId('p2p-create-currency-switch'));
-    // Default unit = sell NGN → quote-per-base bounds
+    // Default unit = sell NGN ? quote-per-base bounds
     expect(await screen.findByTestId('p2p-create-rate-bounds')).toHaveTextContent(
       /Rate must be between 0\.001020408163 and 0\.001052631579 for NGN\/CAD/,
     );
 
     await fireEvent.press(screen.getByTestId('p2p-create-rate-unit'));
     await fireEvent.press(await screen.findByTestId('p2p-rate-unit-sheet-option-CAD'));
-    // Entry unit = CAD → clean integers (same as admin Rate Switch)
+    // Entry unit = CAD ? clean integers (same as admin Rate Switch)
     expect(screen.getByTestId('p2p-create-rate-unit')).toHaveTextContent(/CAD/);
     expect(screen.getByTestId('p2p-create-rate-bounds')).toHaveTextContent(
       'Rate must be between 950 and 980 for NGN/CAD',
@@ -437,7 +437,7 @@ describe('CreateRequestScreen', () => {
   });
 });
 
-describe('RequestDetailScreen — state transitions', () => {
+describe('RequestDetailScreen � state transitions', () => {
   it('shows a clean whole Switch rate for created NGN/CAD requests (no float noise)', async () => {
     setSearchParams({ id: 'r-cad' });
     installFetchMock({
@@ -452,7 +452,7 @@ describe('RequestDetailScreen — state transitions', () => {
           baseCurrencyCode: 'NGN',
           quoteCurrencyCode: 'CAD',
           amount: '98000.000000000000',
-          // Reciprocal of 980 — previously rendered as 980.0000002548 at 12 dp.
+          // Reciprocal of 980 � previously rendered as 980.0000002548 at 12 dp.
           rate: '0.001020408163',
         }),
       ),
@@ -509,7 +509,7 @@ describe('RequestDetailScreen — state transitions', () => {
 
     await fireEvent.press(screen.getByTestId('p2p-accept'));
     await fireEvent.press(await screen.findByTestId('confirm-dialog-confirm'));
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/(tabs)/p2p'));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/People'));
     const acceptCalls = callsTo(calls, 'POST', '/p2p/requests/r-1/accept');
     expect(acceptCalls[0]?.query).toContain('promotionCode=FEE50');
   });
@@ -548,13 +548,13 @@ describe('RequestDetailScreen — state transitions', () => {
 
     await fireEvent.press(screen.getByTestId('p2p-accept'));
     await fireEvent.press(await screen.findByTestId('confirm-dialog-confirm'));
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/(tabs)/p2p'));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/People'));
     const acceptCalls = callsTo(calls, 'POST', '/p2p/requests/r-1/accept');
     expect(acceptCalls).toHaveLength(1);
     expect(acceptCalls[0]?.query).toContain('applyBonusCredit=true');
   });
 
-  it('OPEN → COMPLETED: a non-owner accepts and returns to the P2P tab', async () => {
+  it('OPEN ? COMPLETED: a non-owner accepts and returns to the P2P tab', async () => {
     setSearchParams({ id: 'r-1' });
     const { calls } = installFetchMock({
       'GET /currencies': CURRENCIES,
@@ -585,7 +585,7 @@ describe('RequestDetailScreen — state transitions', () => {
     ).toBeTruthy();
     await fireEvent.press(screen.getByTestId('confirm-dialog-confirm'));
 
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/(tabs)/p2p'));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/People'));
     expect(callsTo(calls, 'POST', '/p2p/requests/r-1/accept')).toHaveLength(1);
   });
 
@@ -679,7 +679,7 @@ describe('RequestDetailScreen — state transitions', () => {
     );
   });
 
-  it('OPEN → CANCELLED: the owner cancels, and edit/cancel disappear', async () => {
+  it('OPEN ? CANCELLED: the owner cancels, and edit/cancel disappear', async () => {
     setSearchParams({ id: 'r-1' });
     let status = 'OPEN';
     const { calls } = installFetchMock({
@@ -717,7 +717,7 @@ describe('RequestDetailScreen — state transitions', () => {
     expect(callsTo(calls, 'DELETE', '/p2p/requests/r-1')).toHaveLength(1);
   });
 
-  it('OPEN → EXPIRED: past its expiry the request is read as expired and cannot be accepted', async () => {
+  it('OPEN ? EXPIRED: past its expiry the request is read as expired and cannot be accepted', async () => {
     setSearchParams({ id: 'r-1' });
     installFetchMock({
       'GET /currencies': CURRENCIES,

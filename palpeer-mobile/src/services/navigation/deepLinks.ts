@@ -76,6 +76,8 @@ export function resolveDeepLink(input: string | null | undefined): string | null
   // Design Card screen (legacy /cards/:id still accepted as input).
   const cardMatch = path.match(new RegExp(`^/cards/(${UUID})$`));
   if (cardMatch?.[1]) return `/Card?id=${cardMatch[1]}`;
+  // Design History (legacy /activity tab).
+  if (path === '/activity') return '/History';
   return path;
 }
 

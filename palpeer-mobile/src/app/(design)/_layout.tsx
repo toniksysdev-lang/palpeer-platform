@@ -9,6 +9,8 @@ import {
   useFonts,
 } from '@expo-google-fonts/noto-sans';
 import { Stack } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { View } from 'react-native';
 
 import { LookContext } from '@/design/dc/runtime';
 import { DARK_PAGE } from '@/design/dc/theme';
@@ -28,8 +30,16 @@ export default function DesignLayout() {
     NotoSans_700Bold,
     NotoSans_800ExtraBold,
   });
+  const [fontsTimedOut, setFontsTimedOut] = useState(false);
 
-  if (!fontsLoaded) return null;
+  useEffect(() => {
+    const timer = setTimeout(() => setFontsTimedOut(true), 2_500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!fontsLoaded && !fontsTimedOut) {
+    return <View style={{ flex: 1, backgroundColor: dark ? DARK_PAGE : '#F3F6F4' }} />;
+  }
 
   return (
     <LookContext.Provider value={{ dark }}>

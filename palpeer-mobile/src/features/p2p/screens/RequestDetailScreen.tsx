@@ -258,7 +258,7 @@ export function RequestDetailScreen() {
       return;
     }
     toast.show({ type: 'success', title: 'P2P order completed' });
-    router.replace('/(tabs)/p2p');
+    router.replace('/People');
   };
 
   const runCancel = async () => {

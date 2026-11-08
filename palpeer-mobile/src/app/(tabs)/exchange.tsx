@@ -1,1 +1,6 @@
-export { ExchangeScreen as default } from '@/features/exchange/screens/ExchangeScreen';
+import { Redirect, type Href } from 'expo-router';
+
+/** Legacy exchange tab → design Change. */
+export default function TabsExchangeRedirect() {
+  return <Redirect href={'/Change' as Href} />;
+}

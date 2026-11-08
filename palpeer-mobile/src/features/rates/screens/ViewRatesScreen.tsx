@@ -170,7 +170,7 @@ function PublicP2PRateCard({ row }: { row: PublicP2PRateResponse }) {
       return;
     }
     pendingNavigation.set(path);
-    router.push('/login');
+    router.push('/StartLogin' as never);
   };
 
   return (
