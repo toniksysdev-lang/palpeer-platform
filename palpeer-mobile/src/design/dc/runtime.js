@@ -127,9 +127,11 @@ export function PhoneNumberPadSlot({ forId } = {}) {
 
 /**
  * Full-bleed top chrome (landing/login). Registers the inset colour on Screen and
- * clears the status-bar band without growing the 390×844 artboard — padding pushes
- * controls below the status bar while marginTop cancels that height so FIT_TO_SCREEN
- * stays matched to the :3333 iframe canvas.
+ * clears the status-bar band without growing the 390×844 artboard.
+ *
+ * Important: do NOT paint `color` behind the whole tree — land/login body sections are
+ * transparent over the page colour. A full-wrap #081410 wash made Android look all-dark
+ * while :3333 (insets ≈ 0, no wrap) kept the light body.
  */
 export function StatusBarBg({ color, children }) {
   const api = useContext(StatusBarBgContext);
@@ -142,14 +144,18 @@ export function StatusBarBg({ color, children }) {
   const top = insets.top;
   if (!(top > 0)) return children;
   return (
-    <View
-      style={{
-        flexGrow: 1,
-        backgroundColor: color || undefined,
-        paddingTop: top,
-        marginTop: -top,
-      }}
-    >
+    <View style={{ flexGrow: 1, paddingTop: top, marginTop: -top }}>
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: top,
+          backgroundColor: color || undefined,
+        }}
+      />
       {children}
     </View>
   );
@@ -714,12 +720,14 @@ export function Screen({ bg = '#F3F6F4', go, children }) {
   }, [availW, availH]);
 
   const scale = fitLock?.scale ?? (FIT_TO_SCREEN ? Math.min(1, Math.max(0.72, Math.min(availW / DESIGN_W || 1, availH / DESIGN_H || 1))) : 1);
-  // Light mode: keep status-bar / header band on the design page colour — never white.
+  // Page shell stays the design page colour (light land body). StatusBarBg may only
+  // recolour the top inset band — never the whole Screen (that washed Android all-dark).
   const lightPage = !bg || norm(bg) === '#FFFFFF' ? '#F3F6F4' : bg;
   const pageBackground = dark ? (DARK_BG[norm(bg)] || DARK_PAGE) : lightPage;
-  // Full-bleed headers (landing/login) may override the inset colour; never fall back to white.
-  const chromeRaw = statusBarBg || pageBackground;
   const background =
+    !dark && norm(pageBackground) === '#FFFFFF' ? '#F3F6F4' : pageBackground;
+  const chromeRaw = statusBarBg || background;
+  const topBand =
     !dark && norm(chromeRaw) === '#FFFFFF' ? '#F3F6F4' : chromeRaw;
   const padOpen = !!pad?.active;
   const overlayPad = padOpen && (pad?.inlineHosts ?? 0) === 0;
@@ -781,13 +789,13 @@ export function Screen({ bg = '#F3F6F4', go, children }) {
               <ScaleContext.Provider value={scale}>
                 <TextContext.Provider value={{ color: '#000000', fontSize: 16, fontWeight: '400', fontFamily: 'Noto Sans', _lhMul: 1.36, inText: false }}>
                   {topChrome ? (
-                    <View style={{ height: topInset, backgroundColor: background }} />
+                    <View style={{ height: topInset, backgroundColor: topBand }} />
                   ) : null}
                   {hasHeader ? (
                     <View
                       style={{
                         paddingTop: topInset,
-                        backgroundColor: background,
+                        backgroundColor: topBand,
                       }}
                     >
                       <Box
