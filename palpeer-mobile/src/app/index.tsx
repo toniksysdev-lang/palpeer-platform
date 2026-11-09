@@ -7,6 +7,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/noto-sans';
 import { Redirect } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useCallback } from 'react';
 
 import { useLiveStart } from '@/design/bridge/useLiveStart';
@@ -49,6 +50,8 @@ export default function Index() {
 
   return (
     <LookContext.Provider value={{ dark: designDark }}>
+      {/* Land hero is always #081410 — light status icons like the :3333 phone frame. */}
+      <StatusBar style="light" />
       <Screen bg={StartScreen.background} go={go}>
         <StartScreen
           {...live}

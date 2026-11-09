@@ -125,15 +125,34 @@ export function PhoneNumberPadSlot({ forId } = {}) {
   );
 }
 
-/** Paint Screen's top inset with `color` so full-bleed headers are not capped by a white/page strip. */
+/**
+ * Full-bleed top chrome (landing/login). Registers the inset colour on Screen and
+ * clears the status-bar band without growing the 390×844 artboard — padding pushes
+ * controls below the status bar while marginTop cancels that height so FIT_TO_SCREEN
+ * stays matched to the :3333 iframe canvas.
+ */
 export function StatusBarBg({ color, children }) {
   const api = useContext(StatusBarBgContext);
+  const insets = useSafeAreaInsets();
   useLayoutEffect(() => {
     if (!api?.setColor) return undefined;
     api.setColor(color || null);
     return () => api.setColor(null);
   }, [api, color]);
-  return children;
+  const top = insets.top;
+  if (!(top > 0)) return children;
+  return (
+    <View
+      style={{
+        flexGrow: 1,
+        backgroundColor: color || undefined,
+        paddingTop: top,
+        marginTop: -top,
+      }}
+    >
+      {children}
+    </View>
+  );
 }
 
 /* ------------------------------------------------------------------ helpers */
@@ -640,14 +659,15 @@ export function Screen({ bg = '#F3F6F4', go, children }) {
   // Lock fit scale on first real layout (and on rotation). Keyboard / focus / browser
   // chrome must never recompute scale — that was shrinking Log in fields and text.
   const [fitLock, setFitLock] = useState(null);
-  // Match the :3333 web preview canvas: use SafeArea insets only.
-  // Do NOT also add StatusBar.currentHeight — on modern Android that double-counts the
-  // status bar, shrinks FIT_TO_SCREEN, and makes land/Main look unlike the iframe.
+  // Match the :3333 web preview canvas: the iframe reports the full phone CSS size with
+  // insets ≈ 0. Scale against the full window — never subtract status/nav bar insets here.
+  // (Subtracting them locked a smaller scale on first paint before StatusBarBg registered,
+  // and fitLock never recovered, so the APK looked distinctly tighter than :3333.)
   const topInset = insets.top;
   const headerProps = headerEntryRef.current.getProps ? headerEntryRef.current.getProps() : null;
   const hasHeader = !!headerProps;
   const availW = Math.max(0, width - insets.left - insets.right);
-  const availH = Math.max(0, height - topInset - insets.bottom);
+  const availH = Math.max(0, height);
   const dockApi = useMemo(() => ({ setHasDock }), []);
   const headerApi = useMemo(
     () => ({
@@ -733,13 +753,19 @@ export function Screen({ bg = '#F3F6F4', go, children }) {
     };
   }, []);
 
+  // Full-bleed StatusBarBg screens match the iframe (edge-to-edge). Other screens keep a
+  // top spacer so Back rows clear the status bar — without shrinking FIT_TO_SCREEN.
+  const bleedTop = statusBarBg != null;
+  const topChrome = !hasHeader && !bleedTop && topInset > 0;
+
   return (
     <View
       style={{
         flex: 1,
         backgroundColor: background,
-        // Header band owns the status-bar inset so Back / Listen sit in the app header.
-        paddingTop: hasHeader ? 0 : topInset,
+        // Never pad the outer shell for the status bar — that shrank the canvas vs :3333.
+        // Header / StatusBarBg / topChrome own the inset instead.
+        paddingTop: 0,
         // Main menu paints into the bottom inset; other screens keep page padding.
         paddingBottom: hasDock ? 0 : insets.bottom,
         paddingLeft: insets.left,
@@ -754,6 +780,9 @@ export function Screen({ bg = '#F3F6F4', go, children }) {
             <NavContext.Provider value={go}>
               <ScaleContext.Provider value={scale}>
                 <TextContext.Provider value={{ color: '#000000', fontSize: 16, fontWeight: '400', fontFamily: 'Noto Sans', _lhMul: 1.36, inText: false }}>
+                  {topChrome ? (
+                    <View style={{ height: topInset, backgroundColor: background }} />
+                  ) : null}
                   {hasHeader ? (
                     <View
                       style={{
