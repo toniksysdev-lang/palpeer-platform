@@ -206,10 +206,10 @@ class Component extends DCLogic {
       openAll: () => this.setState({ all: true }),
       closeAll: () => this.setState({ all: false }),
       listen: () => this.listen(adding
-        ? 'Add a wallet. Which money do you want to keep? ' + addable.map((w) => w.name).join('. ') + '.'
+        ? 'Add a wallet. Select the wallet you want to create ' + addable.map((w) => w.name).join('. ') + '.'
         : justAdded && current ? 'Wallet ready. ' + current.name + '. It is empty. You can add money now or later.' :
         (hidden || !current ? '' : 'You have ' + current.shown + ', ' + current.name + '. ') +
-        'Tap a flag to see other money. Tap the plus to add a wallet. Add: put money in. Send: to another Palpeer user, with no fee. Change: to other money. Take out: to your account.'
+        'Tap a flag to see other money. Tap the plus to add a wallet. Add: fund my wallet. Send: to another Palpeer user, with no fee. Change: to other currency. Withdraw: to your account.'
       )
     };
   }
@@ -234,14 +234,14 @@ export default class MainScreen extends Component {
         </DC.Box>
         <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0, paddingTop: 0, paddingRight: 16, paddingBottom: 12, paddingLeft: 16, _scroll: "y", _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
           {v.showCompleteProfile ? (<>
-            <DC.Box s={{ minHeight: 84, paddingTop: 10, paddingRight: 14, paddingBottom: 10, paddingLeft: 14, borderWidth: 3, borderColor: "#A84C08", borderStyle: "solid", borderRadius: 18, backgroundColor: "#FFF4E5", color: "#0E1F19", textAlign: "left", _display: "flex", flexDirection: "column", justifyContent: "center" }} kind="button" onPress={v.openProfile} label={`Complete my profile`}>
-              <DC.T s={{ fontSize: 20, _lhMul: 1.2, fontWeight: "800" }}>{"Complete my profile"}</DC.T>
-              <DC.T s={{ fontSize: 16, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Add my details and ID to start using my money."}</DC.T>
+            <DC.Box s={{ minHeight: 84, paddingTop: 10, paddingRight: 14, paddingBottom: 10, paddingLeft: 14, borderWidth: 3, borderColor: "#A84C08", borderStyle: "solid", borderRadius: 18, backgroundColor: "#FFF4E5", color: "#0E1F19", textAlign: "left", _display: "flex", flexDirection: "column", justifyContent: "center" }} kind="button" onPress={v.openProfile} label={`Complete your profile`}>
+              <DC.T s={{ fontSize: 20, _lhMul: 1.2, fontWeight: "800" }}>{"Complete your profile"}</DC.T>
+              <DC.T s={{ fontSize: 16, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Add my details and ID to start using your money."}</DC.T>
             </DC.Box>
           </>) : null}
-          <DC.Box s={DC.css(`background: ${DC.S(v.brand)}; color: #FFFFFF; border-radius: 22px; padding: 10px 16px 14px`)} label={`My money`}>
+          <DC.Box s={DC.css(`background: ${DC.S(v.brand)}; color: #FFFFFF; border-radius: 22px; padding: 10px 16px 14px`)} label={`My wallet`}>
             <DC.Box s={{ _display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 44 }}>
-              <DC.T s={{ fontSize: 20, fontWeight: "700", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0 }} role="header">{"My money"}</DC.T>
+              <DC.T s={{ fontSize: 20, fontWeight: "700", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0 }} role="header">{"My wallet"}</DC.T>
               <DC.Box s={{ minHeight: 44, paddingTop: 0, paddingRight: 12, paddingBottom: 0, paddingLeft: 12, marginRight: -6, borderWidth: 0, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.16)", color: "#FFFFFF", fontSize: 16, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={v.toggle}>
                 <DC.Icon w={22} h={22} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.2"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"} /><SVG.Circle cx={"12"} cy={"12"} r={"3"} /></DC.Icon>
                 <DC.T>{v.hideLabel}</DC.T>
@@ -260,7 +260,7 @@ export default class MainScreen extends Component {
                   <DC.Img src={w?.flag} s={{ width: 42, height: 28, borderRadius: 3, _display: "block" }} />
                 </DC.Box>
               </React.Fragment>))}
-              <DC.Box s={{ flexGrow: 1.2, flexShrink: 1, flexBasis: 0, minWidth: 0, height: 52, paddingTop: 0, paddingRight: 0, paddingBottom: 0, paddingLeft: 0, borderWidth: 2, borderColor: "rgba(255,255,255,0.75)", borderStyle: "solid", borderRadius: 14, backgroundColor: "transparent", color: "#FFFFFF", fontSize: 17, fontWeight: "800" }} kind="button" onPress={v.openAll} label={`See all my money`}>
+              <DC.Box s={{ flexGrow: 1.2, flexShrink: 1, flexBasis: 0, minWidth: 0, height: 52, paddingTop: 0, paddingRight: 0, paddingBottom: 0, paddingLeft: 0, borderWidth: 2, borderColor: "rgba(255,255,255,0.75)", borderStyle: "solid", borderRadius: 14, backgroundColor: "transparent", color: "#FFFFFF", fontSize: 17, fontWeight: "800" }} kind="button" onPress={v.openAll} label={`See all your money`}>
                 <DC.T>{"All "}{v.count}</DC.T>
               </DC.Box>
               <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0, height: 52, paddingTop: 0, paddingRight: 0, paddingBottom: 0, paddingLeft: 0, borderWidth: 0, borderRadius: 14, backgroundColor: "#FFFFFF", color: "#0B6E4F", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={v.openAdd} label={`Add a wallet`}>
@@ -274,7 +274,7 @@ export default class MainScreen extends Component {
                 <DC.Icon w={34} h={34} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"3"} strokeLinecap={"round"}><SVG.Path d={"M12 4v16M4 12h16"} /></DC.Icon>
               </DC.Box>
               <DC.T s={{ marginTop: "auto", fontSize: 27, _lhMul: 1.15, fontWeight: "800" }}>{"Add"}</DC.T>
-              <DC.T s={{ fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Put money in"}</DC.T>
+              <DC.T s={{ fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Fund my wallet"}</DC.T>
             </DC.Box>
             <DC.Box s={{ height: 156, paddingTop: 14, paddingRight: 14, paddingBottom: 14, paddingLeft: 14, borderRadius: 22, backgroundColor: "#E1ECFB", color: "#0E1F19", textDecorationLine: "none", _display: "flex", flexDirection: "column", alignItems: "flex-start" }} kind="link" href={"Send.dc.html"}>
               <DC.Box s={{ width: 58, height: 58, borderRadius: 29, backgroundColor: "#1D5BC7", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -288,13 +288,13 @@ export default class MainScreen extends Component {
                 <DC.Icon w={34} h={34} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M3 8h17M15 3l5 5-5 5"} /><SVG.Path d={"M21 16H4M9 11l-5 5 5 5"} /></DC.Icon>
               </DC.Box>
               <DC.T s={{ marginTop: "auto", fontSize: 27, _lhMul: 1.15, fontWeight: "800" }}>{"Change"}</DC.T>
-              <DC.T s={{ fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"To other money"}</DC.T>
+              <DC.T s={{ fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"To other currency"}</DC.T>
             </DC.Box>
             <DC.Box s={{ height: 156, paddingTop: 14, paddingRight: 14, paddingBottom: 14, paddingLeft: 14, borderRadius: 22, backgroundColor: "#ECE6FA", color: "#0E1F19", textDecorationLine: "none", _display: "flex", flexDirection: "column", alignItems: "flex-start" }} kind="link" href={"TakeOut.dc.html"}>
               <DC.Box s={{ width: 58, height: 58, borderRadius: 29, backgroundColor: "#5E3AB8", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <DC.Icon w={34} h={34} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.4"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M3 10l9-6 9 6z"} /><SVG.Path d={"M6 10v8M12 10v8M18 10v8M3 21h18"} /></DC.Icon>
               </DC.Box>
-              <DC.T s={{ marginTop: "auto", fontSize: 27, _lhMul: 1.15, fontWeight: "800" }}>{"Take out"}</DC.T>
+              <DC.T s={{ marginTop: "auto", fontSize: 27, _lhMul: 1.15, fontWeight: "800" }}>{"Withdraw"}</DC.T>
               <DC.T s={{ fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"To my account"}</DC.T>
             </DC.Box>
           </DC.Box>
@@ -345,7 +345,7 @@ export default class MainScreen extends Component {
                 <DC.T>{v.hideLabel}</DC.T>
               </DC.Box>
             </DC.Box>
-            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"All my money"}</DC.T>
+            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"All your money"}</DC.T>
             <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0, _scroll: "y", _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
               {DC.list(v.wallets).map((w, $index) => (<React.Fragment key={$index}>
                 <DC.Box s={DC.css(`flex-shrink: 0; min-height: 80px; box-sizing: border-box; padding: 8px 14px; border: 3px solid ${DC.S(w?.ring)}; border-radius: 18px; background: #FFFFFF; color: #0E1F19; text-align: left; display: flex; align-items: center; gap: 14px`)} kind="button" onPress={w?.pick}>
@@ -376,7 +376,7 @@ export default class MainScreen extends Component {
               </DC.Box>
             </DC.Box>
             <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Add a wallet"}</DC.T>
-            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Which money do you want to keep?"}</DC.T>
+            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Select the wallet you want to create"}</DC.T>
             <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0, _scroll: "y", _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
               {DC.list(v.addable).map((w, $index) => (<React.Fragment key={$index}>
                 <DC.Box s={{ flexShrink: 0, minHeight: 80, paddingTop: 8, paddingRight: 14, paddingBottom: 8, paddingLeft: 14, borderWidth: 0, borderRadius: 18, backgroundColor: "#FFFFFF", color: "#0E1F19", textAlign: "left", _display: "flex", alignItems: "center", rowGap: 14, columnGap: 14 }} kind="button" onPress={w?.add}>
@@ -421,15 +421,15 @@ export default class MainScreen extends Component {
               <DC.Box s={{ width: 92, height: 92, borderRadius: 46, backgroundColor: "#0E1F19", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <DC.Icon w={52} h={52} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.4"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Rect x={"5"} y={"11"} width={"14"} height={"10"} rx={"2"} /><SVG.Path d={"M8 11V7a4 4 0 0 1 8 0v4"} /></DC.Icon>
               </DC.Box>
-              <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"I was logged out"}</DC.T>
-              <DC.T s={{ fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"No use for 3 minutes. This keeps my money safe."}</DC.T>
+              <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"You were logged out"}</DC.T>
+              <DC.T s={{ fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"No use for 3 minutes. This keeps your money safe."}</DC.T>
             </DC.Box>
             <DC.Box s={{ marginTop: "auto", flexShrink: 0, _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }}>
               <DC.Box s={{ flexShrink: 0, minHeight: 60, borderWidth: 3, borderColor: "#0B6E4F", borderStyle: "solid", borderRadius: 20, backgroundColor: "transparent", color: "#0B6E4F", fontSize: 18, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={v.unlockBio} label={`Unlock with Face or Fingerprint`}>
                 <DC.T>{"Unlock with Face or Fingerprint"}</DC.T>
               </DC.Box>
-              <DC.Box s={{ flexShrink: 0, minHeight: 68, borderWidth: 0, borderRadius: 20, backgroundColor: "#0B6E4F", color: "#FFFFFF", fontSize: 22, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={v.unlockPin} label={`Use my PIN`}>
-                <DC.T>{"Use my PIN"}</DC.T>
+              <DC.Box s={{ flexShrink: 0, minHeight: 68, borderWidth: 0, borderRadius: 20, backgroundColor: "#0B6E4F", color: "#FFFFFF", fontSize: 22, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={v.unlockPin} label={`Use your PIN`}>
+                <DC.T>{"Use your PIN"}</DC.T>
               </DC.Box>
               <DC.Box s={{ flexShrink: 0, minHeight: 56, borderWidth: 0, borderRadius: 20, backgroundColor: "transparent", color: "#33453D", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={v.logBack}>
                 <DC.T>{"Log in again"}</DC.T>

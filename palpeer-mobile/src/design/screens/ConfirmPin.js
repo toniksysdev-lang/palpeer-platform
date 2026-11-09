@@ -288,8 +288,8 @@ export default class ConfirmPinScreen extends Component {
                   <DC.T>{v.unlockBioLabel}</DC.T>
                 </DC.Box>
               ) : null}
-              <DC.Box s={{ flexShrink: 0, minHeight: 68, borderWidth: 0, borderRadius: 20, backgroundColor: '#0B6E4F', color: '#FFFFFF', fontSize: 22, fontWeight: '800', _display: 'flex', alignItems: 'center', justifyContent: 'center' }} kind="button" onPress={v.usePin} disabled={v.bioBusy} label={`Use my PIN`}>
-                <DC.T>{"Use my PIN"}</DC.T>
+              <DC.Box s={{ flexShrink: 0, minHeight: 68, borderWidth: 0, borderRadius: 20, backgroundColor: '#0B6E4F', color: '#FFFFFF', fontSize: 22, fontWeight: '800', _display: 'flex', alignItems: 'center', justifyContent: 'center' }} kind="button" onPress={v.usePin} disabled={v.bioBusy} label={`Use your PIN`}>
+                <DC.T>{"Use your PIN"}</DC.T>
               </DC.Box>
             </DC.Box>
           </DC.Box>
@@ -338,7 +338,7 @@ export default class ConfirmPinScreen extends Component {
               </DC.Box>
             </DC.Box>
             <DC.Box s={{ flexShrink: 0, minHeight: 44, color: '#0E1F19', fontSize: 17, fontWeight: '700', _display: 'flex', alignItems: 'center', justifyContent: 'center' }} kind="button" onPress={v.goReset}>
-              <DC.T>{"I forgot my PIN"}</DC.T>
+              <DC.T>{"Forgot your PIN?"}</DC.T>
             </DC.Box>
           </DC.Box>
         </>) : null}
@@ -353,7 +353,7 @@ export default class ConfirmPinScreen extends Component {
             <DC.T s={{ fontSize: 30, fontWeight: '800', marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Confirm it's you"}</DC.T>
             <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: '600', color: '#33453D' }}>{"This device is already registered. We sent 6 numbers to "}{v.mailMask}{"."}</DC.T>
             <DC.Box s={{ backgroundColor: '#FFFFFF', borderRadius: 20, paddingTop: 14, paddingRight: 14, paddingBottom: 14, paddingLeft: 14, _display: 'flex', flexDirection: 'column', rowGap: 10, columnGap: 10 }}>
-              <DC.T s={{ fontSize: 17, fontWeight: '700' }}>{"6-number code"}</DC.T>
+              <DC.T s={{ fontSize: 17, fontWeight: '700' }}>{"6-digit code"}</DC.T>
               <DC.Input s={{ width: '100%', minHeight: 68, borderWidth: 0, borderRadius: 14, backgroundColor: '#E9EEEB', color: '#0E1F19', textAlign: 'center', fontSize: 32, fontWeight: '800', letterSpacing: 10 }} value={v.ecode} onChange={v.setEcode} inputMode={'numeric'} autoComplete={'one-time-code'} id={'new-device-ecode'} />
               <DC.Box s={DC.css(`min-height: 48px; border: 0; background: transparent; color: ${DC.S(v.resendColor)}; font-size: 17px; font-weight: 800`)} kind="button" onPress={v.resend} disabled={v.resendOff}>
                 <DC.T>{v.resendText}</DC.T>
@@ -378,7 +378,7 @@ export default class ConfirmPinScreen extends Component {
               <DC.T s={{ fontSize: 18, _lhMul: 1.3, fontWeight: '600', color: '#33453D' }}>{"Wrong PIN 3 times. Reset your PIN to continue on this device."}</DC.T>
             </DC.Box>
             <DC.Box s={{ marginTop: 'auto', flexShrink: 0, minHeight: 68, borderRadius: 20, backgroundColor: '#0B6E4F', color: '#FFFFFF', fontSize: 22, fontWeight: '800', _display: 'flex', alignItems: 'center', justifyContent: 'center' }} kind="button" onPress={v.goReset}>
-              <DC.T>{"Reset my PIN"}</DC.T>
+              <DC.T>{"Reset your PIN"}</DC.T>
             </DC.Box>
             <DC.Box s={{ flexShrink: 0, minHeight: 60, borderWidth: 3, borderColor: '#0B6E4F', borderStyle: 'solid', borderRadius: 20, color: '#0B6E4F', fontSize: 20, fontWeight: '800', _display: 'flex', alignItems: 'center', justifyContent: 'center' }} kind="button" onPress={v.goHome}>
               <DC.T>{"Go home"}</DC.T>

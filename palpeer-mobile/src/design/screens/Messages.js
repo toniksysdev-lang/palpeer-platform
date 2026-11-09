@@ -16,11 +16,11 @@ const STEP = 5;
 const ng = (v) => '₦' + Math.round(v).toLocaleString('en-CA');
 const ALERTS = [
   { title: 'My offer ends soon', text: '30 minutes left. See the Palpeer rate.', time: 'New. 9:50 pm', fresh: true, change: true },
-  { title: 'My offer ended', text: 'No one bought it. CA$50 is back in my wallet.', time: '8:30 pm' },
-  { title: 'Money added', text: 'CA$250 is in my wallet.', time: '9:49 pm' },
-  { title: 'A different amount came', text: 'I planned CA$100. CA$80 arrived and is in my wallet.', time: '9:20 pm' },
-  { title: 'My money is being checked', text: 'CA$60 came late or from another email. We will check it within 24 to 48 hours.', time: '12:30 pm' },
-  { title: 'My deposit closed', text: 'I did not send CA$100 within 3 days.', time: '1:05 pm' },
+  { title: 'My offer ended', text: 'No one bought it. CA$50 is back in your wallet.', time: '8:30 pm' },
+  { title: 'Money added', text: 'CA$250 is in your wallet.', time: '9:49 pm' },
+  { title: 'A different amount came', text: 'You planned CA$100. CA$80 arrived and is in your wallet.', time: '9:20 pm' },
+  { title: 'Your money is being checked', text: 'CA$60 came late or from another email. We will check it within 24 to 48 hours.', time: '12:30 pm' },
+  { title: 'My deposit closed', text: 'You did not send CA$100 within 3 days.', time: '1:05 pm' },
   { title: 'A person bought part of my offer', text: '₦40,000 bought. ₦60,000 is still posted.', time: '9:48 pm' },
   { title: 'Change is done', text: '₦90,000 is in my naira', time: '9:42 pm' },
   { title: 'Money sent', text: 'CA$45 went to a Palpeer user', time: '7:03 pm' },
@@ -103,7 +103,7 @@ class Component extends DCLogic {
     const statusText = {
       wait: 'Waiting for the buyer to answer',
       done: 'Done! ' + ng(iGet) + ' is now in my naira.',
-      no: 'I said no. My offer stays open.'
+      no: 'You said no. Your offer stays open.'
     }[status] || '';
     const again = () => {
       const offered = nextPrice;
@@ -114,7 +114,7 @@ class Component extends DCLogic {
         this.setState({ price: answer, status: 'ask', talk: this.state.talk.concat([{ me: false, rate: answer }]) });
       }, 2500);
     };
-    const dealText = 'At ₦' + price + ': the buyer gets CA$' + buyerGets + ', I get ' + ng(iGet) + ' after the CA$2 flat fee';
+    const dealText = 'At ₦' + price + ': the buyer gets CA$' + buyerGets + ', you get ' + ng(iGet) + ' after the CA$2 flat fee';
     const backend = !!this.props.backend;
     const ALERTS_USE = backend ? (this.props.liveAlerts || []) : ALERTS;
     const liveChats = backend ? (this.props.liveChats || []) : [];
@@ -246,7 +246,7 @@ export default class MessagesScreen extends Component {
             </>) : null}
             {v.onChats && !v.backend ? (<>
               <DC.Box s={{ flexShrink: 0, paddingTop: 14, paddingRight: 14, paddingBottom: 14, paddingLeft: 14, borderRadius: 20, backgroundColor: "#E1ECFB", color: "#0E1F19", textDecorationLine: "none", _display: "flex", flexDirection: "column", rowGap: 3, columnGap: 3 }} kind="link" href={"PeopleTalk.dc.html"}>
-                <DC.T s={{ fontSize: 16, _lhMul: 1.25, fontWeight: "700", color: "#33453D" }}>{"I want to buy CA$100"}</DC.T>
+                <DC.T s={{ fontSize: 16, _lhMul: 1.25, fontWeight: "700", color: "#33453D" }}>{"You want to buy CA$100"}</DC.T>
                 <DC.T s={{ fontSize: 21, _lhMul: 1.2, fontWeight: "800" }}>{"The person said ₦975"}</DC.T>
                 <DC.T s={{ fontSize: 15, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"New. 2 minutes ago"}</DC.T>
               </DC.Box>
@@ -395,7 +395,7 @@ export default class MessagesScreen extends Component {
               </React.Fragment>))}
             </DC.Box>
             <DC.Box s={{ _display: "grid", _cols: 3, rowGap: 10, columnGap: 10 }}>
-              <DC.Box s={{ height: 80, borderWidth: 0, borderRadius: 18, backgroundColor: "#0B6E4F", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={v.useFinger} label={`Use my fingerprint`}>
+              <DC.Box s={{ height: 80, borderWidth: 0, borderRadius: 18, backgroundColor: "#0B6E4F", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={v.useFinger} label={`Use your fingerprint`}>
                 <DC.Icon w={46} h={46} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M4.500 10a8 8 0 0 1 15 0"} /><SVG.Path d={"M6.500 20a14 14 0 0 0 1-6.500 4.500 4.500 0 0 1 9 0c0 2.500-.3 4.800-1 7"} /><SVG.Path d={"M12 13.500c0 3.500-.6 6-1.800 8"} /><SVG.Path d={"M19.800 15c-.1 1.500-.3 2.900-.7 4.200"} /></DC.Icon>
               </DC.Box>
               <DC.Box s={{ height: 80, borderWidth: 0, borderRadius: 18, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 34, fontWeight: "800" }} kind="button" onPress={v.press0}>
@@ -406,7 +406,7 @@ export default class MessagesScreen extends Component {
               </DC.Box>
             </DC.Box>
             <DC.Box s={{ flexShrink: 0, minHeight: 44, color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" href={"PinReset.dc.html"}>
-              <DC.T>{"I forgot my PIN"}</DC.T>
+              <DC.T>{"Forgot your PIN?"}</DC.T>
             </DC.Box>
           </DC.Box>
         </>) : null}
@@ -417,10 +417,10 @@ export default class MessagesScreen extends Component {
                 <DC.Icon w={52} h={52} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.4"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Rect x={"5"} y={"11"} width={"14"} height={"10"} rx={"2"} /><SVG.Path d={"M8 11V7a4 4 0 0 1 8 0v4"} /></DC.Icon>
               </DC.Box>
               <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"My PIN is locked"}</DC.T>
-              <DC.T s={{ fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Wrong PIN 3 times. No money moved. Answer my 2 security questions to get back in."}</DC.T>
+              <DC.T s={{ fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Wrong PIN 3 times. No money moved. Answer your 2 security questions to get back in."}</DC.T>
             </DC.Box>
             <DC.Box s={{ marginTop: "auto", flexShrink: 0, minHeight: 68, borderRadius: 20, backgroundColor: "#0B6E4F", color: "#FFFFFF", textDecorationLine: "none", fontSize: 22, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" onPress={v.unlock} href={"PinReset.dc.html"}>
-              <DC.T>{"Reset my PIN"}</DC.T>
+              <DC.T>{"Reset your PIN"}</DC.T>
             </DC.Box>
             <DC.Box s={{ flexShrink: 0, minHeight: 60, borderWidth: 3, borderColor: "#0B6E4F", borderStyle: "solid", borderRadius: 20, color: "#0B6E4F", textDecorationLine: "none", fontSize: 20, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" onPress={v.unlock} href={"Main.dc.html"}>
               <DC.T>{"Go home"}</DC.T>

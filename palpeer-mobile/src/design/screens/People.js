@@ -135,9 +135,9 @@ const buyerView = (o, rate, take, reward) => {
     giveFlag: W[payCode].flag,
     priceText: price(rate),
     leftText: leftLabel(o.left),
-    rangeText: o.least >= o.amt ? 'I can buy ' + fmt(o.giveCode, o.amt) : 'I can buy ' + fmt(o.giveCode, o.least) + ' to ' + fmt(o.giveCode, o.amt),
+    rangeText: o.least >= o.amt ? 'You can buy ' + fmt(o.giveCode, o.amt) : 'You can buy ' + fmt(o.giveCode, o.least) + ' to ' + fmt(o.giveCode, o.amt),
     restText: o.amt - amt <= 0
-      ? 'I bought the whole offer.'
+      ? 'You bought the whole offer.'
       : feeOf(o.giveCode, o.amt - amt, rate) >= o.amt - amt
         ? 'The ' + fmt(o.giveCode, o.amt - amt) + ' left went back to the seller.'
         : 'The offer stays open with ' + fmt(o.giveCode, o.amt - amt) + ' left.'
@@ -362,9 +362,9 @@ class Component extends DCLogic {
       if (pinFor === 'buy' && !negAccept) {
         r = bio
           ? (p.confirmAcceptBiometric ? await p.confirmAcceptBiometric() : { ok: false, error: 'Fingerprint is not ready.' })
-          : (p.confirmAcceptPin ? await p.confirmAcceptPin(pin) : { ok: false, error: 'Could not check my PIN.' });
+          : (p.confirmAcceptPin ? await p.confirmAcceptPin(pin) : { ok: false, error: 'Could not check your PIN.' });
       } else if (bio) {
-        r = p.confirmBiometric ? await p.confirmBiometric() : { ok: false, error: 'Enter my PIN to continue.' };
+        r = p.confirmBiometric ? await p.confirmBiometric() : { ok: false, error: 'Enter your PIN to continue.' };
       } else {
         const ok = p.confirmPin ? await p.confirmPin(pin) : false;
         r = ok ? { ok: true } : { ok: false, error: 'Wrong PIN.' };
@@ -483,7 +483,7 @@ class Component extends DCLogic {
       talk: waiting
         ? 'Waiting for the person to answer.'
         : 'The person\'s price is ' + dealRate + ' naira for one Canada dollar. You can accept, offer again, or say no.',
-      post: 'Make my offer. You give ' + postView.give + '. The person gets ' + postView.net + ' after their fee. You get ' + postView.get + ' after your fee.',
+      post: 'Make your offer. You give ' + postView.give + '. The person gets ' + postView.net + ' after their fee. You get ' + postView.get + ' after your fee.',
       pin: 'Enter your 4 number PIN, or use your fingerprint.',
       bought: 'Done. ' + rec.youGet + ' is now in your ' + rec.getName + '.',
       ended: 'Your offer ended. No one bought the rest. ' + this.state.endedAmt + ' is back in your wallet.',
@@ -517,10 +517,10 @@ class Component extends DCLogic {
       openReward: () => this.setState({ rewardPanel: true, codeBad: false }),
       closeReward: () => this.setState({ rewardPanel: false }),
       rewardTitle: 'My points',
-      useRewardLabel: 'Use my points',
+      useRewardLabel: 'Use your points',
       pointsText: backend
         ? (this.props.bonusText || 'No points yet. Invite friends or use a promo code.')
-        : ('I have ' + points + ' points, worth ' + fmt('CAD', points / POINTS_PER_CAD) + '. Use them by ' + POINTS_END + '.'),
+        : ('You have ' + points + ' points, worth ' + fmt('CAD', points / POINTS_PER_CAD) + '. Use them by ' + POINTS_END + '.'),
       noPoints: backend ? !this.props.hasBonusCredit : points <= 0,
       pointsBg: (backend ? !!this.props.hasBonusCredit : points > 0) ? '#5E3AB8' : '#8C9A94',
       usePoints: () => this.setState({
@@ -609,7 +609,7 @@ class Component extends DCLogic {
       })),
       noPeople: offers.length === 0,
       hasMine: mine.length > 0,
-      mineCards: mine.map((o) => ({ ...sellerView(o), mineLine: (o.sold ? sellerView(o).give + ' still posted' : 'I give ' + sellerView(o).give), open: () => this.setState({ stage: 'live', mineId: o.id }) })),
+      mineCards: mine.map((o) => ({ ...sellerView(o), mineLine: (o.sold ? sellerView(o).give + ' still posted' : 'You give ' + sellerView(o).give), open: () => this.setState({ stage: 'live', mineId: o.id }) })),
 
       deal,
       mineDeal,
@@ -617,7 +617,7 @@ class Component extends DCLogic {
       myPrice,
       dealNote: apiError ? apiError : takeBad
         ? (feeEats ? 'Too small. The fee is more than this amount.' : deal.rangeText)
-        : short ? 'Not enough money. I have ' + fmt(deal.payCode, Wb[deal.payCode].bal) : 'The money moves at once when you accept.',
+        : short ? 'Not enough money. You have ' + fmt(deal.payCode, Wb[deal.payCode].bal) : 'The money moves at once when you accept.',
       dealNoteColor: takeBad || short || apiError ? '#B3231A' : '#33453D',
       dealBlocked: takeBad || short,
       acceptBg: takeBad || short ? '#8C9A94' : '#0B6E4F',
@@ -678,7 +678,7 @@ class Component extends DCLogic {
       more,
       moreExpanded: more ? 'true' : 'false',
       moreChevron: more ? 'M5 15l7-7 7 7' : 'M5 9l7 7 7-7',
-      haveText: tooMuch ? 'Not enough money. I have ' + fmt(dir, Wb[dir].bal) : 'I have ' + fmt(dir, Wb[dir].bal),
+      haveText: tooMuch ? 'Not enough money. You have ' + fmt(dir, Wb[dir].bal) : 'You have ' + fmt(dir, Wb[dir].bal),
       haveColor: tooMuch ? '#B3231A' : '#46574F',
       atLow: rate <= LOW,
       atHigh: rate >= HIGH,
@@ -783,14 +783,14 @@ export default class PeopleScreen extends Component {
                   <DC.Box s={{ _display: "flex", alignItems: "center", rowGap: 12, columnGap: 12 }}>
                     <DC.Img src={o?.getFlag} s={{ flexShrink: 0, width: 54, height: 36, borderRadius: 5, _display: "block", boxShadow: "0 0 0 1px #C9D3CE" }} />
                     <DC.Box s={{ _display: "flex", flexDirection: "column" }}>
-                      <DC.T s={{ fontSize: 16, _lhMul: 1.25, fontWeight: "600", color: "#33453D" }}>{"I get, after fee"}</DC.T>
+                      <DC.T s={{ fontSize: 16, _lhMul: 1.25, fontWeight: "600", color: "#33453D" }}>{"You get, after fee"}</DC.T>
                       <DC.T s={{ fontSize: 28, _lhMul: 1.15, fontWeight: "800" }}>{o?.youGet}</DC.T>
                     </DC.Box>
                   </DC.Box>
                   <DC.Box s={{ _display: "flex", alignItems: "center", rowGap: 12, columnGap: 12 }}>
                     <DC.Img src={o?.giveFlag} s={{ flexShrink: 0, width: 54, height: 36, borderRadius: 5, _display: "block", boxShadow: "0 0 0 1px #C9D3CE" }} />
                     <DC.Box s={{ _display: "flex", flexDirection: "column" }}>
-                      <DC.T s={{ fontSize: 16, _lhMul: 1.25, fontWeight: "600", color: "#33453D" }}>{"I give"}</DC.T>
+                      <DC.T s={{ fontSize: 16, _lhMul: 1.25, fontWeight: "600", color: "#33453D" }}>{"You give"}</DC.T>
                       <DC.T s={{ fontSize: 22, _lhMul: 1.15, fontWeight: "800" }}>{o?.youGive}</DC.T>
                     </DC.Box>
                   </DC.Box>
@@ -809,7 +809,7 @@ export default class PeopleScreen extends Component {
                   <DC.Img src={o?.giveFlag} s={{ flexShrink: 0, width: 54, height: 36, borderRadius: 5, _display: "block", boxShadow: "0 0 0 1px #C9D3CE" }} />
                   <DC.Box s={{ minWidth: 0, _display: "flex", flexDirection: "column" }}>
                     <DC.T s={{ fontSize: 19, _lhMul: 1.25, fontWeight: "800" }}>{o?.mineLine}</DC.T>
-                    <DC.T s={{ fontSize: 16, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"I get "}{o?.get}{". "}{o?.leftText}</DC.T>
+                    <DC.T s={{ fontSize: 16, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"You get "}{o?.get}{". "}{o?.leftText}</DC.T>
                   </DC.Box>
                 </DC.Box>
               </React.Fragment>))}
@@ -826,7 +826,7 @@ export default class PeopleScreen extends Component {
             </DC.Box>
             <DC.Box s={{ flexShrink: 0, minHeight: 64, borderWidth: 0, borderRadius: 20, backgroundColor: "#0B6E4F", color: "#FFFFFF", fontSize: 22, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center", rowGap: 10, columnGap: 10 }} kind="button" onPress={v.goPost}>
               <DC.Icon w={28} h={28} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"3"} strokeLinecap={"round"}><SVG.Path d={"M12 4v16M4 12h16"} /></DC.Icon>
-              <DC.T>{"Make my offer"}</DC.T>
+              <DC.T>{"Make your offer"}</DC.T>
             </DC.Box>
           </DC.Box>
         </>) : null}
@@ -851,7 +851,7 @@ export default class PeopleScreen extends Component {
               </DC.Box>
             </DC.Box>
             <DC.Box s={{ flexShrink: 0, minHeight: 68, borderWidth: 0, borderRadius: 20, backgroundColor: "#0B6E4F", color: "#FFFFFF", fontSize: 22, fontWeight: "800" }} kind="button" onPress={v.goPost}>
-              <DC.T>{"Make my offer"}</DC.T>
+              <DC.T>{"Make your offer"}</DC.T>
             </DC.Box>
             <DC.Box s={{ flexShrink: 0, minHeight: 60, borderWidth: 3, borderColor: "#0B6E4F", borderStyle: "solid", borderRadius: 20, color: "#0B6E4F", textDecorationLine: "none", fontSize: 20, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" href={"Change.dc.html"}>
               <DC.T>{"Change now instead"}</DC.T>
@@ -863,7 +863,7 @@ export default class PeopleScreen extends Component {
             <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"A person's offer"}</DC.T>
             <DC.Box s={{ flexGrow: 0, flexShrink: 1, flexBasis: "auto", minHeight: 0, _scroll: "y", backgroundColor: "#FFFFFF", borderRadius: 22, paddingTop: 16, paddingRight: 18, paddingBottom: 16, paddingLeft: 18, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10, fontSize: 18, _lhMul: 1.3 }}>
               <DC.Box s={{ _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
-                <DC.T s={{ fontWeight: "700" }}>{"I want to buy"}</DC.T>
+                <DC.T s={{ fontWeight: "700" }}>{"You want to buy"}</DC.T>
                 <DC.Box s={{ flexShrink: 0, _display: "flex", alignItems: "baseline", rowGap: 2, columnGap: 2, fontSize: 20, fontWeight: "800" }}>
                   <DC.T>{v.takeSym}</DC.T>
                   <DC.Input s={{ width: 88, minHeight: 48, paddingTop: 0, paddingRight: 4, paddingBottom: 0, paddingLeft: 4, borderWidth: 0, borderBottomWidth: 3, borderBottomColor: "#0E1F19", backgroundColor: "transparent", color: "#0E1F19", fontSize: 28, fontWeight: "800", textAlign: "right" }} value={v.take} onChange={v.setTake} inputMode={"decimal"} id={"take"} />
@@ -881,14 +881,14 @@ export default class PeopleScreen extends Component {
               <DC.Box s={{ _display: "flex", alignItems: "center", rowGap: 14, columnGap: 14 }}>
                 <DC.Img src={v.deal?.getFlag} s={{ flexShrink: 0, width: 60, height: 40, borderRadius: 5, _display: "block", boxShadow: "0 0 0 1px #C9D3CE" }} />
                 <DC.Box s={{ _display: "flex", flexDirection: "column" }}>
-                  <DC.T s={{ fontSize: 17, fontWeight: "600", color: "#33453D" }}>{"I get"}</DC.T>
+                  <DC.T s={{ fontSize: 17, fontWeight: "600", color: "#33453D" }}>{"You get"}</DC.T>
                   <DC.T s={{ fontSize: 32, _lhMul: 1.15, fontWeight: "800", color: "#0B6E4F" }}>{v.deal?.youGet}</DC.T>
                 </DC.Box>
               </DC.Box>
               <DC.Box s={{ _display: "flex", alignItems: "center", rowGap: 14, columnGap: 14 }}>
                 <DC.Img src={v.deal?.giveFlag} s={{ flexShrink: 0, width: 60, height: 40, borderRadius: 5, _display: "block", boxShadow: "0 0 0 1px #C9D3CE" }} />
                 <DC.Box s={{ _display: "flex", flexDirection: "column" }}>
-                  <DC.T s={{ fontSize: 17, fontWeight: "600", color: "#33453D" }}>{"I give"}</DC.T>
+                  <DC.T s={{ fontSize: 17, fontWeight: "600", color: "#33453D" }}>{"You give"}</DC.T>
                   <DC.T s={{ fontSize: 32, _lhMul: 1.15, fontWeight: "800" }}>{v.deal?.youGive}</DC.T>
                 </DC.Box>
               </DC.Box>
@@ -933,7 +933,7 @@ export default class PeopleScreen extends Component {
             </DC.Box>
             <DC.Box s={{ backgroundColor: "#DFF3E8", borderRadius: 20, paddingTop: 14, paddingRight: 16, paddingBottom: 14, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 6, columnGap: 6, fontSize: 18, _lhMul: 1.3 }}>
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
-                <DC.T s={{ fontWeight: "600" }}>{"I buy"}</DC.T>
+                <DC.T s={{ fontWeight: "600" }}>{"You buy"}</DC.T>
                 <DC.T s={{ fontWeight: "800" }}>{v.mineDeal?.offerAmt}</DC.T>
               </DC.Box>
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
@@ -941,11 +941,11 @@ export default class PeopleScreen extends Component {
                 <DC.T s={{ flexShrink: 0, fontWeight: "800", _nowrap: true }}>{v.mineDeal?.feeShow}</DC.T>
               </DC.Box>
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
-                <DC.T s={{ fontWeight: "600" }}>{"I get"}</DC.T>
+                <DC.T s={{ fontWeight: "600" }}>{"You get"}</DC.T>
                 <DC.T s={{ fontWeight: "800" }}>{v.mineDeal?.youGet}</DC.T>
               </DC.Box>
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
-                <DC.T s={{ fontWeight: "600" }}>{"I give"}</DC.T>
+                <DC.T s={{ fontWeight: "600" }}>{"You give"}</DC.T>
                 <DC.T s={{ fontWeight: "800" }}>{v.mineDeal?.youGive}</DC.T>
               </DC.Box>
             </DC.Box>
@@ -963,7 +963,7 @@ export default class PeopleScreen extends Component {
               <DC.T s={{ marginTop: "auto", flexShrink: 0, fontSize: 17, _lhMul: 1.3, fontWeight: "700", color: "#B3231A" }} role="alert">{v.apiError}</DC.T>
             </>) : null}
             <DC.Box s={{ marginTop: "auto", flexShrink: 0, minHeight: 68, borderWidth: 0, borderRadius: 20, backgroundColor: "#1D5BC7", color: "#FFFFFF", fontSize: 22, fontWeight: "800" }} kind="button" onPress={v.sendPrice}>
-              <DC.T>{"Send my price"}</DC.T>
+              <DC.T>{"Send your price"}</DC.T>
             </DC.Box>
           </DC.Box>
         </>) : null}
@@ -993,7 +993,7 @@ export default class PeopleScreen extends Component {
             </DC.Box>
             {v.canAnswer ? (<>
               <DC.Box s={{ flexShrink: 0, backgroundColor: "#DFF3E8", borderRadius: 18, paddingTop: 10, paddingRight: 14, paddingBottom: 10, paddingLeft: 14, fontSize: 17, _lhMul: 1.3, fontWeight: "700" }}>
-                <DC.T>{"At ₦"}{v.dealRate}{": I give "}{v.deal?.youGive}{", I get "}{v.deal?.youGet}</DC.T>
+                <DC.T>{"At ₦"}{v.dealRate}{": you give "}{v.deal?.youGive}{", you get "}{v.deal?.youGet}</DC.T>
               </DC.Box>
               <DC.Box s={DC.css(`flex-shrink: 0; min-height: 64px; border: 0; border-radius: 20px; background: ${DC.S(v.acceptBg)}; color: #FFFFFF; font-size: 21px; font-weight: 800`)} kind="button" onPress={v.accept} disabled={v.dealBlocked}>
                 <DC.T>{"Accept ₦"}{v.dealRate}{" and buy"}</DC.T>
@@ -1012,11 +1012,11 @@ export default class PeopleScreen extends Component {
         {v.isPost ? (<>
           <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }}>
             <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0, _scroll: "y", _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }}>
-              <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, flexShrink: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Make my offer"}</DC.T>
+              <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, flexShrink: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Make your offer"}</DC.T>
               <DC.Box s={{ flexShrink: 0, backgroundColor: "#FFFFFF", borderRadius: 22, paddingTop: 8, paddingRight: 14, paddingBottom: 8, paddingLeft: 14 }} label={`Money in my offer`}>
                 <DC.Box s={{ _display: "flex", alignItems: "center", rowGap: 12, columnGap: 12, minHeight: 60 }}>
                   <DC.Img src={v.post?.give?.flag} s={{ flexShrink: 0, width: 54, height: 36, borderRadius: 5, _display: "block", boxShadow: "0 0 0 1px #C9D3CE" }} />
-                  <DC.T s={{ fontSize: 19, fontWeight: "700" }}>{"I give"}</DC.T>
+                  <DC.T s={{ fontSize: 19, fontWeight: "700" }}>{"You give"}</DC.T>
                   <DC.Box s={{ marginLeft: "auto", _display: "flex", alignItems: "baseline", rowGap: 2, columnGap: 2, fontSize: 22, fontWeight: "800" }}>
                     <DC.T>{v.post?.give?.sym}</DC.T>
                     <DC.Input s={{ width: 118, minHeight: 48, paddingTop: 0, paddingRight: 4, paddingBottom: 0, paddingLeft: 4, borderWidth: 0, borderBottomWidth: 3, borderBottomColor: "#0E1F19", backgroundColor: "transparent", color: "#0E1F19", fontSize: 28, fontWeight: "800", textAlign: "right" }} value={v.amount} onChange={v.setAmount} inputMode={"decimal"} id={"give"} />
@@ -1026,7 +1026,7 @@ export default class PeopleScreen extends Component {
                 <DC.Box s={{ height: 1, backgroundColor: "#DDE4E0" }} />
                 <DC.Box s={{ _display: "flex", alignItems: "center", rowGap: 12, columnGap: 12, minHeight: 60 }}>
                   <DC.Img src={v.post?.want?.flag} s={{ flexShrink: 0, width: 54, height: 36, borderRadius: 5, _display: "block", boxShadow: "0 0 0 1px #C9D3CE" }} />
-                  <DC.T s={{ fontSize: 19, fontWeight: "700" }}>{"I want "}{v.post?.want?.word}</DC.T>
+                  <DC.T s={{ fontSize: 19, fontWeight: "700" }}>{"You want "}{v.post?.want?.word}</DC.T>
                   <DC.Box s={{ flexShrink: 0, marginLeft: "auto", width: 52, height: 52, borderWidth: 0, borderRadius: 26, backgroundColor: "#FCEBD6", color: "#A84C08", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={v.swapDir} label={`Swap the two moneys`}>
                     <DC.Icon w={28} h={28} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M8 20V4M3 9l5-5 5 5"} /><SVG.Path d={"M16 4v16M11 15l5 5 5-5"} /></DC.Icon>
                   </DC.Box>
@@ -1106,7 +1106,7 @@ export default class PeopleScreen extends Component {
                 <DC.T s={{ flexShrink: 0, fontWeight: "800", _nowrap: true }}>{v.post?.myFeeShow}</DC.T>
               </DC.Box>
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12, fontSize: 22, fontWeight: "800" }}>
-                <DC.T>{"I get"}</DC.T>
+                <DC.T>{"You get"}</DC.T>
                 <DC.T>{v.post?.get}</DC.T>
               </DC.Box>
               <DC.T s={{ fontSize: 15, fontWeight: "600", color: "#33453D" }}>{v.noteText}</DC.T>
@@ -1145,7 +1145,7 @@ export default class PeopleScreen extends Component {
               </React.Fragment>))}
             </DC.Box>
             <DC.Box s={{ _display: "grid", _cols: 3, rowGap: 10, columnGap: 10 }}>
-              <DC.Box s={{ height: 80, borderWidth: 0, borderRadius: 18, backgroundColor: "#0B6E4F", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={v.useFinger} label={`Use my fingerprint`}>
+              <DC.Box s={{ height: 80, borderWidth: 0, borderRadius: 18, backgroundColor: "#0B6E4F", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={v.useFinger} label={`Use your fingerprint`}>
                 <DC.Icon w={46} h={46} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M4.500 10a8 8 0 0 1 15 0"} /><SVG.Path d={"M6.500 20a14 14 0 0 0 1-6.500 4.500 4.500 0 0 1 9 0c0 2.500-.3 4.800-1 7"} /><SVG.Path d={"M12 13.500c0 3.500-.6 6-1.800 8"} /><SVG.Path d={"M19.800 15c-.1 1.500-.3 2.900-.7 4.200"} /></DC.Icon>
               </DC.Box>
               <DC.Box s={{ height: 80, borderWidth: 0, borderRadius: 18, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 34, fontWeight: "800" }} kind="button" onPress={v.press0}>
@@ -1156,7 +1156,7 @@ export default class PeopleScreen extends Component {
               </DC.Box>
             </DC.Box>
             <DC.Box s={{ flexShrink: 0, minHeight: 44, color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" href={"PinReset.dc.html"}>
-              <DC.T>{"I forgot my PIN"}</DC.T>
+              <DC.T>{"Forgot your PIN?"}</DC.T>
             </DC.Box>
           </DC.Box>
         </>) : null}
@@ -1173,7 +1173,7 @@ export default class PeopleScreen extends Component {
             </DC.Box>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 22, paddingTop: 14, paddingRight: 18, paddingBottom: 14, paddingLeft: 18, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10, fontSize: 18, _lhMul: 1.3 }} label={`Receipt`}>
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
-                <DC.T s={{ fontWeight: "600", color: "#33453D" }}>{"I gave"}</DC.T>
+                <DC.T s={{ fontWeight: "600", color: "#33453D" }}>{"You gave"}</DC.T>
                 <DC.T s={{ fontWeight: "800" }}>{v.receipt?.youGive}</DC.T>
               </DC.Box>
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
@@ -1229,7 +1229,7 @@ export default class PeopleScreen extends Component {
               </>) : null}
               <DC.Box s={{ height: 1, backgroundColor: "#DDE4E0" }} />
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
-                <DC.T s={{ fontWeight: "600", color: "#33453D" }}>{"I still give"}</DC.T>
+                <DC.T s={{ fontWeight: "600", color: "#33453D" }}>{"You still give"}</DC.T>
                 <DC.T s={{ fontWeight: "800" }}>{v.live?.give}</DC.T>
               </DC.Box>
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
@@ -1245,7 +1245,7 @@ export default class PeopleScreen extends Component {
                 <DC.T s={{ flexShrink: 0, fontWeight: "800", _nowrap: true }}>{v.live?.myFeeShow}</DC.T>
               </DC.Box>
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12, fontSize: 24, fontWeight: "800" }}>
-                <DC.T>{"I get"}</DC.T>
+                <DC.T>{"You get"}</DC.T>
                 <DC.T s={{ color: "#0B6E4F" }}>{v.live?.get}</DC.T>
               </DC.Box>
               <DC.Box s={{ height: 1, backgroundColor: "#DDE4E0" }} />
@@ -1349,7 +1349,7 @@ export default class PeopleScreen extends Component {
                   <DC.T s={{ fontWeight: "800", textAlign: "right" }}>{v.nudge?.mineText}</DC.T>
                 </DC.Box>
                 <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
-                  <DC.T s={{ fontWeight: "600", color: "#33453D" }}>{"I give"}</DC.T>
+                  <DC.T s={{ fontWeight: "600", color: "#33453D" }}>{"You give"}</DC.T>
                   <DC.T s={{ fontWeight: "800", textAlign: "right" }}>{v.nudge?.give}</DC.T>
                 </DC.Box>
                 <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
@@ -1357,7 +1357,7 @@ export default class PeopleScreen extends Component {
                   <DC.T s={{ fontWeight: "800", textAlign: "right" }}>{"No fee"}</DC.T>
                 </DC.Box>
                 <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12, fontSize: 24, fontWeight: "800" }}>
-                  <DC.T>{"I get"}</DC.T>
+                  <DC.T>{"You get"}</DC.T>
                   <DC.T s={{ color: "#0B6E4F" }}>{v.nudge?.get}</DC.T>
                 </DC.Box>
               </DC.Box>
@@ -1365,7 +1365,7 @@ export default class PeopleScreen extends Component {
                 <DC.T>{"Accept Palpeer rate"}</DC.T>
               </DC.Box>
               <DC.Box s={{ flexShrink: 0, minHeight: 60, borderWidth: 3, borderColor: "#0B6E4F", borderStyle: "solid", borderRadius: 20, backgroundColor: "transparent", color: "#0B6E4F", fontSize: 20, fontWeight: "800" }} kind="button" onPress={v.nudgeWait}>
-                <DC.T>{"I prefer to wait"}</DC.T>
+                <DC.T>{"You prefer to wait"}</DC.T>
               </DC.Box>
             </DC.Box>
           </DC.Box>
@@ -1382,7 +1382,7 @@ export default class PeopleScreen extends Component {
             </DC.Box>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 20, paddingTop: 14, paddingRight: 16, paddingBottom: 14, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 8, columnGap: 8, fontSize: 18, _lhMul: 1.3 }}>
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
-                <DC.T s={{ fontWeight: "600", color: "#33453D" }}>{"I gave"}</DC.T>
+                <DC.T s={{ fontWeight: "600", color: "#33453D" }}>{"You gave"}</DC.T>
                 <DC.T s={{ fontWeight: "800", textAlign: "right" }}>{v.now?.give}</DC.T>
               </DC.Box>
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
@@ -1406,7 +1406,7 @@ export default class PeopleScreen extends Component {
               <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"My offer ended"}</DC.T>
               <DC.T s={{ fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"No one bought the rest."}</DC.T>
               <DC.T s={{ fontSize: 40, _lhMul: 1.1, fontWeight: "800", color: "#0B6E4F" }}>{v.endedAmt}</DC.T>
-              <DC.T s={{ fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"is back in my wallet"}</DC.T>
+              <DC.T s={{ fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"is back in your wallet"}</DC.T>
             </DC.Box>
             <DC.Box s={{ marginTop: "auto", flexShrink: 0, minHeight: 68, borderRadius: 20, backgroundColor: "#0B6E4F", color: "#FFFFFF", textDecorationLine: "none", fontSize: 22, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" onPress={v.leave} href={"Change.dc.html"}>
               <DC.T>{"Change now"}</DC.T>
@@ -1459,10 +1459,10 @@ export default class PeopleScreen extends Component {
                 <DC.Icon w={52} h={52} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.4"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Rect x={"5"} y={"11"} width={"14"} height={"10"} rx={"2"} /><SVG.Path d={"M8 11V7a4 4 0 0 1 8 0v4"} /></DC.Icon>
               </DC.Box>
               <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"My PIN is locked"}</DC.T>
-              <DC.T s={{ fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Wrong PIN 3 times. No money moved. Answer my 2 security questions to get back in."}</DC.T>
+              <DC.T s={{ fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Wrong PIN 3 times. No money moved. Answer your 2 security questions to get back in."}</DC.T>
             </DC.Box>
             <DC.Box s={{ marginTop: "auto", flexShrink: 0, minHeight: 68, borderRadius: 20, backgroundColor: "#0B6E4F", color: "#FFFFFF", textDecorationLine: "none", fontSize: 22, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" onPress={v.unlock} href={"PinReset.dc.html"}>
-              <DC.T>{"Reset my PIN"}</DC.T>
+              <DC.T>{"Reset your PIN"}</DC.T>
             </DC.Box>
             <DC.Box s={{ flexShrink: 0, minHeight: 60, borderWidth: 3, borderColor: "#0B6E4F", borderStyle: "solid", borderRadius: 20, color: "#0B6E4F", textDecorationLine: "none", fontSize: 20, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" onPress={v.unlock} href={"Main.dc.html"}>
               <DC.T>{"Go home"}</DC.T>

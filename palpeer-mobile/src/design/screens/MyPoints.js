@@ -42,7 +42,7 @@ class Component extends DCLogic {
       balanceCad,
       earned: String(earned) + ' pts',
       used: String(used) + ' pts',
-      rule: per + ' points = CA$1. Earn points when friends join with my invite code. Use them to cut my P2P fee.',
+      rule: per + ' points = CA$1. Earn points when friends join with your invite code. Use them to cut your P2P fee.',
       empty,
       entries,
       invite: () => (p.onInvite ? p.onInvite() : null),

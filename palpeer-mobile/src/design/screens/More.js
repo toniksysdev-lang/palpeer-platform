@@ -27,24 +27,24 @@ const SHEETS = {
     { title: 'Card history', note: 'See what I paid' }
   ] },
   safe: { title: 'Stay safe', rows: [
-    { title: 'My PIN', note: 'Change my 4 numbers' },
-    { title: 'My password', note: 'Change my password' },
-    { title: 'Security questions', note: 'Change my 2 questions' },
-    { title: 'Face or Fingerprint', note: 'Open the app with my face or finger' },
-    { title: 'Signed-in phones', note: 'See where I am signed in' }
+    { title: 'My PIN', note: 'Change your 4 numbers' },
+    { title: 'My password', note: 'Change your password' },
+    { title: 'Security questions', note: 'Change your 2 questions' },
+    { title: 'Face or Fingerprint', note: 'Open the app with your face or finger' },
+    { title: 'Signed-in phones', note: 'See where you are signed in' }
   ] },
   invite: { title: 'Invite friends', rows: [
     { title: 'My invite code', note: 'Share it with a friend' },
     { title: 'People I invited', note: 'See who joined' }
   ] },
   rewards: { title: 'My rewards', rows: [
-    { title: 'My points', note: 'Earned when friends join. Use them to cut my P2P fee.' },
-    { title: 'My bonuses', note: 'See what I have and what I used' },
-    { title: 'Promotions', note: 'Offers I can use now' }
+    { title: 'My points', note: 'Earned when friends join. Use them to cut your P2P fee.' },
+    { title: 'My bonuses', note: 'See what you have and what you used' },
+    { title: 'Promotions', note: 'Offers you can use now' }
   ] },
   settings: { title: 'Settings', rows: [
     { title: 'Notifications', note: 'Push alerts on this phone and my other devices' },
-    { title: 'Face or Fingerprint', note: 'Open the app with my face or finger' },
+    { title: 'Face or Fingerprint', note: 'Open the app with your face or finger' },
     { title: 'Privacy', note: 'My data, permissions and policies' },
     { title: 'App look', note: 'Light screen' },
     { title: 'App version', note: 'See which version I have' }
@@ -75,13 +75,13 @@ const DEFAULT_FAQ_SECTIONS = [
     items: [
       {
         id: 'forgot-pin',
-        question: 'I forgot my PIN',
+        question: 'Forgot your PIN',
         answer:
           'On More → Stay safe → My PIN, reset with your password and security answers. You can also use Forgot PIN on the PIN screen.'
       },
       {
         id: 'forgot-password',
-        question: 'I forgot my password',
+        question: 'Forgot your password?',
         answer:
           'On sign-in, tap Forgot password?, enter your email, then enter the 6-digit code with your new password.'
       }
@@ -92,12 +92,12 @@ const DEFAULT_FAQ_SECTIONS = [
     items: [
       {
         id: 'add-money',
-        question: 'How do I add money?',
+        question: 'How do you add money?',
         answer: 'Home → Add money. Follow the steps for Canada dollars or Naira.'
       },
       {
         id: 'withdraw',
-        question: 'How do I withdraw?',
+        question: 'How do you withdraw?',
         answer: 'Home → Withdraw. No fee. Canada dollars go to your Interac email. Naira goes to a saved bank account.'
       }
     ]

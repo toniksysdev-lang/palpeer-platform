@@ -80,7 +80,7 @@ export default class MyPromotionsScreen extends Component {
                   <DC.T s={{ fontSize: 14, fontWeight: '600', color: '#5B6B64' }}>{row.windowText}</DC.T>
                   {row.isInvite ? (
                     <DC.Box s={{ marginTop: 6, minHeight: 48, borderRadius: 14, backgroundColor: '#0B6E4F', color: '#FFFFFF', fontSize: 17, fontWeight: '800', _display: 'flex', alignItems: 'center', justifyContent: 'center' }} kind="button" onPress={v.invite}>
-                      <DC.T>{"Open my invite code"}</DC.T>
+                      <DC.T>{"Open your invite code"}</DC.T>
                     </DC.Box>
                   ) : null}
                 </DC.Box>

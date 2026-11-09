@@ -147,7 +147,7 @@ function buildMeRows(input: {
     },
   ];
   if (monthly) {
-    rows.push({ title: 'Money I move each month', note: monthly });
+    rows.push({ title: 'Money you move each month', note: monthly });
   }
   rows.push({
     title: 'My identity',
@@ -156,8 +156,8 @@ function buildMeRows(input: {
   });
   if (incomplete) {
     rows.unshift({
-      title: 'Complete my profile',
-      note: 'Add my name, address and money details',
+      title: 'Complete your profile',
+      note: 'Add your name, address and money details',
       action: 'editProfile',
     });
   }
@@ -219,7 +219,7 @@ export function useLiveMore() {
   const pointsNote = useMemo(() => {
     const bal = pointsBalanceQ.data;
     if (!bal || bal.balancePoints <= 0) {
-      return 'Earned when friends join. Use them to cut my P2P fee.';
+      return 'Earned when friends join. Use them to cut your P2P fee.';
     }
     const cad = formatMoney(bal.balanceCad, {
       currencyCode: bal.currencyCode || 'CAD',
@@ -230,7 +230,7 @@ export function useLiveMore() {
 
   const bonusNote = useMemo(() => {
     const rows = bonusSummaryQ.data ?? [];
-    if (!rows.length) return 'See what I have and what I used';
+    if (!rows.length) return 'See what you have and what you used';
     return rows
       .map((r) => {
         const unused = formatMoney(r.unusedAmount, {
@@ -248,7 +248,7 @@ export function useLiveMore() {
       ? 'No offers right now'
       : activePromos.length === 1
         ? activePromos[0]!.title
-        : `${activePromos.length} offers I can use`;
+        : `${activePromos.length} offers you can use`;
 
   const appVersion =
     Constants.expoConfig?.version ??
@@ -332,7 +332,7 @@ export function useLiveMore() {
       invite: [
         {
           title: 'My invite code',
-          note: referralCode || 'Tap to create my code',
+          note: referralCode || 'Tap to create your code',
           action: 'shareInvite',
         },
         {
@@ -366,15 +366,15 @@ export function useLiveMore() {
       settings: [
         {
           title: 'Notifications',
-          note: 'Push alerts on this phone and my other devices',
+          note: 'Push alerts on this phone and your other devices',
           action: 'notificationSettings',
         },
         {
           title: 'Face or Fingerprint',
-          note: 'Open the app with my face or finger',
+          note: 'Open the app with your face or finger',
           action: 'biometricSettings',
         },
-        { title: 'Privacy', note: 'My data, permissions and policies' },
+        { title: 'Privacy', note: 'Your data, permissions and policies' },
         {
           title: 'App look',
           note: scheme === 'dark' ? 'Dark screen' : 'Light screen',
@@ -383,19 +383,19 @@ export function useLiveMore() {
         { title: 'App version', note: appVersion },
       ],
       safe: [
-        { title: 'My PIN', note: 'Change my 4 numbers', action: 'pinReset' },
-        { title: 'My password', note: 'Change my password' },
+        { title: 'My PIN', note: 'Change your 4 numbers', action: 'pinReset' },
+        { title: 'My password', note: 'Change your password' },
         {
           title: 'Security questions',
-          note: 'Change my 2 questions',
+          note: 'Change your 2 questions',
           action: 'securityQuestions',
         },
         {
           title: 'Face or Fingerprint',
-          note: 'Open the app with my face or finger',
+          note: 'Open the app with your face or finger',
           action: 'biometricSettings',
         },
-        { title: 'Signed-in phones', note: 'See where I am signed in' },
+        { title: 'Signed-in phones', note: 'See where you are signed in' },
       ],
     };
   }, [

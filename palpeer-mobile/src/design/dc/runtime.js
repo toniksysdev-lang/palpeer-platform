@@ -143,6 +143,8 @@ export function StatusBarBg({ color, children }) {
   }, [api, color]);
   const top = insets.top;
   if (!(top > 0)) return children;
+  // marginTop: -top + paddingTop: top keeps the 390×844 artboard height stable
+  // (same FIT_TO_SCREEN canvas as :3333) while clearing status-bar icons.
   return (
     <View style={{ flexGrow: 1, paddingTop: top, marginTop: -top }}>
       <View
@@ -344,10 +346,43 @@ export function Box({ s, kind, flow, onPress, href, disabled, children, _cell, l
 
   const handler = pressHandler(onPress, href, go);
   if (kind || handler) {
+    // Android Pressable often drops backgroundColor / border paints while text still
+    // shows (land "Get started" went white-on-white vs :3333). Paint chrome on an
+    // inner View; keep flex/margin (incl. marginTop: 'auto') on the Pressable shell.
+    const face = { ...view };
+    const pressShell = {
+      alignSelf: parentRow ? view.alignSelf : (view.alignSelf || 'stretch'),
+      flexGrow: view.flexGrow,
+      flexShrink: view.flexShrink,
+      flexBasis: view.flexBasis,
+      width: view.width,
+      height: view.height,
+      minWidth: view.minWidth,
+      minHeight: view.minHeight,
+      maxWidth: view.maxWidth,
+      maxHeight: view.maxHeight,
+      marginTop: view.marginTop,
+      marginRight: view.marginRight,
+      marginBottom: view.marginBottom,
+      marginLeft: view.marginLeft,
+    };
+    delete face.marginTop;
+    delete face.marginRight;
+    delete face.marginBottom;
+    delete face.marginLeft;
+    delete face.flexGrow;
+    delete face.flexShrink;
+    delete face.flexBasis;
+    delete face.alignSelf;
     return (
-      <Pressable onPress={disabled ? undefined : handler} disabled={!!disabled}
-        style={({ pressed }) => (pressed && handler && !disabled ? [view, { opacity: 0.82 }] : view)} {...ax}>
-        {wrapped}
+      <Pressable
+        onPress={disabled ? undefined : handler}
+        disabled={!!disabled}
+        android_ripple={Platform.OS === 'android' ? { color: 'rgba(0,0,0,0.08)' } : undefined}
+        style={({ pressed }) => (pressed && handler && !disabled ? [pressShell, { opacity: 0.82 }] : pressShell)}
+        {...ax}
+      >
+        <View style={face} collapsable={false}>{wrapped}</View>
       </Pressable>
     );
   }

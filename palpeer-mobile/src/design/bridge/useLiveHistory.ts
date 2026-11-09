@@ -148,7 +148,7 @@ function buildRows(tx: TransactionItemResponse): [string, string][] {
   switch (tx.type) {
     case 'FUNDING':
       return [
-        ['I add', amt],
+        ['You added', amt],
         ['Fee', 'No fee'],
         ['Wallet', `${tx.currencyCode} wallet`],
         ['Status', humanizeStatus(tx.status)],
@@ -156,23 +156,23 @@ function buildRows(tx: TransactionItemResponse): [string, string][] {
       ];
     case 'EXCHANGE':
       return [
-        ['I gave', amt],
-        ...(secondary ? ([['I got', secondary]] as [string, string][]) : []),
+        ['You gave', amt],
+        ...(secondary ? ([['You got', secondary]] as [string, string][]) : []),
         ...(rate ? ([['Price', rate]] as [string, string][]) : []),
         ['Status', humanizeStatus(tx.status)],
         ['Reference', tx.id],
       ];
     case 'P2P':
       return [
-        ['I gave', amt],
-        ...(secondary ? ([['I got', secondary]] as [string, string][]) : []),
+        ['You gave', amt],
+        ...(secondary ? ([['You got', secondary]] as [string, string][]) : []),
         ...(rate ? ([['Price', rate]] as [string, string][]) : []),
         ['Status', humanizeStatus(tx.status)],
         ['Reference', tx.id],
       ];
     case 'TRANSFER':
       return [
-        ['I sent', amt],
+        ['You sent', amt],
         ['To', 'A Palpeer user'],
         ['Wallet', `${tx.currencyCode} wallet`],
         ['Status', humanizeStatus(tx.status)],
@@ -180,7 +180,7 @@ function buildRows(tx: TransactionItemResponse): [string, string][] {
       ];
     case 'WITHDRAWAL':
       return [
-        ['I took out', amt],
+        ['You withdrew', amt],
         ['To', 'My bank'],
         ['Wallet', `${tx.currencyCode} wallet`],
         ['Status', humanizeStatus(tx.status)],
@@ -210,7 +210,7 @@ function withWithdrawalDestination(
 ): [string, string][] {
   const destination = destinationAccountRows(currencyCode, destinationReference, bankName);
   const withoutTo = rows.filter(([label]) => label !== 'To');
-  const amountIdx = withoutTo.findIndex(([label]) => label === 'I took out');
+  const amountIdx = withoutTo.findIndex(([label]) => label === 'You withdrew');
   if (amountIdx < 0) return [...destination, ...withoutTo];
   return [
     ...withoutTo.slice(0, amountIdx + 1),

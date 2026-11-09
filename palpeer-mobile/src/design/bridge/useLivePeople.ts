@@ -130,7 +130,7 @@ export function useLivePeople() {
       currencyCode: bal.currencyCode || 'CAD',
       precision: 2,
     });
-    return `I have ${formatPoints(bal.balancePoints)}, worth ${cad}. Use them on my next P2P fee.`;
+    return `You have ${formatPoints(bal.balancePoints)}, worth ${cad}. Use them on your next P2P fee.`;
   }, [pointsBalanceQ.data]);
 
   const prepareAccept = useCallback(

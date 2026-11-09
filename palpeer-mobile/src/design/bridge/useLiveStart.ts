@@ -55,7 +55,7 @@ export function useLiveStart() {
     router.replace({ pathname: '/StartQuestions', params: { setupRequired: '1' } });
   }, []);
 
-  /** After security questions: honor returnTo, else first Home with Complete my profile. */
+  /** After security questions: honor returnTo, else first Home with Complete your profile. */
   const onSetupComplete = useCallback(() => {
     if (returnTo && typeof returnTo === 'string' && returnTo.startsWith('/')) {
       router.replace(returnTo as '/');

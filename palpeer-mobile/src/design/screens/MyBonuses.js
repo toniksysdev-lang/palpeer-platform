@@ -1,4 +1,4 @@
-// My bonuses — design UI (change map: I have / I used).
+// My bonuses — design UI (change map: You have / I used).
 /* eslint-disable */
 import React from 'react';
 import * as SVG from 'react-native-svg';
@@ -47,7 +47,7 @@ class Component extends DCLogic {
       hasMore: !!p.hasMore,
       loadingMore: !!p.loadingMore,
       listenLabel: this.state.speaking ? 'Stop' : 'Listen',
-      listen: () => this.listen('My bonuses. ' + (have ? 'I have' : 'I used') + '.'),
+      listen: () => this.listen('My bonuses. ' + (have ? 'You have' : 'You used') + '.'),
     };
   }
 }
@@ -77,10 +77,10 @@ export default class MyBonusesScreen extends Component {
           </DC.Box>
           <DC.Box s={{ flexShrink: 0, _display: 'grid', _cols: 2, rowGap: 8, columnGap: 8 }}>
             <DC.Box s={{ minHeight: 48, borderRadius: 14, backgroundColor: v.have ? '#0B6E4F' : '#FFFFFF', color: v.have ? '#FFFFFF' : '#0E1F19', fontSize: 17, fontWeight: '800', _display: 'flex', alignItems: 'center', justifyContent: 'center' }} kind="button" onPress={v.pickHave} selected={v.have}>
-              <DC.T>{"I have"}</DC.T>
+              <DC.T>{"You have"}</DC.T>
             </DC.Box>
             <DC.Box s={{ minHeight: 48, borderRadius: 14, backgroundColor: !v.have ? '#0B6E4F' : '#FFFFFF', color: !v.have ? '#FFFFFF' : '#0E1F19', fontSize: 17, fontWeight: '800', _display: 'flex', alignItems: 'center', justifyContent: 'center' }} kind="button" onPress={v.pickUsed} selected={!v.have}>
-              <DC.T>{"I used"}</DC.T>
+              <DC.T>{"You used"}</DC.T>
             </DC.Box>
           </DC.Box>
           {DC.list(v.summary).map((row, $i) => (

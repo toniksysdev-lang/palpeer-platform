@@ -137,9 +137,9 @@ class Component extends DCLogic {
     const bankNeedle = String(bankQuery || '').trim().toLowerCase();
     const banksFiltered = this.bankList().filter((b) => !bankNeedle || String(b).toLowerCase().includes(bankNeedle));
     const speech = {
-      form: 'Take out money. There is no fee. You cannot take out more than you have. You have ' + fmtW(w, w.bal) + '.',
-      newacct: 'Save a new account. You can only take out to accounts you saved.',
-      check: 'Is this right? You take out ' + amountText + ' to ' + destName + '. No fee. This money leaves your wallet now. If it fails, it comes back.',
+      form: 'Withdraw money. There is no fee. You cannot withdraw more than you have. You have ' + fmtW(w, w.bal) + '.',
+      newacct: 'Save a new account. You can only Withdraw to accounts you saved.',
+      check: 'Is this right? You Withdraw ' + amountText + ' to ' + destName + '. No fee. This money leaves your wallet now. If it fails, it comes back.',
       pin: 'Enter your 4 number PIN, or use your fingerprint.',
       done: 'Your money is on the way. You now have ' + fmtW(w, w.bal - n) + '.'
     }[stage];
@@ -170,12 +170,12 @@ class Component extends DCLogic {
       afterText: fmtW(w, w.bal - n),
       destText,
       acct,
-      bankText: bank || 'Choose my bank',
+      bankText: bank || 'Choose your bank',
       haveText: (tooLittle ? 'Too small. The least is ' + fmtW(w, minAmt)
         : tooMuch ? 'Too much. I only have ' + fmtW(w, w.bal)
-        : overLimit ? 'Over my limit. I can take out ' + fmtW(w, limitLeft) + ' now.'
-        : isEmail ? 'I have ' + fmtW(w, w.bal) + '. I can take out ' + fmtW(w, Math.min(limitLeft, w.bal)) + ' now.'
-        : 'I have ' + fmtW(w, w.bal)) + (prepareError ? ' ' + prepareError : ''),
+        : overLimit ? 'Over your limit. You can withdraw ' + fmtW(w, limitLeft) + ' now.'
+        : isEmail ? 'You have ' + fmtW(w, w.bal) + '. You can withdraw ' + fmtW(w, Math.min(limitLeft, w.bal)) + ' now.'
+        : 'You have ' + fmtW(w, w.bal)) + (prepareError ? ' ' + prepareError : ''),
       haveColor: tooMuch || tooLittle || overLimit || prepareError ? '#B3231A' : '#46574F',
       blocked,
       nextBg: blockedBase || prepareError ? '#8C9A94' : '#0B6E4F',
@@ -205,7 +205,7 @@ class Component extends DCLogic {
       },
       listOpen: !!list,
       listIsBank: list === 'bank',
-      listTitle: list === 'bank' ? 'Choose my bank' : 'Which money do you take out?',
+      listTitle: list === 'bank' ? 'Choose your bank' : 'Which money do you Withdraw?',
       bankQuery,
       setBankQuery: (e) => this.setState({ bankQuery: e.target.value }),
       bankEmpty: list === 'bank' && banksFiltered.length === 0,
@@ -216,7 +216,7 @@ class Component extends DCLogic {
             : Object.keys(WALLETS)
           ).map((k) => {
             const x = this.walletFor(k);
-            return { title: x.name, note: 'I have ' + fmtW(x, x.bal), pick: () => this.setState({ code: x.code, amount: '', list: '', prepareError: null }) };
+            return { title: x.name, note: 'You have ' + fmtW(x, x.bal), pick: () => this.setState({ code: x.code, amount: '', list: '', prepareError: null }) };
           }),
       openPicker: () => this.setState({ list: 'wallet', bankQuery: '' }),
       openBanks: () => this.setState({ list: 'bank', bankQuery: '' }),
@@ -249,7 +249,7 @@ class Component extends DCLogic {
 /* ---------------------------------------------------------------- view */
 export default class TakeOutScreen extends Component {
   static defaultProps = {};
-  static title = "Take out money";
+  static title = "Withdraw money";
   static background = "#F3F6F4";
 
   render() {
@@ -258,14 +258,14 @@ export default class TakeOutScreen extends Component {
 <DC.Box s={{ position: "relative", backgroundColor: "#F3F6F4", color: "#0E1F19", fontFamily: "'Noto Sans', system-ui, sans-serif", overflow: "hidden", flex: 1 }}>
         {v.isForm ? (<>
           <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }}>
-            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Take out money"}</DC.T>
-            <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 22, paddingTop: 8, paddingRight: 14, paddingBottom: 8, paddingLeft: 14 }} label={`Money to take out`}>
+            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Withdraw money"}</DC.T>
+            <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 22, paddingTop: 8, paddingRight: 14, paddingBottom: 8, paddingLeft: 14 }} label={`Money to Withdraw`}>
               <DC.Box s={{ _display: "flex", alignItems: "center", rowGap: 10, columnGap: 10, minHeight: 64 }}>
-                <DC.Box s={{ flexShrink: 0, width: 84, height: 54, paddingTop: 0, paddingRight: 0, paddingBottom: 0, paddingLeft: 0, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", _display: "flex", alignItems: "center", justifyContent: "center", rowGap: 4, columnGap: 4 }} kind="button" onPress={v.openPicker} label={`Choose which money to take out. Now ${DC.S(v.w?.name)}`}>
+                <DC.Box s={{ flexShrink: 0, width: 84, height: 54, paddingTop: 0, paddingRight: 0, paddingBottom: 0, paddingLeft: 0, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", _display: "flex", alignItems: "center", justifyContent: "center", rowGap: 4, columnGap: 4 }} kind="button" onPress={v.openPicker} label={`Choose which money to Withdraw. Now ${DC.S(v.w?.name)}`}>
                   <DC.Img src={v.w?.flag} s={{ width: 48, height: 32, borderRadius: 4, _display: "block" }} />
                   <DC.Icon w={20} h={20} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"3"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M5 9l7 7 7-7"} /></DC.Icon>
                 </DC.Box>
-                <DC.T s={{ fontSize: 17, fontWeight: "700", _nowrap: true }}>{"I take out"}</DC.T>
+                <DC.T s={{ fontSize: 17, fontWeight: "700", _nowrap: true }}>{"You withdraw"}</DC.T>
                 <DC.Box s={{ marginLeft: "auto", _display: "flex", alignItems: "baseline", rowGap: 2, columnGap: 2, fontSize: 22, fontWeight: "800", _nowrap: true }}>
                   <DC.T>{v.w?.sym}</DC.T>
                   <DC.Input s={{ width: 96, minHeight: 48, paddingTop: 0, paddingRight: 2, paddingBottom: 0, paddingLeft: 2, borderWidth: 0, borderBottomWidth: 3, borderBottomColor: "#0E1F19", backgroundColor: "transparent", color: "#0E1F19", fontSize: 24, fontWeight: "800", textAlign: "right" }} value={v.amount} onChange={v.setAmount} inputMode={"decimal"} placeholder={"0"} id={"amount"} />
@@ -320,7 +320,7 @@ export default class TakeOutScreen extends Component {
               <DC.Box s={{ _display: "flex", alignItems: "center", rowGap: 14, columnGap: 14 }}>
                 <DC.Img src={v.w?.flag} s={{ flexShrink: 0, width: 66, height: 44, borderRadius: 6, _display: "block", boxShadow: "0 0 0 1px #C9D3CE" }} />
                 <DC.Box s={{ _display: "flex", flexDirection: "column" }}>
-                  <DC.T s={{ fontSize: 18, _lhMul: 1.25, fontWeight: "600", color: "#33453D" }}>{"I take out"}</DC.T>
+                  <DC.T s={{ fontSize: 18, _lhMul: 1.25, fontWeight: "600", color: "#33453D" }}>{"You withdraw"}</DC.T>
                   <DC.T s={{ fontSize: 34, _lhMul: 1.15, fontWeight: "800" }}>{v.amountText}</DC.T>
                 </DC.Box>
               </DC.Box>
@@ -348,7 +348,7 @@ export default class TakeOutScreen extends Component {
               </DC.Box>
             </DC.Box>
             <DC.Box s={{ marginTop: "auto", flexShrink: 0, minHeight: 72, borderWidth: 0, borderRadius: 20, backgroundColor: "#0B6E4F", color: "#FFFFFF", fontSize: 22, fontWeight: "800" }} kind="button" onPress={v.goPin}>
-              <DC.T>{"Yes, take out my money"}</DC.T>
+              <DC.T>{"Yes, withdraw your money"}</DC.T>
             </DC.Box>
           </DC.Box>
         </>) : null}
@@ -381,7 +381,7 @@ export default class TakeOutScreen extends Component {
               </React.Fragment>))}
             </DC.Box>
             <DC.Box s={{ _display: "grid", _cols: 3, rowGap: 10, columnGap: 10 }}>
-              <DC.Box s={{ height: 80, borderWidth: 0, borderRadius: 18, backgroundColor: "#0B6E4F", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={v.useFinger} label={`Use my fingerprint`}>
+              <DC.Box s={{ height: 80, borderWidth: 0, borderRadius: 18, backgroundColor: "#0B6E4F", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={v.useFinger} label={`Use your fingerprint`}>
                 <DC.Icon w={46} h={46} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M4.500 10a8 8 0 0 1 15 0"} /><SVG.Path d={"M6.500 20a14 14 0 0 0 1-6.500 4.500 4.500 0 0 1 9 0c0 2.500-.3 4.800-1 7"} /><SVG.Path d={"M12 13.500c0 3.500-.6 6-1.800 8"} /><SVG.Path d={"M19.800 15c-.1 1.500-.3 2.900-.7 4.200"} /></DC.Icon>
               </DC.Box>
               <DC.Box s={{ height: 80, borderWidth: 0, borderRadius: 18, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 34, fontWeight: "800" }} kind="button" onPress={v.press0}>
@@ -392,7 +392,7 @@ export default class TakeOutScreen extends Component {
               </DC.Box>
             </DC.Box>
             <DC.Box s={{ flexShrink: 0, minHeight: 44, color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" href={"PinReset.dc.html"}>
-              <DC.T>{"I forgot my PIN"}</DC.T>
+              <DC.T>{"Forgot your PIN?"}</DC.T>
             </DC.Box>
           </DC.Box>
         </>) : null}
@@ -405,7 +405,7 @@ export default class TakeOutScreen extends Component {
               </DC.Box>
             </DC.Box>
             <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Save a new account"}</DC.T>
-            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"I can only take out to accounts I saved."}</DC.T>
+            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"You can only withdraw to accounts you saved."}</DC.T>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 20, paddingTop: 12, paddingRight: 14, paddingBottom: 12, paddingLeft: 14, _display: "flex", flexDirection: "column", rowGap: 8, columnGap: 8 }}>
               <DC.Box s={{ minHeight: 60, paddingTop: 6, paddingRight: 12, paddingBottom: 6, paddingLeft: 12, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", textAlign: "left", _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 8, columnGap: 8 }} kind="button" onPress={v.openBanks}>
                 <DC.Box s={{ _display: "flex", flexDirection: "column" }}>
@@ -431,9 +431,9 @@ export default class TakeOutScreen extends Component {
               <DC.Box s={{ width: 92, height: 92, borderRadius: 46, backgroundColor: "#A84C08", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <DC.Icon w={56} h={56} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.4"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Circle cx={"12"} cy={"12"} r={"9"} /><SVG.Path d={"M12 7v5l3 2"} /></DC.Icon>
               </DC.Box>
-              <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"My money is on the way"}</DC.T>
+              <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Your money is on the way"}</DC.T>
               <DC.T s={{ fontSize: 40, _lhMul: 1.1, fontWeight: "800" }}>{v.amountText}</DC.T>
-              <DC.T s={{ fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"I will get an alert when it arrives."}</DC.T>
+              <DC.T s={{ fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"You will get an alert when it arrives."}</DC.T>
             </DC.Box>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 22, paddingTop: 14, paddingRight: 18, paddingBottom: 14, paddingLeft: 18, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10, fontSize: 18, _lhMul: 1.3 }} label={`Receipt`}>
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
@@ -441,7 +441,7 @@ export default class TakeOutScreen extends Component {
                 <DC.T s={{ fontWeight: "800" }}>{"No fee"}</DC.T>
               </DC.Box>
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
-                <DC.T s={{ fontWeight: "600", color: "#33453D" }}>{"I now have"}</DC.T>
+                <DC.T s={{ fontWeight: "600", color: "#33453D" }}>{"You now have"}</DC.T>
                 <DC.T s={{ fontWeight: "800" }}>{v.afterText}</DC.T>
               </DC.Box>
             </DC.Box>
@@ -485,10 +485,10 @@ export default class TakeOutScreen extends Component {
                 <DC.Icon w={52} h={52} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.4"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Rect x={"5"} y={"11"} width={"14"} height={"10"} rx={"2"} /><SVG.Path d={"M8 11V7a4 4 0 0 1 8 0v4"} /></DC.Icon>
               </DC.Box>
               <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"My PIN is locked"}</DC.T>
-              <DC.T s={{ fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Wrong PIN 3 times. No money moved. Answer my 2 security questions to get back in."}</DC.T>
+              <DC.T s={{ fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Wrong PIN 3 times. No money moved. Answer your 2 security questions to get back in."}</DC.T>
             </DC.Box>
             <DC.Box s={{ marginTop: "auto", flexShrink: 0, minHeight: 68, borderRadius: 20, backgroundColor: "#0B6E4F", color: "#FFFFFF", textDecorationLine: "none", fontSize: 22, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" onPress={v.unlock} href={"PinReset.dc.html"}>
-              <DC.T>{"Reset my PIN"}</DC.T>
+              <DC.T>{"Reset your PIN"}</DC.T>
             </DC.Box>
             <DC.Box s={{ flexShrink: 0, minHeight: 60, borderWidth: 3, borderColor: "#0B6E4F", borderStyle: "solid", borderRadius: 20, color: "#0B6E4F", textDecorationLine: "none", fontSize: 20, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" onPress={v.unlock} href={"Main.dc.html"}>
               <DC.T>{"Go home"}</DC.T>

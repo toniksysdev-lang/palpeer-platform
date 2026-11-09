@@ -150,7 +150,7 @@ class Component extends DCLogic {
         '. Change now: Palpeer changes it and there is no waiting. You get ' + nowGet +
         '. Choose a person: you change with another user and you may wait. You may get ' + personGet + ' after the fee.',
       check: 'Is this right? You give ' + giveText + '. You get ' + displayNowGet + '. ' +
-        (expired ? 'Time is over. Get a new price.' : 'If it is right, tap Yes, change my money.'),
+        (expired ? 'Time is over. Get a new price.' : 'If it is right, tap Yes, change your money.'),
       pin: 'Enter your 4 number PIN, or use your fingerprint.',
       done: 'Done. ' + displayNowGet + ' is now in your ' + want.name + '. You now have ' + afterText + '.'
     }[stage];
@@ -166,7 +166,7 @@ class Component extends DCLogic {
       afterText,
       timeText: expired ? 'Time is over. Get a new price.' : 'This price stays for 0:' + secs,
       timeColor: expired ? '#B3231A' : '#A84C08',
-      confirmLabel: expired ? 'Get a new price' : 'Yes, change my money',
+      confirmLabel: expired ? 'Get a new price' : 'Yes, change your money',
       confirm: async () => {
         if (expired) {
           if (this.props.backend && this.props.lockQuote) {
@@ -237,7 +237,7 @@ class Component extends DCLogic {
       give,
       want,
       amount,
-      haveText: tooLittle ? 'Too small. The least is ' + money(give, 10 * give.perCad) : tooMuch ? 'Not enough money. I have ' + money(give, give.bal) : 'I have ' + money(give, give.bal),
+      haveText: tooLittle ? 'Too small. The least is ' + money(give, 10 * give.perCad) : tooMuch ? 'Not enough money. You have ' + money(give, give.bal) : 'You have ' + money(give, give.bal),
       haveColor: tooMuch || tooLittle ? '#B3231A' : '#46574F',
       nowGet: displayNowGet,
       personGet,
@@ -327,7 +327,7 @@ export default class ChangeScreen extends Component {
               <DC.Img src={v.give?.flag} s={{ width: 48, height: 32, borderRadius: 4, _display: "block" }} />
               <DC.Icon w={20} h={20} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"3"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M5 9l7 7 7-7"} /></DC.Icon>
             </DC.Box>
-            <DC.T s={{ fontSize: 19, fontWeight: "700", _nowrap: true }}>{"I give"}</DC.T>
+            <DC.T s={{ fontSize: 19, fontWeight: "700", _nowrap: true }}>{"You give"}</DC.T>
             <DC.Box s={{ marginLeft: "auto", _display: "flex", alignItems: "baseline", rowGap: 2, columnGap: 2, fontSize: 22, fontWeight: "800", _nowrap: true }}>
               <DC.T>{v.give?.sym}</DC.T>
               <DC.Input s={{ width: 118, minHeight: 48, paddingTop: 0, paddingRight: 4, paddingBottom: 0, paddingLeft: 4, borderWidth: 0, borderBottomWidth: 3, borderBottomColor: "#0E1F19", backgroundColor: "transparent", color: "#0E1F19", fontSize: 28, fontWeight: "800", textAlign: "right" }} value={v.amount} onChange={v.setAmount} inputMode={"decimal"} id={"give"} />
@@ -341,7 +341,7 @@ export default class ChangeScreen extends Component {
               <DC.Icon w={20} h={20} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"3"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M5 9l7 7 7-7"} /></DC.Icon>
             </DC.Box>
             <DC.Box s={{ _display: "flex", flexDirection: "column" }}>
-              <DC.T s={{ fontSize: 19, _lhMul: 1.2, fontWeight: "700" }}>{"I want"}</DC.T>
+              <DC.T s={{ fontSize: 19, _lhMul: 1.2, fontWeight: "700" }}>{"You want"}</DC.T>
               <DC.T s={{ fontSize: 16, _lhMul: 1.25, fontWeight: "600", color: "#33453D" }}>{v.want?.name}</DC.T>
             </DC.Box>
             <DC.Box s={{ flexShrink: 0, marginLeft: "auto", width: 52, height: 52, borderWidth: 0, borderRadius: 26, backgroundColor: "#FCEBD6", color: "#A84C08", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={v.swap} label={`Swap the two moneys`}>
@@ -388,7 +388,7 @@ export default class ChangeScreen extends Component {
               <DC.Box s={{ _display: "flex", alignItems: "center", rowGap: 14, columnGap: 14 }}>
                 <DC.Img src={v.give?.flag} s={{ flexShrink: 0, width: 66, height: 44, borderRadius: 6, _display: "block", boxShadow: "0 0 0 1px #C9D3CE" }} />
                 <DC.Box s={{ _display: "flex", flexDirection: "column" }}>
-                  <DC.T s={{ fontSize: 18, _lhMul: 1.25, fontWeight: "600", color: "#33453D" }}>{"I give"}</DC.T>
+                  <DC.T s={{ fontSize: 18, _lhMul: 1.25, fontWeight: "600", color: "#33453D" }}>{"You give"}</DC.T>
                   <DC.T s={{ fontSize: 34, _lhMul: 1.15, fontWeight: "800" }}>{v.giveText}</DC.T>
                 </DC.Box>
               </DC.Box>
@@ -396,7 +396,7 @@ export default class ChangeScreen extends Component {
               <DC.Box s={{ _display: "flex", alignItems: "center", rowGap: 14, columnGap: 14 }}>
                 <DC.Img src={v.want?.flag} s={{ flexShrink: 0, width: 66, height: 44, borderRadius: 6, _display: "block", boxShadow: "0 0 0 1px #C9D3CE" }} />
                 <DC.Box s={{ _display: "flex", flexDirection: "column" }}>
-                  <DC.T s={{ fontSize: 18, _lhMul: 1.25, fontWeight: "600", color: "#33453D" }}>{"I get"}</DC.T>
+                  <DC.T s={{ fontSize: 18, _lhMul: 1.25, fontWeight: "600", color: "#33453D" }}>{"You get"}</DC.T>
                   <DC.T s={{ fontSize: 34, _lhMul: 1.15, fontWeight: "800", color: "#0B6E4F" }}>{v.nowGet}</DC.T>
                 </DC.Box>
               </DC.Box>
@@ -454,7 +454,7 @@ export default class ChangeScreen extends Component {
               </React.Fragment>))}
             </DC.Box>
             <DC.Box s={{ _display: "grid", _cols: 3, rowGap: 10, columnGap: 10 }}>
-              <DC.Box s={{ height: 80, borderWidth: 0, borderRadius: 18, backgroundColor: "#0B6E4F", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={v.useFinger} label={`Use my fingerprint`}>
+              <DC.Box s={{ height: 80, borderWidth: 0, borderRadius: 18, backgroundColor: "#0B6E4F", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={v.useFinger} label={`Use your fingerprint`}>
                 <DC.Icon w={46} h={46} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M4.500 10a8 8 0 0 1 15 0"} /><SVG.Path d={"M6.500 20a14 14 0 0 0 1-6.500 4.500 4.500 0 0 1 9 0c0 2.500-.3 4.800-1 7"} /><SVG.Path d={"M12 13.500c0 3.500-.6 6-1.800 8"} /><SVG.Path d={"M19.800 15c-.1 1.500-.3 2.900-.7 4.200"} /></DC.Icon>
               </DC.Box>
               <DC.Box s={{ height: 80, borderWidth: 0, borderRadius: 18, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 34, fontWeight: "800" }} kind="button" onPress={v.press0}>
@@ -465,7 +465,7 @@ export default class ChangeScreen extends Component {
               </DC.Box>
             </DC.Box>
             <DC.Box s={{ flexShrink: 0, minHeight: 44, color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" href={"PinReset.dc.html"}>
-              <DC.T>{"I forgot my PIN"}</DC.T>
+              <DC.T>{"Forgot your PIN?"}</DC.T>
             </DC.Box>
           </DC.Box>
         </>) : null}
@@ -481,7 +481,7 @@ export default class ChangeScreen extends Component {
             </DC.Box>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 22, paddingTop: 14, paddingRight: 18, paddingBottom: 14, paddingLeft: 18, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10, fontSize: 18, _lhMul: 1.3 }} label={`Receipt`}>
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
-                <DC.T s={{ fontWeight: "600", color: "#33453D" }}>{"I gave"}</DC.T>
+                <DC.T s={{ fontWeight: "600", color: "#33453D" }}>{"You gave"}</DC.T>
                 <DC.T s={{ fontWeight: "800" }}>{v.giveText}</DC.T>
               </DC.Box>
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
@@ -489,7 +489,7 @@ export default class ChangeScreen extends Component {
                 <DC.T s={{ fontWeight: "800" }}>{v.rateText}</DC.T>
               </DC.Box>
               <DC.Box s={{ _display: "flex", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
-                <DC.T s={{ fontWeight: "600", color: "#33453D" }}>{"I now have"}</DC.T>
+                <DC.T s={{ fontWeight: "600", color: "#33453D" }}>{"You now have"}</DC.T>
                 <DC.T s={{ fontWeight: "800" }}>{v.afterText}</DC.T>
               </DC.Box>
               <DC.Box s={{ height: 1, backgroundColor: "#DDE4E0" }} />
@@ -506,7 +506,7 @@ export default class ChangeScreen extends Component {
               <DC.T>{"Go home"}</DC.T>
             </DC.Box>
             <DC.Box s={{ flexShrink: 0, minHeight: 60, borderWidth: 3, borderColor: "#0B6E4F", borderStyle: "solid", borderRadius: 20, color: "#0B6E4F", textDecorationLine: "none", fontSize: 20, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" onPress={v.leave} href={"Wallets.dc.html"}>
-              <DC.T>{"See all my money"}</DC.T>
+              <DC.T>{"See all your money"}</DC.T>
             </DC.Box>
           </DC.Box>
         </>) : null}
@@ -525,7 +525,7 @@ export default class ChangeScreen extends Component {
                   <DC.Img src={w?.flag} s={{ flexShrink: 0, width: 60, height: 40, borderRadius: 5, _display: "block", boxShadow: "0 0 0 1px #C9D3CE" }} />
                   <DC.Box s={{ minWidth: 0, _display: "flex", flexDirection: "column" }}>
                     <DC.T s={{ fontSize: 20, _lhMul: 1.2, fontWeight: "800" }}>{w?.name}</DC.T>
-                    <DC.T s={{ fontSize: 16, _lhMul: 1.25, fontWeight: "600", color: "#46574F" }}>{"I have "}{w?.shown}</DC.T>
+                    <DC.T s={{ fontSize: 16, _lhMul: 1.25, fontWeight: "600", color: "#46574F" }}>{"You have "}{w?.shown}</DC.T>
                   </DC.Box>
                 </DC.Box>
               </React.Fragment>))}
@@ -542,10 +542,10 @@ export default class ChangeScreen extends Component {
                 <DC.Icon w={52} h={52} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.4"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Rect x={"5"} y={"11"} width={"14"} height={"10"} rx={"2"} /><SVG.Path d={"M8 11V7a4 4 0 0 1 8 0v4"} /></DC.Icon>
               </DC.Box>
               <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"My PIN is locked"}</DC.T>
-              <DC.T s={{ fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Wrong PIN 3 times. No money moved. Answer my 2 security questions to get back in."}</DC.T>
+              <DC.T s={{ fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Wrong PIN 3 times. No money moved. Answer your 2 security questions to get back in."}</DC.T>
             </DC.Box>
             <DC.Box s={{ marginTop: "auto", flexShrink: 0, minHeight: 68, borderRadius: 20, backgroundColor: "#0B6E4F", color: "#FFFFFF", textDecorationLine: "none", fontSize: 22, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" onPress={v.unlock} href={"PinReset.dc.html"}>
-              <DC.T>{"Reset my PIN"}</DC.T>
+              <DC.T>{"Reset your PIN"}</DC.T>
             </DC.Box>
             <DC.Box s={{ flexShrink: 0, minHeight: 60, borderWidth: 3, borderColor: "#0B6E4F", borderStyle: "solid", borderRadius: 20, color: "#0B6E4F", textDecorationLine: "none", fontSize: 20, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" onPress={v.unlock} href={"Main.dc.html"}>
               <DC.T>{"Go home"}</DC.T>

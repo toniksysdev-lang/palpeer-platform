@@ -69,7 +69,7 @@ const PROVINCES = {
 };
 const INCOMES = ['My job', 'My business', 'Pension', 'Savings', 'Investment', 'Family or gift', 'Other'];
 const ID_TYPES = [
-  { name: 'Passport', hint: 'The page with my photo' },
+  { name: 'Passport', hint: 'The page with your photo' },
   { name: 'National ID card', hint: 'Front of the card' },
   { name: 'Driver\'s licence', hint: 'Front of the licence' },
   { name: 'Residence permit', hint: 'Front of the permit' }
@@ -365,15 +365,15 @@ class Component extends DCLogic {
       forgotCode: 'If this email has an account, a code is coming. Type the 6 numbers. The code ends in 10 minutes.',
       forgotNew: 'Make a new password with at least 8 letters or numbers. You will be logged out on all your phones.',
       phone: 'Choose your country, and type your phone number. We will send you a code.',
-      phoneCode: 'We sent 6 numbers to your phone. Type them here.',
+      phoneCode: 'We sent a 6-digit code to your phone. Type it here.',
       account: 'Make your account. Type your email, a username and a password. A friend code is not needed.',
-      emailCode: 'We sent 6 numbers to your email. Type them here.',
+      emailCode: 'We sent a 6-digit code to your email. Type it here.',
       method: 'How do you want to keep your money safe? Choose a 4 number PIN, or your face or fingerprint.',
       pinSet: 'Make a PIN with 4 numbers. Do not tell anyone.',
       pinAgain: 'Type the same 4 numbers again.',
       bio: 'Use your face or fingerprint. Press Turn it on.',
       questions: 'Choose 2 questions only you can answer, and type your answers.',
-      home: 'This is your home. You have one wallet. Press Complete my profile to add your details and ID. You must do this before you can move money or add a wallet.',
+      home: 'This is your home. You have one wallet. Press Complete your profile to add your details and ID. You must do this before you can move money or add a wallet.',
       details: 'Step 1 of 4. Type your name, date of birth and job, the same way as on your ID.',
       where: 'Step 2 of 4. Tell us where you live.',
       money: 'Step 3 of 4. Say where your money comes from, and how much you will move each month.',
@@ -445,7 +445,7 @@ class Component extends DCLogic {
       dots: [0, 1, 2, 3].map((i) => ({ bg: i < typed.length ? '#0E1F19' : 'transparent' })),
       pinCount: typed.length + ' of 4 numbers', pinDiff: s.pinDiff,
       pinSubmitting: !!s.pinSubmitting || (backend && !!this.props.securityBusy),
-      qWhy: s.way === 'pin' ? 'I need these answers if I forget my PIN.' : 'I need these answers if I get a new phone.',
+      qWhy: s.way === 'pin' ? 'You need these answers if you forget your PIN.' : 'You need these answers if you get a new phone.',
       q1Text: QUESTIONS[s.q1], q2Text: QUESTIONS[s.q2], a1: s.a1, a2: s.a2, setA1: set('a1'), setA2: set('a2'),
       openQ1: () => this.setState({ sheet: 1 }), openQ2: () => this.setState({ sheet: 2 }), closeQ: () => this.setState({ sheet: 0 }),
       sheetOpen: s.sheet > 0, qList: QUESTIONS.map((text, i) => ({ text, i, pick: pickQ(i) })).filter((q) => q.i !== skipQ),
@@ -475,7 +475,7 @@ class Component extends DCLogic {
       tooYoung: age >= 0 && age < MIN_PROFILE_AGE_YEARS,
       aboutBlocked: !aboutOk, aboutBg: aboutOk ? '#0B6E4F' : '#8C9A94',
       openJob: () => this.setState({ pickOpen: 'job' }),
-      jobText: s.job || 'Choose my job type',
+      jobText: s.job || 'Choose your job type',
       isWhere: s.stage === 'where', isMoney: s.stage === 'money', isIdChoose: s.stage === 'idChoose',
       goWhere: () => this.go('where'), goMoney: () => this.go('money'),
       goIdChoose: () => {
@@ -544,7 +544,7 @@ class Component extends DCLogic {
       sheetTitle:
         s.pickOpen === 'prov' ? lc.provName
           : s.pickOpen === 'job' ? 'My job'
-            : 'Choose my country',
+            : 'Choose your country',
       sheetList: s.pickOpen === 'prov'
         ? (provs || []).map((text) => ({ text, flag: '', pick: () => this.setState({ prov: text, pickOpen: '' }) }))
         : s.pickOpen === 'job'
@@ -591,7 +591,7 @@ class Component extends DCLogic {
       })),
       idName: ID_TYPES[s.idType].name, idHint: ID_TYPES[s.idType].hint, fullName: s.fname + ' ' + s.lname,
       toggleAgree: () => this.setState({ agree: !s.agree }), agreeChecked: s.agree ? 'true' : 'false', agreeMark: s.agree ? '✓' : '', agreeRing: s.agree ? '#0B6E4F' : 'transparent',
-      triesText: 'Palpeer sent me an email. I have ' + left + (left === 1 ? ' more try.' : ' more tries.'),
+      triesText: 'Palpeer sent you an email. You have ' + left + (left === 1 ? ' more try.' : ' more tries.'),
       takeId: () => {
         if (backend && this.props.onPickDocumentType) {
           this.props.onPickDocumentType(DOC_TYPES[s.idType]);
@@ -770,16 +770,16 @@ export default class StartScreen extends Component {
               <DC.Img src={"/_blob/4c58fd735000ec4d9218ecd0f137ff8b"} s={{ width: 250, flexShrink: 0, _display: "block" }} alt={`Palpeer. Your rate, your way.`} />
               <LandingGlobe countries={vals.landCountries} />
             </DC.Box>
-            <DC.Box s={{ flexGrow: 1, flexShrink: 0, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 16, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
-              <DC.T s={{ fontSize: 28, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15, textAlign: "center" }} role="header">{"Change my money."}{"\n"}{"Easy and safe."}</DC.T>
-              <DC.Box s={{ marginTop: "auto", minHeight: 68, flexShrink: 0, borderWidth: 0, borderRadius: 20, backgroundColor: "#0B6E4F", color: "#FFFFFF", fontSize: 22, fontWeight: "800" }} kind="button" onPress={vals.goPhoneStart}>
+            <DC.Box s={{ flexGrow: 1, flexShrink: 0, minHeight: 0, backgroundColor: "#F3F6F4", paddingTop: 18, paddingRight: 16, paddingBottom: 16, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
+              <DC.T s={{ fontSize: 28, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15, textAlign: "center", color: "#0E1F19" }} role="header">{"Change your money."}{"\n"}{"Easy and safe."}</DC.T>
+              <DC.Box s={{ marginTop: "auto", minHeight: 68, flexShrink: 0, borderWidth: 0, borderRadius: 20, backgroundColor: "#0B6E4F", color: "#FFFFFF", fontSize: 22, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={vals.goPhoneStart}>
                 <DC.T>{"Get started"}</DC.T>
               </DC.Box>
-              <DC.Box s={{ minHeight: 60, flexShrink: 0, borderWidth: 3, borderColor: "#0B6E4F", borderStyle: "solid", borderRadius: 18, backgroundColor: "transparent", color: "#0B6E4F", fontSize: 19, fontWeight: "800" }} kind="button" onPress={vals.goRates}>
+              <DC.Box s={{ minHeight: 60, flexShrink: 0, borderWidth: 3, borderColor: "#0B6E4F", borderStyle: "solid", borderRadius: 18, backgroundColor: "transparent", color: "#0B6E4F", fontSize: 19, fontWeight: "800", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={vals.goRates}>
                 <DC.T>{"See best rate now"}</DC.T>
               </DC.Box>
-              <DC.Box s={{ minHeight: 48, flexShrink: 0, borderWidth: 0, backgroundColor: "transparent", color: "#0E1F19", fontSize: 18, fontWeight: "800", textDecorationLine: "underline" }} kind="button" onPress={vals.goLogin}>
-                <DC.T>{"I have an account. Log in"}</DC.T>
+              <DC.Box s={{ minHeight: 48, flexShrink: 0, borderWidth: 0, backgroundColor: "transparent", color: "#0E1F19", fontSize: 18, fontWeight: "800", textDecorationLine: "underline", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="button" onPress={vals.goLogin}>
+                <DC.T>{"Have an account? Log in"}</DC.T>
               </DC.Box>
             </DC.Box>
           </DC.Box>
@@ -798,7 +798,7 @@ export default class StartScreen extends Component {
               </DC.Box>
             </DC.Box>
             <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Best rate now"}</DC.T>
-            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"I can look without an account."}</DC.T>
+            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"You can look without an account."}</DC.T>
             <DC.Box s={{ flexShrink: 0, _display: "flex", rowGap: 4, columnGap: 4, paddingTop: 4, paddingRight: 4, paddingBottom: 4, paddingLeft: 4, backgroundColor: "#E0E7E3", borderRadius: 16 }} role="tablist">
               <DC.Box s={DC.css(`flex: 1; min-height: 52px; border: 0; border-radius: 13px; background: ${DC.S(vals.peopleBg)}; color: ${DC.S(vals.peopleFg)}; font-size: 17px; font-weight: 800`)} kind="button" onPress={vals.showPeople} role="tab" selected={vals.tabPeople}>
                 <DC.T>{"People's offers"}</DC.T>
@@ -837,14 +837,14 @@ export default class StartScreen extends Component {
                     <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0, _display: "flex", alignItems: "center", rowGap: 10, columnGap: 10 }}>
                       <DC.Img src={vals.cadFlag} s={{ flexShrink: 0, width: 48, height: 32, borderRadius: 4, _display: "block", boxShadow: "0 0 0 1px #C9D3CE" }} />
                       <DC.Box s={{ minWidth: 0, _display: "flex", flexDirection: "column" }}>
-                        <DC.T s={{ fontSize: 16, fontWeight: "600", color: "#33453D" }}>{"I give"}</DC.T>
+                        <DC.T s={{ fontSize: 16, fontWeight: "600", color: "#33453D" }}>{"You give"}</DC.T>
                         <DC.T s={{ fontSize: 26, fontWeight: "800" }}>{"CA$1"}</DC.T>
                       </DC.Box>
                     </DC.Box>
                     <DC.Icon w={28} h={28} viewBox={"0 0 24 24"} fill={"none"} stroke={"#0B6E4F"} strokeWidth={"3"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M4 12h16M14 6l6 6-6 6"} /></DC.Icon>
                     <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0, _display: "flex", alignItems: "center", justifyContent: "flex-end", rowGap: 10, columnGap: 10 }}>
                       <DC.Box s={{ minWidth: 0, _display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                        <DC.T s={{ fontSize: 16, fontWeight: "600", color: "#33453D" }}>{"I get"}</DC.T>
+                        <DC.T s={{ fontSize: 16, fontWeight: "600", color: "#33453D" }}>{"You get"}</DC.T>
                         <DC.T s={{ fontSize: 26, fontWeight: "800", color: "#0B6E4F" }}>{vals.adminGetNgn}</DC.T>
                       </DC.Box>
                       <DC.Img src={vals.ngnFlag} s={{ flexShrink: 0, width: 48, height: 32, borderRadius: 4, _display: "block", boxShadow: "0 0 0 1px #C9D3CE" }} />
@@ -855,14 +855,14 @@ export default class StartScreen extends Component {
                     <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0, _display: "flex", alignItems: "center", rowGap: 10, columnGap: 10 }}>
                       <DC.Img src={vals.ngnFlag} s={{ flexShrink: 0, width: 48, height: 32, borderRadius: 4, _display: "block", boxShadow: "0 0 0 1px #C9D3CE" }} />
                       <DC.Box s={{ minWidth: 0, _display: "flex", flexDirection: "column" }}>
-                        <DC.T s={{ fontSize: 16, fontWeight: "600", color: "#33453D" }}>{"I give"}</DC.T>
+                        <DC.T s={{ fontSize: 16, fontWeight: "600", color: "#33453D" }}>{"You give"}</DC.T>
                         <DC.T s={{ fontSize: 26, fontWeight: "800" }}>{"₦1,000"}</DC.T>
                       </DC.Box>
                     </DC.Box>
                     <DC.Icon w={28} h={28} viewBox={"0 0 24 24"} fill={"none"} stroke={"#0B6E4F"} strokeWidth={"3"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M4 12h16M14 6l6 6-6 6"} /></DC.Icon>
                     <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0, _display: "flex", alignItems: "center", justifyContent: "flex-end", rowGap: 10, columnGap: 10 }}>
                       <DC.Box s={{ minWidth: 0, _display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                        <DC.T s={{ fontSize: 16, fontWeight: "600", color: "#33453D" }}>{"I get"}</DC.T>
+                        <DC.T s={{ fontSize: 16, fontWeight: "600", color: "#33453D" }}>{"You get"}</DC.T>
                         <DC.T s={{ fontSize: 26, fontWeight: "800", color: "#0B6E4F" }}>{vals.adminGetCad}</DC.T>
                       </DC.Box>
                       <DC.Img src={vals.cadFlag} s={{ flexShrink: 0, width: 48, height: 32, borderRadius: 4, _display: "block", boxShadow: "0 0 0 1px #C9D3CE" }} />
@@ -918,7 +918,7 @@ export default class StartScreen extends Component {
                   </DC.Box>
                 </DC.Box>
                 <DC.Box s={{ minHeight: 44, borderWidth: 0, backgroundColor: "transparent", color: "#0B6E4F", textAlign: "right", fontSize: 17, fontWeight: "800" }} kind="button" onPress={vals.goForgot}>
-                  <DC.T>{"I forgot my password"}</DC.T>
+                  <DC.T>{"Forgot your password?"}</DC.T>
                 </DC.Box>
               </DC.Box>
               {vals.notice ? (<>
@@ -950,7 +950,7 @@ export default class StartScreen extends Component {
                 </>) : null}
                 {vals.loginBack ? (<>
                   <DC.Box s={{ minHeight: 60, flexShrink: 0, borderWidth: 3, borderColor: "#0B6E4F", borderStyle: "solid", borderRadius: 18, backgroundColor: "transparent", color: "#0B6E4F", fontSize: 19, fontWeight: "800", textDecorationLine: "none", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" onPress={vals.leave} href={vals.nextPage}>
-                    <DC.T>{"Use my fingerprint or face"}</DC.T>
+                    <DC.T>{"Use your fingerprint or face"}</DC.T>
                   </DC.Box>
                 </>) : null}
                 <DC.Box s={{ _display: "flex", rowGap: 10, columnGap: 10 }}>
@@ -958,7 +958,7 @@ export default class StartScreen extends Component {
                     <DC.T>{"Get started"}</DC.T>
                   </DC.Box>
                   <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 52, borderWidth: 0, backgroundColor: "transparent", color: "#0E1F19", fontSize: 18, fontWeight: "800", textDecorationLine: "underline" }} kind="button" onPress={vals.goHelp}>
-                    <DC.T>{"I need help"}</DC.T>
+                    <DC.T>{"Need help?"}</DC.T>
                   </DC.Box>
                 </DC.Box>
               </DC.Box>
@@ -979,11 +979,11 @@ export default class StartScreen extends Component {
               </DC.Box>
             </DC.Box>
             <DC.T s={{ flexShrink: 0, fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"My phone number"}</DC.T>
-            <DC.T s={{ flexShrink: 0, marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"We will send a code to my phone."}</DC.T>
+            <DC.T s={{ flexShrink: 0, marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"We will send a code to your phone."}</DC.T>
             <DC.Box s={{ flexShrink: 0, backgroundColor: "#FFFFFF", borderRadius: 20, paddingTop: 14, paddingRight: 14, paddingBottom: 14, paddingLeft: 14, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
               <DC.T s={{ fontSize: 16, _lhMul: 1.2, fontWeight: "700" }}>{"My country"}</DC.T>
               <DC.Box s={{ _display: "flex", rowGap: 8, columnGap: 8 }}>
-                <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 60, paddingTop: 0, paddingRight: 12, paddingBottom: 0, paddingLeft: 12, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", _display: "flex", alignItems: "center", rowGap: 10, columnGap: 10, fontSize: 18, fontWeight: "800", textAlign: "left" }} kind="button" onPress={vals.openPhoneC} label={`Choose my country`}>
+                <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 60, paddingTop: 0, paddingRight: 12, paddingBottom: 0, paddingLeft: 12, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", _display: "flex", alignItems: "center", rowGap: 10, columnGap: 10, fontSize: 18, fontWeight: "800", textAlign: "left" }} kind="button" onPress={vals.openPhoneC} label={`Choose your country`}>
                   <DC.Img src={vals.phoneFlag} s={{ width: 38, height: 26, borderRadius: 4, _objectFit: "cover" }} />
                   <DC.T s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0 }}>{vals.phoneC}{" "}{vals.dial}</DC.T>
                   <DC.Icon w={20} h={20} s={{ flexShrink: 0 }} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"3"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M5 9l7 7 7-7"} /></DC.Icon>
@@ -992,7 +992,7 @@ export default class StartScreen extends Component {
               <DC.T s={{ fontSize: 16, _lhMul: 1.2, fontWeight: "700" }}>{"Phone number"}</DC.T>
               <DC.Input s={{ width: "100%", minHeight: 52, paddingTop: 0, paddingRight: 12, paddingBottom: 0, paddingLeft: 12, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", fontSize: 18, fontWeight: "700" }} value={vals.phone} onChange={vals.setPhone} inputMode={"numeric"} maxLength={14} id={"phone"} label={`Phone number`} placeholder={"Phone number"} />
             </DC.Box>
-            <DC.T s={{ flexShrink: 0, marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 16, _lhMul: 1.35, fontWeight: "600", color: "#33453D" }}>{"If I continue, I agree to the "}<DC.T s={{ textDecorationLine: "underline" }}>{"Terms of Use"}</DC.T>{" and "}<DC.T s={{ textDecorationLine: "underline" }}>{"Privacy Policy"}</DC.T>{"."}</DC.T>
+            <DC.T s={{ flexShrink: 0, marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 16, _lhMul: 1.35, fontWeight: "600", color: "#33453D" }}>{"If you continue, you agree to the "}<DC.T s={{ textDecorationLine: "underline" }}>{"Terms of Use"}</DC.T>{" and "}<DC.T s={{ textDecorationLine: "underline" }}>{"Privacy Policy"}</DC.T>{"."}</DC.T>
             {vals.hasAuthMsg ? (<>
               <DC.T s={{ flexShrink: 0, fontSize: 17, _lhMul: 1.3, fontWeight: "700", color: "#B3231A" }} role="alert">{vals.authMsg}</DC.T>
             </>) : null}
@@ -1018,10 +1018,10 @@ export default class StartScreen extends Component {
                 <DC.T>{vals.listenLabel}</DC.T>
               </DC.Box>
             </DC.Box>
-            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Check my phone"}</DC.T>
-            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"We sent 6 numbers to "}{vals.phoneMask}{"."}</DC.T>
+            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Check your phone"}</DC.T>
+            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"We sent a 6-digit code to "}{vals.phoneMask}{"."}</DC.T>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 20, paddingTop: 14, paddingRight: 14, paddingBottom: 14, paddingLeft: 14, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
-              <DC.T s={{ fontSize: 17, fontWeight: "700" }}>{"6-number code"}</DC.T>
+              <DC.T s={{ fontSize: 17, fontWeight: "700" }}>{"6-digit code"}</DC.T>
               <DC.Input s={{ width: "100%", minHeight: 68, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", textAlign: "center", fontSize: 32, fontWeight: "800", letterSpacing: 10 }} value={vals.pcode} onChange={vals.setPcode} inputMode={"numeric"} autoComplete={"one-time-code"} id={"pcode"} />
               <DC.Box s={DC.css(`min-height: 48px; border: 0; background: transparent; color: ${DC.S(vals.resendColor)}; font-size: 17px; font-weight: 800`)} kind="button" onPress={vals.resend} disabled={vals.resendOff}>
                 <DC.T>{vals.resendText}</DC.T>
@@ -1050,7 +1050,7 @@ export default class StartScreen extends Component {
                 <DC.T>{vals.listenLabel}</DC.T>
               </DC.Box>
             </DC.Box>
-            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Make my account"}</DC.T>
+            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Create your account"}</DC.T>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 20, paddingTop: 12, paddingRight: 14, paddingBottom: 12, paddingLeft: 14, _display: "flex", flexDirection: "column", rowGap: 6, columnGap: 6 }}>
               <DC.T s={{ fontSize: 16, _lhMul: 1.2, fontWeight: "700" }}>{"Email"}</DC.T>
               <DC.Input s={{ width: "100%", minHeight: 52, paddingTop: 0, paddingRight: 12, paddingBottom: 0, paddingLeft: 12, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", fontSize: 18, fontWeight: "700" }} value={vals.mail} onChange={vals.setMail} inputMode={"email"} id={"mail"} />
@@ -1059,7 +1059,7 @@ export default class StartScreen extends Component {
               {vals.hasUnameHint ? (<>
                 <DC.T s={{ fontSize: 16, fontWeight: "800", color: "#B3231A" }} role="alert">{vals.unameHint}</DC.T>
               </>) : null}
-              <DC.T s={{ fontSize: 16, _lhMul: 1.2, fontWeight: "700" }}>{"Friend's code (if I have one)"}</DC.T>
+              <DC.T s={{ fontSize: 16, _lhMul: 1.2, fontWeight: "700" }}>{"Friend's code (if you have one)"}</DC.T>
               <DC.Input s={{ width: "100%", minHeight: 52, paddingTop: 0, paddingRight: 12, paddingBottom: 0, paddingLeft: 12, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", fontSize: 18, fontWeight: "700" }} value={vals.refer} onChange={vals.setRefer} id={"refer"} />
               <DC.T s={{ fontSize: 16, _lhMul: 1.2, fontWeight: "700" }}>{"Make a password (at least 8)"}</DC.T>
               <DC.Box s={{ position: "relative" }}>
@@ -1099,10 +1099,10 @@ export default class StartScreen extends Component {
                 <DC.T>{vals.listenLabel}</DC.T>
               </DC.Box>
             </DC.Box>
-            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Check my email"}</DC.T>
-            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"We sent 6 numbers to "}{vals.mailMask}{"."}</DC.T>
+            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Check your email"}</DC.T>
+            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"We sent a 6-digit code to "}{vals.mailMask}{"."}</DC.T>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 20, paddingTop: 14, paddingRight: 14, paddingBottom: 14, paddingLeft: 14, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
-              <DC.T s={{ fontSize: 17, fontWeight: "700" }}>{"6-number code"}</DC.T>
+              <DC.T s={{ fontSize: 17, fontWeight: "700" }}>{"6-digit code"}</DC.T>
               <DC.Input s={{ width: "100%", minHeight: 68, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", textAlign: "center", fontSize: 32, fontWeight: "800", letterSpacing: 10 }} value={vals.ecode} onChange={vals.setEcode} inputMode={"numeric"} autoComplete={"one-time-code"} id={"ecode"} />
               <DC.Box s={DC.css(`min-height: 48px; border: 0; background: transparent; color: ${DC.S(vals.resendColor)}; font-size: 17px; font-weight: 800`)} kind="button" onPress={vals.resend} disabled={vals.resendOff}>
                 <DC.T>{vals.resendText}</DC.T>
@@ -1131,15 +1131,15 @@ export default class StartScreen extends Component {
                 <DC.T>{vals.listenLabel}</DC.T>
               </DC.Box>
             </DC.Box>
-            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"How do I keep my money safe?"}</DC.T>
-            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"I use this each time I move money."}</DC.T>
+            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"How do you keep your money safe?"}</DC.T>
+            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"You use this each time you move money."}</DC.T>
             <DC.Box s={{ minHeight: 104, paddingTop: 12, paddingRight: 14, paddingBottom: 12, paddingLeft: 14, borderWidth: 0, borderRadius: 20, backgroundColor: "#FFFFFF", color: "#0E1F19", textAlign: "left", _display: "flex", alignItems: "center", rowGap: 14, columnGap: 14 }} kind="button" onPress={vals.pickPin}>
               <DC.Box s={{ flexShrink: 0, width: 60, height: 60, borderRadius: 30, backgroundColor: "#0B6E4F", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <DC.Icon w={34} h={34} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.4"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Rect x={"5"} y={"11"} width={"14"} height={"10"} rx={"2"} /><SVG.Path d={"M8 11V7a4 4 0 0 1 8 0v4"} /></DC.Icon>
               </DC.Box>
               <DC.Box s={{ _display: "flex", flexDirection: "column" }}>
-                <DC.T s={{ fontSize: 22, _lhMul: 1.2, fontWeight: "800" }}>{"4-number PIN"}</DC.T>
-                <DC.T s={{ fontSize: 16, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"I type my PIN"}</DC.T>
+                <DC.T s={{ fontSize: 22, _lhMul: 1.2, fontWeight: "800" }}>{"4-digit PIN"}</DC.T>
+                <DC.T s={{ fontSize: 16, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"You type your PIN"}</DC.T>
               </DC.Box>
             </DC.Box>
             <DC.Box s={{ minHeight: 104, paddingTop: 12, paddingRight: 14, paddingBottom: 12, paddingLeft: 14, borderWidth: 0, borderRadius: 20, backgroundColor: "#FFFFFF", color: "#0E1F19", textAlign: "left", _display: "flex", alignItems: "center", rowGap: 14, columnGap: 14 }} kind="button" onPress={vals.pickBio}>
@@ -1147,8 +1147,8 @@ export default class StartScreen extends Component {
                 <DC.Icon w={36} h={36} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M12 11v3c0 2.500-.8 4.500-2 6"} /><SVG.Path d={"M8.500 19c.9-1.500 1.500-3 1.500-5v-2a2 2 0 0 1 4 0v2c0 2-.3 3.800-1 5.500"} /><SVG.Path d={"M6 15.500c.3-1 .5-2 .5-3.500a5.500 5.500 0 0 1 11 0v2c0 1.500-.1 2.800-.4 4"} /><SVG.Path d={"M4 10a8 8 0 0 1 15-3.500"} /></DC.Icon>
               </DC.Box>
               <DC.Box s={{ _display: "flex", flexDirection: "column" }}>
-                <DC.T s={{ fontSize: 22, _lhMul: 1.2, fontWeight: "800" }}>{"Face or fingerprint"}</DC.T>
-                <DC.T s={{ fontSize: 16, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"I use my face or finger"}</DC.T>
+                <DC.T s={{ fontSize: 22, _lhMul: 1.2, fontWeight: "800" }}>{"Use your face or fingerprint"}</DC.T>
+                <DC.T s={{ fontSize: 16, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"You use your face or finger"}</DC.T>
               </DC.Box>
             </DC.Box>
           </DC.Box>
@@ -1165,7 +1165,7 @@ export default class StartScreen extends Component {
                 <DC.T>{vals.listenLabel}</DC.T>
               </DC.Box>
             </DC.Box>
-            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Make my PIN"}</DC.T>
+            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Make your PIN"}</DC.T>
             <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"4 numbers. Do not tell anyone."}</DC.T>
             <DC.Box s={{ _display: "flex", justifyContent: "center", rowGap: 18, columnGap: 18, minHeight: 28 }} label={vals.pinCount} role="img">
               {DC.list(vals.dots).map((d, $index) => (<React.Fragment key={$index}>
@@ -1206,7 +1206,7 @@ export default class StartScreen extends Component {
                 <DC.T>{vals.listenLabel}</DC.T>
               </DC.Box>
             </DC.Box>
-            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Type my PIN again"}</DC.T>
+            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Type your PIN again"}</DC.T>
             <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Same 4 numbers."}</DC.T>
             <DC.Box s={{ _display: "flex", justifyContent: "center", rowGap: 18, columnGap: 18, minHeight: 28 }} label={vals.pinCount} role="img">
               {DC.list(vals.dots).map((d, $index) => (<React.Fragment key={$index}>
@@ -1214,9 +1214,9 @@ export default class StartScreen extends Component {
               </React.Fragment>))}
             </DC.Box>
             {vals.pinSubmitting ? (<>
-              <DC.Box s={{ minHeight: 48, _display: "flex", alignItems: "center", justifyContent: "center", rowGap: 10, columnGap: 10 }} label={`Saving my PIN`}>
-                <ActivityIndicator size="large" color="#0B6E4F" accessibilityLabel="Saving my PIN" />
-                <DC.T s={{ textAlign: "center", fontSize: 17, fontWeight: "700", color: "#33453D" }}>{"Saving my PIN…"}</DC.T>
+              <DC.Box s={{ minHeight: 48, _display: "flex", alignItems: "center", justifyContent: "center", rowGap: 10, columnGap: 10 }} label={`Saving your PIN`}>
+                <ActivityIndicator size="large" color="#0B6E4F" accessibilityLabel="Saving your PIN" />
+                <DC.T s={{ textAlign: "center", fontSize: 17, fontWeight: "700", color: "#33453D" }}>{"Saving your PIN…"}</DC.T>
               </DC.Box>
             </>) : null}
             {vals.pinDiff && !vals.pinSubmitting ? (<>
@@ -1253,7 +1253,7 @@ export default class StartScreen extends Component {
                 <DC.T>{vals.listenLabel}</DC.T>
               </DC.Box>
             </DC.Box>
-            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Use my face or fingerprint"}</DC.T>
+            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Use your face or fingerprint"}</DC.T>
             <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"My phone will check it is me."}</DC.T>
             <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, _display: "flex", alignItems: "center", justifyContent: "center" }}>
               <DC.Box s={{ width: 160, height: 160, borderRadius: 80, backgroundColor: "#0B6E4F", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1329,9 +1329,9 @@ export default class StartScreen extends Component {
                   <DC.T>{vals.listenLabel}</DC.T>
                 </DC.Box>
               </DC.Box>
-              <DC.Box s={{ backgroundColor: "#0B6E4F", color: "#FFFFFF", borderRadius: 22, paddingTop: 12, paddingRight: 16, paddingBottom: 14, paddingLeft: 16 }} label={`My money`}>
+              <DC.Box s={{ backgroundColor: "#0B6E4F", color: "#FFFFFF", borderRadius: 22, paddingTop: 12, paddingRight: 16, paddingBottom: 14, paddingLeft: 16 }} label={`My wallet`}>
                 <DC.Box s={{ _display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 40 }}>
-                  <DC.T s={{ fontSize: 20, fontWeight: "700", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0 }} role="header">{"My money"}</DC.T>
+                  <DC.T s={{ fontSize: 20, fontWeight: "700", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0 }} role="header">{"My wallet"}</DC.T>
                   <DC.Box s={{ width: 52, height: 44, borderWidth: 0, borderRadius: 14, backgroundColor: "#FFFFFF", color: "#0B6E4F", fontSize: 28, fontWeight: "800" }} kind="button" onPress={vals.gate} label={`Add a wallet`}>
                     <DC.T>{"+"}</DC.T>
                   </DC.Box>
@@ -1350,7 +1350,7 @@ export default class StartScreen extends Component {
                     <DC.Icon w={34} h={34} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"3"} strokeLinecap={"round"}><SVG.Path d={"M12 4v16M4 12h16"} /></DC.Icon>
                   </DC.Box>
                   <DC.T s={{ marginTop: "auto", fontSize: 27, _lhMul: 1.15, fontWeight: "800" }}>{"Add"}</DC.T>
-                  <DC.T s={{ fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Put money in"}</DC.T>
+                  <DC.T s={{ fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Fund my wallet"}</DC.T>
                 </DC.Box>
                 <DC.Box s={{ borderWidth: 0, textAlign: "left", height: 156, paddingTop: 14, paddingRight: 14, paddingBottom: 14, paddingLeft: 14, borderRadius: 22, backgroundColor: "#E1ECFB", color: "#0E1F19", textDecorationLine: "none", _display: "flex", flexDirection: "column", alignItems: "flex-start" }} kind="button" onPress={vals.gate}>
                   <DC.Box s={{ width: 58, height: 58, borderRadius: 29, backgroundColor: "#1D5BC7", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1364,19 +1364,19 @@ export default class StartScreen extends Component {
                     <DC.Icon w={34} h={34} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M3 8h17M15 3l5 5-5 5"} /><SVG.Path d={"M21 16H4M9 11l-5 5 5 5"} /></DC.Icon>
                   </DC.Box>
                   <DC.T s={{ marginTop: "auto", fontSize: 27, _lhMul: 1.15, fontWeight: "800" }}>{"Change"}</DC.T>
-                  <DC.T s={{ fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"To other money"}</DC.T>
+                  <DC.T s={{ fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"To other currency"}</DC.T>
                 </DC.Box>
                 <DC.Box s={{ borderWidth: 0, textAlign: "left", height: 156, paddingTop: 14, paddingRight: 14, paddingBottom: 14, paddingLeft: 14, borderRadius: 22, backgroundColor: "#ECE6FA", color: "#0E1F19", textDecorationLine: "none", _display: "flex", flexDirection: "column", alignItems: "flex-start" }} kind="button" onPress={vals.gate}>
                   <DC.Box s={{ width: 58, height: 58, borderRadius: 29, backgroundColor: "#5E3AB8", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <DC.Icon w={34} h={34} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.4"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M3 10l9-6 9 6z"} /><SVG.Path d={"M6 10v8M12 10v8M18 10v8M3 21h18"} /></DC.Icon>
                   </DC.Box>
-                  <DC.T s={{ marginTop: "auto", fontSize: 27, _lhMul: 1.15, fontWeight: "800" }}>{"Take out"}</DC.T>
+                  <DC.T s={{ marginTop: "auto", fontSize: 27, _lhMul: 1.15, fontWeight: "800" }}>{"Withdraw"}</DC.T>
                   <DC.T s={{ fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"To my account"}</DC.T>
                 </DC.Box>
               </DC.Box>
               <DC.Box s={{ minHeight: 84, paddingTop: 10, paddingRight: 14, paddingBottom: 10, paddingLeft: 14, borderWidth: 3, borderColor: "#A84C08", borderStyle: "solid", borderRadius: 18, backgroundColor: "#FFF4E5", color: "#0E1F19", textAlign: "left", _display: "flex", flexDirection: "column", justifyContent: "center" }} kind="button" onPress={vals.goDetails}>
-                <DC.T s={{ fontSize: 20, _lhMul: 1.2, fontWeight: "800" }}>{"Complete my profile"}</DC.T>
-                <DC.T s={{ fontSize: 16, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Add my details and ID to start using my money."}</DC.T>
+                <DC.T s={{ fontSize: 20, _lhMul: 1.2, fontWeight: "800" }}>{"Complete your profile"}</DC.T>
+                <DC.T s={{ fontSize: 16, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Add your details and ID to start using your money."}</DC.T>
               </DC.Box>
             </DC.Box>
             <DC.StickyBottom s={{ flexShrink: 0, backgroundColor: "#FFFFFF", _display: "grid", _cols: 4, paddingTop: 6, paddingRight: 8, paddingBottom: 10, paddingLeft: 8 }} label={`Main menu`}>
@@ -1401,11 +1401,11 @@ export default class StartScreen extends Component {
             </DC.StickyBottom>
             {vals.gateOpen ? (<>
               <DC.Box s={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(14,31,25,0.55)", _display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-                <DC.Box s={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 24, borderTopRightRadius: 24, borderBottomRightRadius: 0, borderBottomLeftRadius: 0, paddingTop: 20, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }} label={`Complete my profile first`} role="dialog">
-                  <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Complete my profile first"}</DC.T>
-                  <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"I can move money and add wallets after Palpeer checks my details and ID."}</DC.T>
+                <DC.Box s={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 24, borderTopRightRadius: 24, borderBottomRightRadius: 0, borderBottomLeftRadius: 0, paddingTop: 20, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }} label={`Complete your profile first`} role="dialog">
+                  <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Complete your profile first"}</DC.T>
+                  <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"You can move money and add wallets after Palpeer checks your details and ID."}</DC.T>
                   <DC.Box s={{ minHeight: 68, flexShrink: 0, borderWidth: 0, borderRadius: 20, fontSize: 22, fontWeight: "800", backgroundColor: "#0B6E4F", color: "#FFFFFF" }} kind="button" onPress={vals.goDetails}>
-                    <DC.T>{"Complete my profile"}</DC.T>
+                    <DC.T>{"Complete your profile"}</DC.T>
                   </DC.Box>
                   <DC.Box s={{ minHeight: 52, borderWidth: 0, backgroundColor: "transparent", color: "#0E1F19", fontSize: 18, fontWeight: "800", textDecorationLine: "underline" }} kind="button" onPress={vals.closeGate}>
                     <DC.T>{"Not now"}</DC.T>
@@ -1429,8 +1429,8 @@ export default class StartScreen extends Component {
               </DC.Box>
             </DC.Box>
             <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0, _scroll: "y", _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
-              <DC.T s={{ fontSize: 28, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"About me"}</DC.T>
-              <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Write it the same way as on my ID."}</DC.T>
+              <DC.T s={{ fontSize: 28, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"About you"}</DC.T>
+              <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Write it the same way as on your ID."}</DC.T>
               <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 20, paddingTop: 12, paddingRight: 14, paddingBottom: 12, paddingLeft: 14, _display: "flex", flexDirection: "column", rowGap: 6, columnGap: 6 }}>
                 <DC.T s={{ fontSize: 16, _lhMul: 1.2, fontWeight: "700" }}>{"First name"}</DC.T>
                 <DC.Input s={{ width: "100%", minHeight: 50, paddingTop: 0, paddingRight: 12, paddingBottom: 0, paddingLeft: 12, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", fontSize: 18, fontWeight: "700" }} value={vals.fname} onChange={vals.setFname} id={"fname"} />
@@ -1446,7 +1446,7 @@ export default class StartScreen extends Component {
                   testID="about-dob"
                 />
                 <DC.T s={{ fontSize: 16, _lhMul: 1.2, fontWeight: "700" }}>{"My job"}</DC.T>
-                <DC.Box s={{ minHeight: 50, paddingTop: 0, paddingRight: 12, paddingBottom: 0, paddingLeft: 12, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", textAlign: "left", fontSize: 18, fontWeight: "700", _display: "flex", alignItems: "center", justifyContent: "space-between" }} kind="button" onPress={vals.openJob} label={`Choose my job type`}>
+                <DC.Box s={{ minHeight: 50, paddingTop: 0, paddingRight: 12, paddingBottom: 0, paddingLeft: 12, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", textAlign: "left", fontSize: 18, fontWeight: "700", _display: "flex", alignItems: "center", justifyContent: "space-between" }} kind="button" onPress={vals.openJob} label={`Choose your job type`}>
                   <DC.T s={{ color: vals.job ? "#0E1F19" : "#5B6B64" }}>{vals.jobText}</DC.T>
                   <DC.Icon w={20} h={20} s={{ flexShrink: 0 }} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"3"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M5 9l7 7 7-7"} /></DC.Icon>
                 </DC.Box>
@@ -1471,15 +1471,15 @@ export default class StartScreen extends Component {
               </DC.Box>
             </DC.Box>
             <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0, _scroll: "y", _display: "flex", flexDirection: "column", rowGap: 8, columnGap: 8 }}>
-              <DC.T s={{ fontSize: 28, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Where I live"}</DC.T>
+              <DC.T s={{ fontSize: 28, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Where you live"}</DC.T>
               <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 20, paddingTop: 10, paddingRight: 14, paddingBottom: 10, paddingLeft: 14, _display: "flex", flexDirection: "column", rowGap: 5, columnGap: 5 }}>
-                <DC.Box s={{ minHeight: 52, paddingTop: 0, paddingRight: 12, paddingBottom: 0, paddingLeft: 12, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", _display: "flex", alignItems: "center", rowGap: 10, columnGap: 10, fontSize: 18, fontWeight: "800", textAlign: "left" }} kind="button" onPress={vals.openLiveC} label={`Choose my country`}>
+                <DC.Box s={{ minHeight: 52, paddingTop: 0, paddingRight: 12, paddingBottom: 0, paddingLeft: 12, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", _display: "flex", alignItems: "center", rowGap: 10, columnGap: 10, fontSize: 18, fontWeight: "800", textAlign: "left" }} kind="button" onPress={vals.openLiveC} label={`Choose your country`}>
                   <DC.Img src={vals.liveFlag} s={{ width: 34, height: 23, borderRadius: 3, _objectFit: "cover" }} />
                   <DC.T s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0 }}>{vals.liveName}</DC.T>
                   <DC.Icon w={20} h={20} s={{ flexShrink: 0 }} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"3"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M5 9l7 7 7-7"} /></DC.Icon>
                 </DC.Box>
-                <DC.Box s={{ minHeight: 44, borderWidth: 0, backgroundColor: "transparent", color: "#0B6E4F", fontSize: 17, fontWeight: "800" }} kind="button" onPress={vals.useLocation} disabled={vals.whereLocBusy} label={`Use where I am now`}>
-                  <DC.T>{vals.whereLocBusy ? 'Finding address…' : 'Use where I am now'}</DC.T>
+                <DC.Box s={{ minHeight: 44, borderWidth: 0, backgroundColor: "transparent", color: "#0B6E4F", fontSize: 17, fontWeight: "800" }} kind="button" onPress={vals.useLocation} disabled={vals.whereLocBusy} label={`Use where you are now`}>
+                  <DC.T>{vals.whereLocBusy ? 'Finding address…' : 'Use where you are now'}</DC.T>
                 </DC.Box>
                 {vals.whereAddrMsg ? (<>
                   <DC.T s={{ fontSize: 15, fontWeight: "700", color: "#B3231A" }} role="alert">{vals.whereAddrMsg}</DC.T>
@@ -1502,7 +1502,7 @@ export default class StartScreen extends Component {
                   onPick={vals.applyAddress}
                   testID="where-address1"
                 />
-                <DC.T s={{ fontSize: 16, _lhMul: 1.2, fontWeight: "700" }}>{"Apartment (if I have one)"}</DC.T>
+                <DC.T s={{ fontSize: 16, _lhMul: 1.2, fontWeight: "700" }}>{"Apartment (if you have one)"}</DC.T>
                 <DC.Input s={{ width: "100%", minHeight: 50, paddingTop: 0, paddingRight: 12, paddingBottom: 0, paddingLeft: 12, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", fontSize: 18, fontWeight: "700" }} value={vals.addr2} onChange={vals.setAddr2} id={"addr2"} />
                 <DC.Box s={{ _display: "flex", rowGap: 8, columnGap: 8 }}>
                   <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0, _display: "flex", flexDirection: "column", rowGap: 5, columnGap: 5 }}>
@@ -1535,10 +1535,10 @@ export default class StartScreen extends Component {
               </DC.Box>
             </DC.Box>
             <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0, _scroll: "y", _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
-              <DC.T s={{ fontSize: 28, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"My money"}</DC.T>
+              <DC.T s={{ fontSize: 28, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"My wallet"}</DC.T>
               <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Palpeer needs this to follow the rules."}</DC.T>
               <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 20, paddingTop: 12, paddingRight: 14, paddingBottom: 12, paddingLeft: 14, _display: "flex", flexDirection: "column", rowGap: 8, columnGap: 8 }}>
-                <DC.T s={{ fontSize: 18, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0 }} role="header">{"Where does my money come from?"}</DC.T>
+                <DC.T s={{ fontSize: 18, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0 }} role="header">{"Where does your money come from?"}</DC.T>
                 <DC.Box s={{ _display: "grid", _cols: 2, rowGap: 8, columnGap: 8 }}>
                   {DC.list(vals.incomes).map((c, $index) => (<React.Fragment key={$index}>
                     <DC.Box s={DC.css(`min-height: 56px; padding: 4px 8px; border: 3px solid ${DC.S(c?.ring)}; border-radius: 14px; background: #F3F6F4; color: #0E1F19; font-size: 17px; line-height: 1.2; font-weight: 800`)} kind="button" onPress={c?.pick} selected={c?.pressed}>
@@ -1548,7 +1548,7 @@ export default class StartScreen extends Component {
                 </DC.Box>
               </DC.Box>
               <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 20, paddingTop: 12, paddingRight: 14, paddingBottom: 12, paddingLeft: 14, _display: "flex", flexDirection: "column", rowGap: 8, columnGap: 8 }}>
-                <DC.T s={{ fontSize: 18, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0 }} role="header">{"How much will I move each month?"}</DC.T>
+                <DC.T s={{ fontSize: 18, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0 }} role="header">{"How much will you move each month?"}</DC.T>
                 <DC.Box s={{ _display: "grid", _cols: 2, rowGap: 8, columnGap: 8 }}>
                   {DC.list(vals.months).map((c, $index) => (<React.Fragment key={$index}>
                     <DC.Box s={DC.css(`min-height: 56px; padding: 4px 8px; border: 3px solid ${DC.S(c?.ring)}; border-radius: 14px; background: #F3F6F4; color: #0E1F19; font-size: 17px; line-height: 1.2; font-weight: 800`)} kind="button" onPress={c?.pick} selected={c?.pressed}>
@@ -1579,8 +1579,8 @@ export default class StartScreen extends Component {
                 <DC.T>{vals.listenLabel}</DC.T>
               </DC.Box>
             </DC.Box>
-            <DC.T s={{ fontSize: 28, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Choose my ID"}</DC.T>
-            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"It must be from the government and have my photo."}</DC.T>
+            <DC.T s={{ fontSize: 28, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Choose your ID"}</DC.T>
+            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"It must be from the government and have your photo."}</DC.T>
             {DC.list(vals.idTypes).map((d, $index) => (<React.Fragment key={$index}>
               <DC.Box s={{ minHeight: 76, paddingTop: 8, paddingRight: 14, paddingBottom: 8, paddingLeft: 14, borderWidth: 0, borderRadius: 18, backgroundColor: "#FFFFFF", color: "#0E1F19", textAlign: "left", _display: "flex", alignItems: "center", rowGap: 12, columnGap: 12 }} kind="button" onPress={d?.pick}>
                 <DC.Icon w={30} h={30} viewBox={"0 0 24 24"} fill={"none"} stroke={"#0B6E4F"} strokeWidth={"2.2"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Rect x={"2"} y={"5"} width={"20"} height={"14"} rx={"2"} /><SVG.Circle cx={"8.500"} cy={"11"} r={"2"} /><SVG.Path d={"M5 16c.6-1.500 1.900-2 3.500-2s2.900.5 3.500 2M15 10h4M15 14h4"} /></DC.Icon>
@@ -1605,29 +1605,29 @@ export default class StartScreen extends Component {
                 <DC.T>{vals.listenLabel}</DC.T>
               </DC.Box>
             </DC.Box>
-            <DC.T s={{ fontSize: 28, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Show my ID"}</DC.T>
+            <DC.T s={{ fontSize: 28, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Show your ID"}</DC.T>
             <DC.Box s={DC.css(`min-height: 80px; padding: 8px 14px; border: 3px solid ${DC.S(vals.idRing)}; border-radius: 18px; background: #FFFFFF; color: #0E1F19; text-align: left; display: flex; align-items: center; justify-content: space-between; gap: 10px`)} kind="button" onPress={vals.takeId} selected={vals.idPressed}>
               <DC.Box s={{ _display: "flex", flexDirection: "column" }}>
-                <DC.T s={{ fontSize: 20, _lhMul: 1.2, fontWeight: "800" }}>{"Photo of my ID"}</DC.T>
+                <DC.T s={{ fontSize: 20, _lhMul: 1.2, fontWeight: "800" }}>{"Photo of your ID"}</DC.T>
                 <DC.T s={{ fontSize: 16, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{vals.idName}{": "}{vals.idHint}</DC.T>
               </DC.Box>
               <DC.T s={{ flexShrink: 0, fontSize: 16, fontWeight: "800", color: "#0B6E4F" }}>{vals.idWord}</DC.T>
             </DC.Box>
             <DC.Box s={DC.css(`min-height: 80px; padding: 8px 14px; border: 3px solid ${DC.S(vals.selfieRing)}; border-radius: 18px; background: #FFFFFF; color: #0E1F19; text-align: left; display: flex; align-items: center; justify-content: space-between; gap: 10px`)} kind="button" onPress={vals.takeSelfie} selected={vals.selfiePressed}>
               <DC.Box s={{ _display: "flex", flexDirection: "column" }}>
-                <DC.T s={{ fontSize: 20, _lhMul: 1.2, fontWeight: "800" }}>{"Live photo of my face"}</DC.T>
+                <DC.T s={{ fontSize: 20, _lhMul: 1.2, fontWeight: "800" }}>{"Live photo of your face"}</DC.T>
                 <DC.T s={{ fontSize: 16, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Look at the camera"}</DC.T>
               </DC.Box>
               <DC.T s={{ flexShrink: 0, fontSize: 16, fontWeight: "800", color: "#0B6E4F" }}>{vals.selfieWord}</DC.T>
             </DC.Box>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 18, paddingTop: 10, paddingRight: 14, paddingBottom: 10, paddingLeft: 14, fontSize: 17, _lhMul: 1.3, fontWeight: "600" }}>
-              <DC.T>{"Name on my ID: "}<DC.T s={{ fontWeight: "700" }}>{vals.fullName}</DC.T></DC.T>
+              <DC.T>{"Name on your ID: "}<DC.T s={{ fontWeight: "700" }}>{vals.fullName}</DC.T></DC.T>
             </DC.Box>
             <DC.Box s={DC.css(`min-height: 76px; padding: 8px 12px; border: 3px solid ${DC.S(vals.agreeRing)}; border-radius: 18px; background: #FFFFFF; color: #0E1F19; text-align: left; font-size: 16px; line-height: 1.3; font-weight: 700; display: flex; align-items: center; gap: 10px`)} kind="button" onPress={vals.toggleAgree} role="checkbox" checked={vals.agreeChecked}>
               <DC.Box s={{ flexShrink: 0, width: 30, height: 30, borderRadius: 8, borderWidth: 3, borderColor: "#0E1F19", borderStyle: "solid", _display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: "800", color: "#0B6E4F" }}>
                 <DC.T>{vals.agreeMark}</DC.T>
               </DC.Box>
-              <DC.T>{"This account is for me. Palpeer and ComplyCube can check my details, ID and face."}</DC.T>
+              <DC.T>{"This account is for you. Palpeer and ComplyCube can check your details, ID and face."}</DC.T>
             </DC.Box>
             {vals.hasKycMsg ? (<>
               <DC.T s={{ flexShrink: 0, fontSize: 17, _lhMul: 1.3, fontWeight: "700", color: "#B3231A" }} role="alert">{vals.kycMsg}</DC.T>
@@ -1644,7 +1644,7 @@ export default class StartScreen extends Component {
                 <DC.Icon w={48} h={48} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.4"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Circle cx={"12"} cy={"12"} r={"9"} /><SVG.Path d={"M12 7v5l3 2"} /></DC.Icon>
               </DC.Box>
               <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="status">{"Palpeer is checking"}</DC.T>
-              <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"I will get a message when it is done."}</DC.T>
+              <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"You will get a message when it is done."}</DC.T>
             </DC.Box>
           </DC.Box>
         </>) : null}
@@ -1654,8 +1654,8 @@ export default class StartScreen extends Component {
               <DC.Box s={{ width: 92, height: 92, borderRadius: 46, backgroundColor: "#0B6E4F", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <DC.Icon w={52} h={52} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"3"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M5 13l4.500 4.500L19 7"} /></DC.Icon>
               </DC.Box>
-              <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"I am verified"}</DC.T>
-              <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"I can now add money, change, send, take out and add wallets."}</DC.T>
+              <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"You are verified"}</DC.T>
+              <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"You can now add money, change, send, withdraw and add wallets."}</DC.T>
             </DC.Box>
             <DC.Box s={{ minHeight: 68, flexShrink: 0, borderWidth: 0, borderRadius: 20, fontSize: 22, fontWeight: "800", backgroundColor: "#0B6E4F", color: "#FFFFFF", textDecorationLine: "none", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" onPress={vals.leave} href={"Main.dc.html"}>
               <DC.T>{"Go to Home"}</DC.T>
@@ -1699,7 +1699,7 @@ export default class StartScreen extends Component {
                 <DC.Icon w={52} h={52} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"3"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M6 6l12 12M18 6L6 18"} /></DC.Icon>
               </DC.Box>
               <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"My ID check did not pass 3 times"}</DC.T>
-              <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Palpeer sent me an email. My 3 tries are used. I cannot move money until customer service clears me."}</DC.T>
+              <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Palpeer sent you an email. Your 3 tries are used. You cannot move money until customer service clears you."}</DC.T>
             </DC.Box>
             {vals.notice ? (<>
               <DC.T s={{ textAlign: "center", fontSize: 16, fontWeight: "700", color: "#A84C08" }} role="status">{"This screen is not in the prototype yet."}</DC.T>
@@ -1724,10 +1724,10 @@ export default class StartScreen extends Component {
                 <DC.Icon w={52} h={52} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"3"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M6 6l12 12M18 6L6 18"} /></DC.Icon>
               </DC.Box>
               <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"My face or fingerprint did not work"}</DC.T>
-              <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"No money moved. Answer my 2 security questions, then make a PIN."}</DC.T>
+              <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"No money moved. Answer your 2 security questions, then make a PIN."}</DC.T>
             </DC.Box>
             <DC.Box s={{ minHeight: 68, flexShrink: 0, borderWidth: 0, borderRadius: 20, fontSize: 22, fontWeight: "800", backgroundColor: "#0B6E4F", color: "#FFFFFF", textDecorationLine: "none", _display: "flex", alignItems: "center", justifyContent: "center" }} kind="link" href={"PinReset.dc.html"}>
-              <DC.T>{"Answer my questions"}</DC.T>
+              <DC.T>{"Answer your questions"}</DC.T>
             </DC.Box>
           </DC.Box>
         </>) : null}
@@ -1750,7 +1750,7 @@ export default class StartScreen extends Component {
               </DC.Box>
               <DC.Box s={{ _display: "flex", flexDirection: "column" }}>
                 <DC.T s={{ fontSize: 24, _lhMul: 1.2, fontWeight: "800" }}>{"Me"}</DC.T>
-                <DC.T s={{ fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"For myself, an individual"}</DC.T>
+                <DC.T s={{ fontSize: 17, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"For yourself, an individual"}</DC.T>
               </DC.Box>
             </DC.Box>
             <DC.Box s={{ minHeight: 112, paddingTop: 12, paddingRight: 14, paddingBottom: 12, paddingLeft: 14, borderWidth: 0, borderRadius: 20, backgroundColor: "#FFFFFF", color: "#0E1F19", textAlign: "left", _display: "flex", alignItems: "center", rowGap: 14, columnGap: 14 }} kind="button" onPress={vals.goBiz}>
@@ -1777,7 +1777,7 @@ export default class StartScreen extends Component {
               </DC.Box>
             </DC.Box>
             <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Business accounts are not ready yet"}</DC.T>
-            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Give me your email. We will tell you when it is ready."}</DC.T>
+            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Give us your email. We will tell you when it is ready."}</DC.T>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 20, paddingTop: 14, paddingRight: 14, paddingBottom: 14, paddingLeft: 14, _display: "flex", flexDirection: "column", rowGap: 8, columnGap: 8 }}>
               <DC.T s={{ fontSize: 17, fontWeight: "700" }}>{"My email"}</DC.T>
               <DC.Input s={{ width: "100%", minHeight: 56, paddingTop: 0, paddingRight: 12, paddingBottom: 0, paddingLeft: 12, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", fontSize: 18, fontWeight: "700" }} value={vals.bizMail} onChange={vals.setBizMail} inputMode={"email"} id={"bizmail"} />
@@ -1816,8 +1816,8 @@ export default class StartScreen extends Component {
                 <DC.T>{vals.listenLabel}</DC.T>
               </DC.Box>
             </DC.Box>
-            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"I forgot my password"}</DC.T>
-            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Palpeer will send 6 numbers to my email."}</DC.T>
+            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Forgot your password?"}</DC.T>
+            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Palpeer will send a 6-digit code to your email."}</DC.T>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 20, paddingTop: 14, paddingRight: 14, paddingBottom: 14, paddingLeft: 14, _display: "flex", flexDirection: "column", rowGap: 8, columnGap: 8 }}>
               <DC.T s={{ fontSize: 17, _lhMul: 1.2, fontWeight: "700" }}>{"My email"}</DC.T>
               <DC.Input s={{ width: "100%", minHeight: 56, paddingTop: 0, paddingRight: 12, paddingBottom: 0, paddingLeft: 12, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", fontSize: 18, fontWeight: "700" }} value={vals.fmail} onChange={vals.setFmail} inputMode={"email"} id={"fmail"} />
@@ -1826,7 +1826,7 @@ export default class StartScreen extends Component {
               <DC.T s={{ flexShrink: 0, fontSize: 17, _lhMul: 1.3, fontWeight: "700", color: "#B3231A" }} role="alert">{vals.authMsg}</DC.T>
             </>) : null}
             <DC.Box s={DC.css(`margin-top: auto; min-height: 68px; flex-shrink: 0; border: 0; border-radius: 20px; font-size: 22px; font-weight: 800; background: ${DC.S(vals.fmailBg)}; color: #FFFFFF`)} kind="button" onPress={vals.goForgotCode} disabled={vals.fmailBlocked}>
-              <DC.T>{"Send my code"}</DC.T>
+              <DC.T>{"Send code"}</DC.T>
             </DC.Box>
           </DC.Box>
         </>) : null}
@@ -1842,10 +1842,10 @@ export default class StartScreen extends Component {
                 <DC.T>{vals.listenLabel}</DC.T>
               </DC.Box>
             </DC.Box>
-            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Check my email"}</DC.T>
+            <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Check your email"}</DC.T>
             <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"If "}{vals.fmail}{" has an account, a code is coming. It ends in 10 minutes."}</DC.T>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 20, paddingTop: 14, paddingRight: 14, paddingBottom: 14, paddingLeft: 14, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
-              <DC.T s={{ fontSize: 17, _lhMul: 1.2, fontWeight: "700" }}>{"6-number code"}</DC.T>
+              <DC.T s={{ fontSize: 17, _lhMul: 1.2, fontWeight: "700" }}>{"6-digit code"}</DC.T>
               <DC.Input s={{ width: "100%", minHeight: 68, borderWidth: 0, borderRadius: 14, backgroundColor: "#E9EEEB", color: "#0E1F19", textAlign: "center", fontSize: 32, fontWeight: "800", letterSpacing: 10 }} value={vals.fcode} onChange={vals.setFcode} inputMode={"numeric"} autoComplete={"one-time-code"} id={"fcode"} />
               <DC.Box s={DC.css(`min-height: 48px; border: 0; background: transparent; color: ${DC.S(vals.resendColor)}; font-size: 17px; font-weight: 800`)} kind="button" onPress={vals.resendForgot} disabled={vals.resendOff}>
                 <DC.T>{vals.resendText}</DC.T>
@@ -1891,12 +1891,12 @@ export default class StartScreen extends Component {
                 <DC.T s={{ fontSize: 16, fontWeight: "800", color: "#B3231A" }} role="alert">{"The passwords are not the same."}</DC.T>
               </>) : null}
             </DC.Box>
-            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"I will be logged out on all my phones."}</DC.T>
+            <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"You will be logged out on all your phones."}</DC.T>
             {vals.hasAuthMsg ? (<>
               <DC.T s={{ flexShrink: 0, fontSize: 17, _lhMul: 1.3, fontWeight: "700", color: "#B3231A" }} role="alert">{vals.authMsg}</DC.T>
             </>) : null}
             <DC.Box s={DC.css(`margin-top: auto; min-height: 68px; flex-shrink: 0; border: 0; border-radius: 20px; font-size: 22px; font-weight: 800; background: ${DC.S(vals.npBg)}; color: #FFFFFF`)} kind="button" onPress={vals.finishForgot} disabled={vals.npBlocked}>
-              <DC.T>{"Change my password"}</DC.T>
+              <DC.T>{"Change your password"}</DC.T>
             </DC.Box>
           </DC.Box>
         </>) : null}
