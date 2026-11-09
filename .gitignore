@@ -32,3 +32,6 @@ data/
 
 # Local secrets (Firebase SA, etc.)
 secrets/
+
+# Local design reference app (not part of the mobile EAS build)
+palpeer_new_ui/
