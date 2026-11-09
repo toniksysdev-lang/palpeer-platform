@@ -336,9 +336,39 @@ export function Box({ s, kind, flow, onPress, href, disabled, children, _cell, l
     const horizontal = st._scroll === 'x';
     if (horizontal) inner.flexDirection = inner.flexDirection || 'row';
     else if (inner.flexDirection && inner.flexDirection.startsWith('row')) inner.flexWrap = inner.flexWrap || 'nowrap';
+    // Android often measures flexGrow ScrollViews at 0px inside docked Screens while
+    // :3333 (RN-web) still paints the list. Host View takes the flex slot; ScrollView fills it.
+    if (!horizontal && (outer.flexGrow != null || outer.flex === 1 || outer.minHeight === 0)) {
+      if (inner.flexGrow == null) inner.flexGrow = 1;
+      const host = {
+        flexGrow: outer.flexGrow ?? 1,
+        flexShrink: outer.flexShrink ?? 1,
+        flexBasis: outer.flexBasis ?? 0,
+        minHeight: 0,
+        maxHeight: outer.maxHeight,
+        width: outer.width ?? '100%',
+        alignSelf: outer.alignSelf,
+        backgroundColor: outer.backgroundColor,
+      };
+      return (
+        <View style={host} {...ax}>
+          <ScrollView
+            style={{ flex: 1, width: '100%' }}
+            contentContainerStyle={inner}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+            removeClippedSubviews={false}
+          >
+            {wrapped}
+          </ScrollView>
+        </View>
+      );
+    }
     return (
       <ScrollView style={outer} contentContainerStyle={inner} horizontal={horizontal}
-        keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} {...ax}>
+        keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
+        nestedScrollEnabled={!horizontal} removeClippedSubviews={false} {...ax}>
         {wrapped}
       </ScrollView>
     );
@@ -346,11 +376,11 @@ export function Box({ s, kind, flow, onPress, href, disabled, children, _cell, l
 
   const handler = pressHandler(onPress, href, go);
   if (kind || handler) {
-    // Android Pressable often drops backgroundColor / border paints while text still
-    // shows (land "Get started" went white-on-white vs :3333). Paint chrome on an
-    // inner View; keep flex/margin (incl. marginTop: 'auto') on the Pressable shell.
+    // Android: Pressable is unreliable for flex:1 row tabs (rates pills overlapped /
+    // collapsed vs :3333) and often drops backgroundColor. Put flex+margin on a View
+    // host, paint chrome on an inner face View, keep Pressable as a stretch fill.
     const face = { ...view };
-    const pressShell = {
+    const host = {
       alignSelf: parentRow ? view.alignSelf : (view.alignSelf || 'stretch'),
       flexGrow: view.flexGrow,
       flexShrink: view.flexShrink,
@@ -365,25 +395,37 @@ export function Box({ s, kind, flow, onPress, href, disabled, children, _cell, l
       marginRight: view.marginRight,
       marginBottom: view.marginBottom,
       marginLeft: view.marginLeft,
+      overflow: 'hidden',
+      borderRadius: view.borderRadius,
+      borderTopLeftRadius: view.borderTopLeftRadius,
+      borderTopRightRadius: view.borderTopRightRadius,
+      borderBottomLeftRadius: view.borderBottomLeftRadius,
+      borderBottomRightRadius: view.borderBottomRightRadius,
     };
     delete face.marginTop;
     delete face.marginRight;
     delete face.marginBottom;
     delete face.marginLeft;
+    delete face.alignSelf;
     delete face.flexGrow;
     delete face.flexShrink;
     delete face.flexBasis;
-    delete face.alignSelf;
+    face.width = '100%';
+    if (view.minHeight != null) face.minHeight = view.minHeight;
+    if (view.height != null) face.height = '100%';
+    else if (view.minHeight != null || view.flexGrow != null) face.flexGrow = 1;
     return (
-      <Pressable
-        onPress={disabled ? undefined : handler}
-        disabled={!!disabled}
-        android_ripple={Platform.OS === 'android' ? { color: 'rgba(0,0,0,0.08)' } : undefined}
-        style={({ pressed }) => (pressed && handler && !disabled ? [pressShell, { opacity: 0.82 }] : pressShell)}
-        {...ax}
-      >
-        <View style={face} collapsable={false}>{wrapped}</View>
-      </Pressable>
+      <View style={host} collapsable={false}>
+        <Pressable
+          onPress={disabled ? undefined : handler}
+          disabled={!!disabled}
+          android_ripple={Platform.OS === 'android' ? { color: 'rgba(0,0,0,0.08)' } : undefined}
+          style={({ pressed }) => (pressed && handler && !disabled ? { width: '100%', opacity: 0.82 } : { width: '100%' })}
+          {...ax}
+        >
+          <View style={face} collapsable={false}>{wrapped}</View>
+        </Pressable>
+      </View>
     );
   }
   return <View style={view} {...ax}>{wrapped}</View>;
@@ -441,6 +483,31 @@ export function T({ s, children, href, onPress, label, role, live, _cell }) {
   const handler = pressHandler(onPress, href, go);
   const nowrap = !!st._nowrap;
   const ax = a11y({ label, role: role || (href ? 'link' : undefined), live });
+  // Android Text with flexGrow/flexBasis in a row often lays out at 0 width (headers /
+  // wallet names vanish) while :3333 still paints. Put flex on a View wrapper.
+  const flexKeys = ['flexGrow', 'flexShrink', 'flexBasis', 'flex', 'alignSelf', 'width', 'minWidth', 'maxWidth', 'height', 'minHeight', 'maxHeight', 'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft'];
+  const needsFlexWrap = !inherited.inText && flexKeys.some((k) => view[k] != null);
+  if (needsFlexWrap) {
+    const wrapStyle = {};
+    const textOnly = { ...view };
+    for (const k of flexKeys) {
+      if (view[k] != null) {
+        wrapStyle[k] = view[k];
+        delete textOnly[k];
+      }
+    }
+    return (
+      <TextContext.Provider value={ctx}>
+        <View style={wrapStyle} collapsable={false}>
+          <Text style={[textOnly, resolved]} onPress={handler}
+            numberOfLines={nowrap ? 1 : undefined} adjustsFontSizeToFit={nowrap || undefined}
+            minimumFontScale={nowrap ? 0.6 : undefined} {...ax}>
+            {children}
+          </Text>
+        </View>
+      </TextContext.Provider>
+    );
+  }
   return (
     <TextContext.Provider value={ctx}>
       <Text style={[view, resolved]} onPress={handler}
@@ -536,11 +603,17 @@ export function Input({ s, value, onChange, inputMode, type, placeholder, maxLen
   if (text._lhMul == null && text.lineHeight == null) delete merged.lineHeight;
   const tStyle = resolveText(merged);
   if (dark) tStyle.color = '#F1F5F3';
+  else if (tStyle.color == null) tStyle.color = '#0E1F19';
   // Mobile browsers zoom the whole page when focused inputs are < 16px — looks like a resize.
   // Keep the field tall enough for that floor so text is not clipped after scale.
   if (typeof tStyle.fontSize === 'number' && tStyle.fontSize < 16) tStyle.fontSize = 16;
   if (typeof view.minHeight === 'number' && typeof tStyle.fontSize === 'number') {
     view.minHeight = Math.max(view.minHeight, Math.ceil(tStyle.fontSize + 28));
+  }
+  // Android font padding clips glyphs inside minHeight fields (login/phone look empty).
+  if (Platform.OS === 'android') {
+    tStyle.includeFontPadding = false;
+    tStyle.textAlignVertical = 'center';
   }
   const inputType = String(type || 'text');
   const stringValue = value == null ? '' : String(value);
@@ -573,6 +646,7 @@ export function Input({ s, value, onChange, inputMode, type, placeholder, maxLen
       style={[{ paddingVertical: 0 }, view, tStyle]}
       value={stringValue}
       onChangeText={emitChange}
+      underlineColorAndroid="transparent"
       keyboardType={
         usePad
           ? numberFieldTextInputProps.keyboardType
@@ -800,6 +874,9 @@ export function Screen({ bg = '#F3F6F4', go, children }) {
   // top spacer so Back rows clear the status bar — without shrinking FIT_TO_SCREEN.
   const bleedTop = statusBarBg != null;
   const topChrome = !hasHeader && !bleedTop && topInset > 0;
+  // topChrome sits above the scroll body; shrink the canvas so fixed 844 artboards
+  // (and their flexGrow middles) still fit — otherwise Android zeroes empty states / lists.
+  const bodyCanvasH = Math.max(0, canvasH - (topChrome ? topInset : 0) - (hasHeader ? topInset : 0));
 
   return (
     <View
@@ -873,8 +950,8 @@ export function Screen({ bg = '#F3F6F4', go, children }) {
                       flexGrow: 1,
                       // Explicit phone canvas height so Android does not collapse flex children
                       // inside ScrollView (web preview lays out fine without this).
-                      minHeight: canvasH,
-                      paddingBottom: padScrollInset + (keyboardOpen ? Math.min(keyboardHeight, canvasH * 0.45) : 0),
+                      minHeight: bodyCanvasH,
+                      paddingBottom: padScrollInset + (keyboardOpen ? Math.min(keyboardHeight, bodyCanvasH * 0.45) : 0),
                     }}
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"

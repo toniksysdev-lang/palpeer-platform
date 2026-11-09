@@ -786,7 +786,9 @@ export default class StartScreen extends Component {
           </DC.StatusBarBg>
         </>) : null}
         {vals.isRates ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
+          {/* flexGrow (not fixed 844): Android topChrome + FIT_TO_SCREEN was zeroing the
+              middle flex region so empty-state / offer lists vanished vs :3333. */}
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goLand}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -800,10 +802,10 @@ export default class StartScreen extends Component {
             <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Best rate now"}</DC.T>
             <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"You can look without an account."}</DC.T>
             <DC.Box s={{ flexShrink: 0, _display: "flex", rowGap: 4, columnGap: 4, paddingTop: 4, paddingRight: 4, paddingBottom: 4, paddingLeft: 4, backgroundColor: "#E0E7E3", borderRadius: 16 }} role="tablist">
-              <DC.Box s={DC.css(`flex: 1; min-height: 52px; border: 0; border-radius: 13px; background: ${DC.S(vals.peopleBg)}; color: ${DC.S(vals.peopleFg)}; font-size: 17px; font-weight: 800`)} kind="button" onPress={vals.showPeople} role="tab" selected={vals.tabPeople}>
+              <DC.Box s={DC.css(`flex: 1; min-height: 52px; border: 0; border-radius: 13px; display: flex; align-items: center; justify-content: center; background: ${DC.S(vals.peopleBg)}; color: ${DC.S(vals.peopleFg)}; font-size: 17px; font-weight: 800; text-align: center`)} kind="button" onPress={vals.showPeople} role="tab" selected={vals.tabPeople}>
                 <DC.T>{"People's offers"}</DC.T>
               </DC.Box>
-              <DC.Box s={DC.css(`flex: 1; min-height: 52px; border: 0; border-radius: 13px; background: ${DC.S(vals.adminBg)}; color: ${DC.S(vals.adminFg)}; font-size: 17px; font-weight: 800`)} kind="button" onPress={vals.showAdmin} role="tab" selected={vals.tabAdmin}>
+              <DC.Box s={DC.css(`flex: 1; min-height: 52px; border: 0; border-radius: 13px; display: flex; align-items: center; justify-content: center; background: ${DC.S(vals.adminBg)}; color: ${DC.S(vals.adminFg)}; font-size: 17px; font-weight: 800; text-align: center`)} kind="button" onPress={vals.showAdmin} role="tab" selected={vals.tabAdmin}>
                 <DC.T>{"Palpeer rate"}</DC.T>
               </DC.Box>
             </DC.Box>
@@ -825,9 +827,9 @@ export default class StartScreen extends Component {
               </DC.Box>
             </>) : null}
             {vals.showEmpty ? (<>
-              <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, _display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", rowGap: 8, columnGap: 8, textAlign: "center" }}>
-                <DC.T s={{ fontSize: 24, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.2 }} role="header">{"No offers now"}</DC.T>
-                <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D" }}>{"Offers show here when people post them."}</DC.T>
+              <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 120, _display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", rowGap: 8, columnGap: 8, textAlign: "center" }}>
+                <DC.T s={{ fontSize: 24, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.2, textAlign: "center", color: "#0E1F19" }} role="header">{"No offers now"}</DC.T>
+                <DC.T s={{ marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, fontSize: 18, _lhMul: 1.3, fontWeight: "600", color: "#33453D", textAlign: "center" }}>{"Offers show here when people post them."}</DC.T>
               </DC.Box>
             </>) : null}
             {vals.showAdminTab ? (<>
@@ -1007,7 +1009,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isPhoneCode ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goPhone}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1039,7 +1041,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isAccount ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goPhoneCode}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1088,7 +1090,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isEmailCode ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goAccount}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1120,7 +1122,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isMethod ? (<>
-          <DC.Box s={{ position: "relative", height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ position: "relative", flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goLoginBack}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1154,7 +1156,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isPinSet ? (<>
-          <DC.Box s={{ position: "relative", height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ position: "relative", flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goMethod}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1195,7 +1197,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isPinAgain ? (<>
-          <DC.Box s={{ position: "relative", height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ position: "relative", flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goPinSet} disabled={vals.pinSubmitting}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1242,7 +1244,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isBio ? (<>
-          <DC.Box s={{ position: "relative", height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ position: "relative", flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goMethod}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1266,7 +1268,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isQuestions ? (<>
-          <DC.Box s={{ position: "relative", height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 8, columnGap: 8 }}>
+          <DC.Box s={{ position: "relative", flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 8, columnGap: 8 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goSecurity}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1416,7 +1418,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isDetails ? (<>
-          <DC.Box s={{ position: "relative", height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
+          <DC.Box s={{ position: "relative", flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goHome}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1458,7 +1460,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isWhere ? (<>
-          <DC.Box s={{ position: "relative", height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 8, columnGap: 8 }}>
+          <DC.Box s={{ position: "relative", flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 8, columnGap: 8 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goDetails}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1522,7 +1524,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isMoney ? (<>
-          <DC.Box s={{ position: "relative", height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
+          <DC.Box s={{ position: "relative", flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goWhere}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1567,7 +1569,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isIdChoose ? (<>
-          <DC.Box s={{ position: "relative", height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
+          <DC.Box s={{ position: "relative", flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goMoney}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1593,7 +1595,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isKyc ? (<>
-          <DC.Box s={{ position: "relative", height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
+          <DC.Box s={{ position: "relative", flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goIdChoose}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1638,7 +1640,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isChecking ? (<>
-          <DC.Box s={{ position: "relative", height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ position: "relative", flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, _display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", rowGap: 12, columnGap: 12, textAlign: "center" }}>
               <DC.Box s={{ width: 92, height: 92, borderRadius: 46, backgroundColor: "#A84C08", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <DC.Icon w={48} h={48} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.4"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Circle cx={"12"} cy={"12"} r={"9"} /><SVG.Path d={"M12 7v5l3 2"} /></DC.Icon>
@@ -1649,7 +1651,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isVerified ? (<>
-          <DC.Box s={{ position: "relative", height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ position: "relative", flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, _display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", rowGap: 12, columnGap: 12, textAlign: "center" }}>
               <DC.Box s={{ width: 92, height: 92, borderRadius: 46, backgroundColor: "#0B6E4F", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <DC.Icon w={52} h={52} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"3"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M5 13l4.500 4.500L19 7"} /></DC.Icon>
@@ -1663,7 +1665,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isKycFail ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ _display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 16, borderWidth: 0, borderRadius: 26, backgroundColor: "#0E1F19", color: "#FFFFFF", fontSize: 17, fontWeight: "700" }} kind="button" onPress={vals.listen} label={`Listen to this screen`}>
                 <DC.T>{vals.listenLabel}</DC.T>
@@ -1688,7 +1690,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isKycStop ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ _display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 16, borderWidth: 0, borderRadius: 26, backgroundColor: "#0E1F19", color: "#FFFFFF", fontSize: 17, fontWeight: "700" }} kind="button" onPress={vals.listen} label={`Listen to this screen`}>
                 <DC.T>{vals.listenLabel}</DC.T>
@@ -1713,7 +1715,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isBioFail ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ _display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 16, borderWidth: 0, borderRadius: 26, backgroundColor: "#0E1F19", color: "#FFFFFF", fontSize: 17, fontWeight: "700" }} kind="button" onPress={vals.listen} label={`Listen to this screen`}>
                 <DC.T>{vals.listenLabel}</DC.T>
@@ -1732,7 +1734,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isType ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goLand}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1765,7 +1767,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isBiz ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goType}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1791,7 +1793,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isBizDone ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, _display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", rowGap: 12, columnGap: 12, textAlign: "center" }}>
               <DC.Box s={{ width: 92, height: 92, borderRadius: 46, backgroundColor: "#0B6E4F", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <DC.Icon w={52} h={52} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"3"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M5 13l4.500 4.500L19 7"} /></DC.Icon>
@@ -1805,7 +1807,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isForgot ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goLoginFromForgot}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1831,7 +1833,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isForgotCode ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goForgot}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -1860,7 +1862,7 @@ export default class StartScreen extends Component {
           </DC.Box>
         </>) : null}
         {vals.isForgotNew ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ minHeight: 52, flexShrink: 0, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={vals.goForgotCode2}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>

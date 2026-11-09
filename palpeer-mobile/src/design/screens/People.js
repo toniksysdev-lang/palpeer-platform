@@ -768,7 +768,7 @@ export default class PeopleScreen extends Component {
     return (
 <DC.Box s={{ position: "relative", backgroundColor: "#F3F6F4", color: "#0E1F19", fontFamily: "'Noto Sans', system-ui, sans-serif", overflow: "hidden", flex: 1 }}>
         {v.isList ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }}>
             <DC.Box s={{ _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }}>
               <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Choose a person"}</DC.T>
               <DC.Box s={{ flexShrink: 0, _display: "flex", alignItems: "center", rowGap: 4, columnGap: 4 }}>
@@ -831,7 +831,7 @@ export default class PeopleScreen extends Component {
           </DC.Box>
         </>) : null}
         {v.isEmpty ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Choose a person"}</DC.T>
             <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0, paddingTop: 20, paddingRight: 18, paddingBottom: 20, paddingLeft: 18, backgroundColor: "#FFFFFF", borderRadius: 22, _display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
               <DC.Box s={{ width: 96, height: 96, borderRadius: 48, backgroundColor: "#E1ECFB", color: "#1D5BC7", _display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -859,7 +859,7 @@ export default class PeopleScreen extends Component {
           </DC.Box>
         </>) : null}
         {v.isOffer ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"A person's offer"}</DC.T>
             <DC.Box s={{ flexGrow: 0, flexShrink: 1, flexBasis: "auto", minHeight: 0, _scroll: "y", backgroundColor: "#FFFFFF", borderRadius: 22, paddingTop: 16, paddingRight: 18, paddingBottom: 16, paddingLeft: 18, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10, fontSize: 18, _lhMul: 1.3 }}>
               <DC.Box s={{ _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 12, columnGap: 12 }}>
@@ -916,7 +916,7 @@ export default class PeopleScreen extends Component {
           </DC.Box>
         </>) : null}
         {v.isCounter ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Offer a different price"}</DC.T>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 22, paddingTop: 14, paddingRight: 14, paddingBottom: 14, paddingLeft: 14 }} label={`My price`}>
               <DC.T s={{ fontSize: 19, fontWeight: "700", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.25 }} role="header">{"My price for CA$1"}</DC.T>
@@ -968,7 +968,7 @@ export default class PeopleScreen extends Component {
           </DC.Box>
         </>) : null}
         {v.isTalk ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }}>
             <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Talk about the price"}</DC.T>
             <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0, _scroll: "y", paddingTop: 14, paddingRight: 14, paddingBottom: 14, paddingLeft: 14, backgroundColor: "#FFFFFF", borderRadius: 22, _display: "flex", flexDirection: "column", rowGap: 10, columnGap: 10 }}>
               {DC.list(v.bubbles).map((b, $index) => (<React.Fragment key={$index}>
@@ -1010,7 +1010,7 @@ export default class PeopleScreen extends Component {
           </DC.Box>
         </>) : null}
         {v.isPost ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }}>
             <DC.Box s={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0, _scroll: "y", _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }}>
               <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, flexShrink: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Make your offer"}</DC.T>
               <DC.Box s={{ flexShrink: 0, backgroundColor: "#FFFFFF", borderRadius: 22, paddingTop: 8, paddingRight: 14, paddingBottom: 8, paddingLeft: 14 }} label={`Money in my offer`}>
@@ -1127,7 +1127,7 @@ export default class PeopleScreen extends Component {
               <DC.T>{v.listenLabel}</DC.T>
             </DC.Box>
           </DC.StickyTop>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Enter your PIN"}</DC.T>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 22, paddingTop: 16, paddingRight: 16, paddingBottom: 16, paddingLeft: 16, _display: "flex", flexDirection: "column", alignItems: "center", rowGap: 12, columnGap: 12 }} label={`PIN`}>
               <DC.Box s={{ _display: "flex", justifyContent: "center", rowGap: 18, columnGap: 18 }} label={v.pinLabel} role="img">
@@ -1161,7 +1161,7 @@ export default class PeopleScreen extends Component {
           </DC.Box>
         </>) : null}
         {v.isBought ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 26, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 26, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ _display: "flex", flexDirection: "column", alignItems: "center", rowGap: 10, columnGap: 10, textAlign: "center" }}>
               <DC.Box s={{ width: 92, height: 92, borderRadius: 46, backgroundColor: "#0B6E4F", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <DC.Icon w={58} h={58} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"3"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M5 13l4.500 4.500L19 7"} /></DC.Icon>
@@ -1202,7 +1202,7 @@ export default class PeopleScreen extends Component {
           </DC.Box>
         </>) : null}
         {v.isLive ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }}>
             <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"My offer"}</DC.T>
             {v.liveSoon ? (<>
               <DC.Box s={{ flexShrink: 0, backgroundColor: "#FCEBD6", borderRadius: 18, paddingTop: 10, paddingRight: 14, paddingBottom: 10, paddingLeft: 14, _display: "flex", alignItems: "center", justifyContent: "space-between", rowGap: 10, columnGap: 10 }} label={`Offer ends soon`}>

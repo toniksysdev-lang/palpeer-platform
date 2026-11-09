@@ -257,7 +257,7 @@ export default class TakeOutScreen extends Component {
     return (
 <DC.Box s={{ position: "relative", backgroundColor: "#F3F6F4", color: "#0E1F19", fontFamily: "'Noto Sans', system-ui, sans-serif", overflow: "hidden", flex: 1 }}>
         {v.isForm ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }}>
             <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Withdraw money"}</DC.T>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 22, paddingTop: 8, paddingRight: 14, paddingBottom: 8, paddingLeft: 14 }} label={`Money to Withdraw`}>
               <DC.Box s={{ _display: "flex", alignItems: "center", rowGap: 10, columnGap: 10, minHeight: 64 }}>
@@ -314,7 +314,7 @@ export default class TakeOutScreen extends Component {
           </DC.Box>
         </>) : null}
         {v.isCheck ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Is this right?"}</DC.T>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 22, paddingTop: 18, paddingRight: 18, paddingBottom: 18, paddingLeft: 18, _display: "flex", flexDirection: "column", rowGap: 12, columnGap: 12 }}>
               <DC.Box s={{ _display: "flex", alignItems: "center", rowGap: 14, columnGap: 14 }}>
@@ -363,7 +363,7 @@ export default class TakeOutScreen extends Component {
               <DC.T>{v.listenLabel}</DC.T>
             </DC.Box>
           </DC.StickyTop>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.T s={{ fontSize: 30, fontWeight: "800", marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Enter your PIN"}</DC.T>
             <DC.Box s={{ backgroundColor: "#FFFFFF", borderRadius: 22, paddingTop: 16, paddingRight: 16, paddingBottom: 16, paddingLeft: 16, _display: "flex", flexDirection: "column", alignItems: "center", rowGap: 12, columnGap: 12 }} label={`PIN`}>
               <DC.Box s={{ _display: "flex", justifyContent: "center", rowGap: 18, columnGap: 18 }} label={v.pinLabel} role="img">
@@ -397,7 +397,7 @@ export default class TakeOutScreen extends Component {
           </DC.Box>
         </>) : null}
         {v.isNew ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ minHeight: 52, _display: "flex", alignItems: "center" }}>
               <DC.Box s={{ height: 52, paddingTop: 0, paddingRight: 16, paddingBottom: 0, paddingLeft: 10, borderWidth: 0, borderRadius: 26, backgroundColor: "#FFFFFF", color: "#0E1F19", fontSize: 17, fontWeight: "700", _display: "flex", alignItems: "center", rowGap: 6, columnGap: 6 }} kind="button" onPress={v.goForm}>
                 <DC.Icon w={26} h={26} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.6"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Path d={"M20 12H5M11 6l-6 6 6 6"} /></DC.Icon>
@@ -426,7 +426,7 @@ export default class TakeOutScreen extends Component {
           </DC.Box>
         </>) : null}
         {v.isDone ? (<>
-          <DC.Box s={{ height: 844, paddingTop: 26, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 26, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: "flex", flexDirection: "column", rowGap: 14, columnGap: 14 }}>
             <DC.Box s={{ _display: "flex", flexDirection: "column", alignItems: "center", rowGap: 10, columnGap: 10, textAlign: "center" }}>
               <DC.Box s={{ width: 92, height: 92, borderRadius: 46, backgroundColor: "#A84C08", color: "#FFFFFF", _display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <DC.Icon w={56} h={56} viewBox={"0 0 24 24"} fill={"none"} stroke={"currentColor"} strokeWidth={"2.4"} strokeLinecap={"round"} strokeLinejoin={"round"}><SVG.Circle cx={"12"} cy={"12"} r={"9"} /><SVG.Path d={"M12 7v5l3 2"} /></DC.Icon>

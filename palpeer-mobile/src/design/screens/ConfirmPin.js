@@ -305,7 +305,7 @@ export default class ConfirmPinScreen extends Component {
               <DC.T>{v.listenLabel}</DC.T>
             </DC.Box>
           </DC.StickyTop>
-          <DC.Box s={{ height: 844, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: 'flex', flexDirection: 'column', rowGap: 14, columnGap: 14 }}>
+          <DC.Box s={{ flexGrow: 1, minHeight: 0, paddingTop: 18, paddingRight: 16, paddingBottom: 20, paddingLeft: 16, _display: 'flex', flexDirection: 'column', rowGap: 14, columnGap: 14 }}>
             <DC.T s={{ fontSize: 30, fontWeight: '800', marginTop: 0, marginBottom: 0, marginRight: 0, marginLeft: 0, _lhMul: 1.15 }} role="header">{"Enter your PIN"}</DC.T>
             <DC.Box s={{ backgroundColor: '#FFFFFF', borderRadius: 22, paddingTop: 16, paddingRight: 16, paddingBottom: 16, paddingLeft: 16, _display: 'flex', flexDirection: 'column', alignItems: 'center', rowGap: 12, columnGap: 12 }} label={`PIN`}>
               <DC.Box s={{ _display: 'flex', justifyContent: 'center', rowGap: 18, columnGap: 18 }} label={v.pinLabel} role="img">

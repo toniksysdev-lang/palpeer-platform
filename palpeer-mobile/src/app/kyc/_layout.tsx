@@ -14,7 +14,8 @@ import { useAppearance } from '@/hooks/useAppearance';
 
 /** ComplyCube capture / submit — Simple Home look (matches design Start KYC). */
 export default function KycLayout() {
-  const { dark } = useAppearance();
+  const { appearance } = useAppearance();
+  const designDark = appearance === 'dark';
   const [fontsLoaded] = useFonts({
     NotoSans_400Regular,
     NotoSans_500Medium,
@@ -26,12 +27,12 @@ export default function KycLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <LookContext.Provider value={{ dark }}>
+    <LookContext.Provider value={{ dark: designDark }}>
       <Stack
         screenOptions={{
           headerShown: false,
           animation: 'slide_from_right',
-          contentStyle: { backgroundColor: dark ? DARK_PAGE : '#F3F6F4' },
+          contentStyle: { backgroundColor: designDark ? DARK_PAGE : '#F3F6F4' },
         }}
       />
     </LookContext.Provider>

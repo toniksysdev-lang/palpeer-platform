@@ -24,7 +24,7 @@ import { useAppSelector } from '@/store';
  */
 export default function Index() {
   const isAuthenticated = useAppSelector((state) => state.session.status === 'authenticated');
-  const { scheme, setAppearance } = useAppearance();
+  const { appearance, setAppearance } = useAppearance();
   useFonts({
     NotoSans_400Regular,
     NotoSans_500Medium,
@@ -44,9 +44,8 @@ export default function Index() {
 
   if (isAuthenticated) return <Redirect href="/Main" />;
 
-  // Design Start land is authored like :3333 (dark hero + light body). Only remap DC
-  // colors when the user explicitly chose dark via the land Dark/Light control.
-  const designDark = scheme === 'dark';
+  // Match :3333 light artboards unless the user explicitly chose dark (not system).
+  const designDark = appearance === 'dark';
 
   return (
     <LookContext.Provider value={{ dark: designDark }}>
@@ -56,7 +55,7 @@ export default function Index() {
         <StartScreen
           {...live}
           stage="land"
-          look={scheme === 'dark' ? 'dark' : 'light'}
+          look={designDark ? 'dark' : 'light'}
           onLookChange={onLookChange}
         />
       </Screen>
