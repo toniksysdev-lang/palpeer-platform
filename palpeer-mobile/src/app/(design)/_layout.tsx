@@ -17,9 +17,9 @@ import { NewUiProviders } from '@/newui/providers';
  * NewUiProviders wrap the ported React UI kit (theme / i18n).
  */
 export default function DesignLayout() {
-  const { scheme } = useAppearance();
-  // Follow the same resolved scheme as newui ThemeProvider so App look applies everywhere.
-  const designDark = scheme === 'dark';
+  const { appearance } = useAppearance();
+  // Explicit dark only — same rule as newui ThemeProvider / :3333 light artboard.
+  const designDark = appearance === 'dark';
 
   return (
     <LookContext.Provider value={{ dark: designDark }}>

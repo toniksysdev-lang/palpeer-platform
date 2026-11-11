@@ -1,5 +1,5 @@
 import { router, type Href } from 'expo-router';
-import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -20,7 +20,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   FocusScrollProvider,
   useFocusAnchor,
@@ -209,9 +209,32 @@ function ScreenScrollBody({
   );
 }
 
-export function Screen({ children, scroll, pad = true, gap = 14, bg, style }: { children: ReactNode; scroll?: boolean; pad?: boolean; gap?: number; bg?: string; style?: StyleProp<ViewStyle> }) {
+/** When true, Screen skips safe-area padding (nested under Overlay / tab SafeArea). */
+const ScreenInsetCtx = createContext(true);
+
+export function Screen({
+  children,
+  scroll,
+  pad = true,
+  gap = 14,
+  bg,
+  style,
+  safe,
+}: {
+  children: ReactNode;
+  scroll?: boolean;
+  pad?: boolean;
+  gap?: number;
+  bg?: string;
+  style?: StyleProp<ViewStyle>;
+  /** Override inset padding. Default: on for roots, off inside Overlay. */
+  safe?: boolean;
+}) {
   const c = useC();
   const { s, page, scale } = useLayout();
+  const insets = useSafeAreaInsets();
+  const inheritSafe = useContext(ScreenInsetCtx);
+  const applySafe = safe ?? inheritSafe;
   const scrollRef = useRef<ScrollView>(null);
   const padX = pad ? s(16) : 0;
   const padTop = pad ? s(12) : 0;
@@ -236,8 +259,21 @@ export function Screen({ children, scroll, pad = true, gap = 14, bg, style }: { 
     <View style={[{ flex: 1, width: '100%' }, inner, style]}>{children}</View>
   );
 
+  // Full-window shell + inset padding (not SafeAreaView) so LayoutProvider’s
+  // usable-height scale matches :3333 instead of double-compressing the canvas.
   return (
-    <SafeAreaView style={[page, { backgroundColor: bg || c.bg }]} edges={['top', 'bottom']}>
+    <View
+      style={[
+        page,
+        {
+          backgroundColor: bg || c.bg,
+          paddingTop: applySafe ? insets.top : 0,
+          paddingBottom: applySafe ? insets.bottom : 0,
+          paddingLeft: applySafe ? insets.left : 0,
+          paddingRight: applySafe ? insets.right : 0,
+        },
+      ]}
+    >
       <KeyboardAvoidingView
         style={{ flex: 1, width: '100%' }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -245,7 +281,7 @@ export function Screen({ children, scroll, pad = true, gap = 14, bg, style }: { 
         {body}
         <NumberPadDock scale={scale} includeBottomInset={false} />
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -879,11 +915,27 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
  */
 export function Overlay({ open, children }: { open: boolean; children: ReactNode }) {
   const c = useC();
+  const insets = useSafeAreaInsets();
   if (!open) return null;
+  // Overlay already sits in a tab SafeArea (or full window). Nested Screens must
+  // not re-apply insets — that crushed sheets on Android vs :3333 (insets ≈ 0).
   return (
-    <View style={[StyleSheet.absoluteFillObject, { backgroundColor: c.bg }]}>
-      {children}
-    </View>
+    <ScreenInsetCtx.Provider value={false}>
+      <View
+        style={[
+          StyleSheet.absoluteFillObject,
+          {
+            backgroundColor: c.bg,
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom,
+            paddingLeft: insets.left,
+            paddingRight: insets.right,
+          },
+        ]}
+      >
+        {children}
+      </View>
+    </ScreenInsetCtx.Provider>
   );
 }
 

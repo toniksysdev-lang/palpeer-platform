@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Image, Linking, Pressable, ScrollView, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBarBg } from '@/design/dc/runtime';
 import { useOptionalNumberPad } from '@/components/ui/NumberPadContext';
 import { formatPhoneDisplay, normalizePhoneInput, PHONE_MAX_LEN } from '@/newui/lib/phone';
 import {
@@ -641,16 +642,19 @@ export default function Start(props: StartProps) {
       </>
     );
     // Prefer flex (no web scrollbar). Only scroll on very short viewports.
+    // StatusBarBg keeps the 390×844 artboard height stable on native (same as :3333).
     return (
-      <SafeAreaView edges={['top', 'bottom']} style={[page, { backgroundColor: c.bg }]}>
-        {winH < 620 ? (
-          <ScrollView style={{ flex: 1, width: '100%' }} contentContainerStyle={{ flexGrow: 1, width: '100%' }} bounces={false} showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}>
-            {landBody}
-          </ScrollView>
-        ) : (
-          <View style={{ flex: 1, width: '100%', minHeight: 0 }}>{landBody}</View>
-        )}
-      </SafeAreaView>
+      <View style={[page, { backgroundColor: c.bg }]}>
+        <StatusBarBg color={c.hero}>
+          {winH < 620 ? (
+            <ScrollView style={{ flex: 1, width: '100%' }} contentContainerStyle={{ flexGrow: 1, width: '100%' }} bounces={false} showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}>
+              {landBody}
+            </ScrollView>
+          ) : (
+            <View style={{ flex: 1, width: '100%', minHeight: 0 }}>{landBody}</View>
+          )}
+        </StatusBarBg>
+      </View>
     );
   }
 

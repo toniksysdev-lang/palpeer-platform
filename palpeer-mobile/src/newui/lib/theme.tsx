@@ -65,12 +65,13 @@ type Ctx = { look: Look; setLook: (l: Look) => void; c: Palette };
 const ThemeCtx = createContext<Ctx>({ look: 'light', setLook: () => {}, c: light });
 
 /**
- * newui theme — driven by the shared appearance preference so App look
- * (More → Settings) applies across design screens and the rest of the app.
+ * newui theme — Match :3333 light artboard unless the user explicitly chose Dark
+ * (ignore system dark so APK OLED devices do not look unlike the preview).
+ * More → Settings App look still writes light/dark via setAppearance.
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const { scheme, setAppearance } = useAppearance();
-  const look: Look = scheme === 'dark' ? 'dark' : 'light';
+  const { appearance, setAppearance } = useAppearance();
+  const look: Look = appearance === 'dark' ? 'dark' : 'light';
   const setLook = useCallback(
     (l: Look) => {
       setAppearance(l);
