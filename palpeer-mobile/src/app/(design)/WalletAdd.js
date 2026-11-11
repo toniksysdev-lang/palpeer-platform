@@ -1,6 +1,6 @@
-﻿// Route for the "WalletAdd" artboard (live backend props).
-import MainScreen from '@/design/screens/Main';
+﻿// Route for add-wallet overlay — same Home with showAdd hint.
 import { useLiveMain } from '@/design/bridge/useLiveMain';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
+import HomeScreen from '@/newui/screens/Home';
 
-export default screen(MainScreen, { showAdd: true }, useLiveMain);
+export default liveScreen(HomeScreen, { showAdd: true }, useLiveMain);

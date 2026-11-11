@@ -2,9 +2,9 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { Modal, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button } from '@/components/ui/Button';
 import { SensitiveScreenGuard } from '@/hooks/useSensitiveScreen';
-import { useTheme } from '@/providers/ThemeProvider';
+import { ConfirmPinPrompt } from '@/newui/features/ConfirmPinPrompt';
+import { NewUiProviders } from '@/newui/providers';
 import { authorizedRequest } from '@/services/api/authorized';
 import { baseApi } from '@/services/api/baseApi';
 import {
@@ -15,7 +15,6 @@ import { securityCommands } from '@/services/security/securityCommands';
 import { useAppDispatch, useAppSelector } from '@/store';
 import type { PinStatusResponse } from '@/types/api/security';
 
-import { PinEntry } from './components/PinEntry';
 import { isPinLocked, pinLockedMessage, securityErrorMessage } from './errors';
 
 type PromptOptions = {
@@ -29,13 +28,12 @@ type PinPromptApi = { requestPin: (options?: PromptOptions) => Promise<boolean> 
 const PinPromptContext = createContext<PinPromptApi | null>(null);
 
 /**
- * App-wide full-screen "confirm with your PIN" flow. Uses a native Modal so it stacks above
- * expo-router / react-native-screens (JS overlays sit underneath native stack windows).
+ * App-wide full-screen "confirm with your PIN" flow (newui design).
+ * Uses a native Modal so it stacks above expo-router / react-native-screens.
  * `requestPin` resolves true after POST /security/pin/verify succeeds, or after a successful
  * biometric check when biometric unlock is enabled (client-side step R-SEC-2).
  */
 export function PinPromptProvider({ children }: { children: ReactNode }) {
-  const theme = useTheme();
   const { height: windowHeight } = useWindowDimensions();
   const dispatch = useAppDispatch();
   const biometricEnabled = useAppSelector((state) => state.appLock.biometricEnabled);
@@ -155,58 +153,30 @@ export function PinPromptProvider({ children }: { children: ReactNode }) {
         }}
         testID="pin-prompt"
       >
-        {/* Modal content is portaled outside the app tree — needs its own SafeAreaProvider. */}
+        {/* Modal content is portaled outside the app tree — needs providers. */}
         <SafeAreaProvider>
-          <View style={[styles.fill, { minHeight: windowHeight, backgroundColor: theme.colors.background }]}>
-            <SafeAreaView style={styles.fill} edges={['top', 'bottom', 'left', 'right']}>
-              {open && request ? (
-                <>
-                  <SensitiveScreenGuard />
-                  <View
-                    style={[
-                      styles.fill,
-                      {
-                        paddingHorizontal: theme.spacing.xl,
-                        paddingTop: theme.spacing.md,
-                      },
-                    ]}
-                  >
-                    <PinEntry
+          <NewUiProviders>
+            <View style={[styles.fill, { minHeight: windowHeight }]}>
+              <SafeAreaView style={styles.fill} edges={['top', 'bottom', 'left', 'right']}>
+                {open && request ? (
+                  <>
+                    <SensitiveScreenGuard />
+                    <ConfirmPinPrompt
                       title={request.title ?? 'Enter your PIN'}
-                      subtitle={request.message}
+                      message={request.message}
                       error={error}
-                      submitLabel="Confirm"
-                      loading={verifying}
-                      disabled={blocked}
-                      autoSubmit
-                      onSubmit={(pin) => void verify(pin)}
-                      testID="pin-prompt-entry"
-                      footer={
-                        <View style={{ gap: theme.spacing.sm }}>
-                          {biometricLabel && !blocked ? (
-                            <Button
-                              label={`Use ${biometricLabel}`}
-                              variant="outline"
-                              onPress={() => void tryBiometric()}
-                              disabled={verifying}
-                              testID="pin-prompt-biometric"
-                            />
-                          ) : null}
-                          <Button
-                            label={blocked ? 'Close' : 'Cancel'}
-                            variant="ghost"
-                            onPress={() => finish(false)}
-                            disabled={verifying}
-                            testID="pin-prompt-cancel"
-                          />
-                        </View>
-                      }
+                      verifying={verifying}
+                      blocked={blocked}
+                      biometricLabel={biometricLabel}
+                      onSubmitPin={(pin) => void verify(pin)}
+                      onBiometric={() => void tryBiometric()}
+                      onCancel={() => finish(false)}
                     />
-                  </View>
-                </>
-              ) : null}
-            </SafeAreaView>
-          </View>
+                  </>
+                ) : null}
+              </SafeAreaView>
+            </View>
+          </NewUiProviders>
         </SafeAreaProvider>
       </Modal>
     </PinPromptContext.Provider>

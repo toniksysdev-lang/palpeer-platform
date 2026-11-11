@@ -165,10 +165,12 @@ public class P2PService {
         }
         refreshExpiry(entity);
         if (entity.getStatus() == P2PStatus.OPEN) {
+            boolean hadSellHold = entity.getHoldLedgerEntryId() != null;
             releaseSellHold(entity);
             entity.setStatus(P2PStatus.CANCELLED);
             p2PRequestRepository.save(entity);
             publishClosed(entity);
+            notifyOfferClosed(entity, hadSellHold, false);
             return;
         }
         if (entity.getStatus() == P2PStatus.CANCELLED || entity.getStatus() == P2PStatus.EXPIRED) {
@@ -592,11 +594,37 @@ public class P2PService {
         if (entity.getStatus() == P2PStatus.OPEN
                 && entity.getExpiresAt() != null
                 && !entity.getExpiresAt().isAfter(Instant.now())) {
+            boolean hadSellHold = entity.getHoldLedgerEntryId() != null;
             releaseSellHold(entity);
             entity.setStatus(P2PStatus.EXPIRED);
             p2PRequestRepository.save(entity);
             publishClosed(entity);
+            notifyOfferClosed(entity, hadSellHold, true);
         }
+    }
+
+    /** In-app alert when the owner's listing ends without a full trade. */
+    private void notifyOfferClosed(P2PRequest entity, boolean releasedSellHold, boolean expired) {
+        String money = formatAmount(entity.getAmount()) + " " + entity.getBaseCurrencyCode();
+        String body;
+        if (releasedSellHold) {
+            body = expired
+                    ? "No one bought it. " + money + " is back in your wallet."
+                    : "You closed this offer. " + money + " is back in your wallet.";
+        } else if (expired) {
+            body = "No one took this offer for " + money + ".";
+        } else {
+            body = "You closed your offer for " + money + ".";
+        }
+        eventPublisher.publishEvent(new UserNotifyEvent(
+                entity.getUserId(),
+                expired ? "My offer ended" : "My offer closed",
+                body,
+                "P2P",
+                "P2P_REQUEST",
+                entity.getId(),
+                true,
+                true));
     }
 
     private void publishClosed(P2PRequest entity) {
@@ -666,7 +694,7 @@ public class P2PService {
 
         eventPublisher.publishEvent(new UserNotifyEvent(
                 sellerId,
-                "P2P trade completed",
+                "Change is done",
                 "You sold " + baseLine + " and received " + quoteLine + ". " + detail + ".",
                 "TRANSACTION",
                 "P2P_ORDER",
@@ -675,7 +703,7 @@ public class P2PService {
                 true));
         eventPublisher.publishEvent(new UserNotifyEvent(
                 buyerId,
-                "P2P trade completed",
+                "Change is done",
                 "You bought " + baseLine + " and paid " + quoteLine + ". " + detail + ".",
                 "TRANSACTION",
                 "P2P_ORDER",

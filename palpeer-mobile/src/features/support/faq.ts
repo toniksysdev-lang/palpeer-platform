@@ -62,11 +62,15 @@ const STOP_WORDS = new Set([
   'tell',
 ]);
 
-/** Expand casual wording so Live Chat matches How-To titles without the remote AI. */
+/**
+ * Expand casual wording so Live Chat matches How-To titles.
+ * Keep verbs in separate groups — do not put shared nouns like "money" in fund/withdraw
+ * (that made "withdraw money" score as "add money").
+ */
 const SYNONYM_GROUPS: readonly (readonly string[])[] = [
-  ['add', 'fund', 'funding', 'deposit', 'topup', 'top-up', 'money', 'naira', 'dollars'],
+  ['add', 'fund', 'funding', 'deposit', 'topup', 'top-up'],
   ['take', 'withdraw', 'withdrawal', 'cashout', 'cash-out', 'payout'],
-  ['change', 'swap', 'convert', 'exchange', 'instantex', 'instant'],
+  ['change', 'swap', 'convert', 'exchange', 'instantex', 'instant', 'changing'],
   ['send', 'transfer', 'pay'],
   ['p2p', 'peer', 'marketplace', 'offer', 'trade', 'negotiate'],
   ['pin', 'password', 'biometric', 'fingerprint', 'face'],
@@ -76,8 +80,33 @@ const SYNONYM_GROUPS: readonly (readonly string[])[] = [
   ['bonus', 'referral', 'invite', 'points', 'promotion', 'promotions'],
   ['notification', 'notifications', 'alert', 'alerts'],
   ['rate', 'rates', 'fx'],
+  ['fee', 'fees', 'charge', 'charges', 'cost', 'costs'],
   ['chat', 'support', 'agent', 'ticket', 'help'],
   ['profile', 'details', 'account', 'email', 'phone'],
+];
+
+/** Exact / near-exact prompts → FAQ item id (quick chips + common phrasing). */
+const PHRASE_ALIASES: readonly { re: RegExp; id: string }[] = [
+  { re: /\b(what are|whats|what's|tell me|explain).*(fees?|charges?|costs?)\b/, id: 'fees-overview' },
+  { re: /^(fees?|charges?|costs?)$/i, id: 'fees-overview' },
+  { re: /\bp2p fee|fee.*(p2p|person|offer)|(p2p|person|offer).*fee\b/, id: 'fees-overview' },
+  { re: /\btop[- ]?up\b/, id: 'fund-how' },
+  { re: /\b(how (do|can|to) i )?(add|fund|deposit)(\s+(money|wallet|cad|ngn))?\b/, id: 'fund-how' },
+  { re: /\b(how (do|can|to) i )?withdraw( money| funds?)?\b/, id: 'withdraw-how' },
+  { re: /\b(how (do|can|to) i )?(change|swap|convert)( money| funds?)?\b/, id: 'exchange-how' },
+  { re: /\bforgot.*\bpin\b/, id: 'forgot-pin' },
+  { re: /\bforgot.*password\b/, id: 'forgot-password' },
+];
+
+/** Intent tokens that should win over rival How-Tos when present in the query. */
+const INTENT_BOOSTS: readonly { tokens: readonly string[]; preferIdPrefix: string; boost: number }[] = [
+  { tokens: ['withdraw', 'withdrawal', 'cashout', 'payout'], preferIdPrefix: 'withdraw', boost: 12 },
+  { tokens: ['add', 'fund', 'funding', 'deposit', 'topup', 'top-up'], preferIdPrefix: 'fund', boost: 12 },
+  { tokens: ['change', 'swap', 'convert', 'exchange', 'instantex', 'changing'], preferIdPrefix: 'exchange', boost: 12 },
+  { tokens: ['fee', 'fees', 'charge', 'charges', 'cost'], preferIdPrefix: 'fees', boost: 14 },
+  { tokens: ['send', 'transfer'], preferIdPrefix: 'send', boost: 10 },
+  { tokens: ['p2p', 'peer', 'marketplace', 'negotiate'], preferIdPrefix: 'p2p', boost: 10 },
+  { tokens: ['pin', 'password', 'biometric'], preferIdPrefix: 'forgot', boost: 8 },
 ];
 
 function normalize(value: string): string {
@@ -106,6 +135,45 @@ function expandTokens(tokens: string[]): string[] {
     }
   }
   return [...out];
+}
+
+function findItemById(id: string): FaqItem | null {
+  for (const section of FAQ_SECTIONS) {
+    const hit = section.items.find((item) => item.id === id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/** Look up a How-To answer by stable FAQ item id (for quick chips). */
+export function answerHowToById(id: string): string | null {
+  return findItemById(id)?.answer ?? null;
+}
+
+function matchPhraseAlias(query: string): string | null {
+  const text = normalize(query);
+  for (const alias of PHRASE_ALIASES) {
+    if (alias.re.test(text)) {
+      const item = findItemById(alias.id);
+      if (item) return item.answer;
+    }
+  }
+  return null;
+}
+
+function intentScore(itemId: string, tokens: string[]): number {
+  let score = 0;
+  for (const intent of INTENT_BOOSTS) {
+    const queryHas = intent.tokens.some((t) => tokens.includes(t));
+    if (!queryHas) continue;
+    if (itemId.startsWith(intent.preferIdPrefix) || itemId.includes(intent.preferIdPrefix)) {
+      score += intent.boost;
+    } else {
+      // Penalize rival how-tos when the query clearly names another intent.
+      score -= Math.floor(intent.boost / 2);
+    }
+  }
+  return score;
 }
 
 /** Sections whose questions or answers contain every word of the query. */
@@ -139,6 +207,9 @@ export function answerHowToFromFaq(
   query: string,
   options: AnswerHowToOptions = {},
 ): string | null {
+  const alias = matchPhraseAlias(query);
+  if (alias) return alias;
+
   const tokens = tokenize(query);
   if (tokens.length === 0) return null;
   const expanded = expandTokens(tokens);
@@ -160,11 +231,20 @@ export function answerHowToFromFaq(
       for (const word of tokens) {
         if (question.includes(word)) score += 1;
       }
+      score += intentScore(item.id, tokens);
       if (score >= minScore) scored.push({ item, score });
     }
   }
   if (scored.length === 0) return null;
   scored.sort((a, b) => b.score - a.score || a.item.question.length - b.item.question.length);
+  // Reject weak loose matches that barely cleared the floor (often wrong how-tos).
+  if (!loose && scored[0]!.score < minScore + 1 && tokens.length >= 2) {
+    // still allow if title strongly matches
+    const top = scored[0]!;
+    const q = normalize(top.item.question);
+    const strongTitle = tokens.some((word) => q.includes(word));
+    if (!strongTitle) return null;
+  }
   return scored[0]!.item.answer;
 }
 

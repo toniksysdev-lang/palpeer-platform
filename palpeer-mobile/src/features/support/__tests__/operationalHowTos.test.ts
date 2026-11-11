@@ -13,6 +13,7 @@ describe('OPERATIONAL_HOW_TOS', () => {
         'wallets',
         'funding',
         'withdrawal',
+        'fees',
         'exchange',
         'p2p',
         'activity',
@@ -55,5 +56,14 @@ describe('FAQ mirrors operational How-Tos', () => {
     expect(answerHowToFromFaq('How do I add money?')).toMatch(/add money|fund|wallet/i);
     expect(answerHowToFromFaq('I forgot my PIN')).toMatch(/PIN|reset/i);
     expect(answerHowToFromFaq('top up my wallet', { loose: true })).toBeTruthy();
+  });
+
+  it('answers quick-chip prompts with the right How-Tos (not rivals)', () => {
+    expect(answerHowToFromFaq('What are the fees?')).toMatch(/InstantEX|P2P|review screen/i);
+    expect(answerHowToFromFaq('How do I withdraw money?')).toMatch(/Withdraw/i);
+    expect(answerHowToFromFaq('How do I withdraw money?')).not.toMatch(/Fund wallet/i);
+    expect(answerHowToFromFaq('How do I change money?')).toMatch(/InstantEX|swap|Exchange/i);
+    expect(answerHowToFromFaq('How do I change money?')).not.toMatch(/My InstantEX failed/i);
+    expect(answerHowToFromFaq('How do I add money?')).toMatch(/Fund/i);
   });
 });

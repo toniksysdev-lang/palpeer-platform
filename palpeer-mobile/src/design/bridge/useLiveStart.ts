@@ -1,10 +1,11 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
 import { authErrorMessage } from '@/features/auth/errors';
 import { useEnsureProfile } from '@/features/profile/useEnsureProfile';
-import { useGetRegistrationCountriesQuery } from '@/services/api/authApi';
 import { useSubmitBusinessInterestMutation } from '@/services/api/businessInterestApi';
+import { apiRequest } from '@/services/api/client';
 import { toAppError } from '@/services/api/errors';
 import { useAppSelector } from '@/store';
 
@@ -18,6 +19,13 @@ function homePathForCountry(country: string | null | undefined): '/StartHomeCad'
   return String(country || '').toUpperCase() === 'NG' ? '/StartHomeNgn' : '/StartHomeCad';
 }
 
+function normalizeIso2List(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((c) => String(c ?? '').trim().toUpperCase())
+    .filter((c) => /^[A-Z]{2}$/.test(c));
+}
+
 /** Combined Start-screen bridge: auth + KYC + PIN/questions/profile + public rates. */
 export function useLiveStart() {
   const auth = useLiveAuth();
@@ -25,7 +33,12 @@ export function useLiveStart() {
   const security = useLiveSecurity();
   const profile = useEnsureProfile();
   const sessionEmail = useAppSelector((state) => state.session.email);
-  const countriesQuery = useGetRegistrationCountriesQuery();
+  /**
+   * Load Admin → Settings → Registration countries (enabled ISO2) via a plain request.
+   * RTK Query refetchOnFocus was aborting this call mid-flight on web, so the landing
+   * hero never left the stand-in CA/NG/GH/KE flags.
+   */
+  const [registrationCountries, setRegistrationCountries] = useState<string[] | undefined>(undefined);
   const [submitBusinessInterest] = useSubmitBusinessInterestMutation();
   const [bizError, setBizError] = useState<string | null>(null);
   const { setupRequired, gate, returnTo } = useLocalSearchParams<{
@@ -36,12 +49,20 @@ export function useLiveStart() {
   const required = setupRequired === '1';
   const openGate = gate === '1' || required;
 
-  const registrationCountries = useMemo(() => {
-    if (!countriesQuery.data) return undefined;
-    return countriesQuery.data
-      .map((c) => c.trim().toUpperCase())
-      .filter((c) => /^[A-Z]{2}$/.test(c));
-  }, [countriesQuery.data]);
+  const loadRegistrationCountries = useCallback(async () => {
+    const result = await apiRequest<string[]>('/public/registration-countries');
+    if (!result.ok) return;
+    setRegistrationCountries(normalizeIso2List(result.data));
+  }, []);
+
+  useEffect(() => {
+    void loadRegistrationCountries();
+    const onAppState = (next: AppStateStatus) => {
+      if (next === 'active') void loadRegistrationCountries();
+    };
+    const sub = AppState.addEventListener('change', onAppState);
+    return () => sub.remove();
+  }, [loadRegistrationCountries]);
 
   const greetingName = useMemo(() => {
     const first = profile.profile?.firstName?.trim();

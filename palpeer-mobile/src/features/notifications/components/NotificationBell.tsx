@@ -20,7 +20,7 @@ export function NotificationBell() {
       <IconButton
         icon={Bell}
         accessibilityLabel={label ? `Notifications, ${unread.data} unread` : 'Notifications'}
-        onPress={() => router.navigate({ pathname: '/chat', params: { section: 'alerts' } })}
+        onPress={() => router.navigate({ pathname: '/Messages', params: { section: 'alerts' } })}
         testID="home-notifications"
       />
       {label ? (

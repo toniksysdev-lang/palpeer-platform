@@ -350,14 +350,13 @@ public class WithdrawalService {
         auditWithdrawal(tx, "WITHDRAWAL_PROCESS");
         notifyWithdrawal(
                 tx,
-                "Withdrawal successful",
-                "Your withdrawal of "
-                        + formatMoney(tx.getAmount(), tx.getCurrencyCode())
-                        + " has been sent"
+                "Money taken out",
+                formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                        + " went to your bank"
                         + (tx.getDestinationReference() == null || tx.getDestinationReference().isBlank()
                                 ? "."
-                                : " to " + tx.getDestinationReference().trim() + ".")
-                        + " Funds have left your Palpeer wallet.");
+                                : " (" + tx.getDestinationReference().trim() + ").")
+                        + " It has left your Palpeer wallet.");
         try {
             poolFundThresholdService.notifyIfThresholdHit(tx.getCurrencyCode());
         } catch (RuntimeException ex) {
@@ -415,7 +414,8 @@ public class WithdrawalService {
                 "Your withdrawal of "
                         + formatMoney(tx.getAmount(), tx.getCurrencyCode())
                         + " could not be completed. Any hold on your balance has been released."
-                        + detail);
+                        + detail
+                        + " Open History for details.");
         return toResponse(tx);
     }
 
@@ -525,8 +525,11 @@ public class WithdrawalService {
             tx.setProviderName(rail.providerName());
             tx.setProviderReference(initiation.providerReference());
             if (!initiation.pendingExternalSettlement()) {
-                // Immediate confirmation from rail — settle ledger now
+                // Immediate confirmation from rail — settle ledger now.
+                // Still record initiate + notify so Messages → Alerts always gets a row
+                // even if settleSuccess were skipped by an idempotent replay.
                 withdrawalTransactionRepository.save(tx);
+                auditWithdrawal(tx, "WITHDRAWAL_INITIATE");
                 return settleSuccess(tx);
             }
         }
@@ -535,11 +538,11 @@ public class WithdrawalService {
         auditWithdrawal(tx, "WITHDRAWAL_INITIATE");
         notifyWithdrawal(
                 tx,
-                "Withdrawal initiated",
+                "Withdrawal started",
                 "Your withdrawal of "
                         + formatMoney(tx.getAmount(), tx.getCurrencyCode())
-                        + " is pending. The amount is held in your wallet until the payout is"
-                        + " confirmed.");
+                        + " is on the way. The amount is held in your wallet until your bank"
+                        + " confirms it. You will get an alert when it is done.");
         return toResponse(tx);
     }
 

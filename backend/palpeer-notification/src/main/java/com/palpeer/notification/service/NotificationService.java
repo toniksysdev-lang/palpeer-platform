@@ -23,7 +23,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Slf4j
 @Service
@@ -35,12 +38,16 @@ public class NotificationService {
     private final PushNotifier pushNotifier;
     private final EmailSender emailSender;
     private final UserRepository userRepository;
+    private final PlatformTransactionManager transactionManager;
 
     /**
      * Create and optionally push/email a notification for a user.
      * Intended for internal module callers until admin RBAC (P12-06 / Phase 15).
+     *
+     * <p>Inbox row is committed in its own {@code REQUIRES_NEW} transaction <em>before</em> email/push
+     * so Alerts never disappear when delivery side-effects run inside a rolled-back outer unit of work
+     * (e.g. AFTER_COMMIT listeners during funding reconcile).
      */
-    @Transactional
     public NotificationResponse create(UUID userId, CreateNotificationRequest request) {
         return toResponse(createInternal(userId, request).notification());
     }
@@ -48,26 +55,44 @@ public class NotificationService {
     private record CreateOutcome(Notification notification, PushDeliveryResult pushDelivery) {}
 
     private CreateOutcome createInternal(UUID userId, CreateNotificationRequest request) {
-        Notification notification = new Notification();
-        notification.setUserId(userId);
-        notification.setTitle(request.title().trim());
-        notification.setBody(request.body().trim());
-        notification.setCategory(trimToNull(request.category()));
-        notification.setChannel(request.channel());
-        notification.setReferenceType(trimToNull(request.referenceType()));
-        notification.setReferenceId(request.referenceId());
-        notification.setStatus(NotificationStatus.PENDING);
-        notificationRepository.save(notification);
+        TransactionTemplate requiresNew = requiresNewTx();
 
-        PushDeliveryResult pushDelivery = deliverIfNeeded(notification);
-        return new CreateOutcome(notification, pushDelivery);
+        Notification pending = requiresNew.execute(status -> {
+            Notification notification = new Notification();
+            notification.setUserId(userId);
+            notification.setTitle(request.title().trim());
+            notification.setBody(request.body().trim());
+            notification.setCategory(trimToNull(request.category()));
+            notification.setChannel(request.channel());
+            notification.setReferenceType(trimToNull(request.referenceType()));
+            notification.setReferenceId(request.referenceId());
+            notification.setStatus(NotificationStatus.PENDING);
+            Notification saved = notificationRepository.saveAndFlush(notification);
+            log.info(
+                    "Notification inbox row committed id={} user={} refType={} title={}",
+                    saved.getId(),
+                    saved.getUserId(),
+                    saved.getReferenceType(),
+                    saved.getTitle());
+            return saved;
+        });
+
+        PushDeliveryResult pushDelivery = requiresNew.execute(status -> {
+            Notification managed = notificationRepository
+                    .findById(pending.getId())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Notification missing after commit: " + pending.getId()));
+            return deliverIfNeeded(managed);
+        });
+
+        Notification latest = notificationRepository.findById(pending.getId()).orElse(pending);
+        return new CreateOutcome(latest, pushDelivery);
     }
 
     /**
      * Push + in-app notification for every user (optionally excluding one actor).
      * Failures for individual recipients are logged and do not abort the broadcast.
      */
-    @Transactional
     public BroadcastPushStats broadcastPush(
             UUID excludeUserId,
             String title,
@@ -137,6 +162,12 @@ public class NotificationService {
         return notificationRepository.findAll(pageable).map(this::toResponse);
     }
 
+    private TransactionTemplate requiresNewTx() {
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return template;
+    }
+
     private PushDeliveryResult deliverIfNeeded(Notification notification) {
         NotificationChannel channel = notification.getChannel();
         if (channel == NotificationChannel.IN_APP) {
@@ -167,11 +198,8 @@ public class NotificationService {
         }
 
         if (channel == NotificationChannel.PUSH) {
-            if (pushOk) {
-                markSent(notification, null);
-            } else {
-                markFailed(notification, joinFailures(failures));
-            }
+            // In-app inbox row always exists; device push is best-effort (no tokens ≠ hide alert).
+            markSent(notification, pushOk ? null : joinFailures(failures));
             return pushResult;
         }
 

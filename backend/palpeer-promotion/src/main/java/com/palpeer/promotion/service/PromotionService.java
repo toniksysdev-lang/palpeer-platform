@@ -840,6 +840,12 @@ public class PromotionService {
     }
 
     private ReferralResponse toReferral(Referral r) {
+        String refereeUsername = null;
+        if (r.getRefereeUserId() != null) {
+            refereeUsername = userRepository.findById(r.getRefereeUserId())
+                    .map(User::getUsername)
+                    .orElse(null);
+        }
         return new ReferralResponse(
                 r.getId(),
                 r.getReferrerUserId(),
@@ -847,7 +853,8 @@ public class PromotionService {
                 r.getReferralCode(),
                 r.getStatus(),
                 r.getPromotionId(),
-                r.getCreatedAt());
+                r.getCreatedAt(),
+                refereeUsername);
     }
 
     private static boolean isCadLoyaltyBonus(Bonus bonus) {

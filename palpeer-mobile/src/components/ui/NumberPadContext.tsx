@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,6 +40,93 @@ type NumberPadApi = {
 };
 
 const NumberPadContext = createContext<NumberPadApi | null>(null);
+
+/** Lets Screen scroll a focused number field so it sits above the keypad. */
+type NumberPadScrollApi = {
+  /** Approximate dock height reserved at the bottom while the pad is open. */
+  dockHeight: number;
+  /** Register the screen ScrollView so fields can request scroll-into-view. */
+  registerScrollView: (ref: RefObject<{ scrollTo: (opts: { y: number; animated?: boolean }) => void } | null> | null) => void;
+  /** Scroll so `anchor` ends above the keypad (with a little breathing room). */
+  ensureAbovePad: (anchor: View | null) => void;
+};
+
+const NumberPadScrollContext = createContext<NumberPadScrollApi | null>(null);
+
+export function NumberPadScrollProvider({
+  children,
+  dockHeight,
+}: {
+  children: ReactNode;
+  dockHeight: number;
+}) {
+  const scrollRef = useRef<{ scrollTo: (opts: { y: number; animated?: boolean }) => void } | null>(null);
+  const scrollY = useRef(0);
+  const viewport = useRef({ y: 0, h: 0 });
+
+  const registerScrollView = useCallback((ref: RefObject<{ scrollTo: (opts: { y: number; animated?: boolean }) => void } | null> | null) => {
+    scrollRef.current = ref?.current ?? null;
+  }, []);
+
+  const ensureAbovePad = useCallback(
+    (anchor: View | null) => {
+      if (!anchor || dockHeight <= 0) return;
+      const run = () => {
+        const scroller = scrollRef.current as
+          | (View & { scrollTo: (opts: { y: number; animated?: boolean }) => void; measureInWindow?: View['measureInWindow'] })
+          | null;
+        if (!scroller?.measureInWindow) {
+          // Fallback: nudge down enough for the dock.
+          scrollRef.current?.scrollTo({ y: Math.max(0, scrollY.current + dockHeight * 0.35), animated: true });
+          return;
+        }
+        scroller.measureInWindow((_sx, sy, _sw, sh) => {
+          viewport.current = { y: sy, h: sh };
+          anchor.measureInWindow((_fx, fy, _fw, fh) => {
+            const fieldBottom = fy + fh;
+            const visibleBottom = sy + sh - dockHeight - 12;
+            if (fieldBottom <= visibleBottom) return;
+            const delta = fieldBottom - visibleBottom;
+            const nextY = Math.max(0, scrollY.current + delta);
+            scrollY.current = nextY;
+            scrollRef.current?.scrollTo({ y: nextY, animated: true });
+          });
+        });
+      };
+      // Wait a frame so the dock has laid out and ScrollView height has settled.
+      requestAnimationFrame(() => requestAnimationFrame(run));
+    },
+    [dockHeight],
+  );
+
+  const api = useMemo(
+    () => ({
+      dockHeight,
+      registerScrollView,
+      ensureAbovePad,
+      /** Used by Screen to keep scroll offset in sync for delta math. */
+      _setScrollY: (y: number) => {
+        scrollY.current = y;
+      },
+    }),
+    [dockHeight, registerScrollView, ensureAbovePad],
+  );
+
+  return (
+    <NumberPadScrollContext.Provider value={api as NumberPadScrollApi & { _setScrollY: (y: number) => void }}>
+      {children}
+    </NumberPadScrollContext.Provider>
+  );
+}
+
+export function useNumberPadScroll(): NumberPadScrollApi | null {
+  return useContext(NumberPadScrollContext);
+}
+
+/** Internal: Screen updates tracked scroll offset. */
+export function useNumberPadScrollInternal() {
+  return useContext(NumberPadScrollContext) as (NumberPadScrollApi & { _setScrollY?: (y: number) => void }) | null;
+}
 
 export function NumberPadProvider({ children }: { children: ReactNode }) {
   const [active, setActive] = useState<NumberPadField | null>(null);
@@ -239,7 +327,6 @@ export function NumberPadDock({
     <View
       testID={testID}
       style={[
-        contentStyle,
         {
           gap: 0,
           paddingTop: padTop,
@@ -253,6 +340,8 @@ export function NumberPadDock({
           // Keep a little air under Continue when this dock is in-flow.
           marginTop: fitHeight ? 2 : undefined,
         },
+        // Callers (e.g. inline My phone number) may tighten padding / flex.
+        contentStyle,
       ]}
     >
       <NumberPad

@@ -22,7 +22,10 @@ config.watcher = {
 const withCss = withNativeWind(config, { input: './global.css' });
 
 // Dev-only CORS proxy for Expo web. Skip on EAS / CI export:embed workers.
-const onEasOrCi = Boolean(process.env.EAS_BUILD || process.env.CI);
+// Note: `CI=0` (common in local scripts) is a non-empty string — do not treat it as on.
+const ciFlag = String(process.env.CI || '').toLowerCase();
+const onEasOrCi =
+  Boolean(process.env.EAS_BUILD) || ciFlag === '1' || ciFlag === 'true' || ciFlag === 'yes';
 if (!onEasOrCi) {
   const previousEnhance = withCss.server?.enhanceMiddleware;
   withCss.server = {

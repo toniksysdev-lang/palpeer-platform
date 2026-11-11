@@ -1,6 +1,6 @@
-﻿// Route for the "MoreHelp" artboard (live backend props).
-import MoreScreen from '@/design/screens/More';
+﻿// Route for Get help — opens More with the help sheet.
 import { useLiveMore } from '@/design/bridge/useLiveMore';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
+import MoreScreen from '@/newui/screens/More';
 
-export default screen(MoreScreen, { sheet: 'help' }, useLiveMore);
+export default liveScreen(MoreScreen, { sheet: 'help' }, useLiveMore);

@@ -163,7 +163,8 @@ export function buildConfig(raw: RawEnv): AppConfig {
     supportChatApiBaseUrl,
     // Staging/production often hit a cold Render free instance; keep headroom beyond 15s.
     requestTimeoutMs: env === 'development' ? 15_000 : 60_000,
-    sessionRestoreTimeoutMs: 8_000,
+    // Cap splash wait for /auth/refresh — unreachable API should not hold BrandSplash long.
+    sessionRestoreTimeoutMs: env === 'development' ? 3_000 : 4_500,
     support: {
       email: parseEmail(raw.EXPO_PUBLIC_SUPPORT_EMAIL) ?? 'support@palpeer.com',
       phone: parsePhone(raw.EXPO_PUBLIC_SUPPORT_PHONE),

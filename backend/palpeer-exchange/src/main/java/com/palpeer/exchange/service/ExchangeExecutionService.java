@@ -151,14 +151,13 @@ public class ExchangeExecutionService {
             eventPublisher.publishEvent(new UserQualifyingTradeCompletedEvent(userId));
             eventPublisher.publishEvent(new UserNotifyEvent(
                     userId,
-                    "Exchange successful",
-                    "You exchanged "
+                    "Change is done",
+                    formatMoney(quote.getTargetAmount(), quote.getTargetCurrencyCode())
+                            + " is in your wallet (from "
                             + formatMoney(quote.getSourceAmount(), quote.getSourceCurrencyCode())
-                            + " for "
-                            + formatMoney(quote.getTargetAmount(), quote.getTargetCurrencyCode())
                             + " at rate "
                             + formatAmount(quote.getAppliedRate())
-                            + ".",
+                            + ").",
                     "TRANSACTION",
                     "EXCHANGE",
                     tx.getId(),

@@ -22,7 +22,7 @@ export function matchAccountQuestion(message: string): AccountQuestionKind | nul
   const text = message.toLowerCase().normalize('NFKD').replace(/\s+/g, ' ').trim();
   if (!text) return null;
 
-  // Leave product how-tos to the Support AI + operational guide ("how do I fund my wallet").
+  // Leave product how-tos to FAQ / Support AI ("how do I fund my wallet", "top up", etc.).
   const instructional =
     (/\bhow (do|can|to) i\b/.test(text) ||
       /\bwhere (do|can) i\b/.test(text) ||
@@ -30,17 +30,29 @@ export function matchAccountQuestion(message: string): AccountQuestionKind | nul
     !/\bhow much\b/.test(text);
   if (instructional) return null;
 
+  // Funding / cash-out how-tos are not balance questions.
   if (
-    /\b(wallet|wallets|balance|balances|funds?|how much|available)\b/.test(text) &&
+    /\b(top[- ]?up|add money|fund(ing)?|deposit|withdraw(al|ing)?|cash[- ]?out|payout)\b/.test(
+      text,
+    )
+  ) {
+    return null;
+  }
+
+  // Status / delay questions belong in Help How-Tos, not the recent-tx list.
+  if (/\b(pending|not arrived|late|held|review|missing|waiting)\b/.test(text)) {
+    return null;
+  }
+
+  if (
+    /\b(wallet|wallets|balance|balances|how much|available)\b/.test(text) &&
     /\b(my|i have|on my|account|do i|what are|which|show|list)\b/.test(text)
   ) {
     return 'wallets';
   }
   if (
-    /\b(my|recent|show|list|what)\b/.test(text) &&
-    /\b(transaction|transactions|payment|payments|funding|withdrawal|withdrawals|activity)\b/.test(
-      text,
-    )
+    /\b(my|recent|show|list)\b/.test(text) &&
+    /\b(transaction|transactions|activity|history)\b/.test(text)
   ) {
     return 'transactions';
   }
@@ -84,7 +96,9 @@ export function isCapacityAiReply(text: string): boolean {
     value.includes('temporarily unavailable') ||
     value.includes('too many requests') ||
     value.includes('technical difficulties') ||
-    value.includes('trouble reaching the ai');
+    value.includes('trouble reaching the ai') ||
+    value.includes('unable to process') ||
+    value.includes('try again later');
   const agentOffer =
     value.includes('human agent') ||
     value.includes('live agent') ||
@@ -93,8 +107,10 @@ export function isCapacityAiReply(text: string): boolean {
     value.includes('connect you with a human') ||
     value.includes('connect you to a human') ||
     value.includes('chat with an agent') ||
-    value.includes('chat with a human');
-  return highDemand && (agentOffer || value.includes('apolog'));
+    value.includes('chat with a human') ||
+    value.includes('talk to a person');
+  // Capacity stubs often apologize without naming an agent — treat those as degraded too.
+  return highDemand && (agentOffer || value.includes('apolog') || value.includes('sorry'));
 }
 
 /** Answer from the authenticated app's Palpeer backend data. */

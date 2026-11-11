@@ -162,8 +162,9 @@ export function mapPhotonFeature(feature: PhotonFeature, index: number): Address
   ]
     .filter(Boolean)
     .join(', ');
+  // Always append index — Photon can return several rows for the same osm_id.
   return buildSuggestion({
-    id: `${p.osm_type ?? 'photon'}-${p.osm_id ?? index}`,
+    id: `${p.osm_type ?? 'photon'}-${p.osm_id ?? 'x'}-${index}`,
     label,
     street: street || p.name || '',
     line2: p.district ?? '',
@@ -270,7 +271,14 @@ async function searchNominatim(
   }
   const payload = (await response.json()) as NominatimResult[];
   if (!Array.isArray(payload)) return [];
-  return payload.map(mapNominatimResult).filter((item): item is AddressSuggestion => item != null);
+  return payload
+    .map((result, index) => {
+      const mapped = mapNominatimResult(result);
+      if (!mapped) return null;
+      // place_id can repeat across nearby hits — keep React keys unique.
+      return { ...mapped, id: `${mapped.id}-${index}` };
+    })
+    .filter((item): item is AddressSuggestion => item != null);
 }
 
 /**

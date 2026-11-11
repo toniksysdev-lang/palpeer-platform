@@ -47,11 +47,15 @@ export const TYPE_OPTIONS: readonly { key: TypeFilter; title: string }[] = [
   { key: 'BONUS', title: 'Bonuses' },
 ];
 
-export type Period = 'ALL' | '7D' | '30D' | '90D';
+export type Period = 'ALL' | '7D' | '30D' | '90D' | 'CUSTOM';
 
-const PERIOD_DAYS: Record<Exclude<Period, 'ALL'>, number> = { '7D': 7, '30D': 30, '90D': 90 };
+const PERIOD_DAYS: Record<Exclude<Period, 'ALL' | 'CUSTOM'>, number> = {
+  '7D': 7,
+  '30D': 30,
+  '90D': 90,
+};
 
-export const PERIOD_OPTIONS: readonly { key: Period; title: string }[] = [
+export const PERIOD_OPTIONS: readonly { key: Exclude<Period, 'CUSTOM'>; title: string }[] = [
   { key: 'ALL', title: 'All time' },
   { key: '7D', title: 'Last 7 days' },
   { key: '30D', title: 'Last 30 days' },
@@ -62,7 +66,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Start of the period as an ISO instant; undefined for all time (the backend then starts at epoch). */
 export function periodFrom(period: Period, now: number): string | undefined {
-  if (period === 'ALL') return undefined;
+  if (period === 'ALL' || period === 'CUSTOM') return undefined;
   return new Date(now - PERIOD_DAYS[period] * DAY_MS).toISOString();
 }
 

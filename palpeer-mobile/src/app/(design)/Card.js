@@ -1,9 +1,9 @@
-// Route for the design Card artboard (detail + history, live backend props).
+// Route for Card detail + history — newui presentation, live backend props.
 import { useLocalSearchParams } from 'expo-router';
 
-import CardScreen from '@/design/screens/Card';
 import { useLiveCard } from '@/design/bridge/useLiveCard';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
+import CardScreen from '@/newui/screens/Card';
 
 function useCardProps() {
   const params = useLocalSearchParams();
@@ -11,4 +11,4 @@ function useCardProps() {
   return useLiveCard(id);
 }
 
-export default screen(CardScreen, {}, useCardProps);
+export default liveScreen(CardScreen, {}, useCardProps);

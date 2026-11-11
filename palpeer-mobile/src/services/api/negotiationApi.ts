@@ -6,6 +6,7 @@ import type {
 
 import { baseApi } from './baseApi';
 import { jsonDecimal } from './json';
+import { ALERTS } from './notificationApi';
 
 const MINE = { type: 'Negotiation', id: 'MINE' } as const;
 
@@ -39,7 +40,7 @@ export const negotiationApi = baseApi.injectEndpoints({
         method: 'POST',
         body: { p2pRequestId, ...terms(offer) },
       }),
-      invalidatesTags: (_result, error) => (error ? [] : [MINE]),
+      invalidatesTags: (_result, error) => (error ? [] : [MINE, ...ALERTS]),
     }),
     counterOffer: build.mutation<NegotiationResponse, { id: string; offer: CounterOfferRequest }>({
       query: ({ id, offer }) => ({
@@ -48,7 +49,7 @@ export const negotiationApi = baseApi.injectEndpoints({
         body: terms(offer),
       }),
       // A 409 means the other side moved first; refetching shows whose turn it is now.
-      invalidatesTags: (_result, _error, { id }) => [{ type: 'Negotiation', id }, MINE],
+      invalidatesTags: (_result, _error, { id }) => [{ type: 'Negotiation', id }, MINE, ...ALERTS],
     }),
     /** Creates the P2P order with the offer's terms; the response carries `p2pOrderId`. */
     acceptNegotiation: build.mutation<NegotiationResponse, { id: string; p2pRequestId: string }>({
@@ -60,17 +61,18 @@ export const negotiationApi = baseApi.injectEndpoints({
         { type: 'Negotiation', id },
         MINE,
         ...requestClosedTags(p2pRequestId),
+        ...ALERTS,
       ],
     }),
     /** Declines the other side's pending offer (only on my turn); the negotiation ends. */
     rejectNegotiation: build.mutation<NegotiationResponse, string>({
       query: (id) => ({ path: `/negotiations/${encodeURIComponent(id)}/reject`, method: 'POST' }),
-      invalidatesTags: (_result, _error, id) => [{ type: 'Negotiation', id }, MINE],
+      invalidatesTags: (_result, _error, id) => [{ type: 'Negotiation', id }, MINE, ...ALERTS],
     }),
     /** Withdraws from an open negotiation (either participant, any turn). */
     cancelNegotiation: build.mutation<NegotiationResponse, string>({
       query: (id) => ({ path: `/negotiations/${encodeURIComponent(id)}/cancel`, method: 'POST' }),
-      invalidatesTags: (_result, _error, id) => [{ type: 'Negotiation', id }, MINE],
+      invalidatesTags: (_result, _error, id) => [{ type: 'Negotiation', id }, MINE, ...ALERTS],
     }),
   }),
   overrideExisting: process.env.NODE_ENV !== 'production',

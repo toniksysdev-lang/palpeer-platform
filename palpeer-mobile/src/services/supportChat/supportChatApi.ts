@@ -51,6 +51,20 @@ function unwrapAi(data: AiChatResponse): {
   };
 }
 
+function sessionIdFrom(data: unknown): string | null {
+  if (!data || typeof data !== 'object') return null;
+  const row = data as Record<string, unknown>;
+  const direct = row.sessionId ?? row.SessionId;
+  if (typeof direct === 'string' && direct.trim()) return direct.trim();
+  const nested = row.data;
+  if (nested && typeof nested === 'object') {
+    const inner = nested as Record<string, unknown>;
+    const id = inner.sessionId ?? inner.SessionId;
+    if (typeof id === 'string' && id.trim()) return id.trim();
+  }
+  return null;
+}
+
 /** Start a guest AI chat session (fast path: one quick retry, short timeout). */
 export async function startGuestAiSession(): Promise<
   { ok: true; sessionId: string } | { ok: false; error: string }
@@ -61,12 +75,20 @@ export async function startGuestAiSession(): Promise<
       method: 'POST',
       body: {},
       // Keep boot snappy — don't wait the full app request timeout on a hung start.
-      timeoutMs: 8_000,
+      timeoutMs: 12_000,
     });
-    if (result.ok && result.data?.sessionId) {
-      return { ok: true, sessionId: result.data.sessionId };
+    if (result.ok) {
+      const sessionId = sessionIdFrom(result.data);
+      if (sessionId) return { ok: true, sessionId };
+      // HTML / empty body usually means the Metro proxy was skipped (e.g. CI=0).
+      lastError =
+        typeof result.data === 'string' ||
+        (result.data && typeof result.data === 'object' && 'html' in (result.data as object))
+          ? "Couldn't reach live chat. Restart the Expo web server and try again."
+          : 'Could not start chat session.';
+    } else {
+      lastError = result.error.message;
     }
-    lastError = result.ok ? lastError : result.error.message;
     if (attempt < 1) await new Promise((r) => setTimeout(r, 250));
   }
   return { ok: false, error: lastError };

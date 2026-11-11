@@ -233,11 +233,11 @@ export function DesignAddressField({
             ) : null}
             {suggestions.map((item, index) => (
               <Pressable
-                key={item.id}
+                key={`${item.id}-${index}`}
                 onPressIn={() => applyAddress(item)}
                 accessibilityRole="button"
                 accessibilityLabel={`Use address ${item.label}`}
-                testID={`${testID}-suggestion-${item.id}`}
+                testID={`${testID}-suggestion-${index}`}
                 style={({ pressed }) => ({
                   paddingHorizontal: sp(14),
                   paddingVertical: sp(12),

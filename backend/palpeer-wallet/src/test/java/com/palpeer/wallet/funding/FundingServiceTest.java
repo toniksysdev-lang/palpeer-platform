@@ -142,7 +142,7 @@ class FundingServiceTest {
         ArgumentCaptor<UserNotifyEvent> notify = ArgumentCaptor.forClass(UserNotifyEvent.class);
         verify(eventPublisher).publishEvent(notify.capture());
         assertThat(notify.getValue().referenceType()).isEqualTo("FUNDING");
-        assertThat(notify.getValue().title()).isEqualTo("Funding successful");
+        assertThat(notify.getValue().title()).isEqualTo("Money added");
         assertThat(notify.getValue().sendEmail()).isTrue();
         assertThat(notify.getValue().sendPush()).isTrue();
     }

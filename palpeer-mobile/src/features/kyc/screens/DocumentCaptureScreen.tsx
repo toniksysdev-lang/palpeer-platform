@@ -11,13 +11,15 @@ import { documentTypeLabel, isKycDocumentType, KYC_DOCUMENT_TYPES } from '../kyc
 import { kycHref, safeKycReturnTo } from '../returnTo';
 
 export function DocumentCaptureScreen() {
-  const { type, returnTo: returnToParam } = useLocalSearchParams<{
+  const { type, returnTo: returnToParam, start } = useLocalSearchParams<{
     type?: string;
     returnTo?: string;
+    start?: string;
   }>();
   const toast = useToast();
   const dispatch = useAppDispatch();
   const returnTo = safeKycReturnTo(returnToParam, '');
+  const autoStart = start === 'camera' || start === 'library' ? start : undefined;
 
   if (!isKycDocumentType(type)) {
     return (
@@ -51,6 +53,11 @@ export function DocumentCaptureScreen() {
       router.replace(kycHref('/kyc/selfie', returnTo || undefined) as Href);
       return;
     }
+    // Design flow: back to Show your ID (or legacy /kyc hub).
+    if (returnTo === '/StartChecking') {
+      router.replace('/StartKyc' as Href);
+      return;
+    }
     if (returnTo) {
       router.replace(returnTo as Href);
       return;
@@ -72,6 +79,7 @@ export function DocumentCaptureScreen() {
       ]}
       cameraHint="Fit the document inside the frame"
       allowLibrary
+      autoStart={autoStart}
       onUploaded={() => void onUploaded()}
       onExit={() =>
         router.canGoBack()

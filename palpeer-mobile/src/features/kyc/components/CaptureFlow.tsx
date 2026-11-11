@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { CheckCircle2, type LucideIcon } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { useSensitiveScreen } from '@/hooks/useSensitiveScreen';
@@ -28,6 +28,8 @@ type Props = {
   cameraHint: string;
   /** Selfies must be taken live; documents may also come from the photo library. */
   allowLibrary: boolean;
+  /** Skip intro and open the camera or library picker immediately. */
+  autoStart?: 'camera' | 'library';
   onUploaded: () => void;
   onExit: () => void;
   icon?: LucideIcon;
@@ -48,13 +50,17 @@ export function CaptureFlow({
   tips,
   cameraHint,
   allowLibrary,
+  autoStart,
   onUploaded,
   onExit,
   notice,
 }: Props) {
   useSensitiveScreen();
-  const [phase, setPhase] = useState<Phase>({ name: 'intro' });
+  const [phase, setPhase] = useState<Phase>(() =>
+    autoStart === 'camera' ? { name: 'camera' } : { name: 'intro' },
+  );
   const { state: upload, upload: send, reset } = useKycUpload(target);
+  const autoLibraryStarted = useRef(false);
 
   const process = async (source: CapturedImage) => {
     setPhase({ name: 'processing' });
@@ -83,7 +89,7 @@ export function CaptureFlow({
       });
       const asset = result.canceled ? undefined : result.assets[0];
       if (!asset) {
-        setPhase((current) => (current.name === 'camera' ? { name: 'intro' } : current));
+        setPhase({ name: 'intro' });
         return;
       }
       // Library assets can omit size on web; prepareImage measures the file before quality checks.
@@ -100,6 +106,14 @@ export function CaptureFlow({
       });
     }
   };
+
+  useEffect(() => {
+    if (autoStart !== 'library' || autoLibraryStarted.current || !allowLibrary) return;
+    autoLibraryStarted.current = true;
+    void pickFromLibrary();
+    // Intentionally once on mount when opened via “Upload image”.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount auto-start only
+  }, [autoStart, allowLibrary]);
 
   const retake = () => {
     reset();
@@ -207,7 +221,7 @@ export function CaptureFlow({
     ...(allowLibrary
       ? [
           {
-            label: 'Choose from library',
+            label: 'Upload image',
             onPress: () => void pickFromLibrary(),
             variant: 'secondary' as const,
             testID: 'capture-library',

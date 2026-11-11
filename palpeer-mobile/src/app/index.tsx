@@ -11,16 +11,15 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback } from 'react';
 
 import { useLiveStart } from '@/design/bridge/useLiveStart';
-import { useGo } from '@/design/dc/route';
-import { LookContext, Screen } from '@/design/dc/runtime';
-import StartScreen from '@/design/screens/Start';
+import { LookContext } from '@/design/dc/runtime';
 import { useAppearance } from '@/hooks/useAppearance';
+import { NewUiProviders } from '@/newui/providers';
+import StartScreen from '@/newui/screens/Start';
 import { useAppSelector } from '@/store';
 
 /**
- * App entry — same design Start landing as http://localhost:3333/?route=/.
+ * App entry — new UI Start landing (no DC FIT_TO_SCREEN).
  * Signed-in users go to design Home (`/Main`).
- * Fonts are loaded in root `_layout`; this keeps a soft useFonts call for HMR.
  */
 export default function Index() {
   const isAuthenticated = useAppSelector((state) => state.session.status === 'authenticated');
@@ -33,7 +32,6 @@ export default function Index() {
     NotoSans_800ExtraBold,
   });
   const live = useLiveStart();
-  const go = useGo();
 
   const onLookChange = useCallback(
     (next: 'dark' | 'light') => {
@@ -44,21 +42,19 @@ export default function Index() {
 
   if (isAuthenticated) return <Redirect href="/Main" />;
 
-  // Match :3333 light artboards unless the user explicitly chose dark (not system).
   const designDark = appearance === 'dark';
 
   return (
     <LookContext.Provider value={{ dark: designDark }}>
-      {/* Land hero is always #081410 — light status icons like the :3333 phone frame. */}
-      <StatusBar style="light" />
-      <Screen bg={StartScreen.background} go={go}>
+      <NewUiProviders>
+        <StatusBar style="light" />
         <StartScreen
           {...live}
           stage="land"
           look={designDark ? 'dark' : 'light'}
           onLookChange={onLookChange}
         />
-      </Screen>
+      </NewUiProviders>
     </LookContext.Provider>
   );
 }

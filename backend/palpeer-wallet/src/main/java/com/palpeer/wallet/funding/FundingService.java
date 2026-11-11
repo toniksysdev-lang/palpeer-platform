@@ -459,10 +459,9 @@ public class FundingService {
         auditStatus(tx, "FUNDING_PROCESS", "SUCCESS");
         notifyFunding(
                 tx,
-                "Funding successful",
-                "Your funding of "
-                        + formatMoney(tx.getAmount(), tx.getCurrencyCode())
-                        + " has been credited to your wallet and is available to use.");
+                "Money added",
+                formatMoney(tx.getAmount(), tx.getCurrencyCode())
+                        + " is in your wallet and ready to use.");
         return toResponse(tx);
     }
 
@@ -921,9 +920,9 @@ public class FundingService {
 
     private static String fundingInitiatedTitle(FundingTransaction tx) {
         if (tx.getStatus() == MoneyMovementStatus.PENDING) {
-            return "Complete your funding payment";
+            return "Send your money";
         }
-        return "Funding initiated";
+        return "Funding started";
     }
 
     private static String fundingInitiatedBody(FundingTransaction tx) {

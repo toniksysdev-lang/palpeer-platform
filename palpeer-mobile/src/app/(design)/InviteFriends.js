@@ -1,6 +1,6 @@
-// Route for the "Invite friends" artboard (live backend props).
-import InviteFriendsScreen from '@/design/screens/InviteFriends';
+// Route for Invite friends — newui presentation, live backend props.
 import { useLiveInviteFriends } from '@/design/bridge/useLiveInviteFriends';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
+import InviteFriendsScreen from '@/newui/screens/InviteFriends';
 
-export default screen(InviteFriendsScreen, {}, useLiveInviteFriends);
+export default liveScreen(InviteFriendsScreen, {}, useLiveInviteFriends);

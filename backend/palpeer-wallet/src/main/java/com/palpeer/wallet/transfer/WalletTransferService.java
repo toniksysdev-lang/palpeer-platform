@@ -168,8 +168,8 @@ public class WalletTransferService {
         String money = formatMoney(amount, source.getCurrencyCode());
         eventPublisher.publishEvent(new UserNotifyEvent(
                 senderUserId,
-                "Transfer sent",
-                "You sent " + money + " to " + recipient.getEmail() + ".",
+                "Money sent",
+                money + " went to a Palpeer user (" + recipient.getEmail() + ").",
                 "TRANSACTION",
                 "TRANSFER",
                 transfer.getId(),
@@ -177,8 +177,8 @@ public class WalletTransferService {
                 true));
         eventPublisher.publishEvent(new UserNotifyEvent(
                 recipient.getId(),
-                "Transfer received",
-                "You received " + money + " from another Palpeer user.",
+                "Money received",
+                money + " came from a Palpeer user.",
                 "TRANSACTION",
                 "TRANSFER",
                 transfer.getId(),

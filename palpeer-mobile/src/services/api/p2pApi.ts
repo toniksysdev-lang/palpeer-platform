@@ -10,6 +10,7 @@ import type {
 
 import { baseApi } from './baseApi';
 import { jsonDecimal } from './json';
+import { ALERTS } from './notificationApi';
 
 const OPEN_LIST = { type: 'P2PRequest', id: 'OPEN' } as const;
 const MINE = { type: 'P2PRequest', id: 'MINE' } as const;
@@ -97,7 +98,7 @@ export const p2pApi = baseApi.injectEndpoints({
     }),
     createRequest: build.mutation<P2PRequestResponse, CreateP2PRequest>({
       query: (request) => ({ path: '/p2p/requests', method: 'POST', body: createBody(request) }),
-      invalidatesTags: (_result, error) => (error ? [] : [OPEN_LIST, MINE, WALLET_LIST]),
+      invalidatesTags: (_result, error) => (error ? [] : [OPEN_LIST, MINE, WALLET_LIST, ...ALERTS]),
     }),
     updateRequest: build.mutation<P2PRequestResponse, { id: string; changes: UpdateP2PRequest }>({
       query: ({ id, changes }) => ({
@@ -111,6 +112,7 @@ export const p2pApi = baseApi.injectEndpoints({
         OPEN_LIST,
         MINE,
         WALLET_LIST,
+        ...ALERTS,
       ],
     }),
     /** OPEN → cancel; CANCELLED/EXPIRED → remove from history. */
@@ -121,6 +123,7 @@ export const p2pApi = baseApi.injectEndpoints({
         OPEN_LIST,
         MINE,
         WALLET_LIST,
+        ...ALERTS,
       ],
     }),
     /** Alias for removing a cancelled/expired request from history (same DELETE endpoint). */
@@ -130,6 +133,7 @@ export const p2pApi = baseApi.injectEndpoints({
         { type: 'P2PRequest', id },
         OPEN_LIST,
         MINE,
+        ...ALERTS,
       ],
     }),
     acceptRequest: build.mutation<
@@ -158,6 +162,7 @@ export const p2pApi = baseApi.injectEndpoints({
           ORDERS,
           WALLET_LIST,
           { type: 'Bonus', id: 'MINE' },
+          ...ALERTS,
         ];
       },
     }),

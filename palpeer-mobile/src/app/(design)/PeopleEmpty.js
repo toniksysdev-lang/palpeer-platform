@@ -1,6 +1,6 @@
 ﻿// Route for the "PeopleEmpty" artboard (live backend props).
-import PeopleScreen from '@/design/screens/People';
 import { useLivePeople } from '@/design/bridge/useLivePeople';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
+import PeopleScreen from '@/newui/screens/People';
 
-export default screen(PeopleScreen, { stage: 'empty' }, useLivePeople);
+export default liveScreen(PeopleScreen, { stage: 'empty' }, useLivePeople);

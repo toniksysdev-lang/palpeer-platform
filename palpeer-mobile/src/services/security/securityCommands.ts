@@ -19,7 +19,8 @@ import type {
  */
 export const securityCommands = {
   setPin(body: SetPinRequest): Promise<ApiResult<void>> {
-    return authorizedRequest('/security/pin', { method: 'POST', body });
+    // Bcrypt + cold API can exceed the default 15s client budget (same as register/login).
+    return authorizedRequest('/security/pin', { method: 'POST', body, timeoutMs: 60_000 });
   },
   changePin(body: ChangePinRequest): Promise<ApiResult<void>> {
     return authorizedRequest('/security/pin', { method: 'PUT', body });

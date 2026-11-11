@@ -1,6 +1,6 @@
-// Route for design Notification settings (live backend props).
-import NotificationSettingsScreen from '@/design/screens/NotificationSettings';
+// Route for Notification settings — newui presentation, live backend props.
 import { useLiveNotificationSettings } from '@/design/bridge/useLiveNotificationSettings';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
+import NotificationSettingsScreen from '@/newui/screens/NotificationSettings';
 
-export default screen(NotificationSettingsScreen, {}, useLiveNotificationSettings);
+export default liveScreen(NotificationSettingsScreen, {}, useLiveNotificationSettings);

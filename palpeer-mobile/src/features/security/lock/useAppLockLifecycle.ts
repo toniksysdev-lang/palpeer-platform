@@ -10,7 +10,7 @@ import { appLocked } from '@/store/slices/appLockSlice';
  */
 export const LOCK_AFTER_BACKGROUND_MS = 60_000;
 
-/** Design Timeout: idle on the foreground for this long → “I was logged out”. */
+/** Design Timeout: idle on the foreground for this long → “You were logged out”. */
 export const IDLE_LOGOUT_MS = 180_000;
 
 const IDLE_POLL_MS = 5_000;

@@ -35,7 +35,6 @@ import { useSignedOutWelcomeLanding } from '@/hooks/useSignedOutWelcomeLanding';
 import { AppProviders } from '@/providers/AppProviders';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAppSelector } from '@/store';
-import { palette } from '@/theme';
 
 // Belt-and-suspenders with src/boot/preventSplashAutoHide (runs even earlier).
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -94,13 +93,15 @@ function RootNavigator() {
   useSignedOutWelcomeLanding(ready, isAuthenticated);
   useApplyPendingReferral();
 
+  // Don't hold BrandSplash on slow font CDN — landing can paint with fallbacks, then swap.
   useEffect(() => {
-    const timer = setTimeout(() => setFontsTimedOut(true), 2_500);
+    const timer = setTimeout(() => setFontsTimedOut(true), 700);
     return () => clearTimeout(timer);
   }, []);
 
   const fontsReady = fontsLoaded || fontsTimedOut;
-  const bootReady = ready && fontsReady;
+  // Signed-out landing only needs session bootstrap; fonts can finish a beat later.
+  const bootReady = ready && (fontsReady || !isAuthenticated);
 
   useEffect(() => {
     if (bootReady) {
@@ -121,12 +122,12 @@ function RootNavigator() {
   if (!bootReady) {
     // Preview iframe: parent overlay is the splash — avoid a second in-app splash.
     if (isWebPreviewFrame()) {
-      return <View style={{ flex: 1, backgroundColor: palette.neutral0 }} testID="boot-placeholder" />;
+      return <View style={{ flex: 1, backgroundColor: '#081410' }} testID="boot-placeholder" />;
     }
     // Keep BrandSplash until session + design fonts are ready (avoids blank post-splash on APK).
     return (
       <View
-        style={{ flex: 1, backgroundColor: palette.neutral0 }}
+        style={{ flex: 1, backgroundColor: '#081410' }}
         onLayout={() => {
           // Native splash can hide once BrandSplash has painted; stay on BrandSplash until bootReady.
           hideNativeSplash();

@@ -1,9 +1,9 @@
 ﻿// Route for the "OfferLink" artboard (live backend props + optional ?id= / requestId).
 import { useLocalSearchParams } from 'expo-router';
 
-import OfferLinkScreen from '@/design/screens/OfferLink';
 import { useLiveOfferLink } from '@/design/bridge/useLiveOfferLink';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
+import OfferLinkScreen from '@/newui/screens/OfferLink';
 
 function useOfferLinkProps() {
   const params = useLocalSearchParams();
@@ -11,4 +11,4 @@ function useOfferLinkProps() {
   return useLiveOfferLink(requestId || undefined);
 }
 
-export default screen(OfferLinkScreen, {}, useOfferLinkProps);
+export default liveScreen(OfferLinkScreen, {}, useOfferLinkProps);

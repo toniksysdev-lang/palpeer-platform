@@ -1,6 +1,6 @@
-﻿// Route for the "Timeout" artboard (live backend props).
-import MainScreen from '@/design/screens/Main';
+﻿// Route for session timeout overlay — same Home with showTimeout hint.
 import { useLiveMain } from '@/design/bridge/useLiveMain';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
+import HomeScreen from '@/newui/screens/Home';
 
-export default screen(MainScreen, { showTimeout: true }, useLiveMain);
+export default liveScreen(HomeScreen, { showTimeout: true }, useLiveMain);

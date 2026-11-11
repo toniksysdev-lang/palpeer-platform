@@ -1,6 +1,6 @@
-// Route for the "My bonuses" artboard (live backend props).
-import MyBonusesScreen from '@/design/screens/MyBonuses';
+// Route for My bonuses — newui presentation, live backend props.
 import { useLiveMyBonuses } from '@/design/bridge/useLiveMyBonuses';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
+import MyBonusesScreen from '@/newui/screens/MyBonuses';
 
-export default screen(MyBonusesScreen, {}, useLiveMyBonuses);
+export default liveScreen(MyBonusesScreen, {}, useLiveMyBonuses);

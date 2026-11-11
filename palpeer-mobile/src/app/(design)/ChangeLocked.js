@@ -1,6 +1,6 @@
-﻿// Route for the "ChangeLocked" artboard (live backend props).
-import ChangeScreen from '@/design/screens/Change';
+// Route for the "ChangeLocked" artboard (live backend props).
+import ChangeScreen from '@/newui/screens/Change';
 import { useLiveChange } from '@/design/bridge/useLiveChange';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
 
-export default screen(ChangeScreen, { stage: 'locked' }, useLiveChange);
+export default liveScreen(ChangeScreen, { stage: 'locked' }, useLiveChange);

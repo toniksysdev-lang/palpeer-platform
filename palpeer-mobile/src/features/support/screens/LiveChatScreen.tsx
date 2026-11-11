@@ -17,16 +17,12 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import {
+  PREVIEW_KEYBOARD_EVENT,
+  keepPreviewKeyboardFocus,
+  type PreviewKeyboardDetail,
+} from '@/boot/previewSoftKeyboard';
 import { SIMPLE_HOME as D } from '@/design/simpleHomeTokens';
-
-const HELPER_NAME = 'Tonia';
-const HELPER_SUBTITLE = 'Palpeer helper. A person can join.';
-const QUICK_CHIPS = [
-  { id: 'fees', label: 'Fees', prompt: 'What are the fees?' },
-  { id: 'add', label: 'Add money', prompt: 'How do I add money?' },
-  { id: 'withdraw', label: 'Withdraw', prompt: 'How do I withdraw money?' },
-  { id: 'changing', label: 'Changing', prompt: 'How do I change money?' },
-] as const;
 import {
   autoAssignAgent,
   getAgentsOnline,
@@ -40,7 +36,7 @@ import {
 import { formatClockTime } from '@/utils/datetime';
 
 import { SupportTicketForm } from '../components/SupportTicketForm';
-import { answerHowToFromFaq, localAssistantTopicsHint } from '../faq';
+import { answerHowToById, answerHowToFromFaq, localAssistantTopicsHint } from '../faq';
 import {
   answerAccountQuestion,
   isCapacityAiReply,
@@ -49,6 +45,15 @@ import {
 } from '../liveChat/answerAccountQuestion';
 import { buildLiveChatContext } from '../liveChat/buildLiveChatContext';
 import { useLiveChatContext } from '../liveChat/useLiveChatContext';
+
+const HELPER_NAME = 'Tonia';
+const HELPER_SUBTITLE = 'Palpeer helper. A person can join.';
+const QUICK_CHIPS = [
+  { id: 'fees', label: 'Fees', prompt: 'What are the fees?', faqId: 'fees-overview' },
+  { id: 'add', label: 'Add money', prompt: 'How do I add money?', faqId: 'fund-how' },
+  { id: 'withdraw', label: 'Withdraw', prompt: 'How do I withdraw money?', faqId: 'withdraw-how' },
+  { id: 'changing', label: 'Changing', prompt: 'How do I change money?', faqId: 'exchange-how' },
+] as const;
 
 type Sender = 'user' | 'ai' | 'agent' | 'system';
 
@@ -159,9 +164,11 @@ export function LiveChatScreen() {
     const onShow = (event: KeyboardEvent) => {
       // Prefer overlap vs window (edge-to-edge Android); fall back to reported height.
       const windowH = Dimensions.get('window').height;
-      const overlap = Math.max(0, Math.round(windowH - event.endCoordinates.screenY));
-      const height = overlap > 40 ? overlap : event.endCoordinates.height;
-      setKeyboardHeight(height);
+      const screenY = event.endCoordinates?.screenY;
+      const overlap =
+        typeof screenY === 'number' ? Math.max(0, Math.round(windowH - screenY)) : 0;
+      const height = overlap > 40 ? overlap : event.endCoordinates?.height ?? 0;
+      setKeyboardHeight(Math.max(0, height));
       scrollToComposer();
       if (Platform.OS === 'android') {
         setTimeout(scrollToComposer, 50);
@@ -170,9 +177,30 @@ export function LiveChatScreen() {
     const onHide = () => setKeyboardHeight(0);
     const showSub = Keyboard.addListener(showEvent, onShow);
     const hideSub = Keyboard.addListener(hideEvent, onHide);
+
+    // :3333 phone-frame overlay keypad (does not fire RN Keyboard events).
+    const onPreviewKeyboard = (event: Event) => {
+      const detail = (event as CustomEvent<PreviewKeyboardDetail>).detail;
+      if (!detail?.open) {
+        setKeyboardHeight(0);
+        return;
+      }
+      keepPreviewKeyboardFocus(800);
+      setKeyboardHeight(Math.max(0, Math.round(detail.height || 0)));
+      scrollToComposer();
+      setTimeout(scrollToComposer, 80);
+      setTimeout(scrollToComposer, 220);
+    };
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.addEventListener(PREVIEW_KEYBOARD_EVENT, onPreviewKeyboard as EventListener);
+    }
+
     return () => {
       showSub.remove();
       hideSub.remove();
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.removeEventListener(PREVIEW_KEYBOARD_EVENT, onPreviewKeyboard as EventListener);
+      }
     };
   }, [scrollToComposer]);
 
@@ -298,7 +326,7 @@ export function LiveChatScreen() {
     }
   };
 
-  const sendText = async (raw: string) => {
+  const sendText = async (raw: string, options?: { faqId?: string }) => {
     const text = raw.trim();
     if (!text || sending || booting || !sessionId || awaitingEscalation) return;
 
@@ -342,10 +370,35 @@ export function LiveChatScreen() {
         return;
       }
 
+      // Quick chips pin a How-To id so scoring cannot pick a rival answer.
+      if (options?.faqId) {
+        const pinned = answerHowToById(options.faqId);
+        if (pinned) {
+          setMessages((prev) => prev.filter((m) => m.id !== loadingId));
+          push({
+            id: `ai-faq-${Date.now()}`,
+            text: pinned,
+            sender: 'ai',
+            createdAt: new Date().toISOString(),
+          });
+          return;
+        }
+      }
+
       // Answer account questions from cached snapshot first; refresh only when needed.
       const accountKind = matchAccountQuestion(text);
       let activeSnapshot = snapshotRef.current;
-      if (accountKind && (email || activeSnapshot.userId)) {
+      if (accountKind) {
+        if (!(email || activeSnapshot.userId)) {
+          setMessages((prev) => prev.filter((m) => m.id !== loadingId));
+          push({
+            id: `ai-signin-${Date.now()}`,
+            text: 'Sign in to your Palpeer account in the app to see your balances, profile, and recent activity. I can still answer how-to questions while you are signed out.',
+            sender: 'ai',
+            createdAt: new Date().toISOString(),
+          });
+          return;
+        }
         try {
           activeSnapshot = await refreshAccount();
           snapshotRef.current = activeSnapshot;
@@ -423,8 +476,11 @@ export function LiveChatScreen() {
 
       let reply = result.text;
       if (isMissingAccountAiReply(reply) && (email || activeSnapshot.userId)) {
-        const fallbackKind = matchAccountQuestion(text) ?? 'profile';
-        reply = answerAccountQuestion(fallbackKind, activeSnapshot);
+        const fallbackKind = matchAccountQuestion(text);
+        reply = fallbackKind
+          ? answerAccountQuestion(fallbackKind, activeSnapshot)
+          : answerHowToFromFaq(text, { loose: true }) ??
+            "You're signed in on Palpeer. Ask about your balances, recent activity, or a how-to (add money, withdraw, InstantEX, P2P), or talk to a person.";
       }
 
       // Capacity stubs from the Support AI — answer locally or offer topics + agent.
@@ -471,11 +527,11 @@ export function LiveChatScreen() {
       : connectingLabel(!!sessionId, !!bootError, booting, awaitingEscalation);
 
   const canSend = !sending && !booting && !!sessionId && !awaitingEscalation && !!draft.trim();
-  // Lift the whole chat (messages + composer) above the keyboard. Edge-to-edge Android often
-  // keeps the window full-height, so pad by measured overlap rather than KeyboardAvoidingView.
+  // Lift the composer above the system / :3333 keypad. Pad the column so the message field
+  // sits just above the keyboard (keyboard stays below the field).
   const keyboardLift = keyboardHeight > 0 ? keyboardHeight : 0;
   const composerBottomPad =
-    10 + (keyboardHeight > 0 ? 0 : restingBottomInset.current);
+    10 + (keyboardHeight > 0 ? 8 : restingBottomInset.current);
 
   const onListen = () => {
     if (speaking) {
@@ -494,7 +550,7 @@ export function LiveChatScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']} testID="live-chat-screen">
-      <View style={[styles.flex, { paddingBottom: keyboardLift }]}>
+      <View style={[styles.flex, { paddingBottom: keyboardLift }]} testID="live-chat-keyboard-lift">
         <View style={styles.header}>
           <Pressable
             accessibilityRole="button"
@@ -585,7 +641,7 @@ export function LiveChatScreen() {
                     email,
                     subject: 'Support request from chat',
                   }}
-                  onQuickChip={(prompt) => void sendText(prompt)}
+                  onQuickChip={(prompt, faqId) => void sendText(prompt, { faqId })}
                   onTalkToAgent={() => void escalateToAgent()}
                   onContinueAi={() => setAwaitingEscalation(false)}
                   chipsDisabled={sending || booting || !sessionId || awaitingEscalation}
@@ -627,10 +683,10 @@ export function LiveChatScreen() {
                 editable={!sending && !booting && !!sessionId && !awaitingEscalation}
                 multiline
                 onFocus={() => {
+                  if (Platform.OS === 'web') keepPreviewKeyboardFocus(800);
                   scrollToComposer();
-                  if (Platform.OS === 'android') {
-                    setTimeout(scrollToComposer, 80);
-                  }
+                  setTimeout(scrollToComposer, 80);
+                  setTimeout(scrollToComposer, 220);
                 }}
                 style={styles.input}
                 testID="live-chat-input"
@@ -685,7 +741,7 @@ function LiveChatBubble({
 }: {
   message: ChatMessage;
   ticketPrefill?: { fullName?: string | null; email?: string | null; subject?: string | null };
-  onQuickChip?: (prompt: string) => void;
+  onQuickChip?: (prompt: string, faqId?: string) => void;
   chipsDisabled?: boolean;
   onTalkToAgent: () => void;
   onContinueAi: () => void;
@@ -750,7 +806,7 @@ function LiveChatBubble({
               accessibilityRole="button"
               accessibilityLabel={chip.label}
               disabled={chipsDisabled}
-              onPress={() => onQuickChip?.(chip.prompt)}
+              onPress={() => onQuickChip?.(chip.prompt, chip.faqId)}
               testID={`live-chat-chip-${chip.id}`}
               style={({ pressed }) => [
                 styles.chip,

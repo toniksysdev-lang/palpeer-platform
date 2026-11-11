@@ -105,7 +105,7 @@ class WithdrawalServiceTest {
         ArgumentCaptor<UserNotifyEvent> notify = ArgumentCaptor.forClass(UserNotifyEvent.class);
         verify(eventPublisher).publishEvent(notify.capture());
         assertThat(notify.getValue().referenceType()).isEqualTo("WITHDRAWAL");
-        assertThat(notify.getValue().title()).isEqualTo("Withdrawal initiated");
+        assertThat(notify.getValue().title()).isEqualTo("Withdrawal started");
         assertThat(notify.getValue().sendEmail()).isTrue();
         assertThat(notify.getValue().sendPush()).isTrue();
     }
@@ -137,7 +137,7 @@ class WithdrawalServiceTest {
         ArgumentCaptor<UserNotifyEvent> notify = ArgumentCaptor.forClass(UserNotifyEvent.class);
         verify(eventPublisher).publishEvent(notify.capture());
         assertThat(notify.getValue().referenceType()).isEqualTo("WITHDRAWAL");
-        assertThat(notify.getValue().title()).isEqualTo("Withdrawal successful");
+        assertThat(notify.getValue().title()).isEqualTo("Money taken out");
         assertThat(notify.getValue().sendEmail()).isTrue();
         assertThat(notify.getValue().sendPush()).isTrue();
     }

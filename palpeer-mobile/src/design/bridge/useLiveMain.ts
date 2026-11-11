@@ -3,11 +3,13 @@ import { router, type Href } from 'expo-router';
 
 import { useEnsureProfile } from '@/features/profile/useEnsureProfile';
 import { usePinPrompt } from '@/features/security/PinPromptProvider';
+import { walletErrorMessage } from '@/features/wallets/errors';
 import { useToast } from '@/providers/ToastProvider';
-import { badgeLabel } from '@/features/notifications/logic';
+import { badgeLabel, messagesMenuCount } from '@/features/notifications/logic';
 import { toAppError } from '@/services/api/errors';
+import { useGetChatUnreadCountQuery } from '@/services/api/chatApi';
 import { useGetCurrenciesQuery } from '@/services/api/currencyApi';
-import { useGetUnreadCountQuery } from '@/services/api/notificationApi';
+import { ALERTS_POLL_MS, useGetUnreadCountQuery } from '@/services/api/notificationApi';
 import { useGetPinStatusQuery } from '@/services/api/securityApi';
 import {
   useCreateWalletMutation,
@@ -19,6 +21,10 @@ import { useAppSelector } from '@/store';
 import { formatMoney } from '@/utils/money';
 
 import { buildWalletCatalog, ownedDesignWallets } from './mapWallet';
+
+export type AddWalletResult =
+  | { ok: true }
+  | { ok: false; error?: string; cancelled?: boolean };
 
 function latestMovementLine(
   tx:
@@ -48,7 +54,7 @@ function latestMovementLine(
   let title = `${tx.type}: ${amt}`;
   if (tx.type === 'EXCHANGE' && secondary) title = `You changed ${amt} to ${secondary}`;
   else if (tx.type === 'FUNDING') title = `You added ${amt}`;
-  else if (tx.type === 'WITHDRAWAL') title = `You took out ${amt}`;
+  else if (tx.type === 'WITHDRAWAL') title = `You withdrew ${amt}`;
   else if (tx.type === 'TRANSFER') title = `You sent ${amt}`;
   else if (tx.type === 'P2P' && secondary) title = `You changed ${amt} to ${secondary}`;
   const time = new Date(tx.createdAt).toLocaleString('en-CA', {
@@ -64,8 +70,17 @@ export function useLiveMain() {
   const authenticated = useAppSelector((state) => state.session.status === 'authenticated');
   const walletsQ = useGetWalletsQuery(undefined, { skip: !authenticated });
   const currenciesQ = useGetCurrenciesQuery(undefined, { skip: !authenticated });
-  const recent = useGetRecentTransactionsQuery(1, { skip: !authenticated });
-  const notifUnread = useGetUnreadCountQuery(undefined, { skip: !authenticated });
+  const recent = useGetRecentTransactionsQuery(3, { skip: !authenticated });
+  const notifUnread = useGetUnreadCountQuery(undefined, {
+    skip: !authenticated,
+    pollingInterval: authenticated ? ALERTS_POLL_MS : 0,
+    skipPollingIfUnfocused: true,
+  });
+  const chatUnread = useGetChatUnreadCountQuery(undefined, {
+    skip: !authenticated,
+    pollingInterval: authenticated ? ALERTS_POLL_MS : 0,
+    skipPollingIfUnfocused: true,
+  });
   const profile = useEnsureProfile();
   const pinStatus = useGetPinStatusQuery(undefined, { skip: !authenticated });
   const { requestPin } = usePinPrompt();
@@ -84,19 +99,19 @@ export function useLiveMain() {
     return 'there';
   }, [profile.profile?.firstName]);
 
-  const unreadCount = notifUnread.data ?? 0;
+  const unreadCount = messagesMenuCount(notifUnread.data, chatUnread.data);
   const msgBadge = badgeLabel(unreadCount) ?? '';
 
-  const lastMovement = useMemo(
-    () => latestMovementLine(recent.data?.[0]),
+  const recentMovements = useMemo(
+    () => (recent.data ?? []).map(latestMovementLine).filter((line): line is { title: string; time: string } => !!line),
     [recent.data],
   );
 
   const onAddWallet = useCallback(
-    async (code: string) => {
-      const fail = (error: string) => {
+    async (code: string): Promise<AddWalletResult> => {
+      const fail = (error: string): AddWalletResult => {
         toast.show({ type: 'error', title: error });
-        return { ok: false as const, error };
+        return { ok: false, error };
       };
 
       if (profile.loading) {
@@ -127,14 +142,16 @@ export function useLiveMain() {
         allowBiometric: true,
       });
       if (!confirmed) {
-        return { ok: false as const };
+        // User dismissed the PIN sheet — not a create failure.
+        return { ok: false, cancelled: true };
       }
 
       try {
         await createWallet({ currencyCode: code }).unwrap();
-        return { ok: true as const };
+        return { ok: true };
       } catch (raw) {
-        return fail(toAppError(raw).message ?? 'Could not add wallet');
+        const appError = toAppError(raw);
+        return fail(walletErrorMessage(appError) || 'Could not add wallet');
       }
     },
     [createWallet, pinStatus, profile.loading, profile.profile, requestPin, toast],
@@ -154,6 +171,15 @@ export function useLiveMain() {
     await sessionManager.dismissToLogin();
   }, []);
 
+  const onRefresh = useCallback(() => {
+    void walletsQ.refetch();
+    void currenciesQ.refetch();
+    void recent.refetch();
+    void notifUnread.refetch();
+    void chatUnread.refetch();
+    profile.retry();
+  }, [chatUnread, currenciesQ, notifUnread, profile, recent, walletsQ]);
+
   return {
     backend: true as const,
     liveWallets,
@@ -164,11 +190,12 @@ export function useLiveMain() {
     goAddMoney,
     unreadCount,
     msgBadge,
-    lastMovement,
+    recentMovements,
     walletsLoading: walletsQ.isLoading || currenciesQ.isLoading,
     walletsError: walletsQ.error ? toAppError(walletsQ.error).message : null,
     onAddWallet,
     refetchWallets: () => void walletsQ.refetch(),
+    onRefresh,
     onLogBack,
   };
 }

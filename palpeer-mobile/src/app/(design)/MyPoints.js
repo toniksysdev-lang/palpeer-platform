@@ -1,6 +1,6 @@
-// Route for the "My points" artboard (live backend props).
-import MyPointsScreen from '@/design/screens/MyPoints';
+// Route for My points — newui presentation, live backend props.
 import { useLiveMyPoints } from '@/design/bridge/useLiveMyPoints';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
+import MyPointsScreen from '@/newui/screens/MyPoints';
 
-export default screen(MyPointsScreen, {}, useLiveMyPoints);
+export default liveScreen(MyPointsScreen, {}, useLiveMyPoints);

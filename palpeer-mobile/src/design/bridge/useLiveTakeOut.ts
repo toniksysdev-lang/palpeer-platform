@@ -3,21 +3,31 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEnsureProfile } from '@/features/profile/useEnsureProfile';
 import { usePinPrompt } from '@/features/security/PinPromptProvider';
 import { cadReference, ngnReference } from '@/features/wallets/destination';
+import { FUNDING_POLL_MS, isInProgress } from '@/features/wallets/movementStatus';
 import { useIdempotencyKey } from '@/features/wallets/useIdempotencyKey';
+import { baseApi } from '@/services/api/baseApi';
 import { toAppError } from '@/services/api/errors';
+import { ALERTS } from '@/services/api/notificationApi';
 import {
   useCreateWithdrawalMutation,
   useGetWalletsQuery,
   useGetWithdrawalBanksQuery,
+  useLazyGetWithdrawalQuery,
+  walletBalanceTags,
 } from '@/services/api/walletApi';
 import { interacAddressesStorage } from '@/services/storage/interacAddressesStorage';
-import { useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import { toMoney } from '@/utils/money';
 
 import { ownedDesignWallets } from './mapWallet';
 import { verifyDesignPin } from './verifyPin';
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function useLiveTakeOut() {
+  const dispatch = useAppDispatch();
   const authenticated = useAppSelector((s) => s.session.status === 'authenticated');
   const sessionEmail = useAppSelector((s) => s.session.email);
   const userId = useAppSelector((s) => s.session.userId) ?? '';
@@ -25,6 +35,7 @@ export function useLiveTakeOut() {
   const walletsQ = useGetWalletsQuery(undefined, { skip: !authenticated });
   const banksQ = useGetWithdrawalBanksQuery(undefined, { skip: !authenticated });
   const [createWithdrawal] = useCreateWithdrawalMutation();
+  const [fetchWithdrawal] = useLazyGetWithdrawalQuery();
   const { requestPin } = usePinPrompt();
   const [interacEmails, setInteracEmails] = useState<string[]>(
     sessionEmail ? [sessionEmail] : [],
@@ -34,6 +45,7 @@ export function useLiveTakeOut() {
     amount: string;
     destinationReference: string;
   } | null>(null);
+  const withdrawalIdRef = useRef<string | null>(null);
   const idempotency = useIdempotencyKey();
 
   const liveWallets = useMemo(() => ownedDesignWallets(walletsQ.data), [walletsQ.data]);
@@ -74,6 +86,17 @@ export function useLiveTakeOut() {
     return map;
   }, [banksQ.data]);
 
+  const refreshAlerts = useCallback(
+    (walletId?: string) => {
+      dispatch(
+        baseApi.util.invalidateTags(
+          walletId ? [...walletBalanceTags(walletId), ...ALERTS] : [...ALERTS],
+        ),
+      );
+    },
+    [dispatch],
+  );
+
   const prepareWithdrawal = useCallback(
     (code: string, amount: string, dest: { email?: string; bank?: string; acct?: string }) => {
       const wallet = walletsQ.data?.find((w) => w.currencyCode === code);
@@ -97,10 +120,32 @@ export function useLiveTakeOut() {
         amount,
         destinationReference,
       };
+      withdrawalIdRef.current = null;
       idempotency.reset();
       return { ok: true as const };
     },
     [banksByName, idempotency, walletsQ.data],
+  );
+
+  /** Poll until withdrawal leaves in-progress (triggers Kuda TSQ reconcile on GET). */
+  const waitForWithdrawal = useCallback(
+    async (withdrawalId: string, walletId: string) => {
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        try {
+          const data = await fetchWithdrawal(withdrawalId, true).unwrap();
+          if (!isInProgress(data.status)) {
+            refreshAlerts(walletId);
+            return;
+          }
+        } catch {
+          // Keep polling — webhook/reconcile may still settle.
+        }
+        await sleep(FUNDING_POLL_MS);
+      }
+      // Still pending: refresh Alerts once so "Withdrawal started" is visible.
+      refreshAlerts(walletId);
+    },
+    [fetchWithdrawal, refreshAlerts],
   );
 
   const runWithdrawal = useCallback(async () => {
@@ -122,10 +167,20 @@ export function useLiveTakeOut() {
       console.warn('withdrawal failed', toAppError(result.error).message);
       return false;
     }
+    const tx = result.data;
+    withdrawalIdRef.current = tx.id;
     idempotency.reset();
     pendingRef.current = null;
+
+    // Mutation invalidates ALERTS; force another pass so Messages badge/list catch
+    // AFTER_COMMIT notify (and SUCCESS settle on the same request).
+    refreshAlerts(pending.walletId);
+
+    if (isInProgress(tx.status)) {
+      void waitForWithdrawal(tx.id, pending.walletId);
+    }
     return true;
-  }, [createWithdrawal, idempotency]);
+  }, [createWithdrawal, idempotency, refreshAlerts, waitForWithdrawal]);
 
   const confirmPin = useCallback(
     async (pin: string) => {
@@ -139,7 +194,7 @@ export function useLiveTakeOut() {
   const confirmBiometric = useCallback(async () => {
     const confirmed = await requestPin({
       title: 'Confirm withdrawal',
-      message: 'Confirm with fingerprint or enter your PIN to take out money.',
+      message: 'Confirm with fingerprint or enter your PIN to withdraw money.',
       allowBiometric: true,
     });
     if (!confirmed) return false;

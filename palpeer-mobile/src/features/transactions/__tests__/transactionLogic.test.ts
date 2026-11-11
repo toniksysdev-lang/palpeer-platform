@@ -27,6 +27,7 @@ describe('isTransactionType', () => {
 describe('periodFrom', () => {
   it('is undefined for all time and counts whole days back otherwise', () => {
     expect(periodFrom('ALL', NOW)).toBeUndefined();
+    expect(periodFrom('CUSTOM', NOW)).toBeUndefined();
     expect(periodFrom('7D', NOW)).toBe(new Date(NOW - 7 * 86_400_000).toISOString());
     expect(periodFrom('90D', NOW)).toBe(new Date(NOW - 90 * 86_400_000).toISOString());
   });

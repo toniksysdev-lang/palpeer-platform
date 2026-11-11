@@ -7,6 +7,7 @@ import type {
 
 import { baseApi } from './baseApi';
 import { jsonDecimal } from './json';
+import { ALERTS } from './notificationApi';
 import { walletBalanceTags } from './walletApi';
 
 function amountBody({ sourceWalletId, targetWalletId, fixedSide, amount }: ExchangeAmountRequest) {
@@ -53,6 +54,7 @@ export const exchangeApi = baseApi.injectEndpoints({
           : [
               ...walletBalanceTags(quote.sourceWalletId),
               ...walletBalanceTags(quote.targetWalletId),
+              ...ALERTS,
             ],
     }),
     getExchange: build.query<ExchangeTransactionResponse, string>({

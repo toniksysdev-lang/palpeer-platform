@@ -18,16 +18,14 @@ import { FAQ_SECTIONS, type FaqSection } from '@/features/support/faq';
 import { useAppearance } from '@/hooks/useAppearance';
 import { useLanguage } from '@/hooks/useLanguage';
 import { formatPoints } from '@/features/loyalty/logic';
+import { badgeLabel, messagesMenuCount } from '@/features/notifications/logic';
+import { completedReferrals, invitedFriendsSummary } from '@/features/promotions/logic';
 import { useToast } from '@/providers/ToastProvider';
 import { useGetFeatureFlagsQuery } from '@/services/api/authApi';
-import {
-  useGetCardsQuery,
-  useIssueCardMutation,
-} from '@/services/api/cardApi';
-import { badgeLabel } from '@/features/notifications/logic';
-import { toAppError } from '@/services/api/errors';
+import { useGetCardsQuery } from '@/services/api/cardApi';
+import { useGetChatUnreadCountQuery } from '@/services/api/chatApi';
 import { useGetKycStatusQuery } from '@/services/api/kycApi';
-import { useGetUnreadCountQuery } from '@/services/api/notificationApi';
+import { ALERTS_POLL_MS, useGetUnreadCountQuery } from '@/services/api/notificationApi';
 import {
   useGetActivePromotionsQuery,
   useGetMyBonusSummaryQuery,
@@ -35,7 +33,6 @@ import {
   useGetMyReferralCodeQuery,
   useGetMyReferralsQuery,
 } from '@/services/api/promotionApi';
-import { useGetWalletsQuery } from '@/services/api/walletApi';
 import { sessionManager } from '@/services/auth/session';
 import { useAppSelector } from '@/store';
 import type { AppLanguage } from '@/store/slices/preferencesSlice';
@@ -124,7 +121,7 @@ function buildMeRows(input: {
     {
       title: 'My name',
       note: fullName || (incomplete ? `${EMPTY} — tap to add` : EMPTY),
-      action: incomplete ? 'editProfile' : undefined,
+      action: 'editProfile',
     },
     {
       title: 'My email',
@@ -133,17 +130,17 @@ function buildMeRows(input: {
     {
       title: 'Date of birth',
       note: dob || (incomplete ? EMPTY : '—'),
-      action: incomplete && !dob ? 'editProfile' : undefined,
+      action: 'editProfile',
     },
     {
       title: 'Where I live',
       note: address || (incomplete ? EMPTY : '—'),
-      action: incomplete && !address ? 'editProfile' : undefined,
+      action: 'editProfile',
     },
     {
       title: 'My job',
       note: job || (incomplete ? EMPTY : '—'),
-      action: incomplete && !job ? 'editProfile' : undefined,
+      action: 'editProfile',
     },
   ];
   if (monthly) {
@@ -179,16 +176,23 @@ export function useLiveMore() {
   const { scheme, setAppearance } = useAppearance();
   const toast = useToast();
   const kyc = useGetKycStatusQuery(undefined, { skip: !authenticated });
-  const notifUnread = useGetUnreadCountQuery(undefined, { skip: !authenticated });
+  const notifUnread = useGetUnreadCountQuery(undefined, {
+    skip: !authenticated,
+    pollingInterval: authenticated ? ALERTS_POLL_MS : 0,
+    skipPollingIfUnfocused: true,
+  });
+  const chatUnread = useGetChatUnreadCountQuery(undefined, {
+    skip: !authenticated,
+    pollingInterval: authenticated ? ALERTS_POLL_MS : 0,
+    skipPollingIfUnfocused: true,
+  });
   const flags = useGetFeatureFlagsQuery();
   const cardsQ = useGetCardsQuery(undefined, { skip: !authenticated });
-  const walletsQ = useGetWalletsQuery(undefined, { skip: !authenticated });
   const referralCodeQ = useGetMyReferralCodeQuery(undefined, { skip: !authenticated });
   const referralsQ = useGetMyReferralsQuery(undefined, { skip: !authenticated });
   const bonusSummaryQ = useGetMyBonusSummaryQuery(undefined, { skip: !authenticated });
   const pointsBalanceQ = useGetMyLoyaltyPointsBalanceQuery(undefined, { skip: !authenticated });
   const promotionsQ = useGetActivePromotionsQuery(undefined, { skip: !authenticated });
-  const [issueCard] = useIssueCardMutation();
 
   const supportEmail = appConfig.support.email ?? DEFAULT_SUPPORT_EMAIL;
   const supportPhone = appConfig.support.phone ?? '';
@@ -205,7 +209,7 @@ export function useLiveMore() {
   const identityLabel = identityChecked ? 'Identity checked' : identityNote(kyc.data?.status);
   const emailNote = sessionEmail?.trim() || EMPTY;
 
-  const unreadCount = notifUnread.data ?? 0;
+  const unreadCount = messagesMenuCount(notifUnread.data, chatUnread.data);
   const msgBadge = badgeLabel(unreadCount) ?? '';
 
   const cardsEnabled = flags.data?.virtualCardsEnabled !== false;
@@ -213,8 +217,7 @@ export function useLiveMore() {
   const activeCard = cards.find((c) => c.status === 'ACTIVE') ?? cards[0];
 
   const referralCode = referralCodeQ.data?.referralCode ?? '';
-  const invitedCount = (referralsQ.data ?? []).filter((r) => r.status === 'COMPLETED').length;
-  const invitedOpen = (referralsQ.data ?? []).filter((r) => r.status === 'OPEN').length;
+  const invitedCount = completedReferrals(referralsQ.data ?? []).length;
 
   const pointsNote = useMemo(() => {
     const bal = pointsBalanceQ.data;
@@ -337,12 +340,7 @@ export function useLiveMore() {
         },
         {
           title: 'People I invited',
-          note:
-            invitedCount > 0
-              ? `${invitedCount} joined` + (invitedOpen ? ` · ${invitedOpen} waiting` : '')
-              : invitedOpen > 0
-                ? `${invitedOpen} waiting to join`
-                : 'Nobody has joined yet',
+          note: invitedFriendsSummary(invitedCount),
           action: 'viewReferrals',
         },
       ],
@@ -374,7 +372,11 @@ export function useLiveMore() {
           note: 'Open the app with your face or finger',
           action: 'biometricSettings',
         },
-        { title: 'Privacy', note: 'Your data, permissions and policies' },
+        {
+          title: 'Privacy',
+          note: 'Your data, permissions and policies',
+          action: 'privacy',
+        },
         {
           title: 'App look',
           note: scheme === 'dark' ? 'Dark screen' : 'Light screen',
@@ -384,7 +386,11 @@ export function useLiveMore() {
       ],
       safe: [
         { title: 'My PIN', note: 'Change your 4 numbers', action: 'pinReset' },
-        { title: 'My password', note: 'Change your password' },
+        {
+          title: 'My password',
+          note: 'Change your password',
+          action: 'changePassword',
+        },
         {
           title: 'Security questions',
           note: 'Change your 2 questions',
@@ -395,7 +401,11 @@ export function useLiveMore() {
           note: 'Open the app with your face or finger',
           action: 'biometricSettings',
         },
-        { title: 'Signed-in phones', note: 'See where you are signed in' },
+        {
+          title: 'Signed-in phones',
+          note: 'See where you are signed in',
+          action: 'signedInDevices',
+        },
       ],
     };
   }, [
@@ -405,7 +415,6 @@ export function useLiveMore() {
     cards,
     cardsEnabled,
     invitedCount,
-    invitedOpen,
     meRows,
     pointsNote,
     promoNote,
@@ -438,6 +447,18 @@ export function useLiveMore() {
         router.push('/PinReset');
         return;
       }
+      if (action === 'changePassword') {
+        router.push('/ChangePassword' as Href);
+        return;
+      }
+      if (action === 'signedInDevices') {
+        router.push('/security/devices' as Href);
+        return;
+      }
+      if (action === 'privacy') {
+        router.push('/Privacy' as Href);
+        return;
+      }
       if (action === 'securityQuestions') {
         router.push('/StartQuestions');
         return;
@@ -449,6 +470,7 @@ export function useLiveMore() {
         return;
       }
       if (action === 'liveChat') {
+        // Backend support chat (AI helper + live agent).
         router.push('/support/live-chat' as Href);
         return;
       }
@@ -504,18 +526,11 @@ export function useLiveMore() {
         return;
       }
       if (action === 'issueCard') {
-        const cad = walletsQ.data?.find((w) => w.currencyCode === 'CAD');
-        const wallet = cad ?? walletsQ.data?.[0];
-        if (!wallet) return;
-        try {
-          await issueCard({
-            currencyCode: wallet.currencyCode,
-            walletId: wallet.id,
-            cardholderName: displayName !== 'My account' ? displayName : undefined,
-          }).unwrap();
-        } catch (raw) {
-          console.warn('issue card failed', toAppError(raw).message);
+        if (!cardsEnabled) {
+          toast.show({ type: 'error', title: 'Cards are not available right now' });
+          return;
         }
+        router.push('/IssueCard' as Href);
         return;
       }
       if (action.startsWith('openCard:') || action.startsWith('history:')) {
@@ -523,14 +538,7 @@ export function useLiveMore() {
         if (id) router.push(`/Card?id=${encodeURIComponent(id)}` as Href);
       }
     },
-    [
-      displayName,
-      issueCard,
-      openSupportChannel,
-      supportEmail,
-      supportPhone,
-      walletsQ.data,
-    ],
+    [cardsEnabled, openSupportChannel, supportEmail, supportPhone, toast],
   );
 
   const setAppLanguage = useCallback(
@@ -547,6 +555,30 @@ export function useLiveMore() {
     },
     [setAppearance],
   );
+
+  const onRefresh = useCallback(() => {
+    void kyc.refetch();
+    void notifUnread.refetch();
+    void chatUnread.refetch();
+    void flags.refetch();
+    void cardsQ.refetch();
+    void referralCodeQ.refetch();
+    void referralsQ.refetch();
+    void bonusSummaryQ.refetch();
+    void pointsBalanceQ.refetch();
+    void promotionsQ.refetch();
+  }, [
+    bonusSummaryQ,
+    cardsQ,
+    chatUnread,
+    flags,
+    kyc,
+    notifUnread,
+    pointsBalanceQ,
+    promotionsQ,
+    referralCodeQ,
+    referralsQ,
+  ]);
 
   return {
     backend: true as const,
@@ -569,5 +601,6 @@ export function useLiveMore() {
     openPinReset,
     openChangePin: openPinReset,
     runSheetAction,
+    onRefresh,
   };
 }

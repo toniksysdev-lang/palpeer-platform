@@ -1,6 +1,6 @@
-﻿// Route for the "AddSend" artboard (live backend props).
-import AddScreen from '@/design/screens/Add';
+// Route for the "AddSend" artboard (live backend props).
+import AddScreen from '@/newui/screens/Add';
 import { useLiveAdd } from '@/design/bridge/useLiveAdd';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
 
-export default screen(AddScreen, { stage: 'send' }, useLiveAdd);
+export default liveScreen(AddScreen, { stage: 'send' }, useLiveAdd);

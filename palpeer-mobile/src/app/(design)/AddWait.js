@@ -1,6 +1,6 @@
-﻿// Route for the "AddWait" artboard (live backend props).
-import AddScreen from '@/design/screens/Add';
+// Route for the "AddWait" artboard (live backend props).
+import AddScreen from '@/newui/screens/Add';
 import { useLiveAdd } from '@/design/bridge/useLiveAdd';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
 
-export default screen(AddScreen, { stage: 'wait' }, useLiveAdd);
+export default liveScreen(AddScreen, { stage: 'wait' }, useLiveAdd);

@@ -1,15 +1,17 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Image, Platform, StyleSheet, View } from 'react-native';
 
-import { PALPEER_LOGO } from '@/components/brand/logo';
-import { palette } from '@/theme';
+/** Newui lockup — same mark as the landing hero. */
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const LOGO = require('@/newui/assets/logo.png') as number;
 
 /** Indeterminate progress cycle length while bootstrap runs. */
 const PROGRESS_CYCLE_MS = 1200;
 const PROGRESS_TRACK_WIDTH = 148;
-/** Hardcoded so BrandSplash works as SuspenseFallback before ThemeProvider mounts. */
-const PROGRESS_TRACK = palette.neutral50;
-const PROGRESS_FILL = palette.emerald500;
+/** Match newui land hero (`c.hero` / brand green) before ThemeProvider mounts. */
+const SPLASH_BG = '#081410';
+const PROGRESS_TRACK = 'rgba(255,255,255,0.16)';
+const PROGRESS_FILL = '#0B6E4F';
 
 /** Dismiss any static HTML boot splash once React BrandSplash is painting (web only). */
 function hideWebBootSplash() {
@@ -64,16 +66,17 @@ export function BrandSplash() {
 
   return (
     <View
-      style={[styles.container, { backgroundColor: palette.neutral0 }]}
+      style={[styles.container, { backgroundColor: SPLASH_BG }]}
       accessibilityLabel="Loading PALPEER"
       accessibilityRole="progressbar"
       testID="brand-splash"
     >
       <Image
-        source={PALPEER_LOGO}
+        source={LOGO}
         style={styles.logo}
         resizeMode="contain"
         accessibilityIgnoresInvertColors
+        accessibilityLabel="Palpeer. Your rate, your way."
       />
 
       <View
@@ -96,7 +99,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     gap: 24,
   },
-  logo: { width: 200, height: 84 },
+  logo: { width: 220, height: 92 },
   progressTrack: {
     width: PROGRESS_TRACK_WIDTH,
     height: 4,

@@ -1,9 +1,13 @@
 import * as Clipboard from 'expo-clipboard';
+import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { Share } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
 
-import { shareMessage } from '@/features/promotions/logic';
+import {
+  completedReferrals,
+  invitedFriendsSummary,
+  shareMessage,
+} from '@/features/promotions/logic';
 import {
   useGetMyReferralCodeQuery,
   useGetMyReferralsQuery,
@@ -19,40 +23,23 @@ export function useLiveInviteFriends() {
   const referralsQ = useGetMyReferralsQuery(undefined, { skip: !authenticated });
 
   const referralCode = codeQ.data?.referralCode ?? '';
-  const referrals = referralsQ.data ?? [];
-
-  const joined = referrals.filter((r) => r.status === 'COMPLETED').length;
-  const open = referrals.filter((r) => r.status === 'OPEN').length;
-
-  const joinedText = useMemo(() => {
-    if (joined > 0) {
-      return `${joined} joined` + (open ? ` · ${open} waiting` : '');
-    }
-    if (open > 0) return `${open} invited, waiting to join`;
-    return 'Nobody has joined yet';
-  }, [joined, open]);
+  const joinedRows = useMemo(
+    () => completedReferrals(referralsQ.data ?? []),
+    [referralsQ.data],
+  );
+  const joinedCount = joinedRows.length;
+  const joinedText = invitedFriendsSummary(joinedCount);
 
   const people = useMemo(() => {
-    return referrals.map((r) => {
+    return joinedRows.map((r) => {
       const when = formatDateTime(r.createdAt) ?? '';
-      if (r.status === 'COMPLETED') {
-        return {
-          title: r.referralCode,
-          note: `Joined and checked · ${when}`,
-        };
-      }
-      if (r.status === 'OPEN') {
-        return {
-          title: r.referralCode,
-          note: `Invited · waiting · ${when}`,
-        };
-      }
+      const who = (r.refereeUsername && `@${r.refereeUsername}`) || 'A friend';
       return {
-        title: r.referralCode,
-        note: `${r.status} · ${when}`,
+        title: who,
+        note: when ? `Joined and checked · ${when}` : 'Joined and checked',
       };
     });
-  }, [referrals]);
+  }, [joinedRows]);
 
   const onShare = useCallback(async () => {
     if (!referralCode) return;

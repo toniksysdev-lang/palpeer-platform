@@ -32,6 +32,8 @@ export type ReferralResponse = {
   status: ReferralStatus;
   promotionId: Uuid | null;
   createdAt: IsoInstant;
+  /** Present after the invitee joins (COMPLETED). */
+  refereeUsername?: string | null;
 };
 
 /** VERIFIED: `ApplyReferralRequest`. Case-insensitive, ≤ 40 characters. */

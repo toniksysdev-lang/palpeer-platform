@@ -4,16 +4,40 @@ import { Platform } from 'react-native';
  * Bridge for the localhost:3333 phone-frame preview soft keyboard.
  * Parent shell shows a mobile keypad; this module opens/closes it on focus and
  * inserts keystrokes into the focused web input (cross-origin postMessage).
+ *
+ * Important: do NOT close the keypad on focusout. RN Web scroll-into-view and
+ * layout updates briefly blur inputs, which made the keypad flash open then close
+ * on every "My answer" tap. Close only when the user taps outside a text field
+ * (or focuses an in-app number-pad field).
  */
 const OPEN = 'palpeer-soft-keyboard-open';
 const CLOSE = 'palpeer-soft-keyboard-close';
 const KEY = 'palpeer-soft-keyboard-key';
+const LAYOUT = 'palpeer-soft-keyboard-layout';
+/** Dispatched on `window` when the :3333 phone-frame keypad opens/closes (with height). */
+export const PREVIEW_KEYBOARD_EVENT = 'palpeer-preview-keyboard';
 
 type KeyPayload = {
   type: typeof KEY;
   key?: string;
   code?: 'Backspace' | 'Enter' | 'Space';
 };
+
+type LayoutPayload = {
+  type: typeof LAYOUT;
+  open?: boolean;
+  height?: number;
+};
+
+export type PreviewKeyboardDetail = { open: boolean; height: number };
+
+function emitPreviewKeyboard(detail: PreviewKeyboardDetail) {
+  try {
+    window.dispatchEvent(new CustomEvent(PREVIEW_KEYBOARD_EVENT, { detail }));
+  } catch {
+    // Ignore if CustomEvent unavailable.
+  }
+}
 
 function isPreviewFrame(): boolean {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
@@ -126,19 +150,56 @@ function applyKey(payload: KeyPayload) {
   if (payload.key) insertText(active, payload.key);
 }
 
-let blurTimer: ReturnType<typeof setTimeout> | null = null;
+let closeTimer: ReturnType<typeof setTimeout> | null = null;
+let lastTextInput: HTMLInputElement | HTMLTextAreaElement | null = null;
 
 function usesInAppNumberPad(el: HTMLElement): boolean {
   return el.getAttribute('data-palpeer-number-pad') === '1';
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return true;
+  if (target.closest?.('input, textarea, [contenteditable="true"]')) return true;
+  // RN Web often wraps the native input; tapping the field chrome should not close.
+  if (target.closest?.('[data-palpeer-text-field="1"]')) return true;
+  return false;
+}
+
+/**
+ * Kept for FocusScroll callers. No longer gates close-on-blur (that path was removed).
+ */
+export function keepPreviewKeyboardFocus(_ms = 600) {
+  // no-op — focusout no longer closes the keypad
+}
+
+function restoreLastTextInputFocus() {
+  const el = lastTextInput;
+  if (!el || !el.isConnected) return;
+  if (document.activeElement === el) return;
+  try {
+    el.focus({ preventScroll: true });
+  } catch {
+    try {
+      el.focus();
+    } catch {
+      // Ignore.
+    }
+  }
+}
+
+function cancelClose() {
+  if (closeTimer) {
+    clearTimeout(closeTimer);
+    closeTimer = null;
+  }
+}
+
 function onFocusIn(event: FocusEvent) {
   const target = event.target;
   if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
-  if (blurTimer) {
-    clearTimeout(blurTimer);
-    blurTimer = null;
-  }
+  cancelClose();
+  lastTextInput = target;
   // Number-pad fields use the in-app keypad only — never the preview soft keyboard.
   if (usesInAppNumberPad(target) || (target.inputMode || '').toLowerCase() === 'none') {
     notifyParent({ type: CLOSE });
@@ -150,18 +211,42 @@ function onFocusIn(event: FocusEvent) {
   });
 }
 
-function onFocusOut() {
-  blurTimer = setTimeout(() => {
+/** Close only on an intentional tap outside text fields — never on transient focusout. */
+function onPointerDownClose(event: Event) {
+  if (isEditableTarget(event.target)) {
+    cancelClose();
+    return;
+  }
+  cancelClose();
+  closeTimer = setTimeout(() => {
     const active = document.activeElement;
-    if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return;
+    if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
+      if (!usesInAppNumberPad(active) && (active.inputMode || '').toLowerCase() !== 'none') {
+        return;
+      }
+    }
     notifyParent({ type: CLOSE });
-  }, 120);
+  }, 50);
 }
 
 function onMessage(event: MessageEvent) {
-  const data = event.data as KeyPayload | null;
-  if (!data || data.type !== KEY) return;
-  applyKey(data);
+  const data = event.data as (KeyPayload | LayoutPayload) | null;
+  if (!data || typeof data !== 'object') return;
+  if (data.type === KEY) {
+    applyKey(data as KeyPayload);
+    return;
+  }
+  if (data.type === LAYOUT) {
+    const open = !!(data as LayoutPayload).open;
+    const height = Math.max(0, Math.round((data as LayoutPayload).height ?? 0));
+    emitPreviewKeyboard({ open, height: open ? height : 0 });
+    if (open) {
+      requestAnimationFrame(() => {
+        restoreLastTextInputFocus();
+        setTimeout(restoreLastTextInputFocus, 80);
+      });
+    }
+  }
 }
 
 /** Install once when the Expo web app runs inside the phone-frame preview. */
@@ -169,8 +254,14 @@ export function installPreviewSoftKeyboard() {
   if (!isPreviewFrame() || typeof document === 'undefined') return;
   if ((window as Window & { __palpeerSoftKeyboard?: boolean }).__palpeerSoftKeyboard) return;
   (window as Window & { __palpeerSoftKeyboard?: boolean }).__palpeerSoftKeyboard = true;
+  try {
+    document.documentElement.setAttribute('data-palpeer-soft-kb', '1');
+  } catch {
+    // Ignore.
+  }
   document.addEventListener('focusin', onFocusIn, true);
-  document.addEventListener('focusout', onFocusOut, true);
+  document.addEventListener('mousedown', onPointerDownClose, true);
+  document.addEventListener('touchstart', onPointerDownClose, true);
   window.addEventListener('message', onMessage);
 }
 

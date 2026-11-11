@@ -11,6 +11,14 @@ export function badgeLabel(count: number | undefined): string | null {
   return count > 9 ? '9+' : String(count);
 }
 
+/** Footer Messages badge: unread Alerts + unread chat rooms. */
+export function messagesMenuCount(
+  notificationUnread: number | undefined,
+  chatUnread: number | undefined,
+): number {
+  return Math.max(0, notificationUnread ?? 0) + Math.max(0, chatUnread ?? 0);
+}
+
 export function uniqueNotifications(items: NotificationResponse[]): NotificationResponse[] {
   const seen = new Set<string>();
   return items.filter((item) => {

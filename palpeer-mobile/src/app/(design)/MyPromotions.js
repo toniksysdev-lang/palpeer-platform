@@ -1,6 +1,6 @@
-// Route for the "Promotions" artboard (live backend props).
-import MyPromotionsScreen from '@/design/screens/MyPromotions';
+// Route for Promotions — newui presentation, live backend props.
 import { useLiveMyPromotions } from '@/design/bridge/useLiveMyPromotions';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
+import MyPromotionsScreen from '@/newui/screens/MyPromotions';
 
-export default screen(MyPromotionsScreen, {}, useLiveMyPromotions);
+export default liveScreen(MyPromotionsScreen, {}, useLiveMyPromotions);

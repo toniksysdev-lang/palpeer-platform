@@ -5,16 +5,19 @@ import { useEnsureProfile } from '@/features/profile/useEnsureProfile';
 import { FUNDING_POLL_MS, isInProgress } from '@/features/wallets/movementStatus';
 import { useIdempotencyKey } from '@/features/wallets/useIdempotencyKey';
 import { toAppError } from '@/services/api/errors';
+import { baseApi } from '@/services/api/baseApi';
+import { ALERTS } from '@/services/api/notificationApi';
 import {
   useCreateFundingMutation,
   useGetWalletsQuery,
   useLazyGetFundingQuery,
+  walletBalanceTags,
 } from '@/services/api/walletApi';
 import {
   interacAddressesStorage,
   type InteracAddress,
 } from '@/services/storage/interacAddressesStorage';
-import { useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import type { FundingTransactionResponse } from '@/types/api/wallet';
 import { toMoney } from '@/utils/money';
 
@@ -37,6 +40,7 @@ function sleep(ms: number) {
 }
 
 export function useLiveAdd() {
+  const dispatch = useAppDispatch();
   const authenticated = useAppSelector((s) => s.session.status === 'authenticated');
   const walletsQ = useGetWalletsQuery(undefined, { skip: !authenticated });
   const profile = useEnsureProfile();
@@ -142,6 +146,18 @@ export function useLiveAdd() {
     [createFunding, idempotency, profile.profile, walletsQ.data],
   );
 
+  /** Refresh Home wallet card + recent activity + Alerts once funding settles. */
+  const refreshAfterFunding = useCallback(
+    (walletId?: string) => {
+      dispatch(
+        baseApi.util.invalidateTags(
+          walletId ? [...walletBalanceTags(walletId), ...ALERTS] : [...ALERTS],
+        ),
+      );
+    },
+    [dispatch],
+  );
+
   /** Poll funding until it leaves an in-progress status (or fails). */
   const waitForFunding = useCallback(
     async (fundingId: string): Promise<{ ok: true } | { ok: false; error: string }> => {
@@ -150,14 +166,20 @@ export function useLiveAdd() {
       for (let attempt = 0; attempt < 40; attempt += 1) {
         try {
           const data = await fetchFunding(id, true).unwrap();
-          if (data.status === 'SUCCESS') return { ok: true };
+          if (data.status === 'SUCCESS') {
+            // getFunding does not invalidate wallets — force Home balance refresh now.
+            refreshAfterFunding(data.walletId);
+            return { ok: true };
+          }
           if (data.status === 'FAILED' || data.status === 'REVERSED') {
+            refreshAfterFunding(data.walletId);
             return {
               ok: false,
               error: data.failureReason || 'Funding did not complete.',
             };
           }
           if (!isInProgress(data.status)) {
+            refreshAfterFunding(data.walletId);
             return { ok: false, error: `Funding ended with status ${data.status}.` };
           }
         } catch (raw) {
@@ -170,7 +192,7 @@ export function useLiveAdd() {
         error: 'Still waiting for your payment. Check History later.',
       };
     },
-    [fetchFunding],
+    [fetchFunding, refreshAfterFunding],
   );
 
   return {

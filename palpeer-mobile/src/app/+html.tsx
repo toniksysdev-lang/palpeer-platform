@@ -8,8 +8,29 @@ import type { PropsWithChildren } from 'react';
 const bootSplashCss = `
 html, body, #root {
   height: 100%;
+  width: 100%;
   margin: 0;
-  background-color: #FFFFFF;
+  background-color: #081410;
+}
+html, body {
+  overflow: hidden;
+}
+#root {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+/* Mobile feel: keep scrolling, hide web-style scrollbar tracks. */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+  background: transparent;
 }
 #palpeer-boot-splash {
   position: fixed;
@@ -21,20 +42,20 @@ html, body, #root {
   justify-content: center;
   gap: 24px;
   padding: 0 32px;
-  background-color: #FFFFFF;
+  background-color: #081410;
   pointer-events: none;
   transition: opacity 140ms ease-out;
 }
 #palpeer-boot-splash img {
-  width: 200px;
-  height: 84px;
+  width: 220px;
+  height: 92px;
   object-fit: contain;
 }
 #palpeer-boot-splash .track {
   width: 148px;
   height: 4px;
   border-radius: 999px;
-  background-color: #F4F6F5;
+  background-color: rgba(255,255,255,0.16);
   overflow: hidden;
   margin-top: 4px;
 }
@@ -42,7 +63,7 @@ html, body, #root {
   height: 100%;
   width: 28%;
   border-radius: 999px;
-  background-color: #0E9F6E;
+  background-color: #0B6E4F;
   animation: palpeer-boot-bar 1.6s ease-in-out infinite alternate;
 }
 @keyframes palpeer-boot-bar {

@@ -336,7 +336,7 @@ describe('LockScreen', () => {
     const { calls } = installFetchMock({});
     const { store } = await renderLocked();
 
-    expect(await screen.findByText(/I was logged out/)).toBeTruthy();
+    expect(await screen.findByText(/You were logged out/)).toBeTruthy();
     expect(await screen.findByText(/Too many tries/)).toBeTruthy();
     expect(store.getState().appLock.locked).toBe(true);
     expect(calls).toHaveLength(0);

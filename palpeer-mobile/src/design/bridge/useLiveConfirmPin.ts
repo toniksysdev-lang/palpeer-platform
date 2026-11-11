@@ -11,7 +11,11 @@ import { markDeviceVerifiedForSession } from '@/features/security/deviceSession'
 import { accountCommands } from '@/services/auth/accountCommands';
 import { authorizedRequest } from '@/services/api/authorized';
 import { toAppError } from '@/services/api/errors';
-import { buildRegistration } from '@/services/biometrics/deviceRegistration';
+import {
+  buildRegistration,
+  findThisDevice,
+  getDeviceIdentifier,
+} from '@/services/biometrics/deviceRegistration';
 import {
   authenticateWithBiometrics,
   getBiometricCapability,
@@ -67,6 +71,35 @@ export function useLiveConfirmPin() {
     router.replace('/Main');
     return { ok: true };
   }, [userId]);
+
+  // If we were sent here during first-time setup (no other trusted phone), leave automatically.
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const identifier = await getDeviceIdentifier();
+      const list = await securityCommands.listDevices();
+      if (cancelled || !list.ok) return;
+      const devices = list.data ?? [];
+      const known = findThisDevice(devices, identifier);
+      if (known?.enabled) {
+        enterApp();
+        return;
+      }
+      const otherTrusted = devices.some(
+        (device) => device.enabled && device.deviceIdentifier !== identifier,
+      );
+      if (otherTrusted) return;
+      if (!known) {
+        const registration = await buildRegistration();
+        await securityCommands.registerDevice(registration).catch(() => undefined);
+      }
+      if (!cancelled) enterApp();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [enterApp, userId]);
 
   const beginEmailOtp = useCallback(async (): Promise<OkErr> => {
     setError(null);

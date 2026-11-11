@@ -86,6 +86,12 @@ describe('matchAccountQuestion', () => {
     expect(matchAccountQuestion('current InstantEX rates')).toBe('rates');
     expect(matchAccountQuestion('how do I fund my wallet')).toBeNull();
   });
+
+  it('does not steal funding, withdraw, or pending status questions', () => {
+    expect(matchAccountQuestion('top up my wallet')).toBeNull();
+    expect(matchAccountQuestion('my withdrawal is pending')).toBeNull();
+    expect(matchAccountQuestion('pending deposit not arrived')).toBeNull();
+  });
 });
 
 describe('answerAccountQuestion', () => {

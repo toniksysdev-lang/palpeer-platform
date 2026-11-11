@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import { markDeviceVerifiedForSession } from '@/features/security/deviceSession';
 import { SECURITY_QUESTION_CATALOGUE } from '@/features/security/questionCatalogue';
@@ -10,16 +11,16 @@ import {
 } from '@/features/profile/profileOptions';
 import { toIsoDate } from '@/features/profile/schemas';
 import { baseApi } from '@/services/api/baseApi';
-import {
-  useGetPublicInstantRatesQuery,
-  useGetPublicP2PRatesQuery,
-} from '@/services/api/currencyApi';
-import { toAppError } from '@/services/api/errors';
+import { apiRequest } from '@/services/api/client';
+import { publicApiErrorMessage, toAppError } from '@/services/api/errors';
 import { useUpdateMyProfileMutation } from '@/services/api/profileApi';
+import { sessionManager } from '@/services/auth/session';
 import { buildRegistration } from '@/services/biometrics/deviceRegistration';
 import { securityCommands } from '@/services/security/securityCommands';
 import { useAppDispatch, useAppSelector } from '@/store';
+import type { PublicInstantRateResponse, PublicP2PRateResponse } from '@/types/api/exchange';
 import type { UpdateProfileRequest } from '@/types/api/profile';
+import { leftSeconds } from '@/newui/features/start/data';
 import { formatMoney, formatRate } from '@/utils/money';
 
 type OkErr = { ok: true } | { ok: false; error: string };
@@ -34,11 +35,6 @@ const COUNTRY_ID_TO_ISO: Record<string, string> = {
   za: 'ZA',
 };
 
-function leftSeconds(expiresAt: string | null | undefined): number {
-  if (!expiresAt) return 3600;
-  return Math.max(0, Math.floor((Date.parse(expiresAt) - Date.now()) / 1000));
-}
-
 /**
  * PIN, security questions, profile save, and public rates for the Start onboarding flow.
  */
@@ -46,15 +42,64 @@ export function useLiveSecurity() {
   const dispatch = useAppDispatch();
   const userId = useAppSelector((state) => state.session.userId);
   const [updateProfile] = useUpdateMyProfileMutation();
-  const p2pRates = useGetPublicP2PRatesQuery();
-  const instantRates = useGetPublicInstantRatesQuery();
+  /**
+   * Guest Best-rate boards. Plain fetch (not RTK) — refetchOnFocus was aborting these
+   * mid-flight on web, leaving the Palpeer rate tab stuck on "Loading…".
+   */
+  const [instantRatesData, setInstantRatesData] = useState<PublicInstantRateResponse[] | undefined>(
+    undefined,
+  );
+  const [p2pRatesData, setP2pRatesData] = useState<PublicP2PRateResponse[] | undefined>(undefined);
+  const [ratesLoading, setRatesLoading] = useState(true);
+  const [ratesError, setRatesError] = useState<string | null>(null);
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [securityBusy, setSecurityBusy] = useState(false);
+
+  const loadPublicRates = useCallback(async () => {
+    setRatesLoading(true);
+    const [instant, p2p] = await Promise.all([
+      apiRequest<PublicInstantRateResponse[]>('/public/instant-rates'),
+      apiRequest<PublicP2PRateResponse[]>('/public/p2p-rates'),
+    ]);
+    let nextError: string | null = null;
+    if (instant.ok) {
+      setInstantRatesData(Array.isArray(instant.data) ? instant.data : []);
+    } else {
+      nextError = publicApiErrorMessage(toAppError(instant.error));
+      setInstantRatesData((prev) => prev ?? []);
+    }
+    if (p2p.ok) {
+      setP2pRatesData(Array.isArray(p2p.data) ? p2p.data : []);
+    } else {
+      nextError = nextError || publicApiErrorMessage(toAppError(p2p.error));
+      setP2pRatesData((prev) => prev ?? []);
+    }
+    setRatesError(nextError);
+    setRatesLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void loadPublicRates();
+    const onAppState = (next: AppStateStatus) => {
+      if (next === 'active') void loadPublicRates();
+    };
+    const sub = AppState.addEventListener('change', onAppState);
+    return () => sub.remove();
+  }, [loadPublicRates]);
 
   const onSetPin = useCallback(async (pin: string): Promise<OkErr> => {
     setSecurityError(null);
     setSecurityBusy(true);
     try {
+      // Ensure we have a bearer token before PIN write (refresh once if memory token was dropped).
+      if (!sessionManager.getAccessToken()) {
+        const refreshed = await sessionManager.refreshAccessToken();
+        if (!refreshed) {
+          const msg = 'Please log in again to set your PIN.';
+          setSecurityError(msg);
+          return { ok: false, error: msg };
+        }
+      }
       const result = await securityCommands.setPin({ pin });
       if (!result.ok) {
         const msg = securityErrorMessage(toAppError(result.error));
@@ -64,12 +109,10 @@ export function useLiveSecurity() {
       // First-time PIN on this install counts as device confirmation for this session,
       // so RequireNewDevicePin does not bounce StartQuestions back to ConfirmPin.
       if (userId) markDeviceVerifiedForSession(userId);
-      try {
-        const registration = await buildRegistration();
-        await securityCommands.registerDevice(registration);
-      } catch {
-        // Device register is best-effort after PIN is saved; setup can continue.
-      }
+      // Fire-and-forget — awaiting device register used to hold the PIN screen until timeout.
+      void buildRegistration()
+        .then((registration) => securityCommands.registerDevice(registration))
+        .catch(() => undefined);
       dispatch(baseApi.util.invalidateTags(['Security']));
       return { ok: true };
     } catch (raw) {
@@ -205,49 +248,65 @@ export function useLiveSecurity() {
   );
 
   const liveOffers = useMemo(() => {
-    return (p2pRates.data ?? []).map((r) => {
+    return (p2pRatesData ?? []).map((r) => {
       const rate = Number.parseFloat(r.rate) || 0;
       const amt = Number.parseFloat(r.amount) || 0;
+      const cadBase = r.baseCurrencyCode === 'CAD';
+      const ngnBase = r.baseCurrencyCode === 'NGN';
       return {
         id: r.id,
         rate: Math.round(rate),
         amt: Math.round(amt),
-        left: leftSeconds(r.expiresAt),
+        left: leftSeconds(r.expiresAt) || 3600,
         expiresAt: r.expiresAt,
-        ca: r.baseCurrencyCode === 'CAD' || (r.side === 'SELL' && r.quoteCurrencyCode === 'NGN'),
+        ca: cadBase || (r.side === 'SELL' && r.quoteCurrencyCode === 'NGN'),
         priceLabel: `CA$1 = ₦${formatRate(r.rate, 0)}`,
-        amountLabel:
-          r.baseCurrencyCode === 'CAD'
-            ? `Selling CA$${formatMoney(r.amount, { precision: 0, showCurrency: false })}`
-            : `Selling ₦${formatMoney(r.amount, { precision: 0, showCurrency: false })}`,
+        amountLabel: cadBase
+          ? `Selling CA$${formatMoney(r.amount, { precision: 0, showCurrency: false })}`
+          : ngnBase
+            ? `Selling ₦${formatMoney(r.amount, { precision: 0, showCurrency: false })}`
+            : `Selling ${formatMoney(r.amount, { currencyCode: r.baseCurrencyCode, precision: 0 })}`,
       };
     });
-  }, [p2pRates.data]);
+  }, [p2pRatesData]);
 
+  /**
+   * InstantEX board for guests. Platform buy/sell: user buy NGN = platform sell,
+   * user sell NGN = platform buy (same as ViewRatesScreen).
+   */
   const adminRate = useMemo(() => {
-    const pair = (instantRates.data ?? []).find(
+    const pair = (instantRatesData ?? []).find(
       (r) =>
         (r.baseCurrencyCode === 'CAD' && r.quoteCurrencyCode === 'NGN') ||
         (r.baseCurrencyCode === 'NGN' && r.quoteCurrencyCode === 'CAD'),
     );
     if (!pair) {
-      return { getNgn: '₦—', getCad: 'CA$—' };
+      return { ready: false as const, getNgn: '₦—', getCad: 'CA$—' };
     }
     const buy = Number.parseFloat(pair.buyRate) || 0;
     const sell = Number.parseFloat(pair.sellRate) || 0;
     if (pair.baseCurrencyCode === 'CAD') {
-      const ngnPerCad = buy || sell;
-      const cadPerThousandNgn = 1000 / (sell || buy || 1);
+      const userBuyNgnPerCad = sell || buy;
+      const userSellNgnPerCad = buy || sell;
+      const cadPerThousandNgn = 1000 / (userSellNgnPerCad || 1);
       return {
-        getNgn: `₦${formatRate(String(ngnPerCad), 0)}`,
+        ready: true as const,
+        getNgn: `₦${formatRate(String(userBuyNgnPerCad), 0)}`,
         getCad: `CA$${cadPerThousandNgn.toFixed(2)}`,
       };
     }
+    const ngnPerCad = 1 / (sell || buy || 1);
+    const cadPerThousandNgn = 1000 * (buy || sell || 0);
     return {
-      getNgn: `₦${(1 / (buy || 1)).toFixed(0)}`,
-      getCad: `CA$${formatRate(pair.buyRate, 2)}`,
+      ready: true as const,
+      getNgn: `₦${ngnPerCad.toFixed(0)}`,
+      getCad: `CA$${cadPerThousandNgn.toFixed(2)}`,
     };
-  }, [instantRates.data]);
+  }, [instantRatesData]);
+
+  const refetchRates = useCallback(() => {
+    void loadPublicRates();
+  }, [loadPublicRates]);
 
   return {
     onSetPin,
@@ -257,7 +316,10 @@ export function useLiveSecurity() {
     securityBusy,
     clearSecurityError: () => setSecurityError(null),
     liveOffers,
-    ratesEmpty: !p2pRates.isLoading && liveOffers.length === 0,
+    ratesEmpty: !ratesLoading && liveOffers.length === 0,
+    ratesLoading,
+    ratesError,
+    refetchRates,
     adminRate,
   };
 }

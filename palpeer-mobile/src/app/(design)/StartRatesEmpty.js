@@ -1,6 +1,6 @@
-﻿// Route for the "StartRatesEmpty" artboard (live backend props).
-import StartScreen from '@/design/screens/Start';
+// Route for the "StartRatesEmpty" artboard (live backend props).
+import StartScreen from '@/newui/screens/Start';
 import { useLiveStart } from '@/design/bridge/useLiveStart';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
 
-export default screen(StartScreen, { stage: 'rates', empty: true }, useLiveStart);
+export default liveScreen(StartScreen, { stage: 'rates', empty: true }, useLiveStart);

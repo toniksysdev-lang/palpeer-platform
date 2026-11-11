@@ -58,6 +58,7 @@ const SAMPLE_PERIOD_OPTIONS = [
   { key: '7D', title: 'Last 7 days', note: 'This week', selected: false },
   { key: '30D', title: 'Last 30 days', note: 'This month', selected: false },
   { key: '90D', title: 'Last 90 days', note: 'Last 3 months', selected: false },
+  { key: 'CUSTOM', title: 'From / To', note: 'Pick a start and end date on the calendar', selected: false },
 ];
 
 class Component extends DCLogic {

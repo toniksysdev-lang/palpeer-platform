@@ -11,6 +11,8 @@ public record ReferralResponse(
         String referralCode,
         ReferralStatus status,
         UUID promotionId,
-        Instant createdAt
+        Instant createdAt,
+        /** Username of the invited person when they have joined; null while still open. */
+        String refereeUsername
 ) {
 }

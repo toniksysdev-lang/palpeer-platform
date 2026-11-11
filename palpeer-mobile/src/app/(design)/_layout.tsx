@@ -5,6 +5,7 @@ import { Stack } from 'expo-router';
 import { LookContext } from '@/design/dc/runtime';
 import { DARK_PAGE } from '@/design/dc/theme';
 import { useAppearance } from '@/hooks/useAppearance';
+import { NewUiProviders } from '@/newui/providers';
 
 /**
  * Design UI route group — Palpeer Simple Home artboards (change map).
@@ -13,20 +14,24 @@ import { useAppearance } from '@/hooks/useAppearance';
  *
  * Match :3333: design screens are authored for the light artboard. Only remap
  * via LookContext when the user explicitly chose dark (not system dark).
+ * NewUiProviders wrap the ported React UI kit (theme / i18n).
  */
 export default function DesignLayout() {
-  const { appearance } = useAppearance();
-  const designDark = appearance === 'dark';
+  const { scheme } = useAppearance();
+  // Follow the same resolved scheme as newui ThemeProvider so App look applies everywhere.
+  const designDark = scheme === 'dark';
 
   return (
     <LookContext.Provider value={{ dark: designDark }}>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          animation: 'slide_from_right',
-          contentStyle: { backgroundColor: designDark ? DARK_PAGE : '#F3F6F4' },
-        }}
-      />
+      <NewUiProviders>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            animation: 'slide_from_right',
+            contentStyle: { backgroundColor: designDark ? DARK_PAGE : '#F3F6F4' },
+          }}
+        />
+      </NewUiProviders>
     </LookContext.Provider>
   );
 }

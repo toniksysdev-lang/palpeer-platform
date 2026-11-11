@@ -78,6 +78,22 @@ export async function supportChatRequest<T>(
       };
     }
 
+    // Metro sometimes serves the Expo HTML shell for /support-chat-api when the
+    // proxy middleware is disabled — treat that as a network/config failure.
+    const looksLikeHtml =
+      (typeof text === 'string' && /^\s*<(!DOCTYPE|html)/i.test(text)) ||
+      (typeof data === 'string' && /^\s*<(!DOCTYPE|html)/i.test(data));
+    if (looksLikeHtml) {
+      return {
+        ok: false,
+        error: createAppError('serviceUnavailable', {
+          message:
+            "Couldn't reach live chat. Restart Expo web (chat proxy) and try again.",
+          code: 'SUPPORT_CHAT_PROXY',
+        }),
+      };
+    }
+
     return { ok: true, data: data as T };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {

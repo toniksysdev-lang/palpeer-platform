@@ -105,7 +105,7 @@ class NegotiationServiceTest {
                     && notify.sendPush()
                     && "NEGOTIATION".equals(notify.referenceType())
                     && notify.referenceId().equals(response.id())
-                    && notify.title().contains("negotiation");
+                    && notify.title().toLowerCase().contains("price");
         }));
         verify(eventPublisher).publishEvent(any(NegotiationChangedEvent.class));
     }

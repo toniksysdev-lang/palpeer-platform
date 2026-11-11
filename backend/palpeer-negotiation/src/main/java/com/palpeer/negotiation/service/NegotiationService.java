@@ -107,8 +107,23 @@ public class NegotiationService {
         String side = p2p.getSide() != null ? p2p.getSide().name() : "P2P";
         eventPublisher.publishEvent(new UserNotifyEvent(
                 negotiation.getRequesterId(),
-                "New P2P negotiation offer",
-                "Someone sent a negotiation on your P2P " + side + " request: " + detail + ".",
+                "New price offer",
+                "Someone wants to talk about your P2P " + side + " offer: " + detail + ". Open Messages to answer.",
+                "P2P",
+                "NEGOTIATION",
+                negotiation.getId(),
+                true,
+                true));
+    }
+
+    private void notifyOtherParty(Negotiation negotiation, UUID actorId, String title, String body) {
+        UUID other = negotiation.getRequesterId().equals(actorId)
+                ? negotiation.getCounterpartyId()
+                : negotiation.getRequesterId();
+        eventPublisher.publishEvent(new UserNotifyEvent(
+                other,
+                title,
+                body,
                 "P2P",
                 "NEGOTIATION",
                 negotiation.getId(),
@@ -144,6 +159,13 @@ public class NegotiationService {
                 request.rate());
         negotiation.setCurrentOfferId(counter.getId());
         negotiationRepository.save(negotiation);
+        notifyOtherParty(
+                negotiation,
+                userId,
+                "New price offer",
+                "Someone offered a new price ("
+                        + formatAmount(request.rate())
+                        + "). Open Messages to answer.");
         return changed(negotiation);
     }
 
@@ -184,6 +206,11 @@ public class NegotiationService {
 
         negotiation.setP2pOrderId(order.id());
         negotiationRepository.save(negotiation);
+        notifyOtherParty(
+                negotiation,
+                userId,
+                "Price agreed",
+                "The other person accepted your price. Your trade is moving.");
         return changed(negotiation);
     }
 
@@ -206,6 +233,11 @@ public class NegotiationService {
         current.setStatus(NegotiationOfferStatus.REJECTED);
         negotiationOfferRepository.save(current);
         close(negotiation, NegotiationCloseReason.REJECTED, userId);
+        notifyOtherParty(
+                negotiation,
+                userId,
+                "Price talk ended",
+                "The other person said no to your price. The offer can stay open for others.");
         return changed(negotiation);
     }
 
@@ -216,6 +248,11 @@ public class NegotiationService {
         assertOpen(negotiation);
         rejectPendingOffer(negotiation);
         close(negotiation, NegotiationCloseReason.CANCELLED, userId);
+        notifyOtherParty(
+                negotiation,
+                userId,
+                "Price talk ended",
+                "The other person left this price talk.");
         return changed(negotiation);
     }
 

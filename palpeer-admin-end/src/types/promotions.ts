@@ -68,6 +68,8 @@ export type ReferralSummary = {
   status: ReferralStatus | string;
   promotionId?: string | null;
   createdAt: string;
+  /** Present when the invitee has joined. */
+  refereeUsername?: string | null;
 };
 
 export type BonusSummary = {

@@ -204,7 +204,7 @@ export const OPERATIONAL_HOW_TOS: readonly HowToSection[] = [
     items: [
       {
         id: 'withdraw-how',
-        title: 'How do I withdraw?',
+        title: 'How do I withdraw money?',
         body:
           'Home → Withdraw or wallet → Withdraw. Enter amount and destination → review → confirm with your transaction PIN if set. Amount cannot exceed available balance. Status is tracked on the withdrawal screen (held / complete / failed with amount released / reversed).',
       },
@@ -229,14 +229,26 @@ export const OPERATIONAL_HOW_TOS: readonly HowToSection[] = [
     ],
   },
   {
+    id: 'fees',
+    title: 'Fees',
+    items: [
+      {
+        id: 'fees-overview',
+        title: 'What are the fees?',
+        body:
+          'Fees depend on what you do — the app shows the exact amount before you confirm:\n• InstantEX (swap between your wallets): if a platform fee applies, it appears on the quote review as Platform fee. If no fee line is shown, none applies on that quote.\n• P2P marketplace: a fee estimate is shown before you accept an offer; you may enter a promo code or apply pending bonus credit toward the fee when offered.\n• Fund wallet, Send to a Palpeer user, and Withdraw: follow the amounts on each review screen — do not assume a fee unless the app shows one.\nAlways check the review screen before you confirm with your PIN.',
+      },
+    ],
+  },
+  {
     id: 'exchange',
     title: 'InstantEX (swap)',
     items: [
       {
         id: 'exchange-how',
-        title: 'How do I swap between my wallets?',
+        title: 'How do I change / swap money?',
         body:
-          'Open the InstantEX / Exchange tab (or Home → InstantEX). Choose source and target wallets (different currencies), enter an amount on either side — the other side and rate come from the server. Review shows a locked quote with a countdown; confirm with PIN if set. If the quote expires, get a new quote. You need at least two wallets in different currencies.',
+          'Open the InstantEX / Exchange tab (or Home → InstantEX). Choose source and target wallets (different currencies), enter an amount on either side — the other side and rate come from the server. Review shows a locked quote with a countdown; confirm with PIN if set. If the quote expires, get a new quote. You need at least two wallets in different currencies. For a rate with another person, use the P2P tab instead.',
       },
       {
         id: 'exchange-fees',

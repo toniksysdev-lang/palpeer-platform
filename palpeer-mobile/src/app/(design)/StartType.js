@@ -1,6 +1,6 @@
-﻿// Route for the "StartType" artboard (live backend props).
-import StartScreen from '@/design/screens/Start';
+// Route for the "StartType" artboard (live backend props).
+import StartScreen from '@/newui/screens/Start';
 import { useLiveStart } from '@/design/bridge/useLiveStart';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
 
-export default screen(StartScreen, { stage: 'type' }, useLiveStart);
+export default liveScreen(StartScreen, { stage: 'type' }, useLiveStart);

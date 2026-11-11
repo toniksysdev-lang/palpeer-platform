@@ -7,7 +7,8 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Platform, ScrollView, View } from 'react-native';
+import { keepPreviewKeyboardFocus } from '@/boot/previewSoftKeyboard';
 
 const EDGE_GAP = 12;
 
@@ -37,6 +38,11 @@ export function useFocusAnchor() {
   const api = useFocusScroll();
   const ref = useRef<View>(null);
 
+  /** Remember this field as the scroll target without scrolling yet. */
+  const activate = useCallback(() => {
+    api?.setActiveTarget(ref.current);
+  }, [api]);
+
   const reveal = useCallback(() => {
     const run = () => api?.ensureVisible(ref.current);
     api?.setActiveTarget(ref.current);
@@ -48,7 +54,7 @@ export function useFocusAnchor() {
     });
   }, [api]);
 
-  return { ref, reveal };
+  return { ref, activate, reveal };
 }
 
 type ProviderProps = {
@@ -100,8 +106,11 @@ export function FocusScrollProvider({ children, scrollRef }: ProviderProps) {
           if (delta === 0) return;
 
           const nextY = Math.max(0, offsetRef.current + delta);
+          if (Math.abs(nextY - offsetRef.current) < 1) return;
           offsetRef.current = nextY;
-          scroller.scrollTo({ y: nextY, animated: true });
+          // Web: scroll can briefly blur the focused input — keep the preview keypad open.
+          if (Platform.OS === 'web') keepPreviewKeyboardFocus(800);
+          scroller.scrollTo({ y: nextY, animated: Platform.OS !== 'web' });
         });
       });
     },

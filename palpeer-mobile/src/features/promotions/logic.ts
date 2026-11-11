@@ -53,6 +53,22 @@ export function referralStatusLabel(status: ReferralStatus): string {
   return REFERRAL_STATUS_LABELS[status] ?? status;
 }
 
+/**
+ * Friends who applied the invite code. OPEN rows with no referee are the unused
+ * shareable code from `my-code`, not people waiting to join.
+ */
+export function completedReferrals<T extends { refereeUserId: string | null }>(
+  referrals: readonly T[],
+): T[] {
+  return referrals.filter((r) => r.refereeUserId != null);
+}
+
+/** Summary line for Invite friends / More → People I invited. */
+export function invitedFriendsSummary(joinedCount: number): string {
+  if (joinedCount <= 0) return 'Nobody has joined yet';
+  return joinedCount === 1 ? '1 joined' : `${joinedCount} joined`;
+}
+
 const BONUS_STATUS_LABELS: Record<BonusStatus, string> = {
   PENDING: 'Pending',
   GRANTED: 'Granted',

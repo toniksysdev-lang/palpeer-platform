@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -24,15 +25,21 @@ import com.palpeer.notification.web.dto.NotificationResponse;
 import com.palpeer.notification.web.dto.RegisterDeviceTokenRequest;
 import com.palpeer.user.domain.User;
 import com.palpeer.user.repository.UserRepository;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationPhase12Test {
@@ -42,9 +49,39 @@ class NotificationPhase12Test {
     @Mock private PushNotifier pushNotifier;
     @Mock private EmailSender emailSender;
     @Mock private UserRepository userRepository;
+    @Mock private PlatformTransactionManager transactionManager;
+    @Mock private TransactionStatus transactionStatus;
 
     @InjectMocks private DeviceTokenService deviceTokenService;
     @InjectMocks private NotificationService notificationService;
+
+    private final Map<UUID, Notification> stored = new HashMap<>();
+
+    @BeforeEach
+    void stubTransactionsAndPersistence() {
+        lenient()
+                .when(transactionManager.getTransaction(any(TransactionDefinition.class)))
+                .thenReturn(transactionStatus);
+        stored.clear();
+        lenient().when(notificationRepository.saveAndFlush(any(Notification.class))).thenAnswer(inv -> {
+            Notification n = inv.getArgument(0);
+            if (n.getId() == null) {
+                n.setId(UUID.randomUUID());
+            }
+            stored.put(n.getId(), n);
+            return n;
+        });
+        lenient().when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> {
+            Notification n = inv.getArgument(0);
+            if (n.getId() != null) {
+                stored.put(n.getId(), n);
+            }
+            return n;
+        });
+        lenient()
+                .when(notificationRepository.findById(any(UUID.class)))
+                .thenAnswer(inv -> Optional.ofNullable(stored.get(inv.getArgument(0))));
+    }
 
     @Test
     void registerDeviceToken_upsertsByToken() {
@@ -70,13 +107,6 @@ class NotificationPhase12Test {
     @Test
     void createInApp_marksSentWithoutPush() {
         UUID userId = UUID.randomUUID();
-        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> {
-            Notification n = inv.getArgument(0);
-            if (n.getId() == null) {
-                n.setId(UUID.randomUUID());
-            }
-            return n;
-        });
 
         NotificationResponse response = notificationService.create(
                 userId,
@@ -96,13 +126,6 @@ class NotificationPhase12Test {
         token.setPlatform(DeviceTokenPlatform.IOS);
         token.setEnabled(true);
 
-        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> {
-            Notification n = inv.getArgument(0);
-            if (n.getId() == null) {
-                n.setId(UUID.randomUUID());
-            }
-            return n;
-        });
         when(deviceTokenRepository.findByUserIdAndEnabledTrue(userId)).thenReturn(List.of(token));
 
         NotificationResponse response = notificationService.create(
@@ -114,22 +137,16 @@ class NotificationPhase12Test {
     }
 
     @Test
-    void createPush_failsWhenNoTokens() {
+    void createPush_staysUnreadInAppWhenNoTokens() {
         UUID userId = UUID.randomUUID();
-        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> {
-            Notification n = inv.getArgument(0);
-            if (n.getId() == null) {
-                n.setId(UUID.randomUUID());
-            }
-            return n;
-        });
         when(deviceTokenRepository.findByUserIdAndEnabledTrue(userId)).thenReturn(List.of());
 
         NotificationResponse response = notificationService.create(
                 userId,
                 new CreateNotificationRequest("Alert", "Msg", null, NotificationChannel.PUSH, null, null));
 
-        assertThat(response.status()).isEqualTo(NotificationStatus.FAILED);
+        // Inbox must still count as unread; missing FCM tokens only annotate failureReason.
+        assertThat(response.status()).isEqualTo(NotificationStatus.SENT);
         assertThat(response.failureReason()).contains("No enabled device tokens");
     }
 
@@ -147,13 +164,6 @@ class NotificationPhase12Test {
         token.setPlatform(DeviceTokenPlatform.ANDROID);
         token.setEnabled(true);
 
-        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> {
-            Notification n = inv.getArgument(0);
-            if (n.getId() == null) {
-                n.setId(UUID.randomUUID());
-            }
-            return n;
-        });
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(deviceTokenRepository.findByUserIdAndEnabledTrue(userId)).thenReturn(List.of(token));
 
@@ -181,13 +191,6 @@ class NotificationPhase12Test {
         user.setId(userId);
         user.setEmail("user@example.com");
 
-        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> {
-            Notification n = inv.getArgument(0);
-            if (n.getId() == null) {
-                n.setId(UUID.randomUUID());
-            }
-            return n;
-        });
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(deviceTokenRepository.findByUserIdAndEnabledTrue(userId)).thenReturn(List.of());
 
@@ -213,13 +216,6 @@ class NotificationPhase12Test {
         UUID poster = UUID.randomUUID();
         UUID other = UUID.randomUUID();
         when(userRepository.findAllIds()).thenReturn(List.of(poster, other));
-        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> {
-            Notification n = inv.getArgument(0);
-            if (n.getId() == null) {
-                n.setId(UUID.randomUUID());
-            }
-            return n;
-        });
         when(deviceTokenRepository.findByUserIdAndEnabledTrue(other)).thenReturn(List.of());
 
         BroadcastPushStats sent = notificationService.broadcastPush(

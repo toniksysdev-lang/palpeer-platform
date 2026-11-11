@@ -42,11 +42,18 @@ export function useLiveAuth() {
   const onLogin = useCallback(
     async (who: string, pass: string) => {
       const identifier = who.trim();
+      const password = pass;
+      if (!identifier || !password) {
+        setLoginError('Enter your email or phone, and your password.');
+        return false;
+      }
+      // Backend login field is `email` but also accepts E.164 phone; normalize email case.
+      const email = identifier.includes('@') ? identifier.toLowerCase() : identifier;
       setLoginError(null);
       setLoginBusy(true);
       try {
-        const tokens = await loginCmd({ email: identifier, password: pass });
-        const sessionEmail = identifier.includes('@') ? identifier.toLowerCase() : null;
+        const tokens = await loginCmd({ email, password });
+        const sessionEmail = email.includes('@') ? email : null;
         await sessionManager.start(tokens, sessionEmail);
         return true;
       } catch (error) {

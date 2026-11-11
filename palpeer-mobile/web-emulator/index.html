@@ -22,7 +22,9 @@
       html,
       body {
         margin: 0;
-        min-height: 100%;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
         font-family:
           'Segoe UI',
           system-ui,
@@ -34,23 +36,52 @@
         color: var(--ink);
       }
 
+      /* Fixed to the visible viewport (avoids 100vh > embedded browser panel). */
       .page {
-        min-height: 100vh;
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
         display: grid;
-        grid-template-columns: minmax(220px, 280px) 1fr;
-        gap: 24px;
-        padding: 28px;
+        grid-template-columns: minmax(200px, 260px) 1fr;
+        gap: 16px;
+        padding: 16px;
+        box-sizing: border-box;
+      }
+
+      @media (max-width: 900px) {
+        .page {
+          grid-template-columns: 1fr;
+          grid-template-rows: auto 1fr;
+          padding: 12px;
+          gap: 12px;
+        }
+
+        .panel {
+          position: static;
+          height: auto;
+          max-height: 32%;
+          overflow: auto;
+        }
       }
 
       .panel {
         background: rgba(255, 255, 255, 0.72);
         border: 1px solid #d2d9d5;
         border-radius: 20px;
-        padding: 20px;
+        padding: 16px;
         backdrop-filter: blur(8px);
-        height: fit-content;
-        position: sticky;
-        top: 28px;
+        height: auto;
+        max-height: 100%;
+        overflow: auto;
+        align-self: stretch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+
+      .panel::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+        display: none;
       }
 
       .panel h1 {
@@ -122,19 +153,36 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: calc(100vh - 56px);
+        min-height: 0;
+        height: 100%;
+        max-height: 100%;
+        overflow: hidden;
+        padding: 8px;
+      }
+
+      .phone-scale {
+        flex: 0 0 auto;
+        position: relative;
+        overflow: hidden;
       }
 
       .phone {
-        position: relative;
+        /* --w/--h are the SCREEN size; bezel padding sits outside so the iframe
+           matches the advertised device dimensions (avoids iframe scrollbars). */
+        --bezel-pad: 12px;
+        position: absolute;
+        top: 0;
+        left: 0;
         width: var(--w);
         height: var(--h);
-        padding: 12px;
+        padding: var(--bezel-pad);
         border-radius: 44px;
         background: linear-gradient(160deg, var(--bezel-edge), var(--bezel));
         box-shadow:
           0 30px 80px rgba(7, 20, 15, 0.28),
           inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+        box-sizing: content-box;
+        transform-origin: top left;
       }
 
       .phone::before {
@@ -159,20 +207,30 @@
         border-radius: 34px;
         overflow: hidden;
         background: var(--screen);
+        box-sizing: border-box;
       }
 
       .screen {
         flex: 1 1 auto;
         width: 100%;
-        height: auto;
+        height: 100%;
         min-height: 0;
         border: 0;
         border-radius: 0;
         background: transparent;
-        overflow: hidden;
+        overflow: hidden !important;
         display: block;
         position: relative;
         z-index: 1;
+        /* Never show a desktop iframe scrollbar around the phone screen. */
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+
+      .screen::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+        display: none;
       }
 
       /* Match BrandSplash until the Expo iframe paints (no instructional copy). */
@@ -186,7 +244,7 @@
         justify-content: center;
         gap: 24px;
         padding: 24px;
-        background: #f3f6f4;
+        background: #081410;
         pointer-events: none;
         transition: opacity 140ms ease-out;
       }
@@ -197,8 +255,8 @@
       }
 
       .screen-boot img {
-        width: 200px;
-        height: 84px;
+        width: 220px;
+        height: 92px;
         object-fit: contain;
       }
 
@@ -206,7 +264,7 @@
         width: 148px;
         height: 4px;
         border-radius: 999px;
-        background: #f4f6f5;
+        background: rgba(255, 255, 255, 0.16);
         overflow: hidden;
         margin-top: 4px;
       }
@@ -215,7 +273,7 @@
         height: 100%;
         width: 28%;
         border-radius: 999px;
-        background: #0e9f6e;
+        background: #0b6e4f;
         animation: preview-boot-bar 1.6s ease-in-out infinite alternate;
       }
 
@@ -257,8 +315,14 @@
         height: 42px;
       }
 
+      /* Overlay the keypad — do not shrink the Expo iframe (that blurs inputs and
+         immediately closes the keyboard via the focusout → close bridge). */
       .soft-keyboard {
-        flex: 0 0 auto;
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        flex: none;
         display: none;
         flex-direction: column;
         gap: 6px;
@@ -387,33 +451,36 @@
 
       </aside>
 
-      <main class="stage">
-        <div class="phone" id="phone">
-          <span class="side-btn power"></span>
-          <span class="side-btn vol-up"></span>
-          <span class="side-btn vol-down"></span>
-          <div class="screen-wrap">
-            <div class="screen-boot" id="screen-boot" aria-hidden="true">
-              <img src="/palpeer-logo.png" alt="" width="200" height="84" />
-              <div class="track"><div class="fill"></div></div>
-            </div>
-            <!-- camera/microphone required for KYC capture inside this cross-origin Expo iframe -->
-            <iframe
-              class="screen"
-              id="frame"
-              title="PALPEER mobile"
-              allow="camera *; microphone *; clipboard-read *; clipboard-write *"
-              allowfullscreen
-            ></iframe>
-            <div
-              class="soft-keyboard"
-              id="soft-keyboard"
-              role="group"
-              aria-label="Phone keyboard"
-              aria-hidden="true"
-            >
-              <div class="kb-hint" id="kb-hint">Mobile keyboard</div>
-              <div id="kb-rows"></div>
+      <main class="stage" id="stage">
+        <div class="phone-scale" id="phone-scale">
+          <div class="phone" id="phone">
+            <span class="side-btn power"></span>
+            <span class="side-btn vol-up"></span>
+            <span class="side-btn vol-down"></span>
+            <div class="screen-wrap">
+              <div class="screen-boot" id="screen-boot" aria-hidden="true">
+                <img src="/palpeer-logo.png" alt="" width="200" height="84" />
+                <div class="track"><div class="fill"></div></div>
+              </div>
+              <!-- camera/microphone required for KYC capture inside this cross-origin Expo iframe -->
+              <iframe
+                class="screen"
+                id="frame"
+                title="PALPEER mobile"
+                allow="camera *; microphone *; clipboard-read *; clipboard-write *"
+                allowfullscreen
+                scrolling="no"
+              ></iframe>
+              <div
+                class="soft-keyboard"
+                id="soft-keyboard"
+                role="group"
+                aria-label="Phone keyboard"
+                aria-hidden="true"
+              >
+                <div class="kb-hint" id="kb-hint">Mobile keyboard</div>
+                <div id="kb-rows"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -436,6 +503,8 @@
       ];
 
       const phone = document.getElementById('phone');
+      const phoneScale = document.getElementById('phone-scale');
+      const stage = document.getElementById('stage');
       const frame = document.getElementById('frame');
       const boot = document.getElementById('screen-boot');
       const devicesEl = document.getElementById('devices');
@@ -445,6 +514,7 @@
       const kbHint = document.getElementById('kb-hint');
       const kbToggle = document.getElementById('kb-toggle');
       openRaw.href = APP_URL;
+      let currentDevice = devices[0];
 
       let keyboardOpen = false;
       let shift = false;
@@ -474,6 +544,28 @@
         softKeyboard.setAttribute('aria-hidden', open ? 'false' : 'true');
         kbToggle.classList.toggle('active', open);
         kbToggle.textContent = open ? 'Hide phone keyboard' : 'Show phone keyboard';
+        // Tell the Expo iframe how tall the keypad is so it can lift fields above it.
+        // Use offsetHeight (unscaled CSS px inside the phone). getBoundingClientRect is
+        // post-transform and under-reports when the phone is CSS-scaled — fields stayed under the pad.
+        const postLayout = () => {
+          const height = open
+            ? Math.round(softKeyboard.offsetHeight || softKeyboard.getBoundingClientRect().height || 0)
+            : 0;
+          try {
+            frame.contentWindow?.postMessage(
+              { type: 'palpeer-soft-keyboard-layout', open: !!open, height },
+              '*',
+            );
+          } catch {
+            // Ignore if iframe not ready.
+          }
+        };
+        window.requestAnimationFrame(() => {
+          postLayout();
+          // Re-measure after keys paint (first open can be 0 before rows layout).
+          window.requestAnimationFrame(postLayout);
+          window.setTimeout(postLayout, 50);
+        });
       }
 
       function letterRows() {
@@ -709,13 +801,51 @@
       frame.src = APP_URL;
       renderKeyboard();
 
-      function applyDevice(device) {
+      function fitPhoneToStage() {
+        if (!stage || !phoneScale || !phone || !currentDevice) return;
+        const pad = 16;
+        const bezel = 24; // 12px padding each side (content-box)
+        const outerW = currentDevice.w + bezel;
+        const outerH = currentDevice.h + bezel;
+        const availW = Math.max(160, stage.clientWidth - pad);
+        const availH = Math.max(240, stage.clientHeight - pad);
+        const scale = Math.min(1, availW / outerW, availH / outerH);
+        // Wrapper takes the *visual* outer size; phone is absolutely positioned and CSS-scaled
+        // so layout height matches what you see (transform alone does not shrink layout).
+        phoneScale.style.width = Math.round(outerW * scale) + 'px';
+        phoneScale.style.height = Math.round(outerH * scale) + 'px';
+        phone.style.transform = `scale(${scale})`;
+        phoneScale.dataset.scale = String(scale);
+      }
+
+      function applyDevice(device, { reload = false } = {}) {
+        currentDevice = device;
         phone.style.setProperty('--w', device.w + 'px');
         phone.style.setProperty('--h', device.h + 'px');
         localStorage.setItem('palpeer.preview.device', device.id);
         [...devicesEl.children].forEach((btn) => {
           btn.classList.toggle('active', btn.dataset.id === device.id);
         });
+        fitPhoneToStage();
+        // Reload iframe so RN web picks up the new viewport Dimensions.
+        if (reload && frame) {
+          const url = new URL(APP_URL, location.href);
+          url.searchParams.set('previewDevice', device.id);
+          url.searchParams.set('w', String(device.w));
+          url.searchParams.set('h', String(device.h));
+          url.searchParams.set('_', String(Date.now()));
+          if (boot) {
+            boot.classList.remove('is-hidden');
+            boot.style.display = '';
+          }
+          frame.src = url.toString();
+        } else {
+          try {
+            frame?.contentWindow?.dispatchEvent(new Event('resize'));
+          } catch {
+            // cross-origin / not ready
+          }
+        }
       }
 
       devices.forEach((device) => {
@@ -723,12 +853,22 @@
         btn.type = 'button';
         btn.dataset.id = device.id;
         btn.innerHTML = `${device.name}<span>${device.detail}</span>`;
-        btn.addEventListener('click', () => applyDevice(device));
+        btn.addEventListener('click', () => applyDevice(device, { reload: true }));
         devicesEl.appendChild(btn);
       });
 
       const saved = localStorage.getItem('palpeer.preview.device');
       applyDevice(devices.find((d) => d.id === saved) || devices[0]);
+      window.addEventListener('resize', fitPhoneToStage);
+      // Re-fit after first paint / font layout when stage size was still settling.
+      requestAnimationFrame(() => requestAnimationFrame(fitPhoneToStage));
+      window.addEventListener('load', fitPhoneToStage);
+      // Re-fit after soft keyboard toggles change available height.
+      const kbObserver = new MutationObserver(fitPhoneToStage);
+      if (softKeyboard) kbObserver.observe(softKeyboard, { attributes: true, attributeFilter: ['class'] });
+      if (typeof ResizeObserver !== 'undefined' && stage) {
+        new ResizeObserver(() => fitPhoneToStage()).observe(stage);
+      }
     </script>
   </body>
 </html>

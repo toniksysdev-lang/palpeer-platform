@@ -69,7 +69,7 @@ const PROVINCES = {
 };
 const INCOMES = ['My job', 'My business', 'Pension', 'Savings', 'Investment', 'Family or gift', 'Other'];
 const ID_TYPES = [
-  { name: 'Passport', hint: 'The page with your photo' },
+  { name: 'Passport', hint: 'The data page with your photo' },
   { name: 'National ID card', hint: 'Front of the card' },
   { name: 'Driver\'s licence', hint: 'Front of the licence' },
   { name: 'Residence permit', hint: 'Front of the permit' }

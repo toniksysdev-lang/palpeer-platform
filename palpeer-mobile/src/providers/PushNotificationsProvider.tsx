@@ -75,7 +75,12 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
           category === 'TRANSACTION' ||
           category === 'FUNDING' ||
           category === 'EXCHANGE' ||
-          category === 'WITHDRAWAL'
+          category === 'WITHDRAWAL' ||
+          category === 'P2P' ||
+          referenceType === 'TRANSFER' ||
+          referenceType === 'P2P_ORDER' ||
+          referenceType === 'P2P_REQUEST' ||
+          referenceType === 'NEGOTIATION'
         ) {
           const tags: { type: 'Wallet' | 'Transaction'; id: string }[] = [WALLET_LIST_TAG];
           // Refresh the open funding/withdrawal status screen without waiting for the next poll.
@@ -180,7 +185,8 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active' && authenticatedRef.current) {
-        dispatch(baseApi.util.invalidateTags([NOTIFICATION_UNREAD]));
+        // Refresh Alerts list + Messages badge (withdrawals often settle while backgrounded).
+        dispatch(baseApi.util.invalidateTags([NOTIFICATION_LIST, NOTIFICATION_UNREAD]));
       }
     });
     return () => subscription.remove();

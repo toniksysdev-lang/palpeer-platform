@@ -1,5 +1,5 @@
 import { skipToken } from '@reduxjs/toolkit/query';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import type { View } from 'react-native';
 
@@ -28,19 +28,29 @@ import {
 } from '@/features/transactions/saveReceipt';
 import { destinationAccountRows } from '@/features/wallets/destination';
 import { useToast } from '@/providers/ToastProvider';
-import { badgeLabel } from '@/features/notifications/logic';
-import { useGetUnreadCountQuery } from '@/services/api/notificationApi';
+import { badgeLabel, messagesMenuCount } from '@/features/notifications/logic';
+import { useGetChatUnreadCountQuery } from '@/services/api/chatApi';
+import {
+  ALERTS,
+  ALERTS_POLL_MS,
+  useGetUnreadCountQuery,
+} from '@/services/api/notificationApi';
+import { baseApi } from '@/services/api/baseApi';
 import {
   useGetTransactionHistoryInfiniteQuery,
   useGetTransactionQuery,
   useGetTransactionSummaryQuery,
 } from '@/services/api/transactionApi';
+import { isInProgress } from '@/features/wallets/movementStatus';
 import {
+  useGetFundingQuery,
   useGetWithdrawalBanksQuery,
   useGetWithdrawalQuery,
+  walletBalanceTags,
 } from '@/services/api/walletApi';
-import { useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import type { TransactionItemResponse } from '@/types/api/transaction';
+import type { FundingPaymentDetails, FundingTransactionResponse } from '@/types/api/wallet';
 import { formatDateTime } from '@/utils/datetime';
 import { formatMoney } from '@/utils/money';
 import { humanizeStatus } from '@/utils/status';
@@ -104,7 +114,7 @@ function typeMeta(type: TransactionItemResponse['type']) {
     case 'TRANSFER':
       return { title: 'Sent money', color: '#1D5BC7', icon: SEND };
     case 'WITHDRAWAL':
-      return { title: 'Took out money', color: '#5E3AB8', icon: BANK };
+      return { title: 'Withdrew money', color: '#5E3AB8', icon: BANK };
     case 'BONUS':
       return { title: 'Bonus', color: '#0B6E4F', icon: GIFT };
     default:
@@ -146,14 +156,16 @@ function buildRows(tx: TransactionItemResponse): [string, string][] {
         : null;
 
   switch (tx.type) {
-    case 'FUNDING':
+    case 'FUNDING': {
+      const awaiting = isInProgress(tx.status);
       return [
-        ['You added', amt],
+        [awaiting ? 'You planned to add' : 'You added', amt],
         ['Fee', 'No fee'],
         ['Wallet', `${tx.currencyCode} wallet`],
         ['Status', humanizeStatus(tx.status)],
         ['Reference', tx.id],
       ];
+    }
     case 'EXCHANGE':
       return [
         ['You gave', amt],
@@ -219,6 +231,170 @@ function withWithdrawalDestination(
   ];
 }
 
+export type HistoryPaymentRow = { key: string; label: string; value: string; copy: string };
+
+function fundingMethodLabel(funding: FundingTransactionResponse): string | null {
+  if (funding.paymentDetails?.method === 'INTERAC_INSTANT' || funding.currencyCode === 'CAD') {
+    return 'Interac e-Transfer';
+  }
+  if (funding.paymentDetails?.method === 'BANK_TRANSFER' || funding.providerName === 'KUDA') {
+    return 'Bank transfer';
+  }
+  if (funding.providerName === 'APAYLO') return 'Interac e-Transfer';
+  return funding.providerName;
+}
+
+function fundingPaymentRows(pay: FundingPaymentDetails): HistoryPaymentRow[] {
+  const amt = formatDesignMoney(pay.currencyCode, Number.parseFloat(pay.amount) || 0);
+  const isInterac = pay.method === 'INTERAC_INSTANT' || pay.currencyCode === 'CAD';
+  const rows: HistoryPaymentRow[] = [];
+  if (isInterac) {
+    if (pay.collectionEmail) {
+      rows.push({
+        key: 'payTo',
+        label: 'Send to',
+        value: pay.collectionEmail,
+        copy: pay.collectionEmail,
+      });
+    }
+    rows.push({ key: 'amount', label: 'Amount', value: amt, copy: pay.amount });
+    if (pay.trackingReference) {
+      rows.push({
+        key: 'memo',
+        label: 'Message',
+        value: pay.trackingReference,
+        copy: pay.trackingReference,
+      });
+    } else if (pay.aplReference) {
+      rows.push({
+        key: 'apl',
+        label: 'Message',
+        value: pay.aplReference,
+        copy: pay.aplReference,
+      });
+    }
+    if (pay.interacEmail) {
+      rows.push({
+        key: 'from',
+        label: 'Send from',
+        value: pay.interacEmail,
+        copy: pay.interacEmail,
+      });
+    }
+    return rows;
+  }
+  if (pay.bankName) rows.push({ key: 'bank', label: 'Bank', value: pay.bankName, copy: pay.bankName });
+  if (pay.accountName) {
+    rows.push({ key: 'name', label: 'Account name', value: pay.accountName, copy: pay.accountName });
+  }
+  if (pay.accountNumber) {
+    rows.push({
+      key: 'number',
+      label: 'Account number',
+      value: pay.accountNumber,
+      copy: pay.accountNumber,
+    });
+  }
+  rows.push({ key: 'amount', label: 'Amount', value: amt, copy: pay.amount });
+  if (pay.trackingReference) {
+    rows.push({
+      key: 'ref',
+      label: 'Reference',
+      value: pay.trackingReference,
+      copy: pay.trackingReference,
+    });
+  }
+  return rows;
+}
+
+function fundingNote(funding: FundingTransactionResponse): string {
+  if (funding.failureReason) return funding.failureReason;
+  switch (funding.status) {
+    case 'INITIATED':
+      return 'Nothing has been added to your wallet yet.';
+    case 'PENDING':
+      return 'Your balance updates once the payment arrives. Use the payment details below.';
+    case 'PROCESSING':
+      return 'This usually takes a few moments.';
+    case 'SUCCESS':
+      return 'The amount is in your available balance.';
+    case 'FAILED':
+      return 'Nothing was added to your wallet.';
+    case 'REVERSED':
+      return 'The amount was taken back out of your wallet.';
+    default:
+      return 'The money moved.';
+  }
+}
+
+function fundingSteps(funding: FundingTransactionResponse): string[] {
+  const steps: string[] = [];
+  if (isInProgress(funding.status)) steps.push('Requested');
+  if (funding.status === 'SUCCESS' || funding.ledgerEntryId) steps.push('Added to your wallet');
+  if (funding.status === 'REVERSED' || funding.reversalLedgerEntryId) {
+    steps.push('Taken back out of your wallet');
+  }
+  if (funding.status === 'FAILED') steps.push('Not completed');
+  return steps;
+}
+
+function withFundingDetails(
+  base: HistoryListItem,
+  funding: FundingTransactionResponse | undefined,
+): HistoryListItem {
+  if (!funding) return base;
+  const amt = formatDesignMoney(funding.currencyCode, Number.parseFloat(funding.amount) || 0);
+  const awaiting = isInProgress(funding.status);
+  const method = fundingMethodLabel(funding);
+  const rows: [string, string][] = [
+    [awaiting ? 'You planned to add' : 'You added', amt],
+    ['Fee', 'No fee'],
+    ['Wallet', `${funding.currencyCode} wallet`],
+  ];
+  if (method) rows.push(['How you pay', method]);
+  rows.push(['Status', humanizeStatus(funding.status)]);
+  if (funding.providerReference) rows.push(['Provider reference', funding.providerReference]);
+  rows.push(['Reference', funding.id]);
+
+  const pay = funding.paymentDetails;
+  const paymentRows =
+    awaiting && pay
+      ? fundingPaymentRows(pay)
+      : awaiting && funding.fundingInstructions
+        ? [
+            {
+              key: 'instructions',
+              label: 'Payment instructions',
+              value: funding.fundingInstructions,
+              copy: funding.fundingInstructions,
+            },
+          ]
+        : [];
+
+  const status = designStatus(funding.status);
+  return {
+    ...base,
+    status,
+    color2: STATUS_COLOR[status] ?? base.color2,
+    note: fundingNote(funding),
+    rows,
+    steps: fundingSteps(funding),
+    when: formatDateTime(funding.createdAt) ?? base.when,
+    reference: funding.id,
+    paymentTitle: awaiting
+      ? pay?.method === 'INTERAC_INSTANT' || funding.currencyCode === 'CAD'
+        ? 'Send Instant Interac'
+        : 'Send from your bank'
+      : null,
+    paymentHint: awaiting
+      ? funding.currencyCode === 'CAD'
+        ? 'Send the exact amount. No security question. Your wallet updates when the payment arrives.'
+        : 'Send the exact amount. Bank fees are shown by your bank. Your wallet updates when the payment arrives.'
+      : null,
+    paymentRows,
+  };
+}
+
 export type HistoryListItem = {
   key: string;
   type: TransactionItemResponse['type'];
@@ -236,6 +412,10 @@ export type HistoryListItem = {
   steps: string[];
   when: string;
   reference: string;
+  /** Bank / Interac payment step while funding is still awaiting confirmation. */
+  paymentTitle?: string | null;
+  paymentHint?: string | null;
+  paymentRows?: HistoryPaymentRow[];
 };
 
 function mapItem(tx: TransactionItemResponse, now: number): HistoryListItem {
@@ -282,6 +462,12 @@ function formatTotals(
     .join(' · ');
 }
 
+function shortDay(isoDay: string): string {
+  const d = new Date(`${isoDay}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return isoDay;
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 /** Live History: filters, summary stats, paginated feed, detail + save image/PDF. */
 export function useLiveHistory() {
   const toast = useToast();
@@ -289,6 +475,8 @@ export function useLiveHistory() {
   const [type, setType] = useState<TypeFilter>('ALL');
   const [period, setPeriod] = useState<Period>('ALL');
   const [from, setFrom] = useState<string | undefined>(undefined);
+  const [to, setTo] = useState<string | undefined>(undefined);
+  const [customLabel, setCustomLabel] = useState<string | null>(null);
   const [selected, setSelected] = useState<{
     type: TransactionItemResponse['type'];
     id: string;
@@ -296,23 +484,87 @@ export function useLiveHistory() {
   const [savingFormat, setSavingFormat] = useState<'image' | 'pdf' | null>(null);
 
   const history = useGetTransactionHistoryInfiniteQuery(
-    { type: type === 'ALL' ? undefined : type, from },
+    { type: type === 'ALL' ? undefined : type, from, to },
     { skip: !authenticated },
   );
   const summary = useGetTransactionSummaryQuery(
-    { from: from ?? ALL_TIME_FROM },
+    { from: from ?? ALL_TIME_FROM, to },
     { skip: !authenticated },
   );
-  const notifUnread = useGetUnreadCountQuery(undefined, { skip: !authenticated });
+  const dispatch = useAppDispatch();
+  const notifUnread = useGetUnreadCountQuery(undefined, {
+    skip: !authenticated,
+    pollingInterval: authenticated ? ALERTS_POLL_MS : 0,
+    skipPollingIfUnfocused: true,
+  });
+  const chatUnread = useGetChatUnreadCountQuery(undefined, {
+    skip: !authenticated,
+    pollingInterval: authenticated ? ALERTS_POLL_MS : 0,
+    skipPollingIfUnfocused: true,
+  });
 
   const firstDetail = useGetTransactionQuery(selected ?? skipToken);
   const detailQ = useGetTransactionQuery(selected ?? skipToken, {
     pollingInterval: transactionPollMs(firstDetail.data),
     skipPollingIfUnfocused: true,
   });
-  const withdrawalQ = useGetWithdrawalQuery(
+  const firstFunding = useGetFundingQuery(
+    selected?.type === 'FUNDING' ? selected.id : skipToken,
+  );
+  const fundingQ = useGetFundingQuery(selected?.type === 'FUNDING' ? selected.id : skipToken, {
+    pollingInterval: transactionPollMs(
+      firstFunding.data
+        ? ({ type: 'FUNDING', status: firstFunding.data.status } as TransactionItemResponse)
+        : undefined,
+    ),
+    skipPollingIfUnfocused: true,
+  });
+  const firstWithdrawal = useGetWithdrawalQuery(
     selected?.type === 'WITHDRAWAL' ? selected.id : skipToken,
   );
+  const withdrawalQ = useGetWithdrawalQuery(
+    selected?.type === 'WITHDRAWAL' ? selected.id : skipToken,
+    {
+      pollingInterval: transactionPollMs(
+        firstWithdrawal.data
+          ? ({ type: 'WITHDRAWAL', status: firstWithdrawal.data.status } as TransactionItemResponse)
+          : undefined,
+      ),
+      skipPollingIfUnfocused: true,
+    },
+  );
+
+  // When History poll sees funding/withdrawal leave in-progress, refresh Home balances + Alerts.
+  const lastFundingStatus = useRef<string | null>(null);
+  const lastWithdrawalStatus = useRef<string | null>(null);
+  useEffect(() => {
+    const status = fundingQ.data?.status ?? null;
+    const prev = lastFundingStatus.current;
+    lastFundingStatus.current = status;
+    if (!prev || !status || prev === status) return;
+    if (isInProgress(prev) && !isInProgress(status)) {
+      const walletId = fundingQ.data?.walletId;
+      dispatch(
+        baseApi.util.invalidateTags(
+          walletId ? [...walletBalanceTags(walletId), ...ALERTS] : [...ALERTS],
+        ),
+      );
+    }
+  }, [dispatch, fundingQ.data?.status, fundingQ.data?.walletId]);
+  useEffect(() => {
+    const status = withdrawalQ.data?.status ?? null;
+    const prev = lastWithdrawalStatus.current;
+    lastWithdrawalStatus.current = status;
+    if (!prev || !status || prev === status) return;
+    if (isInProgress(prev) && !isInProgress(status)) {
+      const walletId = withdrawalQ.data?.walletId;
+      dispatch(
+        baseApi.util.invalidateTags(
+          walletId ? [...walletBalanceTags(walletId), ...ALERTS] : [...ALERTS],
+        ),
+      );
+    }
+  }, [dispatch, withdrawalQ.data?.status, withdrawalQ.data?.walletId]);
   const banksQ = useGetWithdrawalBanksQuery(
     selected?.type === 'WITHDRAWAL' ? undefined : skipToken,
   );
@@ -330,7 +582,10 @@ export function useLiveHistory() {
     }));
   }, [now, rawItems]);
 
-  const periodTitle = PERIOD_OPTIONS.find((o) => o.key === period)?.title ?? 'All time';
+  const periodTitle =
+    period === 'CUSTOM' && customLabel
+      ? customLabel
+      : PERIOD_OPTIONS.find((o) => o.key === period)?.title ?? 'All time';
   const typeTitle = TYPE_OPTIONS.find((o) => o.key === type)?.title ?? 'All types';
 
   const stats = useMemo(() => {
@@ -378,6 +633,9 @@ export function useLiveHistory() {
     if (!selected) return null;
     const base = detailQ.data ? mapItem(detailQ.data, now) : listItemForSelected;
     if (!base) return null;
+    if (base.type === 'FUNDING') {
+      return withFundingDetails(base, fundingQ.data);
+    }
     if (base.type !== 'WITHDRAWAL') return base;
     const currencyCode = detailQ.data?.currencyCode ?? withdrawalQ.data?.currencyCode;
     const destinationReference = withdrawalQ.data?.destinationReference;
@@ -394,6 +652,7 @@ export function useLiveHistory() {
   }, [
     bankNameForWithdrawal,
     detailQ.data,
+    fundingQ.data,
     listItemForSelected,
     now,
     selected,
@@ -401,10 +660,36 @@ export function useLiveHistory() {
     withdrawalQ.data?.destinationReference,
   ]);
 
-  const choosePeriod = useCallback((next: Period) => {
+  const detailLoading =
+    !!selected &&
+    !detail &&
+    (detailQ.isLoading ||
+      (selected.type === 'FUNDING' && fundingQ.isLoading) ||
+      (selected.type === 'WITHDRAWAL' && withdrawalQ.isLoading));
+
+  const choosePeriod = useCallback((next: Exclude<Period, 'CUSTOM'>) => {
     setPeriod(next);
     setFrom(periodFrom(next, Date.now()));
+    setTo(undefined);
+    setCustomLabel(null);
     setSelected(null);
+  }, []);
+
+  const applyCustomRange = useCallback((fromIsoDay: string, toIsoDay: string) => {
+    const fromStart = new Date(`${fromIsoDay}T00:00:00`);
+    const toEnd = new Date(`${toIsoDay}T23:59:59.999`);
+    if (Number.isNaN(fromStart.getTime()) || Number.isNaN(toEnd.getTime())) {
+      return { ok: false as const, error: 'Pick valid From and To dates.' };
+    }
+    if (fromStart.getTime() > toEnd.getTime()) {
+      return { ok: false as const, error: 'From must be on or before To.' };
+    }
+    setPeriod('CUSTOM');
+    setFrom(fromStart.toISOString());
+    setTo(toEnd.toISOString());
+    setCustomLabel(`${shortDay(fromIsoDay)} – ${shortDay(toIsoDay)}`);
+    setSelected(null);
+    return { ok: true as const };
   }, []);
 
   const chooseType = useCallback((next: TypeFilter) => {
@@ -416,6 +701,8 @@ export function useLiveHistory() {
     setType('ALL');
     setPeriod('ALL');
     setFrom(undefined);
+    setTo(undefined);
+    setCustomLabel(null);
     setSelected(null);
   }, []);
 
@@ -470,10 +757,22 @@ export function useLiveHistory() {
     [detail, savingFormat, toast],
   );
 
-  const unreadCount = notifUnread.data ?? 0;
+  const unreadCount = messagesMenuCount(notifUnread.data, chatUnread.data);
   const msgBadge = badgeLabel(unreadCount) ?? '';
 
   const filtering = type !== 'ALL' || period !== 'ALL';
+
+  const onRefresh = useCallback(() => {
+    void history.refetch();
+    void summary.refetch();
+    void notifUnread.refetch();
+    void chatUnread.refetch();
+    if (selected) {
+      void detailQ.refetch();
+      if (selected.type === 'FUNDING') void fundingQ.refetch();
+      if (selected.type === 'WITHDRAWAL') void withdrawalQ.refetch();
+    }
+  }, [chatUnread, detailQ, fundingQ, history, notifUnread, selected, summary, withdrawalQ]);
 
   return {
     backend: true as const,
@@ -489,25 +788,37 @@ export function useLiveHistory() {
       pick: () => chooseType(o.key),
       selected: type === o.key,
     })),
-    periodOptions: PERIOD_OPTIONS.map((o) => ({
-      key: o.key,
-      title: o.title,
-      note:
-        o.key === 'ALL'
-          ? 'From the start'
-          : o.key === '7D'
-            ? 'This week'
-            : o.key === '30D'
-              ? 'This month'
-              : 'Last 3 months',
-      pick: () => choosePeriod(o.key),
-      selected: period === o.key,
-    })),
+    periodOptions: [
+      ...PERIOD_OPTIONS.map((o) => ({
+        key: o.key,
+        title: o.title,
+        note:
+          o.key === 'ALL'
+            ? 'From the start'
+            : o.key === '7D'
+              ? 'This week'
+              : o.key === '30D'
+                ? 'This month'
+                : 'Last 3 months',
+        pick: () => choosePeriod(o.key),
+        selected: period === o.key,
+      })),
+      {
+        key: 'CUSTOM',
+        title: 'From / To',
+        note: customLabel || 'Pick a start and end date on the calendar',
+        pick: () => {
+          /* History opens the calendar form for this key. */
+        },
+        selected: period === 'CUSTOM',
+      },
+    ],
     filtering,
     clearFilters,
+    applyCustomRange,
     detailOpen: !!selected,
     detail,
-    detailLoading: !!selected && !detail && detailQ.isLoading,
+    detailLoading,
     onOpenDetail,
     onCloseDetail,
     onLoadMore,
@@ -520,5 +831,6 @@ export function useLiveHistory() {
     savingFormat,
     canSave: !!detail,
     msgBadge,
+    onRefresh,
   };
 }

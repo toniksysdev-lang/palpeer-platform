@@ -126,25 +126,28 @@ export function useLiveNotificationSettings() {
     toast.show({ type: 'success', title: 'Push notifications off' });
   }, [rememberedId, removeToken, toast]);
 
-  // Default ON when the user has not opted out (same as legacy NotificationSettingsScreen).
+  // Default ON when the user has not explicitly opted out.
   useEffect(() => {
     if (optedOut === null || !permission || rememberedId === undefined) return;
     if (autoEnableAttempted.current || busy) return;
     const alreadyOn = Boolean(rememberedId) && permission.status === 'granted';
-    if (optedOut || alreadyOn) return;
+    // Only skip when the user turned push off; unset/false means prefer ON.
+    if (optedOut === true || alreadyOn) return;
     autoEnableAttempted.current = true;
     void enable({ silent: true });
   }, [optedOut, permission, rememberedId, busy, enable]);
 
   const tokens = tokensQ.data ?? [];
   const thisRecord = rememberedId ? tokens.find((item) => item.id === rememberedId) : undefined;
-  // Default ON: unset opt-out prefers On (even while the silent register runs).
+  // Default ON: anything except explicit opt-out shows On (while silent register runs too).
+  const preferOn = optedOut !== true;
   const enabledHere =
-    optedOut === false &&
+    preferOn &&
     permission?.status !== 'denied' &&
     ((Boolean(thisRecord?.enabled) && permission?.status === 'granted') ||
       Boolean(busy) ||
-      !thisRecord);
+      !thisRecord ||
+      rememberedId === null);
 
   const otherDevices: NotifDeviceRow[] = useMemo(
     () =>

@@ -1,5 +1,5 @@
 import { router, usePathname } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useGetPinStatusQuery } from '@/services/api/securityApi';
 import {
+  buildRegistration,
   findThisDevice,
   getDeviceIdentifier,
 } from '@/services/biometrics/deviceRegistration';
@@ -38,6 +39,11 @@ function onSecuritySetupPath(pathname: string | undefined): boolean {
     pathname.includes('/StartMethod') ||
     pathname.includes('/StartQuestions') ||
     pathname.includes('/StartDetails') ||
+    pathname.includes('/StartMe') ||
+    pathname.includes('/StartPhone') ||
+    pathname.includes('/StartEmail') ||
+    pathname.includes('/StartPass') ||
+    pathname.includes('/StartName') ||
     pathname.includes('/security/pin') ||
     pathname.includes('/security/questions') ||
     pathname.includes('/PinReset')
@@ -45,8 +51,10 @@ function onSecuritySetupPath(pathname: string | undefined): boolean {
 }
 
 /**
- * When the user signs in on an install that is not yet a trusted device and they already have a
- * transaction PIN, require Face/Fingerprint or PIN once before using the app — via ConfirmPin.
+ * When the user signs in on an install that is not a trusted device AND another phone already
+ * owns this account, require Face/Fingerprint or PIN once before using the app — via ConfirmPin.
+ *
+ * First-time setup (no other trusted device yet) must not hit this screen.
  */
 export function RequireNewDevicePin() {
   const theme = useTheme();
@@ -57,6 +65,8 @@ export function RequireNewDevicePin() {
   const pinStatus = useGetPinStatusQuery(undefined, { skip: !authenticated });
   const redirected = useRef(false);
   const checking = useRef(false);
+  /** Only true after we know another enabled device owns the account. */
+  const [takeoverRequired, setTakeoverRequired] = useState(false);
 
   const onConfirm = onConfirmPath(pathname);
   const onSetup = onSecuritySetupPath(pathname);
@@ -67,15 +77,22 @@ export function RequireNewDevicePin() {
       clearDeviceVerifiedSession();
       redirected.current = false;
       checking.current = false;
+      setTakeoverRequired(false);
     }
   }, [authenticated]);
 
   useEffect(() => {
     if (!authenticated || locked || !userId) return;
-    if (isDeviceVerifiedForSession(userId)) return;
+    if (isDeviceVerifiedForSession(userId)) {
+      setTakeoverRequired(false);
+      return;
+    }
     if (pinStatus.isLoading || pinStatus.isFetching || !pinStatus.data) return;
     // First-time PIN setup is handled by RequirePinSetup.
-    if (!pinStatus.data.pinSet) return;
+    if (!pinStatus.data.pinSet) {
+      setTakeoverRequired(false);
+      return;
+    }
     // Stay on StartQuestions / PIN setup — do not yank users back to ConfirmPin.
     if (deferConfirm || redirected.current || checking.current) return;
 
@@ -86,16 +103,42 @@ export function RequireNewDevicePin() {
       const list = await securityCommands.listDevices();
       if (cancelled) return;
       if (!list.ok) {
+        // Fail open — do not block first-time setup when the device list is unreachable.
         markDeviceVerifiedForSession(userId);
+        setTakeoverRequired(false);
         checking.current = false;
         return;
       }
-      const known = findThisDevice(list.data ?? [], identifier);
+
+      const devices = list.data ?? [];
+      const known = findThisDevice(devices, identifier);
       if (known?.enabled) {
         markDeviceVerifiedForSession(userId);
+        setTakeoverRequired(false);
         checking.current = false;
         return;
       }
+
+      const otherTrusted = devices.some(
+        (device) => device.enabled && device.deviceIdentifier !== identifier,
+      );
+
+      // No other phone owns this account — first install / first-time setup.
+      if (!otherTrusted) {
+        markDeviceVerifiedForSession(userId);
+        setTakeoverRequired(false);
+        checking.current = false;
+        // Best-effort register so later logins recognize this install.
+        if (!known) {
+          void buildRegistration()
+            .then((registration) => securityCommands.registerDevice(registration))
+            .catch(() => undefined);
+        }
+        return;
+      }
+
+      // Another trusted device exists and this install is not trusted → Confirm it's you.
+      setTakeoverRequired(true);
       redirected.current = true;
       checking.current = false;
       router.replace(CONFIRM_PATH);
@@ -103,6 +146,7 @@ export function RequireNewDevicePin() {
 
     return () => {
       cancelled = true;
+      checking.current = false;
     };
   }, [
     authenticated,
@@ -120,7 +164,8 @@ export function RequireNewDevicePin() {
     !!userId &&
     !isDeviceVerifiedForSession(userId) &&
     !!pinStatus.data?.pinSet &&
-    !deferConfirm;
+    !deferConfirm &&
+    takeoverRequired;
 
   if (!needsGate) return null;
 

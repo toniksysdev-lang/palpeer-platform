@@ -1,6 +1,6 @@
-﻿// Route for the "More" artboard (live backend props).
-import MoreScreen from '@/design/screens/More';
+﻿// Route for More — newui presentation, live backend props.
 import { useLiveMore } from '@/design/bridge/useLiveMore';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
+import MoreScreen from '@/newui/screens/More';
 
-export default screen(MoreScreen, {}, useLiveMore);
+export default liveScreen(MoreScreen, {}, useLiveMore);

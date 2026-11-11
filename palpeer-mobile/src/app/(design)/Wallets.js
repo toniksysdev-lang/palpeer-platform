@@ -1,6 +1,6 @@
-﻿// Route for the "Wallets" artboard (live backend props).
-import MainScreen from '@/design/screens/Main';
+﻿// Route for all-wallets overlay entry — same Home with showAll hint.
 import { useLiveMain } from '@/design/bridge/useLiveMain';
-import { screen } from '@/design/dc/route';
+import { liveScreen } from '@/design/dc/route';
+import HomeScreen from '@/newui/screens/Home';
 
-export default screen(MainScreen, { showAll: true }, useLiveMain);
+export default liveScreen(HomeScreen, { showAll: true }, useLiveMain);

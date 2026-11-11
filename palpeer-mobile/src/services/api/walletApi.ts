@@ -16,15 +16,13 @@ import type {
 
 import { baseApi } from './baseApi';
 import { jsonDecimal } from './json';
-import { NOTIFICATION_LIST, NOTIFICATION_UNREAD } from './notificationApi';
+import { ALERTS } from './notificationApi';
 import { TRANSACTION_HISTORY, TRANSACTION_SUMMARY } from './transactionApi';
 
 const WALLET_LIST = { type: 'Wallet' as const, id: 'LIST' };
 const RECENT = { type: 'Transaction' as const, id: 'RECENT' };
 /** Every list a new or finished money movement shows up in. */
 const ACTIVITY = [RECENT, TRANSACTION_HISTORY, TRANSACTION_SUMMARY];
-/** Funding/withdrawal publish UserNotifyEvent → Messages → Alerts must refetch with History. */
-const ALERTS = [NOTIFICATION_LIST, NOTIFICATION_UNREAD];
 
 export const LEDGER_PAGE_SIZE = 20;
 
@@ -112,17 +110,18 @@ export const walletApi = baseApi.injectEndpoints({
         body: { walletId, amount: jsonDecimal(amount), destinationReference },
         idempotencyKey,
       }),
-      // The hold moves money from available to pending as soon as the withdrawal is created.
-      invalidatesTags: (_result, error, { walletId }) =>
-        error
-          ? []
-          : [
-              WALLET_LIST,
-              ...ACTIVITY,
-              ...ALERTS,
-              { type: 'Wallet', id: walletId },
-              { type: 'Wallet', id: `LEDGER-${walletId}` },
-            ],
+      // Hold lands immediately; SUCCESS also refreshes balances + Alerts (Money taken out).
+      invalidatesTags: (result, error, { walletId }) => {
+        if (error) return [];
+        if (result?.status === 'SUCCESS') return [...walletBalanceTags(walletId)];
+        return [
+          WALLET_LIST,
+          ...ACTIVITY,
+          ...ALERTS,
+          { type: 'Wallet', id: walletId },
+          { type: 'Wallet', id: `LEDGER-${walletId}` },
+        ];
+      },
     }),
     getWithdrawal: build.query<WithdrawalTransactionResponse, string>({
       query: (withdrawalId) => ({ path: `/withdrawals/${encodeURIComponent(withdrawalId)}` }),
@@ -158,6 +157,7 @@ export const walletApi = baseApi.injectEndpoints({
           : [
               WALLET_LIST,
               ...ACTIVITY,
+              ...ALERTS,
               { type: 'Wallet', id: sourceWalletId },
               { type: 'Wallet', id: `LEDGER-${sourceWalletId}` },
             ],
@@ -188,6 +188,7 @@ export const {
   useLazyGetFundingQuery,
   useCreateWithdrawalMutation,
   useGetWithdrawalQuery,
+  useLazyGetWithdrawalQuery,
   useGetWithdrawalBanksQuery,
   useCreateWalletTransferMutation,
   useLazyLookupTransferRecipientQuery,

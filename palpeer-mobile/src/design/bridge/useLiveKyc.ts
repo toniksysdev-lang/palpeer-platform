@@ -14,12 +14,16 @@ import { useAppDispatch } from '@/store';
 
 type OkErr = { ok: true } | { ok: false; error: string };
 
-/** After ComplyCube capture + submit, design flow waits on StartChecking. */
-const DESIGN_KYC_RETURN = '/StartChecking';
+/** After both captures, return to Show your ID (agree + Send to Palpeer). */
+const DESIGN_KYC_SHOW = '/StartKyc';
+/** After Send to Palpeer, wait while ComplyCube runs. */
+const DESIGN_KYC_CHECKING = '/StartChecking';
+
+export type KycCaptureStart = 'camera' | 'library';
 
 /**
- * KYC for design Start: Choose my ID opens the ComplyCube camera pipeline
- * (document → live selfie → start verification), not the gallery picker.
+ * KYC for design Start: Choose my ID / Take photo open the ComplyCube capture
+ * pipeline (document camera or library upload → live selfie → start verification).
  */
 export function useLiveKyc() {
   const dispatch = useAppDispatch();
@@ -29,35 +33,47 @@ export function useLiveKyc() {
   const [kycError, setKycError] = useState<string | null>(null);
   const [kycBusy, setKycBusy] = useState(false);
 
-  /** Pick an ID type → ComplyCube document capture (camera). */
-  const onPickDocumentType = useCallback((documentType: string) => {
+  /** Open document capture; optional `start` skips the intro (camera or library). */
+  const openDocumentCapture = useCallback((documentType: string, start?: KycCaptureStart) => {
     setKycError(null);
     const type: KycDocumentType = isKycDocumentType(documentType)
       ? documentType
       : 'PASSPORT';
     router.push({
       pathname: '/kyc/document',
-      params: { type, returnTo: DESIGN_KYC_RETURN },
+      params: {
+        type,
+        returnTo: DESIGN_KYC_SHOW,
+        ...(start ? { start } : null),
+      },
     } as Href);
   }, []);
+
+  /** Pick an ID type → ComplyCube document capture. */
+  const onPickDocumentType = useCallback(
+    (documentType: string) => {
+      openDocumentCapture(documentType);
+    },
+    [openDocumentCapture],
+  );
 
   /** Live selfie capture for ComplyCube (front camera only). */
   const onUploadSelfie = useCallback(async (): Promise<OkErr> => {
     setKycError(null);
     router.push({
       pathname: '/kyc/selfie',
-      params: { returnTo: DESIGN_KYC_RETURN },
+      params: { returnTo: DESIGN_KYC_SHOW },
     } as Href);
     return { ok: true };
   }, []);
 
-  /** Document re-capture — same as picking the current type again. */
+  /** Document capture from Show your ID — camera or upload. */
   const onUploadDocument = useCallback(
-    async (documentType = 'PASSPORT'): Promise<OkErr> => {
-      onPickDocumentType(documentType);
+    async (documentType = 'PASSPORT', start?: KycCaptureStart): Promise<OkErr> => {
+      openDocumentCapture(documentType, start);
       return { ok: true };
     },
-    [onPickDocumentType],
+    [openDocumentCapture],
   );
 
   const onSubmitKyc = useCallback(async (): Promise<OkErr> => {
@@ -73,7 +89,7 @@ export function useLiveKyc() {
         issuingCountry: profile.profile?.countryOfResidence ?? undefined,
       }).unwrap();
       dispatch(baseApi.util.invalidateTags(['KycStatus']));
-      router.replace(DESIGN_KYC_RETURN as Href);
+      router.replace(DESIGN_KYC_CHECKING as Href);
       return { ok: true };
     } catch (error) {
       const msg = toAppError(error).message ?? 'Could not start verification.';

@@ -24,8 +24,11 @@ export function SelfieScreen() {
     const progress = await dispatch(
       kycApi.endpoints.getKycProgress.initiate(undefined, { forceRefetch: true, subscribe: false }),
     );
-    // Design profile flow: Show my ID (agree + Send to Palpeer) instead of the legacy form.
-    if (returnTo === '/StartChecking' && progress.data?.hasDocument) {
+    // Design profile flow: Show your ID (agree + Send to Palpeer) instead of the legacy form.
+    if (
+      (returnTo === '/StartKyc' || returnTo === '/StartChecking') &&
+      progress.data?.hasDocument
+    ) {
       router.replace('/StartKyc' as Href);
       return;
     }

@@ -17,6 +17,9 @@ const DEFAULT_PREFERENCES = {
   biometricUnlockPrompted: false,
 };
 
+/** Soft cap for local storage reads — must not dominate cold start. */
+const LOCAL_READ_MS = 1_200;
+
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(fallback), ms);
@@ -26,8 +29,8 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 
 /**
  * Loads preferences and restores the session once.
- * Whole bootstrap is capped so SecureStore / network stalls cannot leave BrandSplash forever.
- * Ready as soon as bootstrap finishes — no artificial minimum splash delay.
+ * Signed-out installs leave BrandSplash as soon as local storage says there is no session
+ * (no network wait). Whole bootstrap is still hard-capped for hung SecureStore / refresh.
  */
 export function useAppBootstrap(): { ready: boolean } {
   const dispatch = useAppDispatch();
@@ -36,30 +39,32 @@ export function useAppBootstrap(): { ready: boolean } {
 
   useEffect(() => {
     let cancelled = false;
-    const hardDeadlineMs = Math.max(appConfig.sessionRestoreTimeoutMs + 4_000, 12_000);
+    const restoreBudgetMs = appConfig.sessionRestoreTimeoutMs;
+    const hardDeadlineMs = Math.max(restoreBudgetMs + LOCAL_READ_MS + 1_500, 6_000);
 
     (async () => {
       const run = async () => {
-        const preferences = await withTimeout(
-          preferencesStorage.load(),
-          3_000,
-          DEFAULT_PREFERENCES,
-        );
+        // Preferences + session keys in parallel — was sequential and slowed every cold start.
+        const [preferences, stored, biometricUserId] = await Promise.all([
+          withTimeout(preferencesStorage.load(), LOCAL_READ_MS, DEFAULT_PREFERENCES),
+          withTimeout(secureStorage.loadSession(), LOCAL_READ_MS, null),
+          withTimeout(secureStorage.getBiometricUserId(), LOCAL_READ_MS, null),
+        ]);
         if (cancelled) return;
+
         dispatch(preferencesLoaded(preferences));
+        dispatch(biometricRestored(!!stored && biometricUserId === stored?.userId));
+
+        // Fast path: no refresh token → show landing immediately (no /auth/refresh wait).
+        if (!stored) {
+          dispatch(sessionAbsent());
+          return;
+        }
 
         // Lock before the session becomes authenticated so the app never renders unlocked first.
-        const [stored, biometricUserId] = await withTimeout(
-          Promise.all([secureStorage.loadSession(), secureStorage.getBiometricUserId()]),
-          3_000,
-          [null, null] as const,
-        );
-        if (cancelled) return;
-        dispatch(biometricRestored(!!stored && biometricUserId === stored.userId));
-
         const outcome = await withTimeout(
           sessionManager.restore(),
-          appConfig.sessionRestoreTimeoutMs,
+          restoreBudgetMs,
           'unauthenticated' as const,
         );
         if (cancelled) return;

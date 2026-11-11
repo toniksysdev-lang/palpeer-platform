@@ -10,6 +10,10 @@ import { baseApi } from './baseApi';
 
 export const NOTIFICATION_LIST = { type: 'Notification' as const, id: 'LIST' };
 export const NOTIFICATION_UNREAD = { type: 'Notification' as const, id: 'UNREAD' };
+/** Invalidate after money / P2P / negotiation mutations so Alerts + footer badge refresh. */
+export const ALERTS = [NOTIFICATION_LIST, NOTIFICATION_UNREAD] as const;
+/** Keep Alerts + Messages badge fresh without relying only on push (web / silent settle). */
+export const ALERTS_POLL_MS = 15_000;
 const PUSH_TOKENS = { type: 'Notification' as const, id: 'DEVICE_TOKENS' };
 
 export const NOTIFICATIONS_PAGE_SIZE = 20;

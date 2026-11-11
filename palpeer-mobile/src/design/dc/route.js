@@ -43,3 +43,19 @@ export function screen(Component, props = {}, useLiveProps) {
   Route.displayName = `${Component.name}Route`;
   return Route;
 }
+
+/**
+ * Live newui screens: merge static + bridge props without DC FIT_TO_SCREEN scaling.
+ * @param {any} Component
+ * @param {object} [props]
+ * @param {() => object} [useLiveProps]
+ */
+export function liveScreen(Component, props = {}, useLiveProps) {
+  function Route() {
+    const go = useGo();
+    const live = typeof useLiveProps === 'function' ? useLiveProps() : {};
+    return <Component {...props} {...live} go={go} />;
+  }
+  Route.displayName = `${Component.displayName || Component.name || 'NewUi'}LiveRoute`;
+  return Route;
+}
