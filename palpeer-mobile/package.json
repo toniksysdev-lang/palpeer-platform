@@ -29,6 +29,7 @@
     "@stomp/stompjs": "^7.3.0",
     "decimal.js-light": "^2.5.1",
     "expo": "~57.0.30",
+    "expo-application": "~57.0.3",
     "expo-audio": "~57.0.5",
     "expo-auth-session": "~57.0.16",
     "expo-build-properties": "~57.0.22",

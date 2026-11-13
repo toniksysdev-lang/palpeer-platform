@@ -1,3 +1,4 @@
+import * as Application from 'expo-application';
 import * as Crypto from 'expo-crypto';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
@@ -6,11 +7,34 @@ import { apiRequest, type ApiResult } from '@/services/api/client';
 import type { DeviceResponse, RegisterDeviceRequest } from '@/types/api/security';
 import { secureStorage } from '@/services/storage/secureStorage';
 
+/**
+ * Hardware-backed id that survives APK reinstall on the same phone (Android ID / iOS IDFV).
+ * Web and unsupported platforms return null → fall back to a random install UUID.
+ */
+async function stableHardwareId(): Promise<string | null> {
+  try {
+    if (Platform.OS === 'android') {
+      const id = Application.getAndroidId();
+      if (id && id.length > 0 && id.toLowerCase() !== 'unknown') return id;
+      return null;
+    }
+    if (Platform.OS === 'ios') {
+      const id = await Application.getIosIdForVendorAsync();
+      return id && id.length > 0 ? id : null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 /** Stable per-install identifier; survives sign-out so the backend sees one record per install. */
 export async function getDeviceIdentifier(): Promise<string> {
   const existing = await secureStorage.getDeviceIdentifier();
   if (existing) return existing;
-  const created = Crypto.randomUUID();
+  const hardware = await stableHardwareId();
+  // Prefix hardware ids so they never collide with plain UUIDs from older builds.
+  const created = hardware ? `hw:${hardware}` : Crypto.randomUUID();
   await secureStorage.setDeviceIdentifier(created);
   return created;
 }
@@ -34,6 +58,36 @@ export function findThisDevice(
   identifier: string,
 ): DeviceResponse | undefined {
   return devices.find((device) => device.deviceIdentifier === identifier);
+}
+
+/**
+ * True when other enabled device(s) look like this same phone after reinstall
+ * (new install id, same OS — accounts keep one trusted device at a time).
+ */
+export function isSamePhoneAsOthers(
+  devices: readonly DeviceResponse[],
+  identifier: string,
+  platform: string | undefined,
+  deviceName: string | undefined,
+): boolean {
+  const others = devices.filter((d) => d.enabled && d.deviceIdentifier !== identifier);
+  if (others.length === 0) return true;
+  const plat = (platform || '').trim().toLowerCase();
+  const name = (deviceName || '').trim().toLowerCase();
+  // One-device policy: a single other row on the same OS is almost always this handset
+  // after uninstall/reinstall (secure storage wiped → new install id).
+  if (others.length === 1) {
+    const otherPlat = (others[0]?.platform || '').trim().toLowerCase();
+    if (!plat || !otherPlat || plat === otherPlat) return true;
+    return false;
+  }
+  return others.every((d) => {
+    const otherPlat = (d.platform || '').trim().toLowerCase();
+    const otherName = (d.deviceName || '').trim().toLowerCase();
+    if (plat && otherPlat && plat !== otherPlat) return false;
+    if (!name && !otherName) return true;
+    return !!name && !!otherName && name === otherName;
+  });
 }
 
 /**

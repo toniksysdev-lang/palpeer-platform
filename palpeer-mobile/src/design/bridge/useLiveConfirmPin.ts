@@ -15,6 +15,7 @@ import {
   buildRegistration,
   findThisDevice,
   getDeviceIdentifier,
+  isSamePhoneAsOthers,
 } from '@/services/biometrics/deviceRegistration';
 import {
   authenticateWithBiometrics,
@@ -31,7 +32,8 @@ type OkErr =
 /**
  * Live bridge for ConfirmPin (new-device) screen.
  * Face/Fingerprint or PIN first; if another device already owns the account
- * (`DEVICE_EXISTS`), email OTP then device takeover (one device at a time).
+ * (`DEVICE_EXISTS`), take over when it is the same phone (reinstall), otherwise
+ * email OTP then device takeover (one device at a time).
  */
 export function useLiveConfirmPin() {
   const userId = useAppSelector((state) => state.session.userId);
@@ -129,6 +131,23 @@ export function useLiveConfirmPin() {
       const registered = await securityCommands.registerDevice(registration);
       if (!registered.ok) {
         if (registered.error.code === 'DEVICE_EXISTS') {
+          // PIN/bio already proved it is you on this session. Prefer takeover without email so a
+          // same-phone reinstall (new install id) is not blocked by "Check your email".
+          // If the other device looks like a different handset, fall back to email OTP.
+          const list = await securityCommands.listDevices();
+          const samePhone =
+            !list.ok ||
+            isSamePhoneAsOthers(
+              list.data ?? [],
+              registration.deviceIdentifier,
+              registration.platform,
+              registration.deviceName,
+            );
+          if (samePhone) {
+            const taken = await securityCommands.takeoverDevice(registration);
+            if (taken.ok) return enterApp();
+            // Takeover failed — still offer email as a last resort.
+          }
           return beginEmailOtp();
         }
         const msg = securityErrorMessage(registered.error);
