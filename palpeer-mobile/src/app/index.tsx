@@ -1,11 +1,3 @@
-import {
-  NotoSans_400Regular,
-  NotoSans_500Medium,
-  NotoSans_600SemiBold,
-  NotoSans_700Bold,
-  NotoSans_800ExtraBold,
-  useFonts,
-} from '@expo-google-fonts/noto-sans';
 import { Redirect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback } from 'react';
@@ -24,13 +16,6 @@ import { useAppSelector } from '@/store';
 export default function Index() {
   const isAuthenticated = useAppSelector((state) => state.session.status === 'authenticated');
   const { appearance, setAppearance } = useAppearance();
-  useFonts({
-    NotoSans_400Regular,
-    NotoSans_500Medium,
-    NotoSans_600SemiBold,
-    NotoSans_700Bold,
-    NotoSans_800ExtraBold,
-  });
   const live = useLiveStart();
 
   const onLookChange = useCallback(

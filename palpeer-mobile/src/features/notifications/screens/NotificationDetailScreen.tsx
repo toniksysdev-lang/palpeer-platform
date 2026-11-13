@@ -1,14 +1,8 @@
 import { router, useLocalSearchParams, type Href } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { View } from 'react-native';
 
-import { ErrorState } from '@/components/feedback/StateViews';
-import { Screen } from '@/components/layout/Screen';
-import { StackHeader } from '@/components/layout/StackHeader';
-import { AppText } from '@/components/ui/AppText';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { isUnread } from '@/features/notifications/logic';
 import { toAppError } from '@/services/api/errors';
 import {
   useGetNotificationQuery,
@@ -16,8 +10,7 @@ import {
 } from '@/services/api/notificationApi';
 import { notificationTarget } from '@/services/navigation/deepLinks';
 import { formatDateTime } from '@/utils/datetime';
-
-import { isUnread } from '../logic';
+import { Btn, Card, H1, Loading, Screen, TopBar, Txt } from '@/newui/ui/kit';
 
 /** Opened from a push tap or a notification without a mapped screen. Always loaded from the API. */
 export function NotificationDetailScreen() {
@@ -29,28 +22,36 @@ export function NotificationDetailScreen() {
   const isAdminMessage =
     data?.referenceType?.toUpperCase() === 'ADMIN_BROADCAST' ||
     data?.category?.toUpperCase() === 'ADMIN';
-  const header = <StackHeader title={isAdminMessage ? 'Message' : 'Notification'} />;
 
   useEffect(() => {
     if (data && unread) void markRead(data.id);
   }, [data, unread, markRead]);
 
+  const say = useMemo(() => {
+    if (!data) return isAdminMessage ? 'Message' : 'Notification';
+    return `${data.title}. ${data.body}`;
+  }, [data, isAdminMessage]);
+
   if (!data) {
+    if (notification.error) {
+      const err = toAppError(notification.error);
+      const message =
+        err.status === 404 ? "This notification wasn't found." : err.message ?? 'Could not load.';
+      return (
+        <Screen gap={12}>
+          <TopBar say={message} />
+          <H1>{isAdminMessage ? 'Message' : 'Notification'}</H1>
+          <Txt size={17} color="text2" noTr>
+            {message}
+          </Txt>
+          <Btn label="Try again" onPress={() => void notification.refetch()} />
+        </Screen>
+      );
+    }
     return (
       <Screen>
-        {header}
-        {notification.error ? (
-          <ErrorState
-            error={
-              toAppError(notification.error).status === 404
-                ? { ...toAppError(notification.error), message: "This notification wasn't found." }
-                : toAppError(notification.error)
-            }
-            onRetry={() => void notification.refetch()}
-          />
-        ) : (
-          <Skeleton height={120} />
-        )}
+        <TopBar />
+        <Loading title="Loading" text="Just a moment." />
       </Screen>
     );
   }
@@ -58,30 +59,31 @@ export function NotificationDetailScreen() {
   const target = notificationTarget(data);
 
   return (
-    <Screen scroll>
-      {header}
-      <Card variant="outlined" padding="lg">
-        <View style={{ gap: 8 }}>
-          {isAdminMessage ? (
-            <AppText variant="caption" tone="muted">
-              From Palpeer
-            </AppText>
-          ) : null}
-          <AppText variant="h2" testID="notification-title">
+    <Screen scroll gap={12}>
+      <TopBar say={say} />
+      <H1>{isAdminMessage ? 'Message' : 'Notification'}</H1>
+      <Card gap={8}>
+        {isAdminMessage ? (
+          <Txt size={15} w="700" color="text3">
+            From Palpeer
+          </Txt>
+        ) : null}
+        <View testID="notification-title">
+          <Txt size={22} w="800" noTr>
             {data.title}
-          </AppText>
-          <AppText variant="caption" tone="muted">
-            {formatDateTime(data.createdAt)}
-          </AppText>
-          <AppText testID="notification-body">{data.body}</AppText>
+          </Txt>
+        </View>
+        <Txt size={15} w="600" color="text3" noTr>
+          {formatDateTime(data.createdAt)}
+        </Txt>
+        <View testID="notification-body">
+          <Txt size={17} color="text2" noTr>
+            {data.body}
+          </Txt>
         </View>
       </Card>
       {target ? (
-        <Button
-          label="Open"
-          onPress={() => router.push(target as Href)}
-          testID="notification-open"
-        />
+        <Btn label="Open" onPress={() => router.push(target as Href)} testID="notification-open" />
       ) : null}
     </Screen>
   );

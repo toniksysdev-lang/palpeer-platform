@@ -22,10 +22,13 @@ export function BottomNav({ active, unread = 0 }: { active: string; unread?: num
       accessibilityRole="tablist"
       style={{
         flexDirection: 'row',
+        alignItems: 'center',
+        flexShrink: 0,
         width: '100%',
         backgroundColor: c.card,
         paddingTop: s(6),
         paddingHorizontal: s(8),
+        // System nav / home-indicator inset only — keep icon+label band the same as :3333.
         paddingBottom: s(10) + insets.bottom,
       }}
     >
@@ -38,7 +41,14 @@ export function BottomNav({ active, unread = 0 }: { active: string; unread?: num
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
             onPress={() => !on && router.replace(t.href)}
-            style={{ flex: 1, minHeight: s(62), alignItems: 'center', justifyContent: 'center', gap: s(2), minWidth: 0 }}
+            style={{
+              flex: 1,
+              minHeight: s(62),
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: s(2),
+              minWidth: 0,
+            }}
           >
             <View>
               <Icon name={t.icon === 'home' && !on ? 'homeLine' : t.icon} size={s(28)} color={color} />

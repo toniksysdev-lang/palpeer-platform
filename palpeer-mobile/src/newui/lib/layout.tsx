@@ -1,6 +1,5 @@
 import { createContext, ReactNode, useContext, useMemo } from 'react';
 import { useWindowDimensions, ViewStyle } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /** Design was authored around a ~390×844 phone. Scale UI from the live window. */
 const BASE_W = 390;
@@ -27,12 +26,11 @@ const LayoutCtx = createContext<LayoutValue>({
 
 export function LayoutProvider({ children }: { children: ReactNode }) {
   const { width, height } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
   const value = useMemo<LayoutValue>(() => {
     const w = Math.max(280, width || BASE_W);
-    // :3333 iframe has ~0 safe-area insets; native must scale to the usable
-    // content box or SafeArea padding double-compresses chrome vs the preview.
-    const h = Math.max(480, (height || BASE_H) - (insets.top || 0) - (insets.bottom || 0));
+    // Match :3333 / DC: scale against the full window. SafeAreaView / BottomNav
+    // apply insets as padding — subtracting them here double-compresses native chrome.
+    const h = Math.max(480, height || BASE_H);
     const byW = w / BASE_W;
     const byH = h / BASE_H;
     // Prefer width; compress further on short phones (SE / Flip cover) so chrome + CTAs fit.
@@ -47,9 +45,9 @@ export function LayoutProvider({ children }: { children: ReactNode }) {
       scale,
       s,
       // Clip the page shell; intentional ScrollViews handle overflow without a document bar.
-      page: { flex: 1, width: '100%', maxWidth: '100%', alignSelf: 'stretch', minHeight: 0, overflow: 'hidden' },
+      page: { flex: 1, width: '100%', maxWidth: '100%', alignSelf: 'stretch', minHeight: 0 },
     };
-  }, [width, height, insets.top, insets.bottom]);
+  }, [width, height]);
 
   return <LayoutCtx.Provider value={value}>{children}</LayoutCtx.Provider>;
 }

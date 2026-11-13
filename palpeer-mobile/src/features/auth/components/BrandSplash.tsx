@@ -1,3 +1,4 @@
+import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Image, Platform, StyleSheet, View } from 'react-native';
 
@@ -64,13 +65,21 @@ export function BrandSplash() {
     extrapolate: 'clamp',
   });
 
+  const onPainted = () => {
+    hideWebBootSplash();
+    // Drop the OS splash (circular-cropped wordmark) as soon as BrandSplash paints.
+    SplashScreen.hideAsync().catch(() => undefined);
+  };
+
   return (
     <View
       style={[styles.container, { backgroundColor: SPLASH_BG }]}
       accessibilityLabel="Loading PALPEER"
       accessibilityRole="progressbar"
       testID="brand-splash"
+      onLayout={onPainted}
     >
+      {/* Match :3333 boot splash — fixed width, natural aspect (logo.png is 570×240). */}
       <Image
         source={LOGO}
         style={styles.logo}
@@ -97,15 +106,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
-    gap: 24,
   },
-  logo: { width: 220, height: 92 },
+  // logo.png is 570×240 (aspect 2.375). Fixed height alone stretched the mark on some OEMs.
+  logo: { width: 220, aspectRatio: 570 / 240, maxWidth: '80%' },
   progressTrack: {
     width: PROGRESS_TRACK_WIDTH,
     height: 4,
     borderRadius: 999,
     overflow: 'hidden',
-    marginTop: 4,
+    marginTop: 24,
   },
   progressFill: {
     height: '100%',

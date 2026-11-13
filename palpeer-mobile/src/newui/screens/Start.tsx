@@ -1,9 +1,9 @@
 import * as LocalAuthentication from 'expo-local-authentication';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Image, Linking, Pressable, ScrollView, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, BackHandler, Easing, Image, Linking, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBarBg } from '@/design/dc/runtime';
 import { useOptionalNumberPad } from '@/components/ui/NumberPadContext';
 import { formatPhoneDisplay, normalizePhoneInput, PHONE_MAX_LEN } from '@/newui/lib/phone';
@@ -40,6 +40,7 @@ import { useListen } from '@/newui/lib/speech';
 import { useStore } from '@/newui/lib/store';
 import { useTheme } from '@/newui/lib/theme';
 import { Icon } from '@/newui/ui/Icon';
+import { SIGNUP_INCOMPLETE_MESSAGE } from '@/features/auth/errors';
 import { Badge, Btn, Card, Choice, Circle, Divider, Dots, Field, Flag, flagSource, H1, H2, NumberPadSlot, P, PinPad, Pill, Row, Screen, Sheet, TopBar, Txt } from '@/newui/ui/kit';
 import { useAppSelector } from '@/store';
 
@@ -131,6 +132,15 @@ export type StartProps = {
   onLogin?: (who: string, pass: string) => Promise<boolean>;
   goAfterLogin?: (where?: 'home' | 'buy' | 'help') => void;
   onRequestPhoneOtp?: (phone: string, dial?: string) => Promise<OkErr>;
+  /** Resume after SIGNUP_INCOMPLETE — maps /auth/signup/status onto Start stages. */
+  onResumeIncompleteSignup?: (
+    phone: string,
+    dial?: string,
+  ) => Promise<
+    | { ok: true; next: 'phoneCode' | 'account' | 'emailCode' | 'login'; email?: string; created?: boolean }
+    | { ok: false; error: string }
+  >;
+  authErrorCode?: string | null;
   onVerifyPhoneOtp?: (phone: string, code: string, dial?: string) => Promise<OkErr>;
   onRegister?: (input: {
     email: string;
@@ -259,6 +269,60 @@ export default function Start(props: StartProps) {
   const phonePadOpen = numberPad?.active?.id === 'signup-phone';
   const forgotCodePadOpen = numberPad?.active?.id === 'forgot-code';
   const otpCodePadOpen = numberPad?.active?.id === 'otp-code';
+  const insets = useSafeAreaInsets();
+
+  /**
+   * In-flow previous stage for Android hardware Back (Start uses local stage, not router stack).
+   * Returns null on land → caller keeps the app open (do not finish Activity).
+   */
+  const previousStartStage = useCallback((st: string, buying: boolean): string | null => {
+    switch (st) {
+      case 'land':
+        return null;
+      case 'rates':
+      case 'login':
+      case 'type':
+        return 'land';
+      case 'biz':
+      case 'phone':
+        return 'type';
+      case 'bizDone':
+        return 'biz';
+      case 'forgot':
+        return 'login';
+      case 'forgotCode':
+        return 'forgot';
+      case 'forgotNew':
+        return 'forgotCode';
+      case 'phoneCode':
+        return 'phone';
+      case 'account':
+        return 'phoneCode';
+      case 'emailCode':
+        return 'account';
+      case 'method':
+        return 'login';
+      case 'pinSet':
+        return 'method';
+      case 'pinAgain':
+        return 'pinSet';
+      case 'bio':
+        return 'method';
+      case 'questions':
+        return s.way === 'pin' ? 'pinSet' : 'bio';
+      case 'elsewhere':
+        return 'login';
+      case 'move':
+        return 'elsewhere';
+      case 'moveQ':
+        return 'move';
+      case 'moveDone':
+      case 'moveStuck':
+        return 'login';
+      default:
+        return buying ? 'rates' : 'land';
+    }
+  }, [s.way]);
 
   useEffect(() => {
     if (props.stage) setStage(props.stage);
@@ -373,6 +437,21 @@ export default function Start(props: StartProps) {
     if (st === 'phoneCode' || st === 'emailCode') startTimer(30);
     else if (st === 'forgotCode') startTimer(45);
   };
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      const prev = previousStartStage(stage, !!s.buying);
+      if (!prev) return true; // land / root — stay in app
+      if (prev === 'pinSet') go('pinSet', { pinA: '', pinB: '', pinDiff: false });
+      else if (prev === 'move') go('move', { mcode: '' });
+      else if (prev === 'land' && stage === 'login') go('land', { buying: false });
+      else go(prev);
+      return true;
+    });
+    return () => sub.remove();
+  }, [stage, s.buying, previousStartStage]);
+
   useEffect(() => {
     const k = setInterval(() => setClock((x) => x + 1), 1000);
     return () => {
@@ -567,8 +646,9 @@ export default function Start(props: StartProps) {
             style={{
               width: Math.round(LAND_HERO.width * heroScale),
               height: Math.round(LAND_HERO.height * heroScale),
+              minHeight: Math.round(LAND_HERO.height * heroScale),
               alignSelf: 'center',
-              flexShrink: 1,
+              flexShrink: Platform.OS === 'web' ? 1 : 0,
               overflow: 'visible',
             }}
           >
@@ -630,14 +710,33 @@ export default function Start(props: StartProps) {
             </Animated.View>
           </View>
         </View>
-        <View style={{ flexGrow: 1, flexShrink: 0, width: '100%', padding: sz(16), paddingTop: sz(14), gap: sz(8), justifyContent: 'flex-end' }}>
+        <View
+          style={{
+            flexGrow: 1,
+            flexShrink: 0,
+            width: '100%',
+            padding: sz(16),
+            paddingTop: sz(14),
+            // Keep CTAs above the Android system nav / gesture bar (was under the footer toolbar).
+            paddingBottom: sz(16) + (Platform.OS === 'web' ? 0 : insets.bottom),
+            justifyContent: 'flex-end',
+          }}
+        >
+          <View style={{ height: sz(8) }} />
           <Txt size={winH < 720 ? 24 : 28} w="800" center lh={1.15} role="header">
             Change your money. Easy and safe.
           </Txt>
           <View style={{ height: sz(20) }} />
           <Btn label="Get started" onPress={() => go('type')} />
+          <View style={{ height: sz(8) }} />
           <Btn kind="outline" size="mid" label="See best rate now" onPress={() => go('rates')} />
-          <Btn kind="link" label="Have an account? Log in" onPress={() => go('login', { created: false, buying: false })} />
+          <View style={{ height: sz(8) }} />
+          <Btn
+            kind="link"
+            label="Have an account? Log in"
+            style={{ alignSelf: 'center' }}
+            onPress={() => go('login', { created: false, buying: false })}
+          />
         </View>
       </>
     );
@@ -646,13 +745,15 @@ export default function Start(props: StartProps) {
     return (
       <View style={[page, { backgroundColor: c.bg }]}>
         <StatusBarBg color={c.hero}>
-          {winH < 620 ? (
-            <ScrollView style={{ flex: 1, width: '100%' }} contentContainerStyle={{ flexGrow: 1, width: '100%' }} bounces={false} showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}>
-              {landBody}
-            </ScrollView>
-          ) : (
-            <View style={{ flex: 1, width: '100%', minHeight: 0 }}>{landBody}</View>
-          )}
+          <ScrollView
+            style={{ flex: 1, width: '100%' }}
+            contentContainerStyle={{ flexGrow: 1, width: '100%' }}
+            bounces={false}
+            showsVerticalScrollIndicator={false}
+            showsHorizontalScrollIndicator={false}
+          >
+            {landBody}
+          </ScrollView>
         </StatusBarBg>
       </View>
     );
@@ -858,9 +959,9 @@ export default function Start(props: StartProps) {
               keyboardType="email-address"
             />
             <Field label="Password" value={s.pass} onChangeText={(v) => up({ pass: v })} secureTextEntry={!s.showPw} autoCapitalize="none" />
-            <Row between>
-              <Btn kind="link" label={s.showPw ? 'Hide' : 'Show'} onPress={() => up({ showPw: !s.showPw })} />
-              <Btn kind="link" label="Forgot your password?" onPress={() => go('forgot')} />
+            <Row between style={{ width: '100%', alignItems: 'center', minHeight: sz(48) }}>
+              <Btn kind="link" label={s.showPw ? 'Hide' : 'Show'} onPress={() => up({ showPw: !s.showPw })} style={{ flexGrow: 0, flexShrink: 0 }} />
+              <Btn kind="link" label="Forgot your password?" onPress={() => go('forgot')} style={{ flexGrow: 0, flexShrink: 1 }} />
             </Row>
             {props.loginError ? (
               <Txt size={16} w="700" color="red" role="alert">
@@ -1052,45 +1153,37 @@ export default function Start(props: StartProps) {
   /* ---------- Sign up: phone, code, account, email code ---------- */
   if (stage === 'phone') {
     const ok = s.phone.length === PHONE_MAX_LEN;
+    const signupIncomplete =
+      props.authErrorCode === 'SIGNUP_INCOMPLETE' || authMsg === SIGNUP_INCOMPLETE_MESSAGE;
     return (
       <Screen style={{ paddingBottom: 0 }}>
         <TopBar onBack={() => go('type')} say={say} />
-        {/* When the keypad is open, keep it pinned and let the fields/Continue scroll above it. */}
+        {/* Copy scrolls; Continue stays pinned above the in-flow number pad (matches :3333). */}
         <ScrollView
           style={{ flex: 1, width: '100%', minHeight: 0 }}
           contentContainerStyle={{
             flexGrow: 1,
             width: '100%',
             gap: sz(14),
-            paddingBottom: phonePadOpen ? sz(10) : 0,
+            paddingBottom: sz(10),
           }}
-          scrollEnabled={phonePadOpen}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={phonePadOpen}
+          showsVerticalScrollIndicator
           showsHorizontalScrollIndicator={false}
-          bounces={phonePadOpen}
         >
-          {!phonePadOpen ? (
-            <>
-              <H1>My phone number</H1>
-              <P>We will send a code to your phone.</P>
-            </>
-          ) : null}
+          <H1>My phone number</H1>
+          <P>We will send a code to your phone.</P>
           <Card>
-            {!phonePadOpen ? (
-              <>
-                <Txt size={16} w="700">
-                  My country
-                </Txt>
-                <Pressable accessibilityRole="button" accessibilityLabel="Choose your country" onPress={() => up({ pickOpen: 'phone' })} style={{ minHeight: 60, borderRadius: 14, backgroundColor: c.field, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Flag cc={pc.cc} w={38} />
-                  <Txt size={18} w="800" style={{ flex: 1 }}>
-                    {pc.name + ' ' + pc.dial}
-                  </Txt>
-                  <Icon name="down" size={20} color={c.text} />
-                </Pressable>
-              </>
-            ) : null}
+            <Txt size={16} w="700">
+              My country
+            </Txt>
+            <Pressable accessibilityRole="button" accessibilityLabel="Choose your country" onPress={() => up({ pickOpen: 'phone' })} style={{ minHeight: 60, borderRadius: 14, backgroundColor: c.field, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Flag cc={pc.cc} w={38} />
+              <Txt size={18} w="800" style={{ flex: 1 }}>
+                {pc.name + ' ' + pc.dial}
+              </Txt>
+              <Icon name="down" size={20} color={c.text} />
+            </Pressable>
             <Field
               label="Phone number"
               value={s.phone}
@@ -1101,32 +1194,60 @@ export default function Start(props: StartProps) {
               maxLength={PHONE_MAX_LEN}
               padKey="signup-phone"
               placeholder={formatPhoneDisplay('5555555555')}
-              autoFocus={phonePadOpen}
             />
           </Card>
-          {!phonePadOpen ? (
-            <Txt size={16} color="text2">
-              If you continue, you agree to the Terms of Use and Privacy Policy.
-            </Txt>
-          ) : null}
-          {!phonePadOpen ? <View style={{ flex: 1, minHeight: 0 }} /> : null}
+          <Txt size={16} color="text2">
+            If you continue, you agree to the Terms of Use and Privacy Policy.
+          </Txt>
           {authMsg ? (
             <Txt size={16} w="700" color="red" role="alert">
               {authMsg}
             </Txt>
           ) : null}
+          <View style={{ flexGrow: 1, minHeight: sz(8) }} />
+        </ScrollView>
+        <View style={{ width: '100%', gap: sz(8), paddingTop: sz(4) }}>
+          {signupIncomplete && props.onResumeIncompleteSignup ? (
+            <Btn
+              label="Continue registration"
+              busy={busy}
+              disabled={!ok}
+              onPress={() => {
+                void (async () => {
+                  setActionBusy(true);
+                  try {
+                    const r = await props.onResumeIncompleteSignup!(s.phone, dial);
+                    if (!r.ok) return;
+                    if (r.next === 'phoneCode') go('phoneCode', { pcode: '' });
+                    else if (r.next === 'account') go('account');
+                    else if (r.next === 'emailCode') {
+                      go('emailCode', { mail: r.email || s.mail, ecode: '' });
+                    } else if (r.next === 'login') {
+                      go('login', {
+                        created: !!r.created,
+                        who: r.email || s.mail || s.phone,
+                      });
+                    }
+                  } finally {
+                    setActionBusy(false);
+                  }
+                })();
+              }}
+            />
+          ) : null}
           <Btn
             label="Continue"
             busy={busy}
             disabled={!ok}
+            kind={signupIncomplete ? 'outline' : 'primary'}
             onPress={() =>
               props.onRequestPhoneOtp
                 ? void viaApi(() => props.onRequestPhoneOtp!(s.phone, dial), () => go('phoneCode', { pcode: '' }))
                 : go('phoneCode')
             }
           />
-        </ScrollView>
-        <NumberPadSlot forId="signup-phone" />
+          <NumberPadSlot forId="signup-phone" />
+        </View>
         <Sheet open={s.pickOpen === 'phone'} onClose={() => up({ pickOpen: '' })} title="Choose your country">
           {phoneCountries.map((k) => (
             <Choice key={k.id} title={k.name + ' ' + k.dial} icon={<Flag cc={k.cc} w={38} />} on={k.id === s.country} onPress={() => up({ country: k.id, pickOpen: '' })} minH={60} />
@@ -1141,21 +1262,21 @@ export default function Start(props: StartProps) {
     return (
       <Screen style={{ paddingBottom: 0 }}>
         <TopBar onBack={() => go(isMail ? 'account' : 'phone')} say={say} />
-        <View
-          style={{
-            flex: 1,
+        {/* Copy scrolls; Continue / Skip Code stay pinned above the in-flow number pad. */}
+        <ScrollView
+          style={{ flex: 1, width: '100%', minHeight: 0 }}
+          contentContainerStyle={{
+            flexGrow: 1,
             width: '100%',
-            minHeight: 0,
             gap: sz(14),
-            justifyContent: otpCodePadOpen ? 'flex-end' : 'flex-start',
+            paddingBottom: sz(10),
           }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator
+          showsHorizontalScrollIndicator={false}
         >
-          {!otpCodePadOpen ? (
-            <>
-              <H1>{isMail ? 'Check your email' : 'Check your phone'}</H1>
-              <P noTr>{tv('We sent a 6-digit code to {0}.', isMail ? s.mail : pc.dial + ' ***-***-' + s.phone.slice(-2))}</P>
-            </>
-          ) : null}
+          <H1>{isMail ? 'Check your email' : 'Check your phone'}</H1>
+          <P noTr>{tv('We sent a 6-digit code to {0}.', isMail ? s.mail : pc.dial + ' ***-***-' + s.phone.slice(-2))}</P>
           <Card>
             <Field
               label="6-digit code"
@@ -1170,14 +1291,16 @@ export default function Start(props: StartProps) {
               autoFocus={otpCodePadOpen}
             />
             {resend}
-            {isMail && !otpCodePadOpen ? <Btn kind="link" label="Wrong email? Change it" onPress={() => go('account')} /> : null}
+            {isMail ? <Btn kind="link" label="Wrong email? Change it" onPress={() => go('account')} /> : null}
           </Card>
           {authMsg ? (
             <Txt size={16} w="700" color="red" role="alert">
               {authMsg}
             </Txt>
           ) : null}
-          {!otpCodePadOpen ? <View style={{ flex: 1, minHeight: 0 }} /> : null}
+          <View style={{ flexGrow: 1, minHeight: sz(8) }} />
+        </ScrollView>
+        <View style={{ width: '100%', gap: sz(8), paddingTop: sz(4) }}>
           <Btn
             label="Continue"
             busy={busy}
@@ -1197,19 +1320,20 @@ export default function Start(props: StartProps) {
             }}
           />
           {/* Dev / fallback: continue signup without verifying the SMS code (matches design Skip Code). */}
-          {!isMail && !otpCodePadOpen ? (
+          {!isMail ? (
             <Btn
               kind="link"
               label="Skip Code"
               disabled={busy}
+              style={{ alignSelf: 'center' }}
               onPress={() => {
                 props.clearAuthError?.();
                 go('account', { pcode: '' });
               }}
             />
           ) : null}
+          <NumberPadSlot forId="otp-code" />
         </View>
-        <NumberPadSlot forId="otp-code" />
       </Screen>
     );
   }

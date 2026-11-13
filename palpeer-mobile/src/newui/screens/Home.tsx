@@ -1,16 +1,23 @@
 import { router, type Href } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
 import type { DesignWallet } from '@/design/bridge/mapWallet';
+import { PinStep } from '@/newui/features/PinStep';
 import { useLang } from '@/newui/lib/i18n';
 import { useLayout } from '@/newui/lib/layout';
 import { fmt, W } from '@/newui/lib/money';
 import { useListen } from '@/newui/lib/speech';
 import { useC } from '@/newui/lib/theme';
-import { BottomNav } from '@/newui/ui/BottomNav';
 import { Icon, IconName } from '@/newui/ui/Icon';
+import { TabRootShell } from '@/newui/ui/TabRootShell';
 import { Btn, Bullets, Card, Choice, Circle, Flag, H1, H2, Loading, Overlay, P, Pill, Row, Screen, TopBar, Txt } from '@/newui/ui/kit';
+import {
+  authenticateWithBiometrics,
+  getBiometricCapability,
+} from '@/services/biometrics/biometrics';
+import { securityCommands } from '@/services/security/securityCommands';
+import { useAppDispatch, useAppSelector } from '@/store';
+import { appUnlocked } from '@/store/slices/appLockSlice';
 
 type HomeProps = {
   backend?: boolean;
@@ -44,9 +51,11 @@ const HREFS = {
 /** Home: wallet card, four actions, recent movements — wired to useLiveMain. */
 export default function Home(props: HomeProps) {
   const c = useC();
-  const { s, page } = useLayout();
+  const { s } = useLayout();
   const { lang } = useLang();
   const { listen, listenLabel } = useListen();
+  const dispatch = useAppDispatch();
+  const biometricEnabled = useAppSelector((state) => state.appLock.biometricEnabled);
   const owned = props.liveWallets ?? [];
   const catalog = props.liveCatalog ?? [];
   const ownedCodes = useMemo(() => owned.map((w) => w.code), [owned]);
@@ -66,6 +75,12 @@ export default function Home(props: HomeProps) {
   const [rel, setRel] = useState({ face: false, id: false });
   const [addError, setAddError] = useState<string | null>(null);
   const [timedOut, setTimedOut] = useState(!!props.showTimeout);
+  const [lockPinOpen, setLockPinOpen] = useState(false);
+  const [lockBusy, setLockBusy] = useState(false);
+  const [lockMsg, setLockMsg] = useState<string | null>(null);
+  const [bioLabel, setBioLabel] = useState('Face or Fingerprint');
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const timeoutBioPrompted = useRef(false);
 
   useEffect(() => {
     if (props.showAll) setAll(true);
@@ -76,6 +91,50 @@ export default function Home(props: HomeProps) {
   useEffect(() => {
     if (props.showTimeout) setTimedOut(true);
   }, [props.showTimeout]);
+
+  useEffect(() => {
+    let active = true;
+    void getBiometricCapability().then((capability) => {
+      if (!active) return;
+      if (capability.status !== 'unsupported') {
+        setBioLabel(capability.label === 'Face ID or Fingerprint' ? 'Face or Fingerprint' : capability.label);
+      }
+      setBioAvailable(capability.status === 'available');
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const finishTimeoutUnlock = useCallback(() => {
+    setLockBusy(false);
+    setLockPinOpen(false);
+    setLockMsg(null);
+    setTimedOut(false);
+    dispatch(appUnlocked());
+  }, [dispatch]);
+
+  const unlockTimeoutBio = useCallback(async () => {
+    if (!biometricEnabled && !bioAvailable) return;
+    setLockBusy(true);
+    setLockMsg(null);
+    const result = await authenticateWithBiometrics('Unlock Palpeer');
+    if (result !== 'success') {
+      setLockBusy(false);
+      if (result === 'lockout') setLockMsg('Too many tries. Use your PIN, or log in again.');
+      else if (result === 'unavailable') setLockMsg(`${bioLabel} isn't available right now. Use your PIN.`);
+      else if (result === 'failed') setLockMsg("We couldn't confirm it's you. Try again or use your PIN.");
+      return;
+    }
+    finishTimeoutUnlock();
+  }, [bioAvailable, bioLabel, biometricEnabled, finishTimeoutUnlock]);
+
+  useEffect(() => {
+    if (!timedOut || lockPinOpen) return;
+    if (!(biometricEnabled && bioAvailable) || timeoutBioPrompted.current) return;
+    timeoutBioPrompted.current = true;
+    void unlockTimeoutBio();
+  }, [timedOut, lockPinOpen, biometricEnabled, bioAvailable, unlockTimeoutBio]);
 
   useEffect(() => {
     if (!ownedCodes.length) {
@@ -156,7 +215,16 @@ export default function Home(props: HomeProps) {
       return;
     }
     if (what && hold.open) return;
-    router.push(href);
+    // Unmount overlays before push — otherwise absolute Overlay covers the next
+    // screen and distorts BottomNav (same pattern as More leaveSheetAndRun).
+    setAll(false);
+    setAdding(false);
+    setTimedOut(false);
+    setJustAddedCode(null);
+    setHold((h) => ({ ...h, open: false }));
+    requestAnimationFrame(() => {
+      router.push(href);
+    });
   };
 
   const say =
@@ -194,456 +262,522 @@ export default function Home(props: HomeProps) {
 
   if (props.walletsLoading && !owned.length) {
     return (
-      <SafeAreaView edges={['top']} style={[page, { backgroundColor: c.bg }]}>
+      <TabRootShell active="home" unread={props.unreadCount ?? 0}>
         <Loading title="Loading your wallet" text="Just a moment." />
-      </SafeAreaView>
+      </TabRootShell>
     );
   }
 
+  const dockVisible = !(all || adding || timedOut || hold.open || !!justAddedCode);
+
   return (
-    <SafeAreaView edges={['top']} style={[page, { backgroundColor: c.bg }]}>
-      <ScrollView
-        style={{ flex: 1, width: '100%' }}
-        contentContainerStyle={{ padding: s(16), paddingTop: s(12), gap: s(14), width: '100%' }}
-        showsVerticalScrollIndicator={false}
-        showsHorizontalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={c.brand} colors={[c.brand]} />
-        }
-      >
-        <Row between style={{ minHeight: s(52) }}>
-          <Txt size={24} w="800" role="header" noTr style={{ flex: 1, minWidth: 0 }}>
-            Hello, {hello}
-          </Txt>
-          <Pill icon="listen" label={listenLabel} dark onPress={() => listen(say)} a11y="Listen to this screen" />
-        </Row>
-
-        {props.profileIncomplete ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => props.openProfile?.()}
-            style={{
-              minHeight: s(64),
-              paddingHorizontal: s(14),
-              paddingVertical: s(10),
-              borderRadius: s(18),
-              backgroundColor: c.warnBg,
-              borderWidth: 2,
-              borderColor: c.orange,
-              justifyContent: 'center',
-              width: '100%',
-            }}
-          >
-            <Txt size={17} w="800">
-              Complete your profile
-            </Txt>
-            <Txt size={15} w="600" color="text2">
-              Finish your details to unlock all of Palpeer.
-            </Txt>
-          </Pressable>
-        ) : null}
-
-        <View accessibilityLabel="My wallet" style={{ backgroundColor: '#0B6E4F', borderRadius: s(22), paddingHorizontal: s(16), paddingTop: s(10), paddingBottom: s(14), width: '100%' }}>
-          <Row between style={{ minHeight: s(44) }}>
-            <Txt size={20} w="700" color="#FFFFFF" style={{ flex: 1, minWidth: 0 }}>
-              My wallet
-            </Txt>
-            {hasWallet ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setHidden(!hidden)}
-                style={{
-                  minHeight: s(44),
-                  paddingHorizontal: s(12),
-                  borderRadius: s(22),
-                  backgroundColor: 'rgba(255,255,255,0.16)',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: s(6),
-                  flexShrink: 0,
-                }}
-              >
-                <Icon name="eye" size={s(22)} color="#FFFFFF" />
-                <Txt size={16} w="700" color="#FFFFFF">
-                  {hidden ? 'Show' : 'Hide'}
-                </Txt>
-              </Pressable>
-            ) : null}
-          </Row>
-          {!hasWallet ? (
-            <View style={{ gap: s(12), paddingTop: s(6), paddingBottom: s(4) }}>
-              <Txt size={17} w="600" color="#FFFFFF">
-                No wallet yet
-              </Txt>
-              <Txt size={15} w="600" color="rgba(255,255,255,0.85)">
-                Create a wallet to get started.
-              </Txt>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Add a wallet"
-                onPress={openAddWallet}
-                style={{
-                  marginTop: s(4),
-                  minHeight: s(52),
-                  borderRadius: s(14),
-                  backgroundColor: '#FFFFFF',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: s(8),
-                  paddingHorizontal: s(14),
-                }}
-              >
-                <Icon name="plus" size={s(26)} color="#0B6E4F" />
-                <Txt size={17} w="800" color="#0B6E4F">
-                  Add a wallet
-                </Txt>
-              </Pressable>
-            </View>
-          ) : cur ? (
-            <>
-              <Row gap={14} style={{ minHeight: s(72) }}>
-                <Flag cc={cur.cc} w={66} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Txt size={17} w="600" color="#FFFFFF">
-                    {cur.name}
-                  </Txt>
-                  <Txt size={34} w="800" color="#FFFFFF" lh={1.15} noTr lines={1} style={{ flexShrink: 1 }}>
-                    {shown(sel)}
-                  </Txt>
-                </View>
-              </Row>
-              <Row gap={8} style={{ marginTop: s(8) }}>
-                {strip.map((code) => (
+    <TabRootShell
+      active="home"
+      unread={props.unreadCount ?? 0}
+      dockVisible={dockVisible}
+      refreshing={refreshing}
+      onRefresh={() => void onRefresh()}
+      overlays={
+        <>
+          <Overlay open={all}>
+            <Screen>
+              <TopBar onBack={() => setAll(false)} right={<Pill icon="eye" label={hidden ? 'Show' : 'Hide'} onPress={() => setHidden(!hidden)} />} />
+              <H1>All your money</H1>
+              <ScrollView contentContainerStyle={{ gap: 10 }} showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}>
+                {wallets.map((w) => (
                   <Pressable
-                    key={code}
+                    key={w.code}
                     accessibilityRole="button"
-                    accessibilityLabel={W(code).name}
-                    accessibilityState={{ selected: code === sel }}
-                    onPress={() => pick(code)}
+                    onPress={() => pick(w.code)}
                     style={{
-                      flex: 1,
-                      height: s(52),
-                      borderRadius: s(14),
-                      backgroundColor: code === sel ? '#FFFFFF' : 'rgba(255,255,255,0.16)',
+                      minHeight: 80,
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderWidth: 3,
+                      borderColor: w.code === sel ? c.brandText : 'transparent',
+                      borderRadius: 18,
+                      backgroundColor: c.card,
+                      flexDirection: 'row',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      minWidth: 0,
+                      gap: 14,
                     }}
                   >
-                    <Flag cc={W(code).cc} w={42} h={28} />
+                    <Flag cc={w.cc} w={60} />
+                    <View>
+                      <Txt size={16} w="600" color="text2">
+                        {w.name}
+                      </Txt>
+                      <Txt size={25} w="800" noTr>
+                        {shown(w.code)}
+                      </Txt>
+                    </View>
                   </Pressable>
                 ))}
+              </ScrollView>
+              <Btn icon="plus" label="Add a wallet" size="mid" onPress={openAddWallet} />
+            </Screen>
+          </Overlay>
+
+          <Overlay open={adding}>
+            <Screen>
+              <TopBar
+                onBack={() => setAdding(false)}
+                say={'Add a wallet. Select the wallet you want to create. ' + addable.map((w) => w.name).join('. ') + '.'}
+              />
+              <H1>Add a wallet</H1>
+              <P>Select the wallet you want to create</P>
+              {addError ? (
+                <Txt size={16} w="700" color="red" noTr>
+                  {addError}
+                </Txt>
+              ) : null}
+              {addable.map((w) => (
+                <Choice key={w.code} title={w.name} icon={<Flag cc={W(w.code).cc} w={60} />} onPress={() => void addWallet(w.code)} right={null} minH={80} />
+              ))}
+              {addable.length === 0 ? (
+                <Card>
+                  <Txt size={18} w="700">
+                    You have all our wallets. More are coming.
+                  </Txt>
+                </Card>
+              ) : null}
+            </Screen>
+          </Overlay>
+
+          {justAddedCur ? (
+            <Overlay open>
+              <Screen>
+                <View style={{ alignItems: 'center', gap: 12, marginTop: 14 }}>
+                  <Circle icon="check" />
+                  <H1 center>Wallet ready!</H1>
+                  <Flag cc={justAddedCur.cc} w={90} />
+                  <Txt size={24} w="800">
+                    {justAddedCur.name}
+                  </Txt>
+                  <P center>It is empty. You can add money now or later.</P>
+                </View>
+                <TopBar
+                  onBack={false}
+                  say={'Wallet ready. ' + justAddedCur.name + '. It is empty. You can add money now or later.'}
+                />
+                <View style={{ flex: 1 }} />
+                <Btn
+                  label="Add money"
+                  onPress={() => {
+                    const code = justAddedCode;
+                    setJustAddedCode(null);
+                    if (code) props.goAddMoney?.(code);
+                  }}
+                />
+                <Btn kind="outline" size="mid" label="Later" onPress={() => setJustAddedCode(null)} />
+              </Screen>
+            </Overlay>
+          ) : null}
+
+          <Overlay open={timedOut}>
+            {lockPinOpen ? (
+              <PinStep
+                title="Enter your PIN"
+                onBack={() => {
+                  setLockPinOpen(false);
+                  setLockMsg(null);
+                }}
+                onDone={() => finishTimeoutUnlock()}
+                confirmPin={async (pin) => {
+                  const result = await securityCommands.verifyPin({ pin });
+                  if (result.ok) return true;
+                  setLockMsg("That PIN didn't work. Try again.");
+                  return false;
+                }}
+                confirmBiometric={
+                  biometricEnabled || bioAvailable
+                    ? async () => {
+                        const result = await authenticateWithBiometrics('Unlock Palpeer');
+                        return result === 'success';
+                      }
+                    : undefined
+                }
+              />
+            ) : (
+              <Screen gap={14}>
+                <View style={{ alignItems: 'center', gap: 12, marginTop: 14 }}>
+                  <Circle icon="lock" size={92} iconSize={52} bg="#0E1F19" />
+                  <H1 center>You were logged out</H1>
+                  <P center>No use for 3 minutes. This keeps your money safe.</P>
+                  {lockMsg ? (
+                    <Txt size={16} w="700" color="red" role="alert">
+                      {lockMsg}
+                    </Txt>
+                  ) : null}
+                </View>
+                <View style={{ flex: 1 }} />
+                {biometricEnabled || bioAvailable ? (
+                  <Btn
+                    kind="outline"
+                    size="mid"
+                    label={lockBusy ? 'Checking…' : `Unlock with ${bioLabel}`}
+                    busy={lockBusy}
+                    disabled={lockBusy}
+                    onPress={() => void unlockTimeoutBio()}
+                  />
+                ) : null}
+                <Btn
+                  label="Use your PIN"
+                  kind={biometricEnabled || bioAvailable ? 'outline' : 'primary'}
+                  size="mid"
+                  disabled={lockBusy}
+                  onPress={() => {
+                    setLockMsg(null);
+                    setLockPinOpen(true);
+                  }}
+                />
+                <Btn
+                  kind="link"
+                  label="Log in again"
+                  disabled={lockBusy}
+                  style={{ alignSelf: 'center' }}
+                  onPress={() => {
+                    setTimedOut(false);
+                    setLockPinOpen(false);
+                    setLockMsg(null);
+                    void props.onLogBack?.();
+                  }}
+                />
+              </Screen>
+            )}
+          </Overlay>
+
+          <Overlay open={hold.open}>
+            <Screen gap={12} scroll>
+              {hold.step === 'info' ? (
+                <>
+                  <Row gap={12}>
+                    <Circle icon="shield" size={72} iconSize={48} bg="#A84C08" />
+                    <H2 style={{ flex: 1 }}>{hold.note ? hold.note + ' is paused for 24 hours' : 'Safety hold for 24 hours'}</H2>
+                  </Row>
+                  <Txt size={17} color="text2">
+                    Your account moved to a new phone. For 24 hours some things are paused to keep your money safe.
+                  </Txt>
+                  <Card gap={4}>
+                    <Txt size={17} w="800" color="brandText">
+                      You can still
+                    </Txt>
+                    <Bullets items={['Log in and see your money', 'See your history', 'Add and receive money', 'Contact customer service', 'Finish your ID check']} />
+                  </Card>
+                  <Card gap={4}>
+                    <Txt size={17} w="800" color="red">
+                      Paused for now
+                    </Txt>
+                    <Bullets items={['Withdraw', 'Send to a person', 'Change money', 'Change your PIN, password or fingerprint']} />
+                  </Card>
+                  <View style={{ flex: 1 }} />
+                  <Btn
+                    size="mid"
+                    label="End the hold early"
+                    onPress={() => {
+                      setRel({ face: false, id: false });
+                      setHold({ ...hold, step: 'verify' });
+                    }}
+                  />
+                  <Btn size="mid" kind="outline" label="OK, keep waiting" onPress={() => setHold({ ...hold, open: false })} />
+                </>
+              ) : null}
+              {hold.step === 'verify' ? (
+                <>
+                  <H1>Prove it is you</H1>
+                  <Txt size={17} color="text2">
+                    A stronger check. Palpeer also checks for risk before ending the hold.
+                  </Txt>
+                  {(
+                    [
+                      ['face', 'Live photo of your face', 'Look at the camera'],
+                      ['id', 'Photo of your ID again', 'The same ID you used before'],
+                    ] as const
+                  ).map(([k, title, note]) => (
+                    <Choice
+                      key={k}
+                      title={title}
+                      note={note}
+                      on={rel[k]}
+                      onPress={() => setRel({ ...rel, [k]: !rel[k] })}
+                      right={
+                        <Txt size={16} w="800" color="brandText">
+                          {rel[k] ? 'Done' : 'Take photo'}
+                        </Txt>
+                      }
+                    />
+                  ))}
+                  <View style={{ flex: 1 }} />
+                  <Btn
+                    size="mid"
+                    label="Send to Palpeer"
+                    disabled={!(rel.face && rel.id)}
+                    onPress={() => {
+                      setHold({ ...hold, step: 'checking' });
+                      setTimeout(() => setHold((h) => ({ ...h, step: 'done' })), 2500);
+                    }}
+                  />
+                  <Btn kind="link" label="Back" onPress={() => setHold({ ...hold, step: 'info' })} />
+                </>
+              ) : null}
+              {hold.step === 'checking' ? <Loading title="Palpeer is checking" text="This is usually quick. You get a message when it is done." /> : null}
+              {hold.step === 'done' ? (
+                <>
+                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                    <Circle icon="check" />
+                    <H1 center>The hold has ended</H1>
+                    <P center>You can use all of Palpeer again.</P>
+                  </View>
+                  <Btn size="mid" label="Go home" onPress={() => setHold({ ...hold, open: false })} />
+                </>
+              ) : null}
+            </Screen>
+          </Overlay>
+        </>
+      }
+    >
+      <Row between style={{ minHeight: s(52) }}>
+                <Txt size={24} w="800" role="header" noTr style={{ flex: 1, minWidth: 0 }}>
+                  Hello, {hello}
+                </Txt>
+                <Pill icon="listen" label={listenLabel} dark onPress={() => listen(say)} a11y="Listen to this screen" />
+              </Row>
+
+              {props.profileIncomplete ? (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="See all your money"
-                  onPress={() => setAll(true)}
+                  onPress={() => props.openProfile?.()}
                   style={{
-                    flex: 1.2,
-                    height: s(52),
-                    borderRadius: s(14),
+                    minHeight: s(64),
+                    paddingHorizontal: s(14),
+                    paddingVertical: s(10),
+                    borderRadius: s(18),
+                    backgroundColor: c.warnBg,
                     borderWidth: 2,
-                    borderColor: 'rgba(255,255,255,0.75)',
-                    alignItems: 'center',
+                    borderColor: c.orange,
                     justifyContent: 'center',
-                    minWidth: 0,
-                    paddingHorizontal: s(4),
+                    width: '100%',
                   }}
                 >
-                  <Txt size={17} w="800" color="#FFFFFF" noTr lines={1}>
-                    {`All ${wallets.length}`}
+                  <Txt size={17} w="800">
+                    Complete your profile
+                  </Txt>
+                  <Txt size={15} w="600" color="text2">
+                    Finish your details to unlock all of Palpeer.
                   </Txt>
                 </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Add a wallet"
-                  onPress={openAddWallet}
-                  style={{ flex: 1, height: s(52), borderRadius: s(14), backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}
-                >
-                  <Icon name="plus" size={s(26)} color="#0B6E4F" />
-                </Pressable>
-              </Row>
-            </>
-          ) : null}
-        </View>
+              ) : null}
 
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: s(12), width: '100%' }}>
-          {tiles.map((t) => (
-            <Pressable
-              key={t.label}
-              accessibilityRole="button"
-              onPress={() => {
-                if (!hasWallet) {
-                  openAddWallet();
-                  return;
-                }
-                if (t.label === 'Add' && props.goAddMoney) {
-                  props.goAddMoney(sel);
-                  return;
-                }
-                goFlow(t.href, t.guard);
-              }}
-              style={{
-                flexBasis: '47%',
-                flexGrow: 1,
-                minHeight: s(140),
-                maxWidth: '48%',
-                padding: s(14),
-                borderRadius: s(22),
-                backgroundColor: t.bg,
-              }}
-            >
-              <View style={{ width: s(52), height: s(52), borderRadius: s(26), backgroundColor: t.dot, alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name={t.icon} size={s(30)} color="#FFFFFF" />
-              </View>
-              <View style={{ marginTop: 'auto', paddingTop: s(10) }}>
-                <Txt size={24} w="800" lh={1.15}>
-                  {t.label}
-                </Txt>
-                <Txt size={15} w="600" color="text2">
-                  {t.note}
-                </Txt>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-
-        {props.recentMovements && props.recentMovements.length > 0 ? (
-          <View style={{ gap: s(8), width: '100%' }}>
-            <Txt size={20} w="800">
-              Recent Transactions
-            </Txt>
-            {props.recentMovements.map((m, i) => (
-              <Row
-                key={`${m.title}-${m.time}-${i}`}
-                gap={12}
-                style={{
-                  backgroundColor: c.card,
-                  borderRadius: s(18),
-                  paddingHorizontal: s(14),
-                  paddingVertical: s(10),
-                  minHeight: s(64),
-                  width: '100%',
-                }}
-              >
-                <Circle icon="check" size={36} iconSize={22} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Txt size={17} w="700" noTr>
-                    {m.title}
+              <View accessibilityLabel="My wallet" style={{ backgroundColor: '#0B6E4F', borderRadius: s(22), paddingHorizontal: s(16), paddingTop: s(10), paddingBottom: s(14), width: '100%' }}>
+                <Row between style={{ minHeight: s(44) }}>
+                  <Txt size={20} w="700" color="#FFFFFF" style={{ flex: 1, minWidth: 0 }}>
+                    My wallet
                   </Txt>
-                  <Txt size={15} w="500" color="text3" noTr>
-                    {m.time}
-                  </Txt>
-                </View>
-              </Row>
-            ))}
-          </View>
-        ) : null}
-      </ScrollView>
-      <BottomNav active="home" unread={props.unreadCount ?? 0} />
-
-      <Overlay open={all}>
-        <Screen>
-          <TopBar onBack={() => setAll(false)} right={<Pill icon="eye" label={hidden ? 'Show' : 'Hide'} onPress={() => setHidden(!hidden)} />} />
-          <H1>All your money</H1>
-          <ScrollView contentContainerStyle={{ gap: 10 }} showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}>
-            {wallets.map((w) => (
-              <Pressable
-                key={w.code}
-                accessibilityRole="button"
-                onPress={() => pick(w.code)}
-                style={{
-                  minHeight: 80,
-                  paddingHorizontal: 14,
-                  paddingVertical: 8,
-                  borderWidth: 3,
-                  borderColor: w.code === sel ? c.brandText : 'transparent',
-                  borderRadius: 18,
-                  backgroundColor: c.card,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 14,
-                }}
-              >
-                <Flag cc={w.cc} w={60} />
-                <View>
-                  <Txt size={16} w="600" color="text2">
-                    {w.name}
-                  </Txt>
-                  <Txt size={25} w="800" noTr>
-                    {shown(w.code)}
-                  </Txt>
-                </View>
-              </Pressable>
-            ))}
-          </ScrollView>
-          <Btn icon="plus" label="Add a wallet" size="mid" onPress={openAddWallet} />
-        </Screen>
-      </Overlay>
-
-      <Overlay open={adding}>
-        <Screen>
-          <TopBar
-            onBack={() => setAdding(false)}
-            say={'Add a wallet. Select the wallet you want to create. ' + addable.map((w) => w.name).join('. ') + '.'}
-          />
-          <H1>Add a wallet</H1>
-          <P>Select the wallet you want to create</P>
-          {addError ? (
-            <Txt size={16} w="700" color="red" noTr>
-              {addError}
-            </Txt>
-          ) : null}
-          {addable.map((w) => (
-            <Choice key={w.code} title={w.name} icon={<Flag cc={W(w.code).cc} w={60} />} onPress={() => void addWallet(w.code)} right={null} minH={80} />
-          ))}
-          {addable.length === 0 ? (
-            <Card>
-              <Txt size={18} w="700">
-                You have all our wallets. More are coming.
-              </Txt>
-            </Card>
-          ) : null}
-        </Screen>
-      </Overlay>
-
-      {justAddedCur ? (
-        <Overlay open>
-          <Screen>
-            <View style={{ alignItems: 'center', gap: 12, marginTop: 14 }}>
-              <Circle icon="check" />
-              <H1 center>Wallet ready!</H1>
-              <Flag cc={justAddedCur.cc} w={90} />
-              <Txt size={24} w="800">
-                {justAddedCur.name}
-              </Txt>
-              <P center>It is empty. You can add money now or later.</P>
-            </View>
-            <TopBar
-              onBack={false}
-              say={'Wallet ready. ' + justAddedCur.name + '. It is empty. You can add money now or later.'}
-            />
-            <View style={{ flex: 1 }} />
-            <Btn
-              label="Add money"
-              onPress={() => {
-                const code = justAddedCode;
-                setJustAddedCode(null);
-                if (code) props.goAddMoney?.(code);
-              }}
-            />
-            <Btn kind="outline" size="mid" label="Later" onPress={() => setJustAddedCode(null)} />
-          </Screen>
-        </Overlay>
-      ) : null}
-
-      <Overlay open={timedOut}>
-        <Screen gap={14}>
-          <View style={{ alignItems: 'center', gap: 12, marginTop: 14 }}>
-            <Circle icon="lock" size={92} iconSize={52} bg="#0E1F19" />
-            <H1 center>You were logged out</H1>
-            <P center>No use for 3 minutes. This keeps your money safe.</P>
-          </View>
-          <View style={{ flex: 1 }} />
-          <Btn kind="outline" size="mid" label="Unlock with Face or Fingerprint" onPress={() => setTimedOut(false)} />
-          <Btn label="Use your PIN" onPress={() => setTimedOut(false)} />
-          <Btn
-            kind="link"
-            label="Log in again"
-            onPress={() => {
-              setTimedOut(false);
-              void props.onLogBack?.();
-            }}
-          />
-        </Screen>
-      </Overlay>
-
-      <Overlay open={hold.open}>
-        <Screen gap={12} scroll>
-          {hold.step === 'info' ? (
-            <>
-              <Row gap={12}>
-                <Circle icon="shield" size={72} iconSize={48} bg="#A84C08" />
-                <H2 style={{ flex: 1 }}>{hold.note ? hold.note + ' is paused for 24 hours' : 'Safety hold for 24 hours'}</H2>
-              </Row>
-              <Txt size={17} color="text2">
-                Your account moved to a new phone. For 24 hours some things are paused to keep your money safe.
-              </Txt>
-              <Card gap={4}>
-                <Txt size={17} w="800" color="brandText">
-                  You can still
-                </Txt>
-                <Bullets items={['Log in and see your money', 'See your history', 'Add and receive money', 'Contact customer service', 'Finish your ID check']} />
-              </Card>
-              <Card gap={4}>
-                <Txt size={17} w="800" color="red">
-                  Paused for now
-                </Txt>
-                <Bullets items={['Withdraw', 'Send to a person', 'Change money', 'Change your PIN, password or fingerprint']} />
-              </Card>
-              <View style={{ flex: 1 }} />
-              <Btn
-                size="mid"
-                label="End the hold early"
-                onPress={() => {
-                  setRel({ face: false, id: false });
-                  setHold({ ...hold, step: 'verify' });
-                }}
-              />
-              <Btn size="mid" kind="outline" label="OK, keep waiting" onPress={() => setHold({ ...hold, open: false })} />
-            </>
-          ) : null}
-          {hold.step === 'verify' ? (
-            <>
-              <H1>Prove it is you</H1>
-              <Txt size={17} color="text2">
-                A stronger check. Palpeer also checks for risk before ending the hold.
-              </Txt>
-              {(
-                [
-                  ['face', 'Live photo of your face', 'Look at the camera'],
-                  ['id', 'Photo of your ID again', 'The same ID you used before'],
-                ] as const
-              ).map(([k, title, note]) => (
-                <Choice
-                  key={k}
-                  title={title}
-                  note={note}
-                  on={rel[k]}
-                  onPress={() => setRel({ ...rel, [k]: !rel[k] })}
-                  right={
-                    <Txt size={16} w="800" color="brandText">
-                      {rel[k] ? 'Done' : 'Take photo'}
+                  {hasWallet ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setHidden(!hidden)}
+                      style={{
+                        minHeight: s(44),
+                        paddingHorizontal: s(12),
+                        borderRadius: s(22),
+                        backgroundColor: 'rgba(255,255,255,0.16)',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: s(6),
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Icon name="eye" size={s(22)} color="#FFFFFF" />
+                      <Txt size={16} w="700" color="#FFFFFF">
+                        {hidden ? 'Show' : 'Hide'}
+                      </Txt>
+                    </Pressable>
+                  ) : null}
+                </Row>
+                {!hasWallet ? (
+                  <View style={{ gap: s(12), paddingTop: s(6), paddingBottom: s(4) }}>
+                    <Txt size={17} w="600" color="#FFFFFF">
+                      No wallet yet
                     </Txt>
-                  }
-                />
-              ))}
-              <View style={{ flex: 1 }} />
-              <Btn
-                size="mid"
-                label="Send to Palpeer"
-                disabled={!(rel.face && rel.id)}
-                onPress={() => {
-                  setHold({ ...hold, step: 'checking' });
-                  setTimeout(() => setHold((h) => ({ ...h, step: 'done' })), 2500);
-                }}
-              />
-              <Btn kind="link" label="Back" onPress={() => setHold({ ...hold, step: 'info' })} />
-            </>
-          ) : null}
-          {hold.step === 'checking' ? <Loading title="Palpeer is checking" text="This is usually quick. You get a message when it is done." /> : null}
-          {hold.step === 'done' ? (
-            <>
-              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                <Circle icon="check" />
-                <H1 center>The hold has ended</H1>
-                <P center>You can use all of Palpeer again.</P>
+                    <Txt size={15} w="600" color="rgba(255,255,255,0.85)">
+                      Create a wallet to get started.
+                    </Txt>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Add a wallet"
+                      onPress={openAddWallet}
+                      style={{
+                        marginTop: s(4),
+                        minHeight: s(52),
+                        borderRadius: s(14),
+                        backgroundColor: '#FFFFFF',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: s(8),
+                        paddingHorizontal: s(14),
+                      }}
+                    >
+                      <Icon name="plus" size={s(26)} color="#0B6E4F" />
+                      <Txt size={17} w="800" color="#0B6E4F">
+                        Add a wallet
+                      </Txt>
+                    </Pressable>
+                  </View>
+                ) : cur ? (
+                  <>
+                    <Row gap={14} style={{ minHeight: s(72) }}>
+                      <Flag cc={cur.cc} w={66} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Txt size={17} w="600" color="#FFFFFF">
+                          {cur.name}
+                        </Txt>
+                        <Txt size={34} w="800" color="#FFFFFF" lh={1.15} noTr lines={1} style={{ flexShrink: 1 }}>
+                          {shown(sel)}
+                        </Txt>
+                      </View>
+                    </Row>
+                    <Row gap={8} style={{ marginTop: s(8) }}>
+                      {strip.map((code) => (
+                        <Pressable
+                          key={code}
+                          accessibilityRole="button"
+                          accessibilityLabel={W(code).name}
+                          accessibilityState={{ selected: code === sel }}
+                          onPress={() => pick(code)}
+                          style={{
+                            flex: 1,
+                            height: s(52),
+                            borderRadius: s(14),
+                            backgroundColor: code === sel ? '#FFFFFF' : 'rgba(255,255,255,0.16)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minWidth: 0,
+                          }}
+                        >
+                          <Flag cc={W(code).cc} w={42} h={28} />
+                        </Pressable>
+                      ))}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="See all your money"
+                        onPress={() => setAll(true)}
+                        style={{
+                          flex: 1.2,
+                          height: s(52),
+                          borderRadius: s(14),
+                          borderWidth: 2,
+                          borderColor: 'rgba(255,255,255,0.75)',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          minWidth: 0,
+                          paddingHorizontal: s(4),
+                        }}
+                      >
+                        <Txt size={17} w="800" color="#FFFFFF" noTr lines={1}>
+                          {`All ${wallets.length}`}
+                        </Txt>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Add a wallet"
+                        onPress={openAddWallet}
+                        style={{ flex: 1, height: s(52), borderRadius: s(14), backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}
+                      >
+                        <Icon name="plus" size={s(26)} color="#0B6E4F" />
+                      </Pressable>
+                    </Row>
+                  </>
+                ) : null}
               </View>
-              <Btn size="mid" label="Go home" onPress={() => setHold({ ...hold, open: false })} />
-            </>
-          ) : null}
-        </Screen>
-      </Overlay>
-    </SafeAreaView>
+
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: s(12), width: '100%' }}>
+                {tiles.map((t) => (
+                  <Pressable
+                    key={t.label}
+                    accessibilityRole="button"
+                    onPress={() => {
+                      if (!hasWallet) {
+                        openAddWallet();
+                        return;
+                      }
+                      if (t.label === 'Add' && props.goAddMoney) {
+                        props.goAddMoney(sel);
+                        return;
+                      }
+                      goFlow(t.href, t.guard);
+                    }}
+                    style={{
+                      flexBasis: '47%',
+                      flexGrow: 1,
+                      minHeight: s(140),
+                      maxWidth: '48%',
+                      padding: s(14),
+                      borderRadius: s(22),
+                      backgroundColor: t.bg,
+                    }}
+                  >
+                    <View style={{ width: s(52), height: s(52), borderRadius: s(26), backgroundColor: t.dot, alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon name={t.icon} size={s(30)} color="#FFFFFF" />
+                    </View>
+                    <View style={{ marginTop: 'auto', paddingTop: s(10) }}>
+                      <Txt size={24} w="800" lh={1.15}>
+                        {t.label}
+                      </Txt>
+                      <Txt size={15} w="600" color="text2">
+                        {t.note}
+                      </Txt>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+
+              <View style={{ gap: s(8), width: '100%' }}>
+                <Txt size={20} w="800">
+                  Recent Transactions
+                </Txt>
+                {props.recentMovements && props.recentMovements.length > 0 ? (
+                  props.recentMovements.map((m, i) => (
+                    <Row
+                      key={`${m.title}-${m.time}-${i}`}
+                      gap={12}
+                      style={{
+                        backgroundColor: c.card,
+                        borderRadius: s(18),
+                        paddingHorizontal: s(14),
+                        paddingVertical: s(10),
+                        minHeight: s(64),
+                        width: '100%',
+                      }}
+                    >
+                      <Circle icon="check" size={36} iconSize={22} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Txt size={17} w="700" noTr>
+                          {m.title}
+                        </Txt>
+                        <Txt size={15} w="500" color="text3" noTr>
+                          {m.time}
+                        </Txt>
+                      </View>
+                    </Row>
+                  ))
+                ) : (
+                  <View
+                    style={{
+                      backgroundColor: c.card,
+                      borderRadius: s(18),
+                      paddingHorizontal: s(14),
+                      paddingVertical: s(16),
+                      width: '100%',
+                    }}
+                  >
+                    <Txt size={16} w="600" color="text2">
+                      No recent activity yet.
+                    </Txt>
+                  </View>
+                )}
+              </View>
+    </TabRootShell>
   );
 }

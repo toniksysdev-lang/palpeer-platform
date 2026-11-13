@@ -1,16 +1,26 @@
 import { Stack } from 'expo-router';
 
-import { useTheme } from '@/providers/ThemeProvider';
+import { NewUiProviders } from '@/newui/providers';
+import { useC } from '@/newui/lib/theme';
 
-export default function NotificationsLayout() {
-  const theme = useTheme();
+function NotificationsStack() {
+  const c = useC();
   return (
     <Stack
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
-        contentStyle: { backgroundColor: theme.colors.background },
+        contentStyle: { backgroundColor: c.bg },
       }}
     />
+  );
+}
+
+/** Notification inbox / detail use newui kit. */
+export default function NotificationsLayout() {
+  return (
+    <NewUiProviders>
+      <NotificationsStack />
+    </NewUiProviders>
   );
 }

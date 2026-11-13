@@ -1,11 +1,10 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, View } from 'react-native';
 import { PinStep } from '@/newui/features/PinStep';
 import { useListen } from '@/newui/lib/speech';
 import { useC } from '@/newui/lib/theme';
-import { BottomNav } from '@/newui/ui/BottomNav';
+import { TabRootShell } from '@/newui/ui/TabRootShell';
 import { Btn, Card, Field, H1, Overlay, Pill, Row, Screen, TopBar, Txt } from '@/newui/ui/kit';
 
 type AlertRow = {
@@ -203,260 +202,262 @@ export default function Messages(props: MessagesProps) {
   );
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.bg }}>
-      <ScrollView
-        contentContainerStyle={{ padding: 16, paddingTop: 12, gap: 10, paddingBottom: 24 }}
-        showsVerticalScrollIndicator={false}
-        showsHorizontalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={c.brand} />}
-      >
-        <Row between style={{ minHeight: 52 }}>
-          <H1>Messages</H1>
-          <Pill icon="listen" dark label={listenLabel} a11y="Listen to this screen" onPress={() => listen(say)} />
-        </Row>
-        <Row gap={8}>
-          {tabBtn('chats', props.backend ? `Price talks (${chats.length})` : 'Price talks (0)')}
-          {tabBtn('alerts', props.backend ? `Alerts (${freshCount})` : 'Alerts (0)')}
-        </Row>
-
-        {tab === 'chats' ? (
-          <>
-            {chats.length === 0 ? (
-              <Txt size={19} w="700" color="text2">
-                No price talks yet.
-              </Txt>
-            ) : null}
-            {chats.map((room) => (
-              <Pressable
-                key={room.id}
-                accessibilityRole="button"
-                onPress={() => {
-                  setChatError('');
-                  setTalkError('');
-                  void (props.openPriceTalk ?? props.openChat)?.(room.id);
-                }}
-                style={{
-                  borderRadius: 18,
-                  backgroundColor: room.unread > 0 || room.needsAnswer ? c.tileBlue : c.card,
-                  padding: 14,
-                  gap: 2,
-                }}
-              >
-                <Txt size={16} w="700" color="text2">
-                  {room.negotiationId ? 'Price talk' : room.p2pOrderId ? 'Order chat' : 'Chat'}
-                </Txt>
-                <Txt size={18} w="800">
-                  {room.title}
-                </Txt>
-                <Txt size={17} w="700" color="blue">
-                  {room.text}
-                </Txt>
-                <Txt size={15} w="600" color="text3">
-                  {room.time}
-                </Txt>
-              </Pressable>
-            ))}
-          </>
-        ) : (
-          <>
-            {alerts.length === 0 ? (
-              <Txt size={19} w="700" color="text2">
-                No alerts yet.
-              </Txt>
-            ) : null}
-            {alerts.map((a) => (
-              <Pressable
-                key={a.id}
-                accessibilityRole="button"
-                onPress={() => props.openAlert?.(a.id)}
-                style={{
-                  borderRadius: 18,
-                  backgroundColor: a.fresh ? c.tileOrange : c.card,
-                  padding: 14,
-                  gap: 4,
-                }}
-              >
-                <Txt size={18} w="800">
-                  {a.title}
-                </Txt>
-                <Txt size={16} color="text2">
-                  {a.text}
-                </Txt>
-                <Txt size={15} w="600" color="text3">
-                  {a.time}
-                </Txt>
-                {a.actionLabel ? (
-                  <Txt
-                    size={16}
-                    w="800"
-                    color={a.actionLabel === 'See Palpeer rate' ? 'orange' : 'blue'}
-                    style={{ marginTop: 6 }}
-                  >
-                    {a.actionLabel}
+    <TabRootShell
+      active="messages"
+      unread={props.unreadCount ?? 0}
+      dockVisible={!(talkOpen || pinOpen || chatOpen)}
+      gap={10}
+      refreshing={refreshing}
+      onRefresh={() => void onRefresh()}
+      overlays={
+        <>
+          <Overlay open={talkOpen && !pinOpen}>
+            {talk ? (
+              <Screen gap={10}>
+                <TopBar onBack={closeTalk} say={say} />
+                <H1>Talk about the price</H1>
+                <ScrollView
+                  contentContainerStyle={{ gap: 10, paddingVertical: 4 }}
+                  style={{ flex: 1, backgroundColor: c.card, borderRadius: 22, padding: 14 }}
+                >
+                  {talk.bubbles.map((b) => (
+                    <View
+                      key={b.id}
+                      style={{
+                        alignSelf: b.me ? 'flex-end' : 'flex-start',
+                        maxWidth: '80%',
+                        borderRadius: 16,
+                        paddingHorizontal: 14,
+                        paddingVertical: 10,
+                        backgroundColor: b.me ? '#1D5BC7' : c.field,
+                      }}
+                    >
+                      <Txt size={14} w="700" color={b.me ? '#FFFFFF' : 'text3'} style={{ opacity: b.me ? 0.85 : 1 }}>
+                        {b.who}
+                      </Txt>
+                      <Txt size={20} w="800" color={b.me ? '#FFFFFF' : c.text}>
+                        {b.text}
+                      </Txt>
+                    </View>
+                  ))}
+                  {talk.showStatus && talk.statusText ? (
+                    <Txt size={17} w="800" style={{ color: talk.statusColor }} role="alert">
+                      {talk.statusText}
+                    </Txt>
+                  ) : null}
+                </ScrollView>
+                {talkError ? (
+                  <Txt size={17} w="700" color="red" role="alert">
+                    {talkError}
                   </Txt>
                 ) : null}
-              </Pressable>
-            ))}
-            {props.alertsHasMore ? (
-              <Btn
-                kind="soft"
-                size="mid"
-                label={props.alertsLoadingMore ? 'Loading…' : 'Load more alerts'}
-                disabled={props.alertsLoadingMore}
-                onPress={() => props.onLoadMoreAlerts?.()}
-              />
+                {talk.canAnswer ? (
+                  <>
+                    <Card bg={c.tileGreen}>
+                      <Txt size={16} w="700">
+                        {talk.dealText}
+                      </Txt>
+                    </Card>
+                    <Btn
+                      label={'Accept ₦' + talk.rate}
+                      busy={talkBusy}
+                      disabled={talkBusy}
+                      onPress={() => setPinOpen(true)}
+                    />
+                    <Row gap={8}>
+                      <Btn
+                        size="mid"
+                        kind="outline"
+                        label={'Offer ₦' + talk.nextPrice}
+                        disabled={talkBusy}
+                        onPress={() => void runTalk('counter')}
+                        style={{ flex: 1, borderColor: '#1D5BC7' }}
+                      />
+                      <Btn
+                        size="mid"
+                        kind="outline"
+                        label="Say no"
+                        disabled={talkBusy}
+                        onPress={() => void runTalk('reject')}
+                        style={{ flex: 1, borderColor: c.red }}
+                      />
+                    </Row>
+                  </>
+                ) : null}
+                <Btn
+                  kind="outline"
+                  size="mid"
+                  label="Open chat"
+                  onPress={() => void props.openMessagesChatFromTalk?.()}
+                />
+              </Screen>
             ) : null}
-          </>
-        )}
-      </ScrollView>
-      <BottomNav active="messages" unread={props.unreadCount ?? 0} />
-
-      <Overlay open={talkOpen && !pinOpen}>
-        {talk ? (
-          <Screen gap={10}>
-            <TopBar onBack={closeTalk} say={say} />
-            <H1>Talk about the price</H1>
-            <ScrollView
-              contentContainerStyle={{ gap: 10, paddingVertical: 4 }}
-              style={{ flex: 1, backgroundColor: c.card, borderRadius: 22, padding: 14 }}
-            >
-              {talk.bubbles.map((b) => (
-                <View
-                  key={b.id}
-                  style={{
-                    alignSelf: b.me ? 'flex-end' : 'flex-start',
-                    maxWidth: '80%',
-                    borderRadius: 16,
-                    paddingHorizontal: 14,
-                    paddingVertical: 10,
-                    backgroundColor: b.me ? '#1D5BC7' : c.field,
-                  }}
-                >
-                  <Txt size={14} w="700" color={b.me ? '#FFFFFF' : 'text3'} style={{ opacity: b.me ? 0.85 : 1 }}>
-                    {b.who}
-                  </Txt>
-                  <Txt size={20} w="800" color={b.me ? '#FFFFFF' : c.text}>
-                    {b.text}
-                  </Txt>
-                </View>
-              ))}
-              {talk.showStatus && talk.statusText ? (
-                <Txt size={17} w="800" style={{ color: talk.statusColor }} role="alert">
-                  {talk.statusText}
+          </Overlay>
+          
+          <Overlay open={pinOpen}>
+            <PinStep
+              title="Enter your PIN"
+              onBack={() => setPinOpen(false)}
+              onDone={() => setPinOpen(false)}
+              confirmPin={
+                props.confirmPin
+                  ? async (pin) => {
+                      const ok = await props.confirmPin!(pin);
+                      if (!ok) return false;
+                      const r = await props.onAcceptTalk?.();
+                      if (!r || r.ok === false) {
+                        setTalkError(r && r.ok === false ? r.error : 'Could not accept price.');
+                        return false;
+                      }
+                      return true;
+                    }
+                  : undefined
+              }
+            />
+          </Overlay>
+          
+          <Overlay open={chatOpen}>
+            <Screen gap={10}>
+              <TopBar onBack={closeChat} say={say} />
+              <H1>Chat</H1>
+              <ScrollView contentContainerStyle={{ gap: 10, paddingVertical: 4 }} style={{ flex: 1, backgroundColor: c.card, borderRadius: 22, padding: 14 }}>
+                {messages.map((m) => (
+                  <View
+                    key={m.id}
+                    style={{
+                      alignSelf: m.me ? 'flex-end' : 'flex-start',
+                      maxWidth: '80%',
+                      borderRadius: 16,
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      backgroundColor: m.me ? '#1D5BC7' : c.field,
+                    }}
+                  >
+                    <Txt size={14} w="700" color={m.me ? '#FFFFFF' : 'text3'} style={{ opacity: m.me ? 0.85 : 1 }}>
+                      {m.me ? 'Me' : 'The other person'}
+                    </Txt>
+                    <Txt size={19} w="700" color={m.me ? '#FFFFFF' : c.text}>
+                      {m.text}
+                    </Txt>
+                    <Txt size={13} w="600" color={m.me ? '#FFFFFF' : 'text3'} style={{ opacity: 0.85 }}>
+                      {m.time}
+                    </Txt>
+                  </View>
+                ))}
+              </ScrollView>
+              {chatError ? (
+                <Txt size={17} w="700" color="red" role="alert">
+                  {chatError}
                 </Txt>
               ) : null}
-            </ScrollView>
-            {talkError ? (
-              <Txt size={17} w="700" color="red" role="alert">
-                {talkError}
-              </Txt>
-            ) : null}
-            {talk.canAnswer ? (
-              <>
-                <Card bg={c.tileGreen}>
-                  <Txt size={16} w="700">
-                    {talk.dealText}
-                  </Txt>
-                </Card>
-                <Btn
-                  label={'Accept ₦' + talk.rate}
-                  busy={talkBusy}
-                  disabled={talkBusy}
-                  onPress={() => setPinOpen(true)}
-                />
-                <Row gap={8}>
-                  <Btn
-                    size="mid"
-                    kind="outline"
-                    label={'Offer ₦' + talk.nextPrice}
-                    disabled={talkBusy}
-                    onPress={() => void runTalk('counter')}
-                    style={{ flex: 1, borderColor: '#1D5BC7' }}
-                  />
-                  <Btn
-                    size="mid"
-                    kind="outline"
-                    label="Say no"
-                    disabled={talkBusy}
-                    onPress={() => void runTalk('reject')}
-                    style={{ flex: 1, borderColor: c.red }}
-                  />
-                </Row>
-              </>
-            ) : null}
-            <Btn
-              kind="outline"
-              size="mid"
-              label="Open chat"
-              onPress={() => void props.openMessagesChatFromTalk?.()}
-            />
-          </Screen>
-        ) : null}
-      </Overlay>
-
-      <Overlay open={pinOpen}>
-        <PinStep
-          title="Enter your PIN"
-          onBack={() => setPinOpen(false)}
-          onDone={() => setPinOpen(false)}
-          confirmPin={
-            props.confirmPin
-              ? async (pin) => {
-                  const ok = await props.confirmPin!(pin);
-                  if (!ok) return false;
-                  const r = await props.onAcceptTalk?.();
-                  if (!r || r.ok === false) {
-                    setTalkError(r && r.ok === false ? r.error : 'Could not accept price.');
-                    return false;
-                  }
-                  return true;
-                }
-              : undefined
-          }
-        />
-      </Overlay>
-
-      <Overlay open={chatOpen}>
-        <Screen gap={10}>
-          <TopBar onBack={closeChat} say={say} />
-          <H1>Chat</H1>
-          <ScrollView contentContainerStyle={{ gap: 10, paddingVertical: 4 }} style={{ flex: 1, backgroundColor: c.card, borderRadius: 22, padding: 14 }}>
-            {messages.map((m) => (
-              <View
-                key={m.id}
-                style={{
-                  alignSelf: m.me ? 'flex-end' : 'flex-start',
-                  maxWidth: '80%',
-                  borderRadius: 16,
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
-                  backgroundColor: m.me ? '#1D5BC7' : c.field,
-                }}
-              >
-                <Txt size={14} w="700" color={m.me ? '#FFFFFF' : 'text3'} style={{ opacity: m.me ? 0.85 : 1 }}>
-                  {m.me ? 'Me' : 'The other person'}
-                </Txt>
-                <Txt size={19} w="700" color={m.me ? '#FFFFFF' : c.text}>
-                  {m.text}
-                </Txt>
-                <Txt size={13} w="600" color={m.me ? '#FFFFFF' : 'text3'} style={{ opacity: 0.85 }}>
-                  {m.time}
-                </Txt>
-              </View>
-            ))}
-          </ScrollView>
-          {chatError ? (
-            <Txt size={17} w="700" color="red" role="alert">
-              {chatError}
+              <Field label="Message" value={draft} onChangeText={(v) => { setDraft(v); setChatError(''); }} />
+              <Row gap={8}>
+                <Btn kind="outline" size="mid" label="Back" onPress={closeChat} style={{ flex: 1 }} />
+                <Btn size="mid" label="Send" onPress={() => void sendChat()} style={{ flex: 1 }} />
+              </Row>
+            </Screen>
+          </Overlay>
+        </>
+      }
+    >
+      <Row between style={{ minHeight: 52 }}>
+        <H1>Messages</H1>
+        <Pill icon="listen" dark label={listenLabel} a11y="Listen to this screen" onPress={() => listen(say)} />
+      </Row>
+      <Row gap={8}>
+        {tabBtn('chats', props.backend ? `Price talks (${chats.length})` : 'Price talks (0)')}
+        {tabBtn('alerts', props.backend ? `Alerts (${freshCount})` : 'Alerts (0)')}
+      </Row>
+      
+      {tab === 'chats' ? (
+        <>
+          {chats.length === 0 ? (
+            <Txt size={19} w="700" color="text2">
+              No price talks yet.
             </Txt>
           ) : null}
-          <Field label="Message" value={draft} onChangeText={(v) => { setDraft(v); setChatError(''); }} />
-          <Row gap={8}>
-            <Btn kind="outline" size="mid" label="Back" onPress={closeChat} style={{ flex: 1 }} />
-            <Btn size="mid" label="Send" onPress={() => void sendChat()} style={{ flex: 1 }} />
-          </Row>
-        </Screen>
-      </Overlay>
-    </SafeAreaView>
+          {chats.map((room) => (
+            <Pressable
+              key={room.id}
+              accessibilityRole="button"
+              onPress={() => {
+                setChatError('');
+                setTalkError('');
+                void (props.openPriceTalk ?? props.openChat)?.(room.id);
+              }}
+              style={{
+                borderRadius: 18,
+                backgroundColor: room.unread > 0 || room.needsAnswer ? c.tileBlue : c.card,
+                padding: 14,
+                gap: 2,
+              }}
+            >
+              <Txt size={16} w="700" color="text2">
+                {room.negotiationId ? 'Price talk' : room.p2pOrderId ? 'Order chat' : 'Chat'}
+              </Txt>
+              <Txt size={18} w="800">
+                {room.title}
+              </Txt>
+              <Txt size={17} w="700" color="blue">
+                {room.text}
+              </Txt>
+              <Txt size={15} w="600" color="text3">
+                {room.time}
+              </Txt>
+            </Pressable>
+          ))}
+        </>
+      ) : (
+        <>
+          {alerts.length === 0 ? (
+            <Txt size={19} w="700" color="text2">
+              No alerts yet.
+            </Txt>
+          ) : null}
+          {alerts.map((a) => (
+            <Pressable
+              key={a.id}
+              accessibilityRole="button"
+              onPress={() => props.openAlert?.(a.id)}
+              style={{
+                borderRadius: 18,
+                backgroundColor: a.fresh ? c.tileOrange : c.card,
+                padding: 14,
+                gap: 4,
+              }}
+            >
+              <Txt size={18} w="800">
+                {a.title}
+              </Txt>
+              <Txt size={16} color="text2">
+                {a.text}
+              </Txt>
+              <Txt size={15} w="600" color="text3">
+                {a.time}
+              </Txt>
+              {a.actionLabel ? (
+                <Txt
+                  size={16}
+                  w="800"
+                  color={a.actionLabel === 'See Palpeer rate' ? 'orange' : 'blue'}
+                  style={{ marginTop: 6 }}
+                >
+                  {a.actionLabel}
+                </Txt>
+              ) : null}
+            </Pressable>
+          ))}
+          {props.alertsHasMore ? (
+            <Btn
+              kind="soft"
+              size="mid"
+              label={props.alertsLoadingMore ? 'Loading…' : 'Load more alerts'}
+              disabled={props.alertsLoadingMore}
+              onPress={() => props.onLoadMoreAlerts?.()}
+            />
+          ) : null}
+        </>
+      )}
+    </TabRootShell>
   );
 }

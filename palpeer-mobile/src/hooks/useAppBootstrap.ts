@@ -5,7 +5,7 @@ import { sessionManager } from '@/services/auth/session';
 import { preferencesStorage } from '@/services/storage/preferencesStorage';
 import { secureStorage } from '@/services/storage/secureStorage';
 import { store, useAppDispatch, useAppSelector } from '@/store';
-import { biometricRestored } from '@/store/slices/appLockSlice';
+import { appLocked, biometricRestored } from '@/store/slices/appLockSlice';
 import { preferencesLoaded } from '@/store/slices/preferencesSlice';
 import { sessionAbsent } from '@/store/slices/sessionSlice';
 import { logger } from '@/utils/logger';
@@ -60,6 +60,11 @@ export function useAppBootstrap(): { ready: boolean } {
           dispatch(sessionAbsent());
           return;
         }
+
+        // Always lock on cold start when a session exists (PIN and/or biometrics).
+        // biometricRestored only locks when biometrics are bound — PIN-only users
+        // were skipping LockScreen and landing on Home unlocked.
+        dispatch(appLocked());
 
         // Lock before the session becomes authenticated so the app never renders unlocked first.
         const outcome = await withTimeout(

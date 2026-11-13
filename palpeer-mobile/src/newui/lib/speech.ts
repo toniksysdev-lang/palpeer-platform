@@ -34,11 +34,21 @@ async function pickVoice(fr: boolean) {
       f.find((v) => AFR.test(v.language)) ||
       f.find((v) => /^fr[-_]FR/i.test(v.language) && fem(v)) ||
       f.find((v) => /^fr[-_]FR/i.test(v.language)) ||
+      f.find((v) => /^fr[-_]CA/i.test(v.language) && fem(v)) ||
+      f.find((v) => /^fr[-_]CA/i.test(v.language)) ||
       f[0]
     );
   }
-  const ng = all.filter((v) => /en[-_]NG/i.test(v.language));
-  return ng.find(fem) || ng[0] || all.find((v) => /^en/i.test(v.language) && fem(v));
+  // English mode: never fall through to a French/system voice on FR locale devices.
+  const en = all.filter((v) => /^en/i.test(v.language));
+  const ng = en.filter((v) => /en[-_]NG/i.test(v.language));
+  return (
+    ng.find(fem) ||
+    ng[0] ||
+    en.find(fem) ||
+    en.find((v) => /en[-_](US|GB|CA|AU|IE|ZA)/i.test(v.language)) ||
+    en[0]
+  );
 }
 
 /** Hook for the Listen button: returns the label ("Listen" or "Stop") and a toggle. */

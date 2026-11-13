@@ -4,6 +4,8 @@ import type { Uuid } from './common';
 export type ProfileResponse = {
   id: Uuid;
   userId: Uuid;
+  /** Public Palpeer handle from the user account. */
+  username?: string | null;
   firstName: string | null;
   lastName: string | null;
   /** ISO date YYYY-MM-DD when set. */

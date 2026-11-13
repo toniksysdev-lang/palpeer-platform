@@ -179,10 +179,11 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
     [
       'expo-splash-screen',
       {
-        image: './assets/splash-icon.png',
-        imageWidth: 200,
+        image: './src/newui/assets/logo.png',
+        imageWidth: 220,
         resizeMode: 'contain',
-        backgroundColor: '#FFFFFF',
+        // Match BrandSplash / :3333 boot overlay (c.hero), not a white flash.
+        backgroundColor: '#081410',
       },
     ],
     [

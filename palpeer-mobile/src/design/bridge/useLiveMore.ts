@@ -117,11 +117,16 @@ function buildMeRows(input: {
   const monthly = optionTitle(MONTHLY_TX_OPTIONS, profile?.monthlyTransactionEstimate);
   const dob = formatDob(profile?.dateOfBirth);
 
+  const username = profile?.username?.trim() || '';
   const rows: MoreSheetRow[] = [
     {
       title: 'My name',
       note: fullName || (incomplete ? `${EMPTY} — tap to add` : EMPTY),
       action: 'editProfile',
+    },
+    {
+      title: 'My username',
+      note: username ? `@${username.replace(/^@/, '')}` : EMPTY,
     },
     {
       title: 'My email',

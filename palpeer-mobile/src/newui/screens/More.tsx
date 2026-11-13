@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, View } from 'react-native';
 import type { MoreSheetRow } from '@/design/bridge/useLiveMore';
 import type { FaqSection } from '@/features/support/faq';
 import { useLang } from '@/newui/lib/i18n';
 import { useListen } from '@/newui/lib/speech';
 import { useC } from '@/newui/lib/theme';
-import { BottomNav } from '@/newui/ui/BottomNav';
 import { Icon, IconName } from '@/newui/ui/Icon';
+import { TabRootShell } from '@/newui/ui/TabRootShell';
 import { Btn, Choice, Overlay, Pill, Row, Screen, TopBar, Txt } from '@/newui/ui/kit';
 
 type MoreProps = {
@@ -243,115 +242,115 @@ export default function More(props: MoreProps) {
   }, [props]);
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.bg }}>
-      <ScrollView
-        contentContainerStyle={{ padding: 16, paddingTop: 12, gap: 12, paddingBottom: 24 }}
-        showsVerticalScrollIndicator={false}
-        showsHorizontalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={c.brand} colors={[c.brand]} />
-        }
+    <TabRootShell
+      active="more"
+      unread={props.unreadCount ?? 0}
+      dockVisible={!sheetOpen}
+      gap={12}
+      refreshing={refreshing}
+      onRefresh={() => void onRefresh()}
+      overlays={
+        <>
+          <Overlay open={sheetOpen}>
+            <Screen scroll gap={10}>
+              <TopBar onBack={back} say={sheetTitle + '. ' + listRows.map((r) => r.title).join('. ') + '.'} />
+              <Txt size={30} w="800" role="header">
+                {sheetTitle}
+              </Txt>
+              {listRows.map((r) => (
+                <Choice
+                  key={r.title + r.note.slice(0, 24)}
+                  title={r.title}
+                  note={r.note}
+                  on={r.on}
+                  onPress={r.onPress}
+                  right={r.on === undefined ? <Icon name="next" size={24} color={c.text3} /> : undefined}
+                />
+              ))}
+              {sheet === 'settings' ? (
+                <Btn
+                  kind="outline"
+                  size="mid"
+                  label="Sign out"
+                  style={{ borderColor: c.red }}
+                  onPress={() => {
+                    setSheet(null);
+                    void props.onSignOut?.();
+                  }}
+                />
+              ) : null}
+            </Screen>
+          </Overlay>
+        </>
+      }
+    >
+      <Row between style={{ minHeight: 52 }}>
+        <Txt size={30} w="800" role="header">
+          More
+        </Txt>
+        <Pill
+          icon="listen"
+          dark
+          label={listenLabel}
+          a11y="Listen to this screen"
+          onPress={() =>
+            listen(
+              sheet
+                ? sheetTitle + '. ' + listRows.map((r) => r.title).join('. ') + '.'
+                : 'More. My details. Get help. My cards. Stay safe. Invite friends. My rewards. Language. Settings.',
+            )
+          }
+        />
+      </Row>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => go('me')}
+        style={{ borderRadius: 20, backgroundColor: c.card, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}
       >
-        <Row between style={{ minHeight: 52 }}>
-          <Txt size={30} w="800" role="header">
-            More
+        <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: c.brand, alignItems: 'center', justifyContent: 'center' }}>
+          <Txt size={22} w="800" color="#FFFFFF" noTr>
+            {initials(displayName)}
           </Txt>
-          <Pill
-            icon="listen"
-            dark
-            label={listenLabel}
-            a11y="Listen to this screen"
-            onPress={() =>
-              listen(
-                sheet
-                  ? sheetTitle + '. ' + listRows.map((r) => r.title).join('. ') + '.'
-                  : 'More. My details. Get help. My cards. Stay safe. Invite friends. My rewards. Language. Settings.',
-              )
-            }
-          />
-        </Row>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => go('me')}
-          style={{ borderRadius: 20, backgroundColor: c.card, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}
-        >
-          <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: c.brand, alignItems: 'center', justifyContent: 'center' }}>
-            <Txt size={22} w="800" color="#FFFFFF" noTr>
-              {initials(displayName)}
-            </Txt>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Txt size={20} w="800" noTr>
-              {displayName}
-            </Txt>
-            <Row gap={4}>
-              {props.identityChecked ? <Icon name="check" size={18} color={c.brandText} /> : null}
-              <Txt size={15} w="700" color="brandText">
-                {identityLabel}
-              </Txt>
-            </Row>
-          </View>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => go('help')}
-          style={{ minHeight: 72, borderRadius: 20, backgroundColor: c.brand, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}
-        >
-          <Icon name="chat" size={30} color="#FFFFFF" />
-          <Txt size={21} w="800" color="#FFFFFF">
-            Get help
-          </Txt>
-        </Pressable>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-          {MENU.map((m) => (
-            <Pressable
-              key={m.key}
-              accessibilityRole="button"
-              onPress={() => go(m.key)}
-              style={{ flexBasis: '47%', flexGrow: 1, minHeight: 104, borderRadius: 20, backgroundColor: c.card, padding: 14, justifyContent: 'space-between' }}
-            >
-              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: m.color, alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name={m.icon} size={26} color="#FFFFFF" />
-              </View>
-              <Txt size={18} w="800">
-                {m.label}
-              </Txt>
-            </Pressable>
-          ))}
         </View>
-      </ScrollView>
-      <BottomNav active="more" unread={props.unreadCount ?? 0} />
-
-      <Overlay open={sheetOpen}>
-        <Screen scroll gap={10}>
-          <TopBar onBack={back} say={sheetTitle + '. ' + listRows.map((r) => r.title).join('. ') + '.'} />
-          <Txt size={30} w="800" role="header">
-            {sheetTitle}
+        <View style={{ flex: 1 }}>
+          <Txt size={20} w="800" noTr>
+            {displayName}
           </Txt>
-          {listRows.map((r) => (
-            <Choice
-              key={r.title + r.note.slice(0, 24)}
-              title={r.title}
-              note={r.note}
-              on={r.on}
-              onPress={r.onPress}
-              right={r.on === undefined ? <Icon name="next" size={24} color={c.text3} /> : undefined}
-            />
-          ))}
-          {sheet === 'settings' ? (
-            <Btn
-              kind="outline"
-              size="mid"
-              label="Sign out"
-              style={{ borderColor: c.red }}
-              onPress={() => {
-                setSheet(null);
-                void props.onSignOut?.();
-              }}
-            />
-          ) : null}
-        </Screen>
-      </Overlay>
-    </SafeAreaView>
+          <Row gap={4}>
+            {props.identityChecked ? <Icon name="check" size={18} color={c.brandText} /> : null}
+            <Txt size={15} w="700" color="brandText">
+              {identityLabel}
+            </Txt>
+          </Row>
+        </View>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => go('help')}
+        style={{ minHeight: 72, borderRadius: 20, backgroundColor: c.brand, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}
+      >
+        <Icon name="chat" size={30} color="#FFFFFF" />
+        <Txt size={21} w="800" color="#FFFFFF">
+          Get help
+        </Txt>
+      </Pressable>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+        {MENU.map((m) => (
+          <Pressable
+            key={m.key}
+            accessibilityRole="button"
+            onPress={() => go(m.key)}
+            style={{ flexBasis: '47%', flexGrow: 1, minHeight: 104, borderRadius: 20, backgroundColor: c.card, padding: 14, justifyContent: 'space-between' }}
+          >
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: m.color, alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name={m.icon} size={26} color="#FFFFFF" />
+            </View>
+            <Txt size={18} w="800">
+              {m.label}
+            </Txt>
+          </Pressable>
+        ))}
+      </View>
+    </TabRootShell>
   );
 }

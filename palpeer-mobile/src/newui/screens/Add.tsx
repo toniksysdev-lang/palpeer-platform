@@ -1,7 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { metaFor } from '@/design/bridge/currencyMeta';
 import type { DesignWallet } from '@/design/bridge/mapWallet';
 import type { FundingDetails } from '@/design/bridge/useLiveAdd';
@@ -24,7 +24,10 @@ type AddProps = {
     amount: string,
     interacEmail?: string,
   ) => Promise<{ ok: false; error: string } | { ok: true; details: FundingDetails; fundingId?: string }>;
-  waitForFunding?: (fundingId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  waitForFunding?: (
+    fundingId: string,
+    opts?: { signal?: AbortSignal; maxAttempts?: number },
+  ) => Promise<{ ok: true } | { ok: false; error: string; cancelled?: boolean }>;
   sessionEmail?: string;
   helloName?: string;
   go?: (href: string) => void;
@@ -89,6 +92,8 @@ export default function Add(props: AddProps) {
   const [fundingError, setFundingError] = useState<string | null>(null);
   const [fundingId, setFundingId] = useState<string | null>(null);
   const [continueBusy, setContinueBusy] = useState(false);
+  /** NGN/Kuda: auto-poll while payment details are on screen (no "It is sent" tap). */
+  const [autoChecking, setAutoChecking] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
@@ -165,7 +170,11 @@ export default function Add(props: AddProps) {
 
   const say = {
     form: 'Add money. Choose how much to add. There is no fee.',
-    send: 'Open your bank app. ' + cfg.step + '. Copy the details. Send the exact amount. Then tap It is sent.',
+    send: isCad
+      ? 'Open your bank app. ' + cfg.step + '. Copy the details. Send the exact amount. Then tap It is sent.'
+      : 'Open your bank app. ' +
+        cfg.step +
+        '. Copy the details. Send the exact amount. Palpeer checks for your payment automatically.',
     wait: 'Waiting for your money. You will get an alert when it is in your wallet. If you do not send it, this closes after 3 days.',
     done: 'Done. ' + amountText + ' is now in your wallet.',
   }[stage];
@@ -177,6 +186,7 @@ export default function Add(props: AddProps) {
 
   const goSend = async () => {
     setFundingError(null);
+    setAutoChecking(false);
     if (timer.current) clearTimeout(timer.current);
     setContinueBusy(true);
     try {
@@ -199,20 +209,57 @@ export default function Add(props: AddProps) {
     }
   };
 
+  /**
+   * Kuda (NGN): watch funding as soon as VA details are shown. GET /funding/{id} runs
+   * DYNAMIC_COLLECTION_ACCOUNT_TSQ on the server, so credits settle without "It is sent".
+   */
+  useEffect(() => {
+    if (stage !== 'send' && stage !== 'wait') return;
+    if (isCad || !props.backend || !props.waitForFunding || !fundingId) return;
+
+    const ac = new AbortController();
+    setAutoChecking(true);
+    setFundingError(null);
+
+    void (async () => {
+      const r = await props.waitForFunding!(fundingId, {
+        signal: ac.signal,
+        // ~30 min at 3s — long enough for the user to open their bank app and transfer.
+        maxAttempts: 600,
+      });
+      if (ac.signal.aborted || r.cancelled) return;
+      setAutoChecking(false);
+      if (r.ok) {
+        setStage('done');
+        return;
+      }
+      // Soft timeout / failure: keep details visible; History still updates if credit arrives later.
+      if (r.error && r.error !== 'Cancelled') {
+        setFundingError(r.error);
+      }
+    })();
+
+    return () => {
+      ac.abort();
+      setAutoChecking(false);
+    };
+  }, [stage, isCad, fundingId, props.backend, props.waitForFunding]);
+
   const goWait = async () => {
     setStage('wait');
     setFundingError(null);
     if (timer.current) clearTimeout(timer.current);
-    if (props.backend && props.waitForFunding) {
+    // NGN auto-poll effect already covers wait; CAD (and preview) still poll from this tap.
+    if (isCad && props.backend && props.waitForFunding) {
       const r = await props.waitForFunding(fundingId || '');
       if (r.ok) setStage('done');
-      else {
+      else if (!r.cancelled) {
         setFundingError(r.error);
         setStage('send');
       }
       return;
     }
-    if (!staticStage) {
+    if (!props.backend && !staticStage) {
       timer.current = setTimeout(() => setStage('done'), 6000);
     }
   };
@@ -269,8 +316,8 @@ export default function Add(props: AddProps) {
             </Row>
           ))}
           {details.map((d) => (
-            <Row key={d.key} between style={{ backgroundColor: c.field, borderRadius: 14, padding: 10 }}>
-              <View style={{ flex: 1 }}>
+            <Row key={d.key} between style={{ backgroundColor: c.field, borderRadius: 14, padding: 10, width: '100%' }}>
+              <View style={{ flex: 1, minWidth: 0, flexShrink: 1 }}>
                 <Small>{d.label}</Small>
                 <Txt size={18} w="800" noTr>
                   {d.value}
@@ -279,6 +326,7 @@ export default function Add(props: AddProps) {
               <Btn
                 size="small"
                 kind="primary"
+                fit
                 a11y={'Copy ' + d.label}
                 label={copied === d.key ? 'Copied' : 'Copy'}
                 style={{ backgroundColor: c.brand, minWidth: 96 }}
@@ -297,9 +345,21 @@ export default function Add(props: AddProps) {
           <Txt size={16} w="700" color="orange">
             {isCad ? 'Send the exact amount from ' + email + '. No security question.' : 'Send the exact amount. Bank fees are shown by your bank.'}
           </Txt>
+          {!isCad && props.backend && autoChecking ? (
+            <Row gap={10} style={{ alignItems: 'center' }}>
+              <ActivityIndicator color={c.brand} />
+              <Txt size={16} w="700" color={c.brand} style={{ flex: 1 }}>
+                Checking for your payment…
+              </Txt>
+            </Row>
+          ) : null}
         </Card>
         <View style={{ flex: 1 }} />
-        <Btn label="It is sent" onPress={() => void goWait()} />
+        {isCad || !props.backend ? (
+          <Btn label="It is sent" onPress={() => void goWait()} />
+        ) : (
+          <Btn kind="outline" label="Go home" onPress={goHome} />
+        )}
       </Screen>
     );
 

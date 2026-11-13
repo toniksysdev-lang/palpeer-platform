@@ -3,16 +3,18 @@ import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { metaFor } from '@/design/bridge/currencyMeta';
 import type { DesignWallet } from '@/design/bridge/mapWallet';
+import { verifyDesignPin } from '@/design/bridge/verifyPin';
 import { AmountBox } from '@/newui/features/AmountBox';
 import { PinStep } from '@/newui/features/PinStep';
 import { fmt, num, ONBOARD_EMAIL, USER, W } from '@/newui/lib/money';
 import { useC } from '@/newui/lib/theme';
 import { Icon } from '@/newui/ui/Icon';
 import { Btn, Card, Choice, Circle, Divider, Field, Flag, H1, H2, Line, Overlay, P, Row, Screen, TopBar, Txt } from '@/newui/ui/kit';
+import type { NgnBankAccount } from '@/services/storage/ngnBankAccountsStorage';
 
 type TakeOutStage = 'form' | 'check' | 'pin' | 'newacct' | 'done';
 
-type Acct = { name: string; bank: string; number: string };
+type Acct = { id?: string; name: string; bank: string; number: string };
 
 type TakeOutProps = {
   backend?: boolean;
@@ -22,6 +24,7 @@ type TakeOutProps = {
   bankNames?: string[];
   sessionEmail?: string;
   interacEmails?: string[];
+  ngnAccounts?: NgnBankAccount[];
   helloName?: string;
   prepareWithdrawal?: (
     code: string,
@@ -30,8 +33,23 @@ type TakeOutProps = {
   ) => { ok: false; error: string } | { ok: true };
   confirmPin?: (pin: string) => Promise<boolean>;
   confirmBiometric?: () => Promise<boolean>;
+  saveNgnAccount?: (input: {
+    bankName: string;
+    accountNumber: string;
+    accountName?: string;
+  }) => Promise<{ ok: true; account: NgnBankAccount } | { ok: false; error: string }>;
+  deleteNgnAccount?: (id: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   go?: (href: string) => void;
 };
+
+function mapNgnAccounts(list: NgnBankAccount[] | undefined): Acct[] {
+  return (list ?? []).map((a) => ({
+    id: a.id,
+    name: a.accountName || 'Saved account',
+    bank: a.bankName,
+    number: a.accountNumber,
+  }));
+}
 
 const SAMPLE_EMAILS = [ONBOARD_EMAIL, 'other@example.com'];
 const MIN: Record<string, number> = { CAD: 10, NGN: 1000 };
@@ -170,11 +188,15 @@ export default function TakeOut(props: TakeOutProps) {
   const [email, setEmail] = useState(props.backend ? props.sessionEmail || '' : SAMPLE_EMAILS[0]!);
   const [bank, setBank] = useState('');
   const [acct, setAcct] = useState('');
-  const [accounts, setAccounts] = useState<Acct[]>(props.backend ? [] : SAMPLE_ACCOUNTS);
+  const [accounts, setAccounts] = useState<Acct[]>(
+    props.backend ? mapNgnAccounts(props.ngnAccounts) : SAMPLE_ACCOUNTS,
+  );
   const [chosen, setChosen] = useState(0);
   const [delIdx, setDelIdx] = useState(-1);
   const [list, setList] = useState<'' | 'bank' | 'wallet'>('');
   const [prepareError, setPrepareError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [selectAccountId, setSelectAccountId] = useState<string | null>(null);
 
   useEffect(() => {
     if (staticStage !== undefined) setStage(normStage(staticStage));
@@ -186,6 +208,19 @@ export default function TakeOut(props: TakeOutProps) {
       setEmail((cur) => (emails.includes(cur) ? cur : emails[0]!));
     }
   }, [props.interacEmails]);
+
+  useEffect(() => {
+    if (!props.backend) return;
+    const next = mapNgnAccounts(props.ngnAccounts);
+    setAccounts(next);
+    if (selectAccountId) {
+      const idx = next.findIndex((a) => a.id === selectAccountId);
+      setChosen(idx >= 0 ? idx : 0);
+      setSelectAccountId(null);
+      return;
+    }
+    setChosen((cur) => (next.length === 0 ? 0 : Math.min(cur, next.length - 1)));
+  }, [props.backend, props.ngnAccounts, selectAccountId]);
 
   const w = wallets.find((x) => x.code === code) || walletRow({ ...metaFor(code), bal: 0 });
   const isEmail = w.method === 'email' || code === 'CAD';
@@ -246,19 +281,44 @@ export default function TakeOut(props: TakeOutProps) {
   if (stage === 'pin')
     return (
       <PinStep
+        title={pinFor === 'save' ? 'Confirm new account' : 'Enter your PIN'}
         onBack={() => {
           setStage(pinFor === 'save' ? 'newacct' : 'check');
           setPinFor('take');
         }}
-        confirmPin={pinFor === 'take' && props.confirmPin ? props.confirmPin : undefined}
+        confirmPin={
+          pinFor === 'take' && props.confirmPin
+            ? props.confirmPin
+            : pinFor === 'save' && props.backend && props.saveNgnAccount
+              ? async (pin) => {
+                  const pinOk = await verifyDesignPin(pin);
+                  if (!pinOk) return false;
+                  setSaveError(null);
+                  const r = await props.saveNgnAccount!({
+                    bankName: bank,
+                    accountNumber: acct,
+                    accountName: props.helloName || 'Saved account',
+                  });
+                  if (!r.ok) {
+                    setSaveError(r.error);
+                    return false;
+                  }
+                  setSelectAccountId(r.account.id);
+                  return true;
+                }
+              : undefined
+        }
         confirmBiometric={pinFor === 'take' ? props.confirmBiometric : undefined}
         onDone={() => {
           if (pinFor === 'save') {
-            setAccounts([...accounts, { name: props.helloName || 'Saved account', bank, number: acct }]);
-            setChosen(accounts.length);
+            if (!props.backend) {
+              setAccounts([...accounts, { name: props.helloName || 'Saved account', bank, number: acct }]);
+              setChosen(accounts.length);
+            }
             setBank('');
             setAcct('');
             setPinFor('take');
+            setSaveError(null);
             setStage('form');
           } else {
             setStage('done');
@@ -294,12 +354,18 @@ export default function TakeOut(props: TakeOutProps) {
               </Txt>
             </Row>
           ) : null}
+          {saveError ? (
+            <Txt size={16} w="700" color="red" role="alert">
+              {saveError}
+            </Txt>
+          ) : null}
         </Card>
         <View style={{ flex: 1 }} />
         <Btn
           label="Save this account"
           disabled={!newOk}
           onPress={() => {
+            setSaveError(null);
             setPinFor('save');
             setStage('pin');
           }}
@@ -400,16 +466,24 @@ export default function TakeOut(props: TakeOutProps) {
         </Card>
       ) : (
         <Card>
-          <H2>Send to a saved account</H2>
+          <H2 style={{ width: '100%', flexShrink: 0 }}>Send to a saved account</H2>
           {accounts.map((a, i) => (
-            <Row key={a.number + i} gap={8}>
-              <View style={{ flex: 1 }}>
+            <Row key={(a.id || a.number) + String(i)} gap={8} style={{ width: '100%', alignItems: 'center' }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
                 <Choice title={a.name} note={a.bank + ' · ' + a.number} on={i === chosen} onPress={() => pickAccount(i)} />
               </View>
-              <Btn size="small" kind="outline" label="Delete" a11y={'Delete ' + a.name} onPress={() => setDelIdx(i)} style={{ borderColor: c.red }} />
+              <Btn
+                size="small"
+                kind="outline"
+                fit
+                label="Delete"
+                a11y={'Delete ' + a.name}
+                onPress={() => setDelIdx(i)}
+                style={{ borderColor: c.red, flexShrink: 0 }}
+              />
             </Row>
           ))}
-          <Btn kind="outline" size="small" label="Save a new account" onPress={() => { setBank(''); setAcct(''); setStage('newacct'); }} />
+          <Btn kind="outline" size="small" label="Save a new account" onPress={() => { setBank(''); setAcct(''); setSaveError(null); setStage('newacct'); }} />
         </Card>
       )}
       <View style={{ flex: 1 }} />
@@ -433,9 +507,21 @@ export default function TakeOut(props: TakeOutProps) {
               size="mid"
               label="Delete"
               onPress={() => {
-                setAccounts(accounts.filter((_, i) => i !== delIdx));
-                setChosen(chosen === delIdx ? 0 : chosen > delIdx ? chosen - 1 : chosen);
-                setDelIdx(-1);
+                void (async () => {
+                  const target = accounts[delIdx];
+                  if (props.backend && props.deleteNgnAccount && target?.id) {
+                    const r = await props.deleteNgnAccount(target.id);
+                    if (!r.ok) {
+                      setPrepareError(r.error);
+                      setDelIdx(-1);
+                      return;
+                    }
+                  } else {
+                    setAccounts(accounts.filter((_, i) => i !== delIdx));
+                    setChosen(chosen === delIdx ? 0 : chosen > delIdx ? chosen - 1 : chosen);
+                  }
+                  setDelIdx(-1);
+                })();
               }}
             />
             <Btn kind="outline" size="mid" label="Keep it" onPress={() => setDelIdx(-1)} />

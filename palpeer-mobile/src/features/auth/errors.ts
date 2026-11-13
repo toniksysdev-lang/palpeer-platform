@@ -33,6 +33,9 @@ const MESSAGES: Record<string, string> = {
     'Signed in on another device. Try again — that session will be replaced.',
 };
 
+/** User-facing copy for incomplete phone signup (alert + resume button). */
+export const SIGNUP_INCOMPLETE_MESSAGE = MESSAGES.SIGNUP_INCOMPLETE;
+
 /** Codes that belong to a single form field rather than the whole form. */
 const FIELD_FOR_CODE: Record<string, string> = {
   EMAIL_ALREADY_REGISTERED: 'email',

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { router } from 'expo-router';
 import { useC } from '@/newui/lib/theme';
-import { Btn, Dots, H1, P, PinPad, Txt } from '@/newui/ui/kit';
+import { Btn, Dots, H1, P, PinPad, Row, Txt } from '@/newui/ui/kit';
 
 type Props = {
   title: string;
@@ -95,18 +95,29 @@ export function ConfirmPinPrompt({
           onPress={() => void onBiometric?.()}
         />
       ) : null}
-      <Btn
-        testID="pin-prompt-cancel"
-        kind={blocked ? 'primary' : 'link'}
-        size="mid"
-        label={blocked ? 'Close' : 'Cancel'}
-        disabled={!!verifying}
-        onPress={onCancel}
-      />
       {blocked ? (
-        <Btn kind="outline" size="mid" label="Reset your PIN" onPress={() => router.push('/PinReset')} />
+        <>
+          <Btn
+            testID="pin-prompt-cancel"
+            kind="primary"
+            size="mid"
+            label="Close"
+            disabled={!!verifying}
+            onPress={onCancel}
+          />
+          <Btn kind="outline" size="mid" label="Reset your PIN" onPress={() => router.push('/PinReset')} />
+        </>
       ) : (
-        <Btn kind="link" label="Forgot your PIN?" onPress={() => router.push('/PinReset')} />
+        <Row between style={{ width: '100%', alignItems: 'center' }}>
+          <Btn
+            testID="pin-prompt-cancel"
+            kind="link"
+            label="Cancel"
+            disabled={!!verifying}
+            onPress={onCancel}
+          />
+          <Btn kind="link" label="Forgot your PIN?" onPress={() => router.push('/PinReset')} />
+        </Row>
       )}
     </View>
   );

@@ -33,12 +33,16 @@ export function LockScreen() {
   const toast = useToast();
   const biometricEnabled = useAppSelector((state) => state.appLock.biometricEnabled);
   const [label, setLabel] = useState('Face or Fingerprint');
+  /** Device has Face/Fingerprint enrolled — show unlock even before settings toggle is on. */
+  const [bioAvailable, setBioAvailable] = useState(false);
   const [mode, setMode] = useState<Mode>('choose');
   const [busy, setBusy] = useState(false);
   const [pinBusy, setPinBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [pinBlocked, setPinBlocked] = useState(false);
   const autoPrompted = useRef(false);
+
+  const showBio = biometricEnabled || bioAvailable;
 
   const logInAgain = useCallback(async () => {
     setBusy(true);
@@ -53,10 +57,10 @@ export function LockScreen() {
   }, [dispatch]);
 
   const unlockWithBiometrics = useCallback(async () => {
-    if (!biometricEnabled) return;
+    if (!biometricEnabled && !bioAvailable) return;
     setBusy(true);
     setMessage(null);
-    const result = await authenticateWithBiometrics('Unlock PALPEER');
+    const result = await authenticateWithBiometrics('Unlock Palpeer');
     if (result !== 'success') {
       setBusy(false);
       if (result === 'lockout') {
@@ -69,19 +73,22 @@ export function LockScreen() {
       // cancelled: stay quiet, user can pick PIN
       return;
     }
-    const trust = await checkDeviceTrust();
-    if (trust === 'revoked') {
-      await secureStorage.setBiometricUserId(null);
-      toast.show({
-        type: 'warning',
-        title: 'Biometric unlock was turned off for this device',
-        message: 'Sign in with your password to continue.',
-      });
-      await sessionManager.signOut();
-      return;
+    // Bound biometric unlock: confirm this install is still trusted on the server.
+    if (biometricEnabled) {
+      const trust = await checkDeviceTrust();
+      if (trust === 'revoked') {
+        await secureStorage.setBiometricUserId(null);
+        toast.show({
+          type: 'warning',
+          title: 'Biometric unlock was turned off for this device',
+          message: 'Sign in with your password to continue.',
+        });
+        await sessionManager.signOut();
+        return;
+      }
     }
     finishUnlock();
-  }, [biometricEnabled, finishUnlock, label, toast]);
+  }, [bioAvailable, biometricEnabled, finishUnlock, label, toast]);
 
   const unlockWithPin = useCallback(
     async (pin: string) => {
@@ -111,9 +118,11 @@ export function LockScreen() {
     void getBiometricCapability().then((capability) => {
       if (!active) return;
       if (capability.status !== 'unsupported') {
-        setLabel(capability.label);
+        setLabel(capability.label === 'Face ID or Fingerprint' ? 'Face or Fingerprint' : capability.label);
       }
-      if (biometricEnabled && !autoPrompted.current) {
+      setBioAvailable(capability.status === 'available');
+      // Auto-prompt only when the user opted into biometric unlock.
+      if (biometricEnabled && capability.status === 'available' && !autoPrompted.current) {
         autoPrompted.current = true;
         void unlockWithBiometrics();
       }
@@ -144,7 +153,7 @@ export function LockScreen() {
             testID="lock-pin-entry"
             footer={
               <View style={styles.pinFooter}>
-                {biometricEnabled ? (
+                {showBio ? (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Unlock with ${label}`}
@@ -205,7 +214,7 @@ export function LockScreen() {
       </View>
 
       <View style={styles.footer}>
-        {biometricEnabled ? (
+        {showBio ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Unlock with ${label}`}
@@ -235,12 +244,12 @@ export function LockScreen() {
           }}
           testID="lock-use-pin"
           style={({ pressed }) => [
-            biometricEnabled ? styles.outlineBtn : styles.primaryBtn,
+            showBio ? styles.outlineBtn : styles.primaryBtn,
             busy && styles.btnDisabled,
             pressed && !busy && styles.pressed,
           ]}
         >
-          <Text style={biometricEnabled ? styles.outlineBtnLabel : styles.primaryBtnLabel}>
+          <Text style={showBio ? styles.outlineBtnLabel : styles.primaryBtnLabel}>
             Use my PIN
           </Text>
         </Pressable>

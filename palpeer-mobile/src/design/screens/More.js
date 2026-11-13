@@ -13,6 +13,7 @@ const DCLogic = DC.DCLogic;
 const SHEETS = {
   me: { title: 'My details', rows: [
     { title: 'My name', note: 'Oluwasesan Afolabi' },
+    { title: 'My username', note: '@oluwasesan' },
     { title: 'My email', note: 'Change the email on my account' },
     { title: 'My identity', note: 'Checked and approved' }
   ] },

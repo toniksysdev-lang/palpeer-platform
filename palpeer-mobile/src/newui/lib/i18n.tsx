@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import FR_DICT from '@/newui/i18n/fr.json';
 import { preferencesStorage } from '@/services/storage/preferencesStorage';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -12,9 +12,12 @@ import { logger } from '@/utils/logger';
  * looked up in the French dictionary (src/newui/i18n/fr.json). Numbers and amounts
  * inside a sentence are templated as {#} so one entry covers every amount.
  * Locale follows Redux preferences (More → Language) so English/French stay in sync.
+ *
+ * Default language is always English unless the user chose French in More / Profile.
  */
 export type Lang = 'en' | 'fr';
-const KEY = 'palpeer-lang';
+/** Legacy prototype key — never read for language; delete if present. */
+const LEGACY_KEY = 'palpeer-lang';
 const FR = FR_DICT as Record<string, string>;
 const TOK = /(?:CA\$|US\$|₦|£|GH₵|KSh ?)?\d[\d,]*(?:\.\d+)?/g;
 const norm = (t: string) => t.replace(/\s+/g, ' ').trim();
@@ -81,33 +84,37 @@ function toLang(value: AppLanguage | string | null | undefined): Lang {
   return value === 'fr' ? 'fr' : 'en';
 }
 
+async function clearLegacyLangKey() {
+  try {
+    await AsyncStorage.removeItem(LEGACY_KEY);
+  } catch {
+    // Ignore storage failures — preference key is source of truth.
+  }
+}
+
 export function LangProvider({ children }: { children: ReactNode }) {
   const dispatch = useAppDispatch();
   const preferenceLang = useAppSelector((s) => s.preferences.language);
+  const preferencesLoaded = useAppSelector((s) => s.preferences.loaded);
   const lang = toLang(preferenceLang);
+  const legacyCleared = useRef(false);
 
-  // One-time migrate from the older newui-only AsyncStorage key into preferences.
+  // Drop prototype `palpeer-lang` so it cannot force French on next boot.
   useEffect(() => {
-    let cancelled = false;
-    AsyncStorage.getItem(KEY)
-      .then((v) => {
-        if (cancelled || v !== 'fr' || preferenceLang === 'fr') return;
-        dispatch(languageChanged('fr'));
-        void preferencesStorage.setLanguage('fr');
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [dispatch, preferenceLang]);
+    if (!preferencesLoaded || legacyCleared.current) return;
+    legacyCleared.current = true;
+    void clearLegacyLangKey().catch((error: unknown) => {
+      logger.warn('Could not clear legacy language key', { error });
+    });
+  }, [preferencesLoaded]);
 
   const setLang = useCallback(
     (l: Lang) => {
       dispatch(languageChanged(l));
-      preferencesStorage.setLanguage(l).catch((error: unknown) => {
+      preferencesStorage.setLanguage(l, { userPicked: true }).catch((error: unknown) => {
         logger.warn('Could not persist language', { error });
       });
-      AsyncStorage.setItem(KEY, l).catch(() => {});
+      void clearLegacyLangKey();
     },
     [dispatch],
   );

@@ -214,7 +214,7 @@ function buildRows(tx: TransactionItemResponse): [string, string][] {
   }
 }
 
-function withWithdrawalDestination(
+export function withWithdrawalDestination(
   rows: [string, string][],
   currencyCode: string,
   destinationReference: string | null | undefined,
@@ -338,7 +338,7 @@ function fundingSteps(funding: FundingTransactionResponse): string[] {
   return steps;
 }
 
-function withFundingDetails(
+export function withFundingDetails(
   base: HistoryListItem,
   funding: FundingTransactionResponse | undefined,
 ): HistoryListItem {
@@ -418,7 +418,7 @@ export type HistoryListItem = {
   paymentRows?: HistoryPaymentRow[];
 };
 
-function mapItem(tx: TransactionItemResponse, now: number): HistoryListItem {
+export function mapHistoryItem(tx: TransactionItemResponse, now: number): HistoryListItem {
   const meta = typeMeta(tx.type);
   const status = designStatus(tx.status);
   const described = describeTransaction(tx);
@@ -571,14 +571,14 @@ export function useLiveHistory() {
 
   const now = Date.now();
   const rawItems = useMemo(() => uniqueItems(history.data?.pages), [history.data?.pages]);
-  const liveItems = useMemo(() => rawItems.map((tx) => mapItem(tx, now)), [now, rawItems]);
+  const liveItems = useMemo(() => rawItems.map((tx) => mapHistoryItem(tx, now)), [now, rawItems]);
 
   const groups = useMemo(() => {
     const byDay = groupByDay(rawItems, now);
     return byDay.map((g) => ({
       key: g.key,
       label: g.label,
-      items: g.items.map((tx) => mapItem(tx, now)),
+      items: g.items.map((tx) => mapHistoryItem(tx, now)),
     }));
   }, [now, rawItems]);
 
@@ -631,7 +631,7 @@ export function useLiveHistory() {
 
   const detail = useMemo(() => {
     if (!selected) return null;
-    const base = detailQ.data ? mapItem(detailQ.data, now) : listItemForSelected;
+    const base = detailQ.data ? mapHistoryItem(detailQ.data, now) : listItemForSelected;
     if (!base) return null;
     if (base.type === 'FUNDING') {
       return withFundingDetails(base, fundingQ.data);
@@ -830,6 +830,7 @@ export function useLiveHistory() {
     onSavePdf,
     savingFormat,
     canSave: !!detail,
+    unreadCount,
     msgBadge,
     onRefresh,
   };

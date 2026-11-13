@@ -5,10 +5,10 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { appLocked } from '@/store/slices/appLockSlice';
 
 /**
- * CLIENT rule: re-lock after the app has spent at least this long in the background. Short trips
- * (the biometric prompt itself, a quick app switch) don't re-lock.
+ * CLIENT rule: re-lock after any background while unlocked. Biometric prompts run while
+ * already locked, so they do not set a background timestamp (see listener below).
  */
-export const LOCK_AFTER_BACKGROUND_MS = 60_000;
+export const LOCK_AFTER_BACKGROUND_MS = 0;
 
 /** Design Timeout: idle on the foreground for this long → “You were logged out”. */
 export const IDLE_LOGOUT_MS = 180_000;
@@ -37,16 +37,15 @@ export function useAppLockLifecycle() {
     let backgroundedAt: number | null = null;
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'background') {
-        backgroundedAt = Date.now();
+        // Only track while unlocked — LockScreen biometric prompts background the
+        // activity; re-locking afterward would bounce the user back to PIN/biometrics.
+        // Skip `inactive` (Control Center / notification shade) so those do not lock.
+        if (!locked) backgroundedAt = Date.now();
       } else if (state === 'active') {
         markUserActive();
         if (backgroundedAt !== null) {
           const away = Date.now() - backgroundedAt;
-          // Background trips re-lock when biometrics are on (keep short switches unlockable).
-          // Long trips also count as inactivity for everyone.
-          if (away >= LOCK_AFTER_BACKGROUND_MS && biometricEnabled) {
-            dispatch(appLocked());
-          } else if (away >= IDLE_LOGOUT_MS) {
+          if (away >= LOCK_AFTER_BACKGROUND_MS) {
             dispatch(appLocked());
           }
           backgroundedAt = null;

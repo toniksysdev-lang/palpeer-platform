@@ -1,7 +1,6 @@
 import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Linking, Pressable, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Linking, Pressable, View } from 'react-native';
 import { DesignAddressField } from '@/features/profile/DesignAddressField';
 import { DateOfBirthField } from '@/features/profile/DateOfBirthField';
 import {
@@ -14,8 +13,8 @@ import { useT, useTv } from '@/newui/lib/i18n';
 import { useListen } from '@/newui/lib/speech';
 import { useStore } from '@/newui/lib/store';
 import { useC } from '@/newui/lib/theme';
-import { BottomNav } from '@/newui/ui/BottomNav';
 import { Icon, IconName } from '@/newui/ui/Icon';
+import { TabRootShell } from '@/newui/ui/TabRootShell';
 import { Btn, Card, Choice, Circle, Field, Flag, H1, H2, Loading, P, Pill, Row, Screen, Sheet, TopBar, Txt } from '@/newui/ui/kit';
 import { ageOf, COUNTRIES, countryOf, ID_TYPES, INCOMES, monthRanges, PROVINCES, StartState } from './data';
 
@@ -99,69 +98,71 @@ export function FirstHome({ s, up, go, say }: StartCtx) {
     { label: 'Withdraw', note: 'To my account', icon: 'bank', bg: c.tilePurple, dot: '#5E3AB8' },
   ];
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.bg }}>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 12, gap: 14 }}>
-        <Row between style={{ minHeight: 52 }}>
-          <Txt size={24} w="800" role="header" noTr>
-            {tv('Hello, {0}', s.uname)}
+    <TabRootShell
+      active="home"
+      dockVisible={!s.gateOpen}
+      overlays={
+        <Sheet open={s.gateOpen} onClose={() => up({ gateOpen: false })}>
+          <H2>Complete your profile first</H2>
+          <P>You can move money and add wallets after Palpeer checks your details and ID.</P>
+          <Btn label="Complete your profile" onPress={() => go('details', { gateOpen: false })} />
+          <Btn kind="outline" size="mid" label="Not now" onPress={() => up({ gateOpen: false })} />
+        </Sheet>
+      }
+    >
+      <Row between style={{ minHeight: 52 }}>
+        <Txt size={24} w="800" role="header" noTr>
+          {tv('Hello, {0}', s.uname)}
+        </Txt>
+        <Pill icon="listen" dark label={listenLabel} onPress={() => listen(say)} a11y="Listen to this screen" />
+      </Row>
+      <View accessibilityLabel="My wallet" style={{ backgroundColor: '#0B6E4F', borderRadius: 22, padding: 16, gap: 8 }}>
+        <Row between>
+          <Txt size={20} w="700" color="#FFFFFF">
+            My wallet
           </Txt>
-          <Pill icon="listen" dark label={listenLabel} onPress={() => listen(say)} a11y="Listen to this screen" />
+          <Pressable accessibilityRole="button" accessibilityLabel="Add a wallet" onPress={gate} style={{ width: 52, height: 52, borderRadius: 14, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="plus" size={26} color="#0B6E4F" />
+          </Pressable>
         </Row>
-        <View accessibilityLabel="My wallet" style={{ backgroundColor: '#0B6E4F', borderRadius: 22, padding: 16, gap: 8 }}>
-          <Row between>
-            <Txt size={20} w="700" color="#FFFFFF">
-              My wallet
+        <Row gap={14}>
+          <Flag cc={pc.cc} w={66} />
+          <View>
+            <Txt size={17} color="#FFFFFF">
+              {pc.wallet}
             </Txt>
-            <Pressable accessibilityRole="button" accessibilityLabel="Add a wallet" onPress={gate} style={{ width: 52, height: 52, borderRadius: 14, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name="plus" size={26} color="#0B6E4F" />
-            </Pressable>
-          </Row>
-          <Row gap={14}>
-            <Flag cc={pc.cc} w={66} />
-            <View>
-              <Txt size={17} color="#FFFFFF">
-                {pc.wallet}
+            <Txt size={34} w="800" color="#FFFFFF" noTr>
+              {pc.zero}
+            </Txt>
+          </View>
+        </Row>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+        {tiles.map((t) => (
+          <Pressable key={t.label} accessibilityRole="button" onPress={gate} style={{ flexBasis: '47%', flexGrow: 1, height: 140, padding: 14, borderRadius: 22, backgroundColor: t.bg, opacity: 0.85 }}>
+            <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: t.dot, alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name={t.icon} size={30} color="#FFFFFF" />
+            </View>
+            <View style={{ marginTop: 'auto' }}>
+              <Txt size={24} w="800">
+                {t.label}
               </Txt>
-              <Txt size={34} w="800" color="#FFFFFF" noTr>
-                {pc.zero}
+              <Txt size={16} color="text2">
+                {t.note}
               </Txt>
             </View>
-          </Row>
-        </View>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-          {tiles.map((t) => (
-            <Pressable key={t.label} accessibilityRole="button" onPress={gate} style={{ flexBasis: '47%', flexGrow: 1, height: 140, padding: 14, borderRadius: 22, backgroundColor: t.bg, opacity: 0.85 }}>
-              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: t.dot, alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name={t.icon} size={30} color="#FFFFFF" />
-              </View>
-              <View style={{ marginTop: 'auto' }}>
-                <Txt size={24} w="800">
-                  {t.label}
-                </Txt>
-                <Txt size={16} color="text2">
-                  {t.note}
-                </Txt>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-        <Pressable accessibilityRole="button" onPress={() => go('details', { gateOpen: false })} style={{ borderRadius: 20, backgroundColor: c.warnBg, borderWidth: 3, borderColor: c.orange, padding: 14, gap: 2 }}>
-          <Txt size={20} w="800">
-            Complete your profile
-          </Txt>
-          <Txt size={16} color="text2">
-            Add your details and ID to start using your money.
-          </Txt>
-        </Pressable>
-      </ScrollView>
-      <BottomNav active="home" />
-      <Sheet open={s.gateOpen} onClose={() => up({ gateOpen: false })}>
-        <H2>Complete your profile first</H2>
-        <P>You can move money and add wallets after Palpeer checks your details and ID.</P>
-        <Btn label="Complete your profile" onPress={() => go('details', { gateOpen: false })} />
-        <Btn kind="outline" size="mid" label="Not now" onPress={() => up({ gateOpen: false })} />
-      </Sheet>
-    </SafeAreaView>
+          </Pressable>
+        ))}
+      </View>
+      <Pressable accessibilityRole="button" onPress={() => go('details', { gateOpen: false })} style={{ borderRadius: 20, backgroundColor: c.warnBg, borderWidth: 3, borderColor: c.orange, padding: 14, gap: 2 }}>
+        <Txt size={20} w="800">
+          Complete your profile
+        </Txt>
+        <Txt size={16} color="text2">
+          Add your details and ID to start using your money.
+        </Txt>
+      </Pressable>
+    </TabRootShell>
   );
 }
 
@@ -427,7 +428,7 @@ export function Kyc({ s, up, go, say, backend, busy, onUploadDocument, onUploadS
     </Txt>
   );
   return (
-    <Screen scroll>
+    <Screen scroll scrollPadReserve={false}>
       <StepHead n={4} onBack={() => go('idChoose')} say={say} />
       <H1>Show your ID</H1>
       <Choice
@@ -453,12 +454,18 @@ export function Kyc({ s, up, go, say, backend, busy, onUploadDocument, onUploadS
         }}
         right={word(s.selfieDone)}
       />
-      <Card>
-        <Row between>
-          <Txt size={17} w="600" style={{ flex: 1 }} noTr>
+      <Card gap={8}>
+        <Row between style={{ alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <Txt size={17} w="600" style={{ flex: 1, minWidth: 0, flexShrink: 1 }} noTr>
             {tv('Name on your ID: {0}', s.fname + ' ' + s.lname)}
           </Txt>
-          <Btn kind="outline" size="small" label={s.nameEdit ? 'Done' : 'Change name'} onPress={() => up({ nameEdit: !s.nameEdit })} />
+          <Btn
+            kind="outline"
+            size="small"
+            fit
+            label={s.nameEdit ? 'Done' : 'Change name'}
+            onPress={() => up({ nameEdit: !s.nameEdit })}
+          />
         </Row>
         {s.nameEdit ? (
           <>
@@ -469,22 +476,47 @@ export function Kyc({ s, up, go, say, backend, busy, onUploadDocument, onUploadS
             <Field label="Last name" value={s.lname} onChangeText={(v) => up({ lname: v })} />
           </>
         ) : null}
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: s.agree }}
+          onPress={() => up({ agree: !s.agree })}
+          style={{
+            flexDirection: 'row',
+            gap: 12,
+            alignItems: 'center',
+            borderRadius: 14,
+            backgroundColor: c.field,
+            padding: 12,
+            borderWidth: 3,
+            borderColor: s.agree ? c.brandText : 'transparent',
+          }}
+        >
+          <View
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              borderWidth: 3,
+              borderColor: c.text,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: s.agree ? c.brand : 'transparent',
+            }}
+          >
+            {s.agree ? <Icon name="check" size={22} color="#FFFFFF" /> : null}
+          </View>
+          <Txt size={16} w="700" style={{ flex: 1 }}>
+            {'This account is for me.\nPalpeer and ComplyCube will verify your details, ID and face.'}
+          </Txt>
+        </Pressable>
       </Card>
-      <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: s.agree }} onPress={() => up({ agree: !s.agree })} style={{ flexDirection: 'row', gap: 12, alignItems: 'center', borderRadius: 18, backgroundColor: c.card, padding: 14, borderWidth: 3, borderColor: s.agree ? c.brandText : 'transparent' }}>
-        <View style={{ width: 32, height: 32, borderRadius: 8, borderWidth: 3, borderColor: c.text, alignItems: 'center', justifyContent: 'center', backgroundColor: s.agree ? c.brand : 'transparent' }}>
-          {s.agree ? <Icon name="check" size={22} color="#FFFFFF" /> : null}
-        </View>
-        <Txt size={16} w="700" style={{ flex: 1 }}>
-          This account is for you. Palpeer and ComplyCube can check your details, ID and face.
-        </Txt>
-      </Pressable>
       {authMsg ? (
         <Txt size={16} w="700" color="red" role="alert">
           {authMsg}
         </Txt>
       ) : null}
       <Btn
-        label="Send to Palpeer"
+        label="Verify my ID"
         busy={!!busy || !!kycBusy}
         disabled={!ok}
         onPress={async () => {

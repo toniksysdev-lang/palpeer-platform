@@ -8,6 +8,7 @@ import { AppText } from './AppText';
 import type { NumberPadBottomLeft } from './NumberPad';
 import { useNumberPadField, useOptionalNumberPad } from './NumberPadContext';
 import { numberFieldTextInputProps, suppressSystemKeyboard } from './numberFieldInput';
+import { readDigitsFromClipboard } from './pasteDigits';
 
 export type NumberPadMode = 'digits' | 'phone' | 'decimal';
 
@@ -31,9 +32,9 @@ export type InputProps = Omit<TextInputProps, 'style' | 'placeholderTextColor'> 
 };
 
 function bottomLeftFor(mode: NumberPadMode): NumberPadBottomLeft {
-  if (mode === 'phone') return '*';
   if (mode === 'decimal') return '.';
-  return '';
+  // digits + phone: `*` is the Paste action when onAccessoryPress is set.
+  return '*';
 }
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
@@ -72,6 +73,12 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
     [onChangeText],
   );
 
+  const pasteFromClipboard = useCallback(async () => {
+    const digits = await readDigitsFromClipboard(numberPadMaxLength);
+    if (!digits) return;
+    onChangeText?.(digits);
+  }, [numberPadMaxLength, onChangeText]);
+
   const pad = useNumberPadField({
     value: stringValue,
     onChange: handlePadChange,
@@ -79,6 +86,8 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
     bottomLeft: numberPad ? bottomLeftFor(numberPad) : '*',
     variant: 'phone',
     disabled: !editable || !numberPad,
+    onAccessoryPress:
+      editable && numberPad && numberPad !== 'decimal' ? () => void pasteFromClipboard() : undefined,
   });
 
   const usePad = !!numberPad && pad.padAvailable;
@@ -165,21 +174,13 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
             ]}
             maxFontSizeMultiplier={1}
             {...numberFieldTextInputProps}
+            contextMenuHidden={false}
           />
           {right}
         </Pressable>
       ) : (
-        <Pressable
-          onPress={() => {
-            if (!editable) return;
-            sharedPad?.close();
-            localRef.current?.focus();
-            reveal();
-          }}
-          disabled={!editable}
-          accessibilityRole="none"
-          style={fieldStyle}
-        >
+        // View (not Pressable) so Android long-press copy/paste is not stolen.
+        <View style={fieldStyle}>
           {left}
           <TextInput
             ref={setRefs}
@@ -192,6 +193,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
             accessibilityHint={error ?? hint}
             placeholderTextColor={theme.colors.textMuted}
             selectionColor={theme.colors.primary}
+            contextMenuHidden={false}
             onFocus={(event) => {
               // Password / email fields must dismiss the OTP/amount pad or it covers
               // lower fields (e.g. Confirm new password) and blocks typing.
@@ -204,6 +206,12 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
               setFocused(false);
               onBlur?.(event);
             }}
+            onPressIn={() => {
+              if (!editable) return;
+              sharedPad?.close();
+              localRef.current?.focus();
+              reveal();
+            }}
             style={[
               styles.input,
               theme.typography.body,
@@ -213,7 +221,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
             {...rest}
           />
           {right}
-        </Pressable>
+        </View>
       )}
       {error ? (
         <AppText variant="caption" tone="danger" accessibilityLiveRegion="polite">

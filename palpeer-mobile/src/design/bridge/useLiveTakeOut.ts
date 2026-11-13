@@ -16,6 +16,10 @@ import {
   walletBalanceTags,
 } from '@/services/api/walletApi';
 import { interacAddressesStorage } from '@/services/storage/interacAddressesStorage';
+import {
+  ngnBankAccountsStorage,
+  type NgnBankAccount,
+} from '@/services/storage/ngnBankAccountsStorage';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { toMoney } from '@/utils/money';
 
@@ -40,6 +44,7 @@ export function useLiveTakeOut() {
   const [interacEmails, setInteracEmails] = useState<string[]>(
     sessionEmail ? [sessionEmail] : [],
   );
+  const [ngnAccounts, setNgnAccounts] = useState<NgnBankAccount[]>([]);
   const pendingRef = useRef<{
     walletId: string;
     amount: string;
@@ -55,6 +60,15 @@ export function useLiveTakeOut() {
     const last = profile.profile?.lastName?.trim() ?? '';
     return `${first} ${last}`.trim() || sessionEmail || '';
   }, [profile.profile?.firstName, profile.profile?.lastName, sessionEmail]);
+
+  const reloadNgnAccounts = useCallback(async () => {
+    if (!userId) {
+      setNgnAccounts([]);
+      return;
+    }
+    const list = await ngnBankAccountsStorage.list(userId);
+    setNgnAccounts(list);
+  }, [userId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +88,10 @@ export function useLiveTakeOut() {
       cancelled = true;
     };
   }, [authenticated, sessionEmail, userId]);
+
+  useEffect(() => {
+    if (authenticated && userId) void reloadNgnAccounts();
+  }, [authenticated, userId, reloadNgnAccounts]);
 
   const bankNames = useMemo(
     () => (banksQ.data ?? []).map((b) => b.name),
@@ -201,15 +219,61 @@ export function useLiveTakeOut() {
     return runWithdrawal();
   }, [requestPin, runWithdrawal]);
 
+  const saveNgnAccount = useCallback(
+    async (input: {
+      bankName: string;
+      accountNumber: string;
+      accountName?: string;
+    }): Promise<{ ok: true; account: NgnBankAccount } | { ok: false; error: string }> => {
+      const bankCode = banksByName.get(input.bankName);
+      if (!bankCode) return { ok: false, error: 'Choose a bank.' };
+      const accountNumber = input.accountNumber.replace(/\D/g, '');
+      if (!/^\d{10}$/.test(accountNumber)) {
+        return { ok: false, error: 'Account number must be 10 digits.' };
+      }
+      if (!userId) return { ok: false, error: 'Sign in again to save an account.' };
+      try {
+        const account = await ngnBankAccountsStorage.save(userId, {
+          bankCode,
+          bankName: input.bankName,
+          accountNumber,
+          accountName: (input.accountName || helloName || 'Saved account').trim() || 'Saved account',
+        });
+        await reloadNgnAccounts();
+        return { ok: true, account };
+      } catch (raw) {
+        return { ok: false, error: toAppError(raw).message ?? 'Could not save bank account.' };
+      }
+    },
+    [banksByName, helloName, reloadNgnAccounts, userId],
+  );
+
+  const deleteNgnAccount = useCallback(
+    async (id: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+      if (!userId) return { ok: false, error: 'Sign in again to delete an account.' };
+      try {
+        await ngnBankAccountsStorage.remove(userId, id);
+        await reloadNgnAccounts();
+        return { ok: true };
+      } catch (raw) {
+        return { ok: false, error: toAppError(raw).message ?? 'Could not delete bank account.' };
+      }
+    },
+    [reloadNgnAccounts, userId],
+  );
+
   return {
     backend: true as const,
     liveWallets,
     bankNames,
     sessionEmail: sessionEmail ?? '',
     interacEmails,
+    ngnAccounts,
     helloName,
     prepareWithdrawal,
     confirmPin,
     confirmBiometric,
+    saveNgnAccount,
+    deleteNgnAccount,
   };
 }

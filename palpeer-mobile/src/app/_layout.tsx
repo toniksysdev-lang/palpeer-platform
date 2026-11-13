@@ -30,6 +30,8 @@ import {
 } from '@/features/security/lock/useAppLockLifecycle';
 import { useAppSwitcherPrivacy } from '@/features/security/lock/useAppSwitcherPrivacy';
 import { useApplyPendingReferral } from '@/features/promotions/useApplyPendingReferral';
+import { NotoFontsLoadedContext } from '@/newui/lib/notoFonts';
+import { useAndroidHardwareBack } from '@/hooks/useAndroidHardwareBack';
 import { useAppBootstrap } from '@/hooks/useAppBootstrap';
 import { useSignedOutWelcomeLanding } from '@/hooks/useSignedOutWelcomeLanding';
 import { AppProviders } from '@/providers/AppProviders';
@@ -93,15 +95,19 @@ function RootNavigator() {
   useSignedOutWelcomeLanding(ready, isAuthenticated);
   useApplyPendingReferral();
 
-  // Don't hold BrandSplash on slow font CDN — landing can paint with fallbacks, then swap.
+  // Web: short timeout so CDN blips don't block landing. Native: wait longer so Noto
+  // loads — otherwise Android falls back to Roboto and the APK diverges from :3333.
   useEffect(() => {
-    const timer = setTimeout(() => setFontsTimedOut(true), 700);
+    const ms = Platform.OS === 'web' ? 700 : 8000;
+    const timer = setTimeout(() => setFontsTimedOut(true), ms);
     return () => clearTimeout(timer);
   }, []);
 
   const fontsReady = fontsLoaded || fontsTimedOut;
-  // Signed-out landing only needs session bootstrap; fonts can finish a beat later.
-  const bootReady = ready && (fontsReady || !isAuthenticated);
+  // Never paint newui before Noto loads (or times out). Unknown fontFamily on Android = missing text/UI.
+  const bootReady = ready && fontsReady;
+
+  useAndroidHardwareBack(bootReady);
 
   useEffect(() => {
     if (bootReady) {
@@ -119,26 +125,20 @@ function RootNavigator() {
     return () => clearTimeout(timer);
   }, []);
 
-  if (!bootReady) {
-    // Preview iframe: parent overlay is the splash — avoid a second in-app splash.
-    if (isWebPreviewFrame()) {
-      return <View style={{ flex: 1, backgroundColor: '#081410' }} testID="boot-placeholder" />;
-    }
-    // Keep BrandSplash until session + design fonts are ready (avoids blank post-splash on APK).
-    return (
+  const body = !bootReady ? (
+    isWebPreviewFrame() ? (
+      <View style={{ flex: 1, backgroundColor: '#081410' }} testID="boot-placeholder" />
+    ) : (
       <View
         style={{ flex: 1, backgroundColor: '#081410' }}
         onLayout={() => {
-          // Native splash can hide once BrandSplash has painted; stay on BrandSplash until bootReady.
           hideNativeSplash();
         }}
       >
         <BrandSplash />
       </View>
-    );
-  }
-
-  return (
+    )
+  ) : (
     <View
       style={{ flex: 1 }}
       onStartShouldSetResponderCapture={() => {
@@ -157,12 +157,9 @@ function RootNavigator() {
           contentStyle: { backgroundColor: theme.colors.background },
         }}
       >
-        {/* Always first: design landing at `/`. */}
         <Stack.Screen name="index" />
-        {/* Design UI artboards (Start*, Main, Change, Send, …) — change map. */}
         <Stack.Screen name="(design)" />
         <Stack.Protected guard={isAuthenticated}>
-          {/* Legacy API-backed stacks kept for deep links / progressive wiring. */}
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="profile" />
           <Stack.Screen name="kyc" />
@@ -196,6 +193,8 @@ function RootNavigator() {
       {isAuthenticated && locked ? <LockScreen /> : null}
     </View>
   );
+
+  return <NotoFontsLoadedContext.Provider value={fontsLoaded}>{body}</NotoFontsLoadedContext.Provider>;
 }
 
 export default function RootLayout() {

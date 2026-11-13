@@ -64,6 +64,17 @@ function DesignButton({
   const inactive = Boolean(disabled || loading);
   const primary = variant === 'primary';
   const ghost = variant === 'ghost';
+  // Android Fabric + NativeWind drops backgroundColor from Pressable function styles
+  // (same bug as kit Btn). Keep paint on a plain object style.
+  const [pressed, setPressed] = useState(false);
+  const bg = primary
+    ? inactive
+      ? D.greenDisabled
+      : D.green
+    : ghost
+      ? 'transparent'
+      : D.white;
+  const opacity = pressed && !inactive ? (ghost ? 0.7 : 0.92) : inactive && ghost ? 0.5 : 1;
   return (
     <Pressable
       accessibilityRole="button"
@@ -71,23 +82,10 @@ function DesignButton({
       accessibilityState={{ disabled: inactive, busy: loading }}
       disabled={inactive}
       onPress={onPress}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
       testID={testID}
-      style={({ pressed }) => [
-        styles.cta,
-        primary && {
-          backgroundColor: inactive ? D.greenDisabled : D.green,
-          opacity: pressed && !inactive ? 0.92 : 1,
-        },
-        !primary &&
-          !ghost && {
-            backgroundColor: D.white,
-            opacity: pressed && !inactive ? 0.92 : 1,
-          },
-        ghost && {
-          backgroundColor: 'transparent',
-          opacity: pressed && !inactive ? 0.7 : inactive ? 0.5 : 1,
-        },
-      ]}
+      style={[styles.cta, { backgroundColor: bg, opacity }]}
     >
       {loading ? (
         <ActivityIndicator color={primary ? D.white : D.green} />

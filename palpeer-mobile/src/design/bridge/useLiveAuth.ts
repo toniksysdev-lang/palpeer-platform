@@ -12,9 +12,14 @@ import { apiRequest } from '@/services/api/client';
 import { toAppError } from '@/services/api/errors';
 import { accountCommands } from '@/services/auth/accountCommands';
 import { sessionManager } from '@/services/auth/session';
-import type { OtpResendResponse } from '@/types/api/auth';
+import type { OtpResendResponse, SignupStatusResponse } from '@/types/api/auth';
 
 type OkErr = { ok: true } | { ok: false; error: string };
+
+/** Where design Start should jump after resuming incomplete phone signup. */
+export type ResumeSignupResult =
+  | { ok: true; next: 'phoneCode' | 'account' | 'emailCode' | 'login'; email?: string; created?: boolean }
+  | { ok: false; error: string };
 
 /**
  * Live auth for the design Start screen: login, signup (phone → account → email OTP),
@@ -29,15 +34,23 @@ export function useLiveAuth() {
   const [requestPasswordReset] = useRequestPasswordResetMutation();
 
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authErrorCode, setAuthErrorCode] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginBusy, setLoginBusy] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
 
   const fail = (error: unknown): OkErr => {
-    const msg = authErrorMessage(toAppError(error));
+    const appErr = toAppError(error);
+    const msg = authErrorMessage(appErr);
     setAuthError(msg);
+    setAuthErrorCode(appErr.code ?? null);
     return { ok: false, error: msg };
   };
+
+  const clearAuthError = useCallback(() => {
+    setAuthError(null);
+    setAuthErrorCode(null);
+  }, []);
 
   const onLogin = useCallback(
     async (who: string, pass: string) => {
@@ -83,7 +96,7 @@ export function useLiveAuth() {
    */
   const onRequestPhoneOtp = useCallback(
     async (nationalPhone: string, dialCode = '+1'): Promise<OkErr> => {
-      setAuthError(null);
+      clearAuthError();
       setAuthBusy(true);
       try {
         const phone = phoneE164(nationalPhone, dialCode);
@@ -99,12 +112,82 @@ export function useLiveAuth() {
         setAuthBusy(false);
       }
     },
-    [phoneE164],
+    [clearAuthError, phoneE164],
+  );
+
+  /**
+   * After SIGNUP_INCOMPLETE: POST /auth/signup/status and map nextStep onto Start stages
+   * (account / email OTP / login), matching EnterPhoneScreen resume.
+   */
+  const onResumeIncompleteSignup = useCallback(
+    async (nationalPhone: string, dialCode = '+1'): Promise<ResumeSignupResult> => {
+      clearAuthError();
+      setAuthBusy(true);
+      try {
+        const phone = phoneE164(nationalPhone, dialCode);
+        const statusResult = await apiRequest<SignupStatusResponse>('/auth/signup/status', {
+          method: 'POST',
+          body: { phone },
+        });
+        if (!statusResult.ok) return fail(statusResult.error);
+
+        const status = statusResult.data;
+        switch (status.nextStep) {
+          case 'PHONE_OTP_REQUIRED': {
+            const otp = await apiRequest<OtpResendResponse>('/auth/otp/phone/request', {
+              method: 'POST',
+              body: { phone },
+            });
+            if (!otp.ok) return fail(otp.error);
+            return { ok: true, next: 'phoneCode' };
+          }
+          case 'REGISTER_REQUIRED':
+            return { ok: true, next: 'account' };
+          case 'EMAIL_OTP_REQUIRED': {
+            if (!status.email) {
+              const msg = 'We found your account, but email verification could not be resumed.';
+              setAuthError(msg);
+              setAuthErrorCode('SIGNUP_INCOMPLETE');
+              return { ok: false, error: msg };
+            }
+            try {
+              await resendSignupEmail({ phone }).unwrap();
+            } catch {
+              // Still open email OTP — user can tap Send code again.
+            }
+            return { ok: true, next: 'emailCode', email: status.email };
+          }
+          case 'LOGIN_READY':
+            return {
+              ok: true,
+              next: 'login',
+              email: status.email ?? phone,
+              created: !status.hasLoggedIn,
+            };
+          case 'BLOCKED': {
+            const msg = 'This account has been disabled. Please contact support.';
+            setAuthError(msg);
+            setAuthErrorCode('USER_DISABLED');
+            return { ok: false, error: msg };
+          }
+          default: {
+            const msg = 'Could not continue with this phone number. Try again.';
+            setAuthError(msg);
+            return { ok: false, error: msg };
+          }
+        }
+      } catch (error) {
+        return fail(error);
+      } finally {
+        setAuthBusy(false);
+      }
+    },
+    [clearAuthError, phoneE164, resendSignupEmail],
   );
 
   const onVerifyPhoneOtp = useCallback(
     async (nationalPhone: string, code: string, dialCode = '+1'): Promise<OkErr> => {
-      setAuthError(null);
+      clearAuthError();
       setAuthBusy(true);
       try {
         const phone = phoneE164(nationalPhone, dialCode);
@@ -120,7 +203,7 @@ export function useLiveAuth() {
         setAuthBusy(false);
       }
     },
-    [phoneE164],
+    [clearAuthError, phoneE164],
   );
 
   const onRegister = useCallback(
@@ -131,7 +214,7 @@ export function useLiveAuth() {
       nationalPhone: string;
       dialCode?: string;
     }): Promise<OkErr> => {
-      setAuthError(null);
+      clearAuthError();
       setAuthBusy(true);
       try {
         const phone = phoneE164(input.nationalPhone, input.dialCode ?? '+1');
@@ -148,12 +231,12 @@ export function useLiveAuth() {
         setAuthBusy(false);
       }
     },
-    [phoneE164, registerCmd],
+    [clearAuthError, phoneE164, registerCmd],
   );
 
   const onVerifyEmailOtp = useCallback(
     async (email: string, code: string): Promise<OkErr> => {
-      setAuthError(null);
+      clearAuthError();
       setAuthBusy(true);
       try {
         await verifyOtpCmd({
@@ -169,12 +252,12 @@ export function useLiveAuth() {
         setAuthBusy(false);
       }
     },
-    [verifyOtpCmd],
+    [clearAuthError, verifyOtpCmd],
   );
 
   const onResendEmailOtp = useCallback(
     async (phoneNational: string, dialCode = '+1'): Promise<OkErr> => {
-      setAuthError(null);
+      clearAuthError();
       setAuthBusy(true);
       try {
         await resendSignupEmail({ phone: phoneE164(phoneNational, dialCode) }).unwrap();
@@ -185,12 +268,12 @@ export function useLiveAuth() {
         setAuthBusy(false);
       }
     },
-    [phoneE164, resendSignupEmail],
+    [clearAuthError, phoneE164, resendSignupEmail],
   );
 
   const onRequestPasswordReset = useCallback(
     async (email: string): Promise<OkErr> => {
-      setAuthError(null);
+      clearAuthError();
       setAuthBusy(true);
       try {
         await requestPasswordReset({ email: email.trim().toLowerCase() }).unwrap();
@@ -201,12 +284,12 @@ export function useLiveAuth() {
         setAuthBusy(false);
       }
     },
-    [requestPasswordReset],
+    [clearAuthError, requestPasswordReset],
   );
 
   const onConfirmPasswordReset = useCallback(
     async (email: string, code: string, newPassword: string): Promise<OkErr> => {
-      setAuthError(null);
+      clearAuthError();
       setAuthBusy(true);
       try {
         await confirmResetCmd({
@@ -221,7 +304,7 @@ export function useLiveAuth() {
         setAuthBusy(false);
       }
     },
-    [confirmResetCmd],
+    [clearAuthError, confirmResetCmd],
   );
 
   const goAfterLogin = useCallback((where: 'home' | 'buy' | 'help' = 'home') => {
@@ -238,9 +321,11 @@ export function useLiveAuth() {
     loginBusy,
     clearLoginError: () => setLoginError(null),
     authError,
+    authErrorCode,
     authBusy,
-    clearAuthError: () => setAuthError(null),
+    clearAuthError,
     onRequestPhoneOtp,
+    onResumeIncompleteSignup,
     onVerifyPhoneOtp,
     onRegister,
     onVerifyEmailOtp,

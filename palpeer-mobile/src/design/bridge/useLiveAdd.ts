@@ -158,12 +158,23 @@ export function useLiveAdd() {
     [dispatch],
   );
 
-  /** Poll funding until it leaves an in-progress status (or fails). */
+  /**
+   * Poll funding until it leaves an in-progress status (or fails).
+   * Each GET triggers backend Kuda TSQ reconcile for PENDING NGN collections.
+   * Pass `signal` to stop when leaving the screen; raise `maxAttempts` for long bank waits.
+   */
   const waitForFunding = useCallback(
-    async (fundingId: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+    async (
+      fundingId: string,
+      opts?: { signal?: AbortSignal; maxAttempts?: number },
+    ): Promise<{ ok: true } | { ok: false; error: string; cancelled?: boolean }> => {
       const id = fundingId || fundingRef.current?.id;
       if (!id) return { ok: false, error: 'No funding to watch.' };
-      for (let attempt = 0; attempt < 40; attempt += 1) {
+      const maxAttempts = opts?.maxAttempts ?? 40;
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        if (opts?.signal?.aborted) {
+          return { ok: false, error: 'Cancelled', cancelled: true };
+        }
         try {
           const data = await fetchFunding(id, true).unwrap();
           if (data.status === 'SUCCESS') {
@@ -183,6 +194,9 @@ export function useLiveAdd() {
             return { ok: false, error: `Funding ended with status ${data.status}.` };
           }
         } catch (raw) {
+          if (opts?.signal?.aborted) {
+            return { ok: false, error: 'Cancelled', cancelled: true };
+          }
           return { ok: false, error: toAppError(raw).message ?? 'Could not check funding.' };
         }
         await sleep(FUNDING_POLL_MS);

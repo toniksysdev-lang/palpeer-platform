@@ -1,4 +1,5 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Image, Platform } from 'react-native';
 
 import type { UploadFile } from '@/services/api/upload';
@@ -11,7 +12,10 @@ export type ImageKind = 'document' | 'selfie';
 
 /** Keeps uploads well under the server's 10 MB multipart limit on any phone camera. */
 export const MAX_LONG_SIDE_PX = 2000;
-const JPEG_QUALITY = 0.85;
+/** ComplyCube rejects files outside 34KB–4MB ("Image file size should be between 34KB and 4MB"). */
+export const MIN_UPLOAD_BYTES = 34 * 1024;
+export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+const JPEG_QUALITY = 0.92;
 
 /**
  * Target short-side for uploads (CLIENT rule, not a backend rule).
@@ -146,6 +150,71 @@ export async function resolveImageDimensions(
   throw new Error('Could not measure image dimensions');
 }
 
+async function measureUriBytes(uri: string): Promise<number | null> {
+  try {
+    if (typeof FileSystem.getInfoAsync === 'function') {
+      const info = await FileSystem.getInfoAsync(uri, { size: true });
+      if (info.exists && typeof info.size === 'number') return info.size;
+    }
+  } catch {
+    // SecureStore / missing native module in tests.
+  }
+  if (Platform.OS === 'web') {
+    try {
+      const res = await fetch(uri);
+      const blob = await res.blob();
+      return blob.size;
+    } catch {
+      // blob:/cross-origin
+    }
+  }
+  return null;
+}
+
+type SavedJpeg = { uri: string; width: number; height: number };
+
+async function encodeWithinComplyCubeLimits(
+  rendered: { width: number; height: number; saveAsync: (o: { format: string; compress: number }) => Promise<SavedJpeg> },
+  startUri: string,
+): Promise<SavedJpeg> {
+  let quality = JPEG_QUALITY;
+  let saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: quality });
+  let bytes = await measureUriBytes(saved.uri);
+
+  while (bytes != null && bytes < MIN_UPLOAD_BYTES && quality < 1) {
+    quality = Math.min(1, Math.round((quality + 0.05) * 100) / 100);
+    saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: quality });
+    bytes = await measureUriBytes(saved.uri);
+  }
+
+  // Soft crops still under 34KB after max quality — upscale then re-encode.
+  if (bytes != null && bytes < MIN_UPLOAD_BYTES) {
+    const factor = Math.min(2.5, Math.max(1.25, Math.sqrt((MIN_UPLOAD_BYTES * 1.35) / Math.max(bytes, 1))));
+    const upCtx = ImageManipulator.manipulate(saved.uri || startUri);
+    upCtx.resize({
+      width: Math.min(MAX_LONG_SIDE_PX, Math.round(saved.width * factor)),
+    });
+    const upRendered = await upCtx.renderAsync();
+    saved = await upRendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.95 });
+    bytes = await measureUriBytes(saved.uri);
+  }
+
+  // Rare: over 4MB after a huge source — recompress harder.
+  let shrink = 0.85;
+  while (bytes != null && bytes > MAX_UPLOAD_BYTES && shrink >= 0.5) {
+    saved = await ImageManipulator.manipulate(saved.uri)
+      .resize({
+        width: Math.min(MAX_LONG_SIDE_PX, Math.round(saved.width * 0.85)),
+      })
+      .renderAsync()
+      .then((r) => r.saveAsync({ format: SaveFormat.JPEG, compress: shrink }));
+    bytes = await measureUriBytes(saved.uri);
+    shrink -= 0.1;
+  }
+
+  return saved;
+}
+
 /** Validates, normalizes size, and re-encodes a captured/picked photo as JPEG ready for upload. */
 export async function prepareImage(source: CapturedImage, kind: ImageKind): Promise<PreparedImage> {
   const size = await resolveImageDimensions(source);
@@ -169,7 +238,7 @@ export async function prepareImage(source: CapturedImage, kind: ImageKind): Prom
     );
   }
   const rendered = await context.renderAsync();
-  const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: JPEG_QUALITY });
+  const saved = await encodeWithinComplyCubeLimits(rendered, source.uri);
 
   return {
     uri: saved.uri,

@@ -20,7 +20,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   FocusScrollProvider,
   useFocusAnchor,
@@ -33,6 +33,7 @@ import {
   useOptionalNumberPad,
 } from '@/components/ui/NumberPadContext';
 import { numberFieldTextInputProps, suppressSystemKeyboard } from '@/components/ui/numberFieldInput';
+import { readDigitsFromClipboard } from '@/components/ui/pasteDigits';
 import {
   keepPreviewKeyboardFocus,
   PREVIEW_KEYBOARD_EVENT,
@@ -40,6 +41,7 @@ import {
 } from '@/boot/previewSoftKeyboard';
 import { useT } from '@/newui/lib/i18n';
 import { useLayout } from '@/newui/lib/layout';
+import { useNotoFontsLoaded } from '@/newui/lib/notoFonts';
 import { formatPhoneDisplay, normalizePhoneInput, PHONE_MAX_LEN } from '@/newui/lib/phone';
 import { useListen } from '@/newui/lib/speech';
 import { Palette, useC } from '@/newui/lib/theme';
@@ -51,13 +53,24 @@ function wantsNumberPad(keyboardType?: TextInputProps['keyboardType']) {
 
 /* ---------- Text ---------- */
 
-/** Keep one face across web/native even if a weight is still loading. */
-const FONT: Record<string, string> = {
+/**
+ * Keep one face across web/native.
+ * Android/iOS need the exact loaded face name — CSS comma fallbacks make the
+ * whole string miss and fall back to Roboto, so the APK looks unlike :3333 web.
+ */
+const FONT_NATIVE: Record<string, string> = {
+  '500': 'NotoSans_500Medium',
+  '600': 'NotoSans_600SemiBold',
+  '700': 'NotoSans_700Bold',
+  '800': 'NotoSans_800ExtraBold',
+};
+const FONT_WEB: Record<string, string> = {
   '500': 'NotoSans_500Medium, Noto Sans, system-ui, sans-serif',
   '600': 'NotoSans_600SemiBold, Noto Sans, system-ui, sans-serif',
   '700': 'NotoSans_700Bold, Noto Sans, system-ui, sans-serif',
   '800': 'NotoSans_800ExtraBold, Noto Sans, system-ui, sans-serif',
 };
+const FONT = Platform.OS === 'web' ? FONT_WEB : FONT_NATIVE;
 
 type TxtProps = {
   children?: ReactNode;
@@ -77,6 +90,7 @@ export function Txt({ children, size = 18, w = '600', color = 'text', style, cen
   const c = useC();
   const t = useT();
   const { s } = useLayout();
+  const notoLoaded = useNotoFontsLoaded();
   const prim = (x: ReactNode) => typeof x === 'string' || typeof x === 'number';
   let content: ReactNode = children;
   if (!noTr) {
@@ -91,12 +105,18 @@ export function Txt({ children, size = 18, w = '600', color = 'text', style, cen
       numberOfLines={lines}
       style={[
         {
-          fontFamily: FONT[w],
+          fontFamily:
+            Platform.OS === 'web'
+              ? FONT[w]
+              : notoLoaded
+                ? FONT_NATIVE[w]
+                : undefined,
           fontSize: fs,
           lineHeight: Math.round(fs * lh),
           color: col,
           textAlign: center ? 'center' : undefined,
-          flexShrink: 1,
+          includeFontPadding: false,
+          flexShrink: 0,
         },
         style,
       ]}
@@ -220,6 +240,8 @@ export function Screen({
   bg,
   style,
   safe,
+  /** Extra bottom room for the overlay keypad. Set false on dense forms (Show your ID). */
+  scrollPadReserve = true,
 }: {
   children: ReactNode;
   scroll?: boolean;
@@ -229,6 +251,7 @@ export function Screen({
   style?: StyleProp<ViewStyle>;
   /** Override inset padding. Default: on for roots, off inside Overlay. */
   safe?: boolean;
+  scrollPadReserve?: boolean;
 }) {
   const c = useC();
   const { s, page, scale } = useLayout();
@@ -245,7 +268,7 @@ export function Screen({
     paddingTop: padTop,
     // Static spare room so FocusScroll can lift fields above the overlay keypad
     // without changing padding on focus (that re-layout blurs inputs on web).
-    paddingBottom: (pad ? s(16) : 0) + (scroll ? 240 : 0),
+    paddingBottom: (pad ? s(16) : 0) + (scroll && scrollPadReserve ? 240 : 0),
     gap: s(gap),
   };
 
@@ -385,6 +408,7 @@ export function Btn({
   busy,
   icon,
   size = 'big',
+  fit,
   style,
   a11y,
   testID,
@@ -398,6 +422,8 @@ export function Btn({
   busy?: boolean;
   icon?: IconName;
   size?: 'big' | 'mid' | 'small';
+  /** Content-sized width (e.g. Change name beside a label) instead of full row. */
+  fit?: boolean;
   style?: StyleProp<ViewStyle>;
   a11y?: string;
   testID?: string;
@@ -430,6 +456,12 @@ export function Btn({
   const bg = blocked && kind !== 'link' && kind !== 'outline' ? c.off : bgMap[kind];
   const fg = blocked && (kind === 'link' || kind === 'outline') ? c.off : fgMap[kind];
   const shown = busy ? 'Loading' : label;
+  const inline = kind === 'link' || !!fit;
+  // NativeWind remaps Pressable via jsxImportSource. Function styles
+  // (`style={({ pressed }) => ...}`) drop backgroundColor/border on Android
+  // Fabric — green fill/outline CTAs vanished in the APK while :3333 (web) looked fine.
+  // Match Pill: plain object style on Pressable (proven to paint on Fabric).
+  const [pressed, setPressed] = useState(false);
   return (
     <Pressable
       testID={testID}
@@ -438,28 +470,39 @@ export function Btn({
       accessibilityState={{ disabled: blocked, busy: !!busy }}
       disabled={blocked}
       onPress={onPress}
-      style={({ pressed }) => [
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      style={[
         {
+          height: kind === 'link' ? undefined : h,
           minHeight: kind === 'link' ? s(48) : h,
+          // Link / fit CTAs sit beside other content — width 100% shoved them off-screen.
+          width: inline ? undefined : '100%',
           maxWidth: '100%',
           borderRadius: s(size === 'big' ? 20 : 16),
           backgroundColor: bg,
           borderWidth: kind === 'outline' ? 3 : 0,
-          borderColor: blocked ? c.off : c.brandText,
+          borderColor: kind === 'outline' ? (blocked ? c.off : c.brand) : 'transparent',
+          alignSelf: inline ? 'flex-start' : 'stretch',
+          flexShrink: inline ? 1 : 0,
           alignItems: 'center',
           justifyContent: 'center',
           flexDirection: 'row',
-          gap: s(10),
-          paddingHorizontal: s(14),
+          paddingHorizontal: kind === 'link' ? s(4) : s(14),
           opacity: pressed && !busy ? 0.85 : 1,
-          alignSelf: kind === 'link' ? undefined : 'stretch',
         },
         style,
       ]}
     >
-      {busy ? <ActivityIndicator color={fg} /> : icon ? <Icon name={icon} size={s(26)} color={fg} /> : null}
+      {busy ? <ActivityIndicator color={fg} style={{ marginRight: s(10) }} /> : icon ? <Icon name={icon} size={s(26)} color={fg} /> : null}
       {shown ? (
-        <Txt size={kind === 'link' ? 17 : fs} w="800" color={fg} center style={kind === 'link' && !busy ? { textDecorationLine: 'underline' } : undefined}>
+        <Txt
+          size={kind === 'link' ? 17 : fs}
+          w="800"
+          color={fg}
+          center
+          style={kind === 'link' && !busy ? { textDecorationLine: 'underline' } : undefined}
+        >
           {shown}
         </Txt>
       ) : null}
@@ -593,14 +636,23 @@ export function Field({
   }, [isPhone, onChangeText]);
 
   const display = isPhone ? formatPhoneDisplay(value) : value;
+  const pasteFromClipboard = useMemo(
+    () => async () => {
+      const digits = await readDigitsFromClipboard(Number.isFinite(padMax) && padMax > 0 ? padMax : 32);
+      if (!digits) return;
+      emit(digits);
+    },
+    [emit, padMax],
+  );
   const pad = useNumberPadField({
     value: isPhone ? normalizePhoneInput(value) : value,
     onChange: emit,
     maxLength: Number.isFinite(padMax) && padMax > 0 ? padMax : 32,
-    bottomLeft: isDecimal ? '.' : '',
+    bottomLeft: isDecimal ? '.' : usePad ? '*' : '',
     variant: 'phone',
     disabled: !usePad || disabled,
     padKey,
+    onAccessoryPress: usePad && !isDecimal && !disabled ? () => void pasteFromClipboard() : undefined,
   });
   const padActive = usePad && pad.padAvailable;
   // System-keyboard fields (e.g. security-question answers) scroll above the soft keyboard.
@@ -626,6 +678,8 @@ export function Field({
         accessibilityLabel={label ? t(label) : undefined}
         {...rest}
         {...(padActive ? numberFieldTextInputProps : null)}
+        // Keep OS copy/paste menu even when the in-app pad owns digit entry.
+        contextMenuHidden={false}
         maxLength={isPhone ? undefined : maxLength}
         placeholder={rest.placeholder ? t(rest.placeholder) : undefined}
         onFocus={(e) => {
@@ -702,13 +756,22 @@ export function PadNumberInput({
   style?: StyleProp<TextStyle>;
 } & Omit<TextInputProps, 'value' | 'onChangeText' | 'style' | 'keyboardType'>) {
   const c = useC();
+  const pasteFromClipboard = useMemo(
+    () => async () => {
+      const digits = await readDigitsFromClipboard(maxLength);
+      if (!digits) return;
+      onChangeText(digits);
+    },
+    [maxLength, onChangeText],
+  );
   const pad = useNumberPadField({
     value,
     onChange: onChangeText,
     maxLength,
-    bottomLeft: decimal ? '.' : '',
+    bottomLeft: decimal ? '.' : '*',
     variant: 'phone',
     padKey,
+    onAccessoryPress: decimal ? undefined : () => void pasteFromClipboard(),
   });
   return (
     <TextInput
@@ -717,6 +780,7 @@ export function PadNumberInput({
       placeholderTextColor={c.text4}
       {...rest}
       {...numberFieldTextInputProps}
+      contextMenuHidden={false}
       onFocus={(e) => {
         rest.onFocus?.(e);
         suppressSystemKeyboard();
@@ -919,6 +983,8 @@ export function Overlay({ open, children }: { open: boolean; children: ReactNode
   if (!open) return null;
   // Overlay already sits in a tab SafeArea (or full window). Nested Screens must
   // not re-apply insets — that crushed sheets on Android vs :3333 (insets ≈ 0).
+  // Android needs elevation so the sheet paints above BottomNav; unmount before
+  // router.push (leaveSheetAndRun / goFlow) so it cannot cover the next page.
   return (
     <ScreenInsetCtx.Provider value={false}>
       <View
@@ -930,6 +996,8 @@ export function Overlay({ open, children }: { open: boolean; children: ReactNode
             paddingBottom: insets.bottom,
             paddingLeft: insets.left,
             paddingRight: insets.right,
+            zIndex: Platform.OS === 'android' ? 20 : undefined,
+            elevation: Platform.OS === 'android' ? 24 : undefined,
           },
         ]}
       >

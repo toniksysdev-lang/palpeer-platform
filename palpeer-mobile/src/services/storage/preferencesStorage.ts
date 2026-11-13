@@ -11,6 +11,8 @@ import { logger } from '@/utils/logger';
 const KEYS = {
   appearance: 'palpeer.pref.appearance',
   language: 'palpeer.pref.language',
+  /** Set when the user picks a language in More / Profile (not prototype auto-migrate). */
+  languageUserPicked: 'palpeer.pref.languageUserPicked',
   onboardingSeen: 'palpeer.pref.onboardingSeen',
   biometricUnlockPrompted: 'palpeer.pref.biometricUnlockPrompted',
   /** ISO2 chosen on phone signup — seeds Complete profile Country. */
@@ -30,21 +32,29 @@ export type StoredPreferences = Omit<PreferencesState, 'loaded'>;
 export const preferencesStorage = {
   async load(): Promise<StoredPreferences> {
     try {
-      const [appearance, language, onboardingSeen, biometricUnlockPrompted] = await Promise.all([
-        AsyncStorage.getItem(KEYS.appearance),
-        AsyncStorage.getItem(KEYS.language),
-        AsyncStorage.getItem(KEYS.onboardingSeen),
-        AsyncStorage.getItem(KEYS.biometricUnlockPrompted),
-      ]);
+      const [appearance, language, languageUserPicked, onboardingSeen, biometricUnlockPrompted] =
+        await Promise.all([
+          AsyncStorage.getItem(KEYS.appearance),
+          AsyncStorage.getItem(KEYS.language),
+          AsyncStorage.getItem(KEYS.languageUserPicked),
+          AsyncStorage.getItem(KEYS.onboardingSeen),
+          AsyncStorage.getItem(KEYS.biometricUnlockPrompted),
+        ]);
+      let resolvedLanguage: AppLanguage =
+        language && (LANGUAGES as readonly string[]).includes(language)
+          ? (language as AppLanguage)
+          : 'en';
+      // Product default is English. French applies only after an explicit in-app choice.
+      if (resolvedLanguage === 'fr' && languageUserPicked !== 'true') {
+        resolvedLanguage = 'en';
+        void AsyncStorage.setItem(KEYS.language, 'en');
+      }
       return {
         appearance:
           appearance && (APPEARANCES as readonly string[]).includes(appearance)
             ? (appearance as AppearancePreference)
             : 'light',
-        language:
-          language && (LANGUAGES as readonly string[]).includes(language)
-            ? (language as AppLanguage)
-            : 'en',
+        language: resolvedLanguage,
         onboardingSeen: onboardingSeen === 'true',
         biometricUnlockPrompted: biometricUnlockPrompted === 'true',
       };
@@ -63,8 +73,16 @@ export const preferencesStorage = {
     await AsyncStorage.setItem(KEYS.appearance, value);
   },
 
-  async setLanguage(value: AppLanguage): Promise<void> {
-    await AsyncStorage.setItem(KEYS.language, value);
+  async setLanguage(value: AppLanguage, options?: { userPicked?: boolean }): Promise<void> {
+    const userPicked = options?.userPicked !== false;
+    if (userPicked) {
+      await AsyncStorage.multiSet([
+        [KEYS.language, value],
+        [KEYS.languageUserPicked, 'true'],
+      ]);
+    } else {
+      await AsyncStorage.setItem(KEYS.language, value);
+    }
   },
 
   async setOnboardingSeen(): Promise<void> {
