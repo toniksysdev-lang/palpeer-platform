@@ -4,14 +4,15 @@ import { AppState } from 'react-native';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { appLocked } from '@/store/slices/appLockSlice';
 
-/**
- * CLIENT rule: re-lock after any background while unlocked. Biometric prompts run while
- * already locked, so they do not set a background timestamp (see listener below).
- */
-export const LOCK_AFTER_BACKGROUND_MS = 0;
-
 /** Design Timeout: idle on the foreground for this long → “You were logged out”. */
 export const IDLE_LOGOUT_MS = 180_000;
+
+/**
+ * Re-lock after returning from background only if away this long (same as idle timeout).
+ * Short trips (camera permission, in-app live photo, Control Center) must not lock.
+ * Biometric prompts run while already locked, so they do not set a background timestamp.
+ */
+export const LOCK_AFTER_BACKGROUND_MS = IDLE_LOGOUT_MS;
 
 const IDLE_POLL_MS = 5_000;
 

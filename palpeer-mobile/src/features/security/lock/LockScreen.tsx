@@ -33,7 +33,7 @@ export function LockScreen() {
   const toast = useToast();
   const biometricEnabled = useAppSelector((state) => state.appLock.biometricEnabled);
   const [label, setLabel] = useState('Face or Fingerprint');
-  /** Device has Face/Fingerprint enrolled — show unlock even before settings toggle is on. */
+  /** Device has Face/Fingerprint enrolled — used for auto-prompt and labels only. */
   const [bioAvailable, setBioAvailable] = useState(false);
   const [mode, setMode] = useState<Mode>('choose');
   const [busy, setBusy] = useState(false);
@@ -42,7 +42,8 @@ export function LockScreen() {
   const [pinBlocked, setPinBlocked] = useState(false);
   const autoPrompted = useRef(false);
 
-  const showBio = biometricEnabled || bioAvailable;
+  /** Only show Face/Fingerprint unlock when the user turned it on in settings. */
+  const showBio = biometricEnabled;
 
   const logInAgain = useCallback(async () => {
     setBusy(true);
@@ -57,7 +58,7 @@ export function LockScreen() {
   }, [dispatch]);
 
   const unlockWithBiometrics = useCallback(async () => {
-    if (!biometricEnabled && !bioAvailable) return;
+    if (!biometricEnabled) return;
     setBusy(true);
     setMessage(null);
     const result = await authenticateWithBiometrics('Unlock Palpeer');
@@ -88,7 +89,7 @@ export function LockScreen() {
       }
     }
     finishUnlock();
-  }, [bioAvailable, biometricEnabled, finishUnlock, label, toast]);
+  }, [biometricEnabled, finishUnlock, label, toast]);
 
   const unlockWithPin = useCallback(
     async (pin: string) => {

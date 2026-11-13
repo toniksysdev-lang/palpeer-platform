@@ -115,7 +115,7 @@ export default function Home(props: HomeProps) {
   }, [dispatch]);
 
   const unlockTimeoutBio = useCallback(async () => {
-    if (!biometricEnabled && !bioAvailable) return;
+    if (!biometricEnabled) return;
     setLockBusy(true);
     setLockMsg(null);
     const result = await authenticateWithBiometrics('Unlock Palpeer');
@@ -127,7 +127,7 @@ export default function Home(props: HomeProps) {
       return;
     }
     finishTimeoutUnlock();
-  }, [bioAvailable, bioLabel, biometricEnabled, finishTimeoutUnlock]);
+  }, [bioLabel, biometricEnabled, finishTimeoutUnlock]);
 
   useEffect(() => {
     if (!timedOut || lockPinOpen) return;
@@ -390,7 +390,7 @@ export default function Home(props: HomeProps) {
                   return false;
                 }}
                 confirmBiometric={
-                  biometricEnabled || bioAvailable
+                  biometricEnabled
                     ? async () => {
                         const result = await authenticateWithBiometrics('Unlock Palpeer');
                         return result === 'success';
@@ -411,7 +411,7 @@ export default function Home(props: HomeProps) {
                   ) : null}
                 </View>
                 <View style={{ flex: 1 }} />
-                {biometricEnabled || bioAvailable ? (
+                {biometricEnabled ? (
                   <Btn
                     kind="outline"
                     size="mid"
@@ -423,7 +423,7 @@ export default function Home(props: HomeProps) {
                 ) : null}
                 <Btn
                   label="Use your PIN"
-                  kind={biometricEnabled || bioAvailable ? 'outline' : 'primary'}
+                  kind={biometricEnabled ? 'outline' : 'primary'}
                   size="mid"
                   disabled={lockBusy}
                   onPress={() => {
