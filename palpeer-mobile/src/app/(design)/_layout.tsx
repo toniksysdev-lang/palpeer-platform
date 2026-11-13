@@ -28,6 +28,9 @@ export default function DesignLayout() {
           screenOptions={{
             headerShown: false,
             animation: 'slide_from_right',
+            // Keep inactive tab roots from holding elevated/absolute overlays over
+            // the active route (Android APK: dead Home tiles / More links).
+            detachInactiveScreens: true,
             contentStyle: { backgroundColor: designDark ? DARK_PAGE : '#F3F6F4' },
           }}
         />

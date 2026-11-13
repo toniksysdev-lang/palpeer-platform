@@ -1,6 +1,6 @@
 import { router, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { InteractionManager, Pressable, ScrollView, View } from 'react-native';
 import type { DesignWallet } from '@/design/bridge/mapWallet';
 import { PinStep } from '@/newui/features/PinStep';
 import { useLang } from '@/newui/lib/i18n';
@@ -180,13 +180,37 @@ export default function Home(props: HomeProps) {
     setAll(false);
   };
 
+  const clearHomeOverlays = useCallback(() => {
+    setAll(false);
+    setAdding(false);
+    setTimedOut(false);
+    setJustAddedCode(null);
+    setHold((h) => ({ ...h, open: false }));
+  }, []);
+
+  /** After closing sheets, wait for Android to drop the absolute Overlay before navigating. */
+  const afterOverlaysCleared = useCallback((run: () => void) => {
+    clearHomeOverlays();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        InteractionManager.runAfterInteractions(() => {
+          run();
+        });
+      });
+    });
+  }, [clearHomeOverlays]);
+
   const addWallet = async (code: string) => {
     setAddError(null);
     if (props.onAddWallet) {
-      // Close the add-wallet Modal first so the PIN Modal can present on top
+      // Close the add-wallet sheet first so the PIN Modal can present on top
       // (nested RN Modals on web fail silently and look like "Could not add wallet").
       setAdding(false);
-      await new Promise<void>((resolve) => setTimeout(resolve, 80));
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          InteractionManager.runAfterInteractions(() => setTimeout(resolve, 120));
+        });
+      });
       const res = await props.onAddWallet(code);
       if (res && 'ok' in res && !res.ok) {
         if (res.cancelled) {
@@ -206,6 +230,11 @@ export default function Home(props: HomeProps) {
 
   const openAddWallet = () => {
     setAddError(null);
+    // Close any other Home sheet so Add Wallet is the only absolute overlay.
+    setAll(false);
+    setTimedOut(false);
+    setJustAddedCode(null);
+    setHold((h) => ({ ...h, open: false }));
     setAdding(true);
   };
 
@@ -215,14 +244,7 @@ export default function Home(props: HomeProps) {
       return;
     }
     if (what && hold.open) return;
-    // Unmount overlays before push — otherwise absolute Overlay covers the next
-    // screen and distorts BottomNav (same pattern as More leaveSheetAndRun).
-    setAll(false);
-    setAdding(false);
-    setTimedOut(false);
-    setJustAddedCode(null);
-    setHold((h) => ({ ...h, open: false }));
-    requestAnimationFrame(() => {
+    afterOverlaysCleared(() => {
       router.push(href);
     });
   };
@@ -703,7 +725,10 @@ export default function Home(props: HomeProps) {
                         return;
                       }
                       if (t.label === 'Add' && props.goAddMoney) {
-                        props.goAddMoney(sel);
+                        const code = sel;
+                        afterOverlaysCleared(() => {
+                          props.goAddMoney?.(code);
+                        });
                         return;
                       }
                       goFlow(t.href, t.guard);

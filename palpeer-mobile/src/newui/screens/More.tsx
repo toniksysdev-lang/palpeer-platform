@@ -95,14 +95,17 @@ export default function More(props: MoreProps) {
   }, []);
 
   /**
-   * Navigate while the sheet still covers More, then clear the sheet afterward.
-   * Closing first flashed the More root under the push animation.
+   * Unmount the sheet Overlay before navigating. On Android, an elevated absolute
+   * Overlay left open on More covers the pushed screen and steals all taps
+   * (web stack sharing hides this — :8082 looks fine, APK feels dead).
    */
   const leaveSheetAndRun = useCallback(async (run: () => void | Promise<void>) => {
     setFaqOpen(null);
+    setSheet(null);
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
     await run();
-    // Destination is on top by now; reset so Back lands on More root, not the sheet.
-    setTimeout(() => setSheet(null), 350);
   }, []);
 
   const contactRows = useMemo(

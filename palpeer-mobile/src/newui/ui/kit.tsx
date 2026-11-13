@@ -973,9 +973,12 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
 /**
  * Full-screen overlay used for steps that sit on top of a screen.
  * Uses an in-tree absolute view (not RN Modal) so PIN / system Modals can
- * present above it. Do not set a high zIndex — on web Stack screens share a
- * stacking context, and a raised overlay on the previous route covers the
- * pushed page until Back (Stay safe / More sheet links).
+ * present above it.
+ *
+ * Do not set Android elevation/zIndex here. Tab roots hide BottomNav while a
+ * sheet is open (`dockVisible=false`), so sibling order is enough to cover the
+ * scroll body. Elevation made the overlay paint above the *next* stack screen
+ * after router.push — Home/More links looked dead on APK while :8082 was fine.
  */
 export function Overlay({ open, children }: { open: boolean; children: ReactNode }) {
   const c = useC();
@@ -983,11 +986,11 @@ export function Overlay({ open, children }: { open: boolean; children: ReactNode
   if (!open) return null;
   // Overlay already sits in a tab SafeArea (or full window). Nested Screens must
   // not re-apply insets — that crushed sheets on Android vs :3333 (insets ≈ 0).
-  // Android needs elevation so the sheet paints above BottomNav; unmount before
-  // router.push (leaveSheetAndRun / goFlow) so it cannot cover the next page.
   return (
     <ScreenInsetCtx.Provider value={false}>
       <View
+        pointerEvents="auto"
+        collapsable={false}
         style={[
           StyleSheet.absoluteFillObject,
           {
@@ -996,8 +999,6 @@ export function Overlay({ open, children }: { open: boolean; children: ReactNode
             paddingBottom: insets.bottom,
             paddingLeft: insets.left,
             paddingRight: insets.right,
-            zIndex: Platform.OS === 'android' ? 20 : undefined,
-            elevation: Platform.OS === 'android' ? 24 : undefined,
           },
         ]}
       >
