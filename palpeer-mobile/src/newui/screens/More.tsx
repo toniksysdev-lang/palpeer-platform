@@ -102,9 +102,6 @@ export default function More(props: MoreProps) {
   const leaveSheetAndRun = useCallback(async (run: () => void | Promise<void>) => {
     setFaqOpen(null);
     setSheet(null);
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-    });
     await run();
   }, []);
 
@@ -248,7 +245,7 @@ export default function More(props: MoreProps) {
     <TabRootShell
       active="more"
       unread={props.unreadCount ?? 0}
-      dockVisible={!sheetOpen}
+      dockVisible
       gap={12}
       refreshing={refreshing}
       onRefresh={() => void onRefresh()}

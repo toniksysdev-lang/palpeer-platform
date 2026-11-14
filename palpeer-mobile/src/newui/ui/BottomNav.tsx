@@ -6,14 +6,16 @@ import { useC } from '@/newui/lib/theme';
 import { Icon, IconName } from './Icon';
 import { Txt } from './kit';
 
-const TABS: { key: string; label: string; icon: IconName; href: Href }[] = [
+export type TabKey = 'home' | 'history' | 'messages' | 'more';
+
+const TABS: { key: TabKey; label: string; icon: IconName; href: Href }[] = [
   { key: 'home', label: 'Home', icon: 'home', href: '/Main' as Href },
   { key: 'history', label: 'History', icon: 'receipt', href: '/History' as Href },
   { key: 'messages', label: 'Messages', icon: 'chat', href: '/Messages' as Href },
   { key: 'more', label: 'More', icon: 'dots', href: '/More' as Href },
 ];
 
-export function BottomNav({ active, unread = 0 }: { active: string; unread?: number }) {
+export function BottomNav({ active, unread = 0 }: { active: TabKey | string; unread?: number }) {
   const c = useC();
   const { s } = useLayout();
   const insets = useSafeAreaInsets();

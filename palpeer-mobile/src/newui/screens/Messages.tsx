@@ -205,7 +205,7 @@ export default function Messages(props: MessagesProps) {
     <TabRootShell
       active="messages"
       unread={props.unreadCount ?? 0}
-      dockVisible={!(talkOpen || pinOpen || chatOpen)}
+      dockVisible
       gap={10}
       refreshing={refreshing}
       onRefresh={() => void onRefresh()}

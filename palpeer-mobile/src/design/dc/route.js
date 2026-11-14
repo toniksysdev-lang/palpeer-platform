@@ -59,3 +59,23 @@ export function liveScreen(Component, props = {}, useLiveProps) {
   Route.displayName = `${Component.displayName || Component.name || 'NewUi'}LiveRoute`;
   return Route;
 }
+
+/**
+ * Same as liveScreen but keeps the Home/History/Messages/More footer under
+ * money-flow screens so the tab bar does not jump after leaving Home.
+ */
+export function liveFlowScreen(Component, props = {}, useLiveProps) {
+  // Lazy require avoids a cycle with newui during design bootstrap.
+  const { FlowShell } = require('@/newui/ui/FlowShell');
+  function Route() {
+    const go = useGo();
+    const live = typeof useLiveProps === 'function' ? useLiveProps() : {};
+    return (
+      <FlowShell active="home">
+        <Component {...props} {...live} go={go} />
+      </FlowShell>
+    );
+  }
+  Route.displayName = `${Component.displayName || Component.name || 'NewUi'}LiveFlowRoute`;
+  return Route;
+}

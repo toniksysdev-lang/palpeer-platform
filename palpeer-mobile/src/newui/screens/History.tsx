@@ -177,7 +177,7 @@ export default function History(props: HistoryProps) {
     <TabRootShell
       active="history"
       unread={props.unreadCount ?? 0}
-      dockVisible={!(picker || props.detailOpen)}
+      dockVisible
       gap={12}
       refreshing={refreshing}
       onRefresh={() => void onRefresh()}

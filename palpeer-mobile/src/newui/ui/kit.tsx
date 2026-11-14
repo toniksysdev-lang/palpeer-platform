@@ -982,25 +982,16 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
  */
 export function Overlay({ open, children }: { open: boolean; children: ReactNode }) {
   const c = useC();
-  const insets = useSafeAreaInsets();
   if (!open) return null;
-  // Overlay already sits in a tab SafeArea (or full window). Nested Screens must
-  // not re-apply insets — that crushed sheets on Android vs :3333 (insets ≈ 0).
+  // Fills TabRootShell's content pane only (ScrollView sibling, above BottomNav).
+  // Parent SafeArea already applied top inset — do not pad insets again.
+  // zIndex (no elevation) covers scroll content without stealing the next stack screen.
   return (
     <ScreenInsetCtx.Provider value={false}>
       <View
         pointerEvents="auto"
         collapsable={false}
-        style={[
-          StyleSheet.absoluteFillObject,
-          {
-            backgroundColor: c.bg,
-            paddingTop: insets.top,
-            paddingBottom: insets.bottom,
-            paddingLeft: insets.left,
-            paddingRight: insets.right,
-          },
-        ]}
+        style={[StyleSheet.absoluteFillObject, { backgroundColor: c.bg, zIndex: 1 }]}
       >
         {children}
       </View>

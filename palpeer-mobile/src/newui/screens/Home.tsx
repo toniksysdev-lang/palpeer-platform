@@ -1,6 +1,6 @@
 import { router, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { InteractionManager, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import type { DesignWallet } from '@/design/bridge/mapWallet';
 import { PinStep } from '@/newui/features/PinStep';
 import { useLang } from '@/newui/lib/i18n';
@@ -188,29 +188,13 @@ export default function Home(props: HomeProps) {
     setHold((h) => ({ ...h, open: false }));
   }, []);
 
-  /** After closing sheets, wait for Android to drop the absolute Overlay before navigating. */
-  const afterOverlaysCleared = useCallback((run: () => void) => {
-    clearHomeOverlays();
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        InteractionManager.runAfterInteractions(() => {
-          run();
-        });
-      });
-    });
-  }, [clearHomeOverlays]);
-
   const addWallet = async (code: string) => {
     setAddError(null);
     if (props.onAddWallet) {
       // Close the add-wallet sheet first so the PIN Modal can present on top
       // (nested RN Modals on web fail silently and look like "Could not add wallet").
       setAdding(false);
-      await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => {
-          InteractionManager.runAfterInteractions(() => setTimeout(resolve, 120));
-        });
-      });
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
       const res = await props.onAddWallet(code);
       if (res && 'ok' in res && !res.ok) {
         if (res.cancelled) {
@@ -238,15 +222,14 @@ export default function Home(props: HomeProps) {
     setAdding(true);
   };
 
-  const goFlow = (href: Href, what?: string) => {
+  const goFlow = (href: Href, _what?: string) => {
     if (!hasWallet) {
       openAddWallet();
       return;
     }
-    if (what && hold.open) return;
-    afterOverlaysCleared(() => {
-      router.push(href);
-    });
+    clearHomeOverlays();
+    // Immediate push — delayed/InteractionManager paths hung on Android release APK.
+    router.push(href);
   };
 
   const say =
@@ -290,7 +273,9 @@ export default function Home(props: HomeProps) {
     );
   }
 
-  const dockVisible = !(all || adding || timedOut || hold.open || !!justAddedCode);
+  // Keep the tab footer mounted during sheets (overlays are scoped above the dock).
+  // Only hide for the timeout lock screen so chrome matches :8082 tab roots.
+  const dockVisible = !timedOut;
 
   return (
     <TabRootShell
@@ -726,9 +711,8 @@ export default function Home(props: HomeProps) {
                       }
                       if (t.label === 'Add' && props.goAddMoney) {
                         const code = sel;
-                        afterOverlaysCleared(() => {
-                          props.goAddMoney?.(code);
-                        });
+                        clearHomeOverlays();
+                        props.goAddMoney(code);
                         return;
                       }
                       goFlow(t.href, t.guard);
