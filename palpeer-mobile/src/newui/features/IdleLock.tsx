@@ -60,7 +60,6 @@ export function IdleLock({ children }: { children: ReactNode }) {
           <View style={{ alignItems: 'center', gap: 10, marginTop: 10 }}>
             <Circle icon="lock" size={80} iconSize={52} bg="#0E1F19" />
             <H1 center>You were logged out</H1>
-            <P center>No use for 3 minutes. Use your fingerprint or PIN to come back.</P>
           </View>
           <Dots n={pin.length} />
           <View style={{ flex: 1 }} />

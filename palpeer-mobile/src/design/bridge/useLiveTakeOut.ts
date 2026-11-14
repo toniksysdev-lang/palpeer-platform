@@ -116,7 +116,11 @@ export function useLiveTakeOut() {
   );
 
   const prepareWithdrawal = useCallback(
-    (code: string, amount: string, dest: { email?: string; bank?: string; acct?: string }) => {
+    (
+      code: string,
+      amount: string,
+      dest: { email?: string; bank?: string; acct?: string; bankCode?: string },
+    ) => {
       const wallet = walletsQ.data?.find((w) => w.currencyCode === code);
       if (!wallet) return { ok: false as const, error: 'Open this wallet first.' };
       let destinationReference: string;
@@ -124,7 +128,9 @@ export function useLiveTakeOut() {
         if (!dest.email?.trim()) return { ok: false as const, error: 'Choose an Interac email.' };
         destinationReference = cadReference({ method: 'email', email: dest.email });
       } else {
-        const bankCode = dest.bank ? banksByName.get(dest.bank) : undefined;
+        const bankCode =
+          (dest.bankCode && dest.bankCode.trim()) ||
+          (dest.bank ? banksByName.get(dest.bank) : undefined);
         if (!bankCode || !dest.acct?.trim()) {
           return { ok: false as const, error: 'Choose a bank account.' };
         }

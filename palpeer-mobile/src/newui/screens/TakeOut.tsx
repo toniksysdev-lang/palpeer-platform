@@ -1,5 +1,6 @@
+import * as LocalAuthentication from 'expo-local-authentication';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { metaFor } from '@/design/bridge/currencyMeta';
 import type { DesignWallet } from '@/design/bridge/mapWallet';
@@ -14,7 +15,7 @@ import type { NgnBankAccount } from '@/services/storage/ngnBankAccountsStorage';
 
 type TakeOutStage = 'form' | 'check' | 'pin' | 'newacct' | 'done';
 
-type Acct = { id?: string; name: string; bank: string; number: string };
+type Acct = { id?: string; name: string; bank: string; number: string; bankCode?: string };
 
 type TakeOutProps = {
   backend?: boolean;
@@ -29,7 +30,7 @@ type TakeOutProps = {
   prepareWithdrawal?: (
     code: string,
     amount: string,
-    dest: { email?: string; bank?: string; acct?: string },
+    dest: { email?: string; bank?: string; acct?: string; bankCode?: string },
   ) => { ok: false; error: string } | { ok: true };
   confirmPin?: (pin: string) => Promise<boolean>;
   confirmBiometric?: () => Promise<boolean>;
@@ -48,6 +49,7 @@ function mapNgnAccounts(list: NgnBankAccount[] | undefined): Acct[] {
     name: a.accountName || 'Saved account',
     bank: a.bankName,
     number: a.accountNumber,
+    bankCode: a.bankCode,
   }));
 }
 
@@ -267,7 +269,7 @@ export default function TakeOut(props: TakeOutProps) {
       const dest = isEmail
         ? { email }
         : pick
-          ? { bank: pick.bank, acct: pick.number }
+          ? { bank: pick.bank, acct: pick.number, bankCode: pick.bankCode }
           : { bank, acct };
       const r = props.prepareWithdrawal(code, amount, dest);
       if (!r.ok) {
@@ -278,13 +280,29 @@ export default function TakeOut(props: TakeOutProps) {
     setStage('pin');
   };
 
+  const saveNewAccountAfterAuth = useCallback(async (): Promise<boolean | { softFail: true }> => {
+    if (!props.saveNgnAccount) return { softFail: true };
+    setSaveError(null);
+    const r = await props.saveNgnAccount({
+      bankName: bank,
+      accountNumber: acct,
+      accountName: props.helloName || 'Saved account',
+    });
+    if (!r.ok) {
+      setSaveError(r.error || 'Could not save this account. Please try again.');
+      return { softFail: true };
+    }
+    setSelectAccountId(r.account.id);
+    return true;
+  }, [acct, bank, props.helloName, props.saveNgnAccount]);
+
   if (stage === 'pin')
     return (
       <PinStep
         title={pinFor === 'save' ? 'Confirm new account' : 'Enter your PIN'}
         onBack={() => {
           setStage(pinFor === 'save' ? 'newacct' : 'check');
-          setPinFor('take');
+          if (pinFor !== 'save') setPinFor('take');
         }}
         confirmPin={
           pinFor === 'take' && props.confirmPin
@@ -293,22 +311,36 @@ export default function TakeOut(props: TakeOutProps) {
               ? async (pin) => {
                   const pinOk = await verifyDesignPin(pin);
                   if (!pinOk) return false;
-                  setSaveError(null);
-                  const r = await props.saveNgnAccount!({
-                    bankName: bank,
-                    accountNumber: acct,
-                    accountName: props.helloName || 'Saved account',
-                  });
-                  if (!r.ok) {
-                    setSaveError(r.error);
-                    return false;
-                  }
-                  setSelectAccountId(r.account.id);
-                  return true;
+                  return saveNewAccountAfterAuth();
                 }
               : undefined
         }
-        confirmBiometric={pinFor === 'take' ? props.confirmBiometric : undefined}
+        confirmBiometric={
+          pinFor === 'take'
+            ? props.confirmBiometric
+            : pinFor === 'save' && props.backend && props.saveNgnAccount
+              ? async () => {
+                  try {
+                    const has = await LocalAuthentication.hasHardwareAsync();
+                    const enrolled = has ? await LocalAuthentication.isEnrolledAsync() : false;
+                    if (has && enrolled) {
+                      const bio = await LocalAuthentication.authenticateAsync({
+                        promptMessage: 'Confirm new account',
+                        cancelLabel: 'Cancel',
+                        disableDeviceFallback: false,
+                      });
+                      if (!bio.success) return false;
+                    } else {
+                      // No biometrics — require PIN instead of silently succeeding.
+                      return false;
+                    }
+                  } catch {
+                    return false;
+                  }
+                  return saveNewAccountAfterAuth();
+                }
+              : undefined
+        }
         onDone={() => {
           if (pinFor === 'save') {
             if (!props.backend) {
@@ -487,7 +519,15 @@ export default function TakeOut(props: TakeOutProps) {
         </Card>
       )}
       <View style={{ flex: 1 }} />
-      <Btn label="Continue" disabled={blocked} onPress={() => setStage('check')} />
+      <Btn
+        label="Continue"
+        disabled={blocked}
+        onPress={() => {
+          setPinFor('take');
+          setPrepareError(null);
+          setStage('check');
+        }}
+      />
 
       <ListOverlay list={list} setList={setList} onBank={setBank} onWallet={(k) => { setCode(k); setAmount(''); }} banks={banks} liveWallets={props.liveWallets} />
 

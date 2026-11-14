@@ -204,9 +204,6 @@ export function LockScreen() {
         <Text style={styles.title} accessibilityRole="header">
           You were logged out
         </Text>
-        <Text style={styles.subtitle}>
-          No use for 3 minutes. This keeps your money safe.
-        </Text>
         {message ? (
           <Text style={styles.message} testID="lock-message" accessibilityRole="alert">
             {message}

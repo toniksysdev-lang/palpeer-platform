@@ -410,7 +410,6 @@ export default function Home(props: HomeProps) {
                 <View style={{ alignItems: 'center', gap: 12, marginTop: 14 }}>
                   <Circle icon="lock" size={92} iconSize={52} bg="#0E1F19" />
                   <H1 center>You were logged out</H1>
-                  <P center>No use for 3 minutes. This keeps your money safe.</P>
                   {lockMsg ? (
                     <Txt size={16} w="700" color="red" role="alert">
                       {lockMsg}

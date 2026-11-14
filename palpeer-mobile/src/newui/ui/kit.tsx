@@ -272,14 +272,26 @@ export function Screen({
     gap: s(gap),
   };
 
+  const numberPad = useOptionalNumberPad();
+  const dismissPad = () => {
+    if (numberPad?.active) numberPad.close();
+  };
+
+  // Pressable wrapper: empty areas dismiss the in-app number pad; child buttons still receive presses.
   const body = scroll ? (
     <FocusScrollProvider scrollRef={scrollRef}>
       <KeyboardFocusReveal />
       <PadRevealOnOpen />
-      <ScreenScrollBody contentContainerStyle={[inner, style]}>{children}</ScreenScrollBody>
+      <Pressable style={{ flex: 1, width: '100%' }} onPress={dismissPad} accessible={false}>
+        <ScreenScrollBody contentContainerStyle={[inner, style]}>{children}</ScreenScrollBody>
+      </Pressable>
     </FocusScrollProvider>
   ) : (
-    <View style={[{ flex: 1, width: '100%' }, inner, style]}>{children}</View>
+    <Pressable style={{ flex: 1, width: '100%' }} onPress={dismissPad} accessible={false}>
+      <View style={[{ flex: 1, width: '100%' }, inner, style]} pointerEvents="box-none">
+        {children}
+      </View>
+    </Pressable>
   );
 
   // Full-window shell + inset padding (not SafeAreaView) so LayoutProvider’s

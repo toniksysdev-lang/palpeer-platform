@@ -14,7 +14,9 @@ export const numberFieldTextInputProps = {
   showSoftInputOnFocus: false,
   inputMode: 'none',
   keyboardType: 'default',
+  // Keep the OS copy/paste menu available (long-press / select). Digits still come from NumberPad.
   contextMenuHidden: false,
+  selectTextOnFocus: false,
   autoCorrect: false,
   spellCheck: false,
   // RN Web → data-palpeer-number-pad="1" on the underlying <input>.

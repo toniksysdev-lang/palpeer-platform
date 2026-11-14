@@ -4,11 +4,22 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { Btn, Circle, Dots, H1, P, PinPad, Screen, TopBar, Txt } from '@/newui/ui/kit';
 
-type PinConfirmResult = boolean | { ok?: boolean; [key: string]: unknown };
+type PinConfirmResult =
+  | boolean
+  | { ok?: boolean; softFail?: boolean; [key: string]: unknown };
+
+function isSoftFail(r: PinConfirmResult): boolean {
+  return typeof r === 'object' && !!r && r.softFail === true;
+}
+
+function okResult(r: PinConfirmResult): boolean {
+  return typeof r === 'boolean' ? r : !!r?.ok && !r.softFail;
+}
 
 /**
  * "Enter your PIN" step used before money moves.
  * With `confirmPin` / `confirmBiometric`, uses live security bridges; otherwise 0000 fails in prototype mode.
+ * Return `{ softFail: true }` when auth succeeded but the follow-up action failed — do not count as Wrong PIN.
  */
 export function PinStep({
   onBack,
@@ -30,8 +41,6 @@ export function PinStep({
   const [tries, setTries] = useState(initialTries);
   const [busy, setBusy] = useState(false);
 
-  const okResult = (r: PinConfirmResult) => (typeof r === 'boolean' ? r : !!r?.ok);
-
   const succeed = (r?: PinConfirmResult) => {
     setPin('');
     setWrong(false);
@@ -42,6 +51,13 @@ export function PinStep({
     setPin('');
     setWrong(true);
     setTries((t) => t + 1);
+  };
+
+  /** Auth OK but save/withdraw failed — leave PIN screen without burning a try. */
+  const softFail = () => {
+    setPin('');
+    setWrong(false);
+    onBack();
   };
 
   const press = async (d: string) => {
@@ -57,6 +73,7 @@ export function PinStep({
       try {
         const r = await confirmPin(v);
         if (okResult(r)) succeed(r);
+        else if (isSoftFail(r)) softFail();
         else failPin();
       } finally {
         setBusy(false);
@@ -74,6 +91,7 @@ export function PinStep({
       try {
         const r = await confirmBiometric();
         if (okResult(r)) succeed(r);
+        else if (isSoftFail(r)) softFail();
       } finally {
         setBusy(false);
       }
