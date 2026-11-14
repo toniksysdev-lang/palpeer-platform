@@ -286,7 +286,7 @@ export default function Home(props: HomeProps) {
       onRefresh={() => void onRefresh()}
       overlays={
         <>
-          <Overlay open={all}>
+          <Overlay open={all} onClose={() => setAll(false)}>
             <Screen>
               <TopBar onBack={() => setAll(false)} right={<Pill icon="eye" label={hidden ? 'Show' : 'Hide'} onPress={() => setHidden(!hidden)} />} />
               <H1>All your money</H1>
@@ -325,7 +325,7 @@ export default function Home(props: HomeProps) {
             </Screen>
           </Overlay>
 
-          <Overlay open={adding}>
+          <Overlay open={adding} onClose={() => setAdding(false)}>
             <Screen>
               <TopBar
                 onBack={() => setAdding(false)}
@@ -352,7 +352,7 @@ export default function Home(props: HomeProps) {
           </Overlay>
 
           {justAddedCur ? (
-            <Overlay open>
+            <Overlay open onClose={() => setJustAddedCode(null)}>
               <Screen>
                 <View style={{ alignItems: 'center', gap: 12, marginTop: 14 }}>
                   <Circle icon="check" />
@@ -381,7 +381,7 @@ export default function Home(props: HomeProps) {
             </Overlay>
           ) : null}
 
-          <Overlay open={timedOut}>
+          <Overlay open={timedOut} onClose={() => setTimedOut(false)}>
             {lockPinOpen ? (
               <PinStep
                 title="Enter your PIN"
@@ -454,7 +454,7 @@ export default function Home(props: HomeProps) {
             )}
           </Overlay>
 
-          <Overlay open={hold.open}>
+          <Overlay open={hold.open} onClose={() => setHold((h) => ({ ...h, open: false }))}>
             <Screen gap={12} scroll>
               {hold.step === 'info' ? (
                 <>

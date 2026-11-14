@@ -110,7 +110,7 @@ function ListOverlay({
   }, [list]);
 
   return (
-    <Overlay open={!!list}>
+    <Overlay open={!!list} onClose={close}>
       <Screen scroll>
         <TopBar onBack={close} />
         <H1>{list === 'bank' ? 'Choose your bank' : 'Which money do you withdraw?'}</H1>

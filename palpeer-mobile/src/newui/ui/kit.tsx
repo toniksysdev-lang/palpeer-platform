@@ -971,31 +971,54 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
 }
 
 /**
- * Full-screen overlay used for steps that sit on top of a screen.
- * Uses an in-tree absolute view (not RN Modal) so PIN / system Modals can
- * present above it.
+ * Full-screen sheet over a tab/flow screen.
  *
- * Do not set Android elevation/zIndex here. Tab roots hide BottomNav while a
- * sheet is open (`dockVisible=false`), so sibling order is enough to cover the
- * scroll body. Elevation made the overlay paint above the *next* stack screen
- * after router.push — Home/More links looked dead on APK while :8082 was fine.
+ * - Web: in-tree absolute fill (preview stack sharing; matches :8082).
+ * - iOS/Android: real RN Modal so the sheet is never trapped under ScrollView
+ *   (zIndex-without-elevation failed on APK) and never paints over the *next*
+ *   stack screen after router.push (elevation did that).
  */
-export function Overlay({ open, children }: { open: boolean; children: ReactNode }) {
+export function Overlay({
+  open,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  /** Android back / request close — parents should clear the open flag. */
+  onClose?: () => void;
+  children: ReactNode;
+}) {
   const c = useC();
-  if (!open) return null;
-  // Fills TabRootShell's content pane only (ScrollView sibling, above BottomNav).
-  // Parent SafeArea already applied top inset — do not pad insets again.
-  // zIndex (no elevation) covers scroll content without stealing the next stack screen.
+
+  if (Platform.OS === 'web') {
+    if (!open) return null;
+    return (
+      <ScreenInsetCtx.Provider value={false}>
+        <View
+          pointerEvents="auto"
+          collapsable={false}
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: c.bg, zIndex: 1 }]}
+        >
+          {children}
+        </View>
+      </ScreenInsetCtx.Provider>
+    );
+  }
+
   return (
-    <ScreenInsetCtx.Provider value={false}>
-      <View
-        pointerEvents="auto"
-        collapsable={false}
-        style={[StyleSheet.absoluteFillObject, { backgroundColor: c.bg, zIndex: 1 }]}
-      >
-        {children}
-      </View>
-    </ScreenInsetCtx.Provider>
+    <Modal
+      visible={open}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={() => onClose?.()}
+      statusBarTranslucent
+    >
+      <ScreenInsetCtx.Provider value={false}>
+        <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: c.bg }}>
+          {children}
+        </SafeAreaView>
+      </ScreenInsetCtx.Provider>
+    </Modal>
   );
 }
 

@@ -183,7 +183,10 @@ export default function History(props: HistoryProps) {
       onRefresh={() => void onRefresh()}
       overlays={
         <>
-          <Overlay open={!!picker}>
+          <Overlay
+            open={!!picker}
+            onClose={picker === 'customRange' ? () => setPicker('period') : closePicker}
+          >
             <Screen scroll gap={10}>
               <TopBar
                 onBack={picker === 'customRange' ? () => setPicker('period') : closePicker}
@@ -248,7 +251,13 @@ export default function History(props: HistoryProps) {
             </Screen>
           </Overlay>
           
-          <Overlay open={!!props.detailOpen}>
+          <Overlay
+            open={!!props.detailOpen}
+            onClose={() => {
+              setCopiedKey(null);
+              props.onCloseDetail?.();
+            }}
+          >
             {props.detailLoading ? (
               <Loading title="Loading receipt" text="Just a moment." />
             ) : detail ? (

@@ -488,7 +488,7 @@ export default function Add(props: AddProps) {
       <View style={{ flex: 1 }} />
       <Btn label="Continue" busy={continueBusy} disabled={blocked} onPress={() => void goSend()} />
 
-      <Overlay open={picker}>
+      <Overlay open={picker} onClose={() => setPicker(false)}>
         <Screen>
           <TopBar onBack={() => setPicker(false)} />
           <H1>Which money do you add?</H1>
@@ -498,7 +498,7 @@ export default function Add(props: AddProps) {
         </Screen>
       </Overlay>
 
-      <Overlay open={emailsOpen}>
+      <Overlay open={emailsOpen} onClose={() => setEmailsOpen(false)}>
         <Screen scroll>
           <TopBar onBack={() => setEmailsOpen(false)} />
           <H1>Add Interac email or number</H1>

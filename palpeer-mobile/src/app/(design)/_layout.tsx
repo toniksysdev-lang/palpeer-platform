@@ -1,39 +1,45 @@
 import '@/design/dc/shims';
 
 import { Stack } from 'expo-router';
+import { View } from 'react-native';
 
 import { LookContext } from '@/design/dc/runtime';
 import { DARK_PAGE } from '@/design/dc/theme';
 import { useAppearance } from '@/hooks/useAppearance';
 import { NewUiProviders } from '@/newui/providers';
+import { DesignTabDock } from '@/newui/ui/DesignTabDock';
 
 /**
  * Design UI route group — Palpeer Simple Home artboards (change map).
  * Fonts load once in root `_layout` (with BrandSplash), so this layout never
  * returns a blank view on Android after splash hide.
  *
- * Match :3333: design screens are authored for the light artboard. Only remap
- * via LookContext when the user explicitly chose dark (not system dark).
- * NewUiProviders wrap the ported React UI kit (theme / i18n).
+ * Persistent BottomNav lives here (not per-screen) so the APK footer stays
+ * fixed like localhost:8082 instead of sliding with stack transitions.
  */
 export default function DesignLayout() {
   const { appearance } = useAppearance();
-  // Explicit dark only — same rule as newui ThemeProvider / :3333 light artboard.
   const designDark = appearance === 'dark';
 
   return (
     <LookContext.Provider value={{ dark: designDark }}>
       <NewUiProviders>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            animation: 'slide_from_right',
-            // Keep inactive tab roots from holding elevated/absolute overlays over
-            // the active route (Android APK: dead Home tiles / More links).
-            detachInactiveScreens: true,
-            contentStyle: { backgroundColor: designDark ? DARK_PAGE : '#F3F6F4' },
-          }}
-        />
+        <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, minHeight: 0, width: '100%' }}>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                animation: 'slide_from_right',
+                detachInactiveScreens: true,
+                contentStyle: {
+                  flex: 1,
+                  backgroundColor: designDark ? DARK_PAGE : '#F3F6F4',
+                },
+              }}
+            />
+          </View>
+          <DesignTabDock />
+        </View>
       </NewUiProviders>
     </LookContext.Provider>
   );

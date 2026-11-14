@@ -251,7 +251,7 @@ export default function More(props: MoreProps) {
       onRefresh={() => void onRefresh()}
       overlays={
         <>
-          <Overlay open={sheetOpen}>
+          <Overlay open={sheetOpen} onClose={back}>
             <Screen scroll gap={10}>
               <TopBar onBack={back} say={sheetTitle + '. ' + listRows.map((r) => r.title).join('. ') + '.'} />
               <Txt size={30} w="800" role="header">

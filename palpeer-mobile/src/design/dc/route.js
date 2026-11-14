@@ -61,8 +61,8 @@ export function liveScreen(Component, props = {}, useLiveProps) {
 }
 
 /**
- * Same as liveScreen but keeps the Home/History/Messages/More footer under
- * money-flow screens so the tab bar does not jump after leaving Home.
+ * Money-flow screens. Footer is persistent in `(design)/_layout` (DesignTabDock);
+ * FlowShell is only a flex body wrapper.
  */
 export function liveFlowScreen(Component, props = {}, useLiveProps) {
   // Lazy require avoids a cycle with newui during design bootstrap.
@@ -71,7 +71,7 @@ export function liveFlowScreen(Component, props = {}, useLiveProps) {
     const go = useGo();
     const live = typeof useLiveProps === 'function' ? useLiveProps() : {};
     return (
-      <FlowShell active="home">
+      <FlowShell>
         <Component {...props} {...live} go={go} />
       </FlowShell>
     );

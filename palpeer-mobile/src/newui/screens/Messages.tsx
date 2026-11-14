@@ -211,7 +211,7 @@ export default function Messages(props: MessagesProps) {
       onRefresh={() => void onRefresh()}
       overlays={
         <>
-          <Overlay open={talkOpen && !pinOpen}>
+          <Overlay open={talkOpen && !pinOpen} onClose={closeTalk}>
             {talk ? (
               <Screen gap={10}>
                 <TopBar onBack={closeTalk} say={say} />
@@ -294,7 +294,7 @@ export default function Messages(props: MessagesProps) {
             ) : null}
           </Overlay>
           
-          <Overlay open={pinOpen}>
+          <Overlay open={pinOpen} onClose={() => setPinOpen(false)}>
             <PinStep
               title="Enter your PIN"
               onBack={() => setPinOpen(false)}
@@ -316,7 +316,7 @@ export default function Messages(props: MessagesProps) {
             />
           </Overlay>
           
-          <Overlay open={chatOpen}>
+          <Overlay open={chatOpen} onClose={closeChat}>
             <Screen gap={10}>
               <TopBar onBack={closeChat} say={say} />
               <H1>Chat</H1>
