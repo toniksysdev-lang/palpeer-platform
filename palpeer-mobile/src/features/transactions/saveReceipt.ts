@@ -1,3 +1,4 @@
+import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -6,6 +7,35 @@ import { Image, Platform, type View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
 const PDF_PAGE_WIDTH = 612;
+const LOGO_MODULE = require('@/newui/assets/logo.png');
+
+let cachedLogoDataUri: string | null | undefined;
+
+/** Embeddable Palpeer logo for HTML receipts (PDF / web image). */
+export async function getReceiptLogoDataUri(): Promise<string | null> {
+  if (cachedLogoDataUri !== undefined) return cachedLogoDataUri;
+  try {
+    const asset = Asset.fromModule(LOGO_MODULE);
+    await asset.downloadAsync();
+    const uri = asset.localUri || asset.uri;
+    if (!uri) {
+      cachedLogoDataUri = null;
+      return null;
+    }
+    if (uri.startsWith('data:')) {
+      cachedLogoDataUri = uri;
+      return uri;
+    }
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    cachedLogoDataUri = `data:image/png;base64,${base64}`;
+    return cachedLogoDataUri;
+  } catch {
+    cachedLogoDataUri = null;
+    return null;
+  }
+}
 
 export class ReceiptShareUnavailableError extends Error {
   constructor() {
@@ -52,7 +82,7 @@ function imageSize(uri: string): Promise<{ width: number; height: number }> {
 }
 
 /** Build a self-contained HTML receipt (used for PDF and web image fallback). */
-export function buildReceiptHtml(content: ReceiptContent): string {
+export function buildReceiptHtml(content: ReceiptContent, logoDataUri?: string | null): string {
   const rows = normalizeRows(content.rows)
     .map(
       (r) =>
@@ -67,6 +97,9 @@ export function buildReceiptHtml(content: ReceiptContent): string {
           .map((s) => `<div class="step">${escapeHtml(s)}</div>`)
           .join('')}</div>`
       : '';
+  const logo = logoDataUri
+    ? `<img class="logo" src="${logoDataUri}" alt="Palpeer" />`
+    : '';
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -74,6 +107,7 @@ export function buildReceiptHtml(content: ReceiptContent): string {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
   body { margin: 0; padding: 24px; font-family: system-ui, -apple-system, sans-serif; background: #F3F6F4; color: #0E1F19; }
+  .logo { display: block; height: 36px; width: auto; max-width: 160px; margin: 0 0 14px; object-fit: contain; }
   h1 { font-size: 28px; font-weight: 800; margin: 0 0 16px; }
   .card { background: #FFFFFF; border-radius: 22px; padding: 16px 18px; margin-bottom: 12px; }
   table { width: 100%; border-collapse: collapse; }
@@ -89,6 +123,7 @@ export function buildReceiptHtml(content: ReceiptContent): string {
 </style>
 </head>
 <body>
+  ${logo}
   <h1>${escapeHtml(content.title || 'Receipt')}</h1>
   <div class="card">
     <table>${rows}</table>
@@ -233,18 +268,34 @@ export async function saveReceiptAsPdf(
 export async function saveReceiptContentAsPdf(
   content: ReceiptContent,
   fileName = 'p2p-receipt',
+  viewRef?: RefObject<View | null>,
 ): Promise<void> {
   const base = safeFileName(fileName);
-  const pdf = await Print.printToFileAsync({
-    html: buildReceiptHtml(content),
-    width: PDF_PAGE_WIDTH,
-  });
-  await shareOrDownload(pdf.uri, {
-    mimeType: 'application/pdf',
-    dialogTitle: 'Save as PDF',
-    UTI: 'com.adobe.pdf',
-    fileName: `${base}.pdf`,
-  });
+  const logoDataUri = await getReceiptLogoDataUri();
+  try {
+    const pdf = await Print.printToFileAsync({
+      html: buildReceiptHtml(content, logoDataUri),
+      width: PDF_PAGE_WIDTH,
+    });
+    await shareOrDownload(pdf.uri, {
+      mimeType: 'application/pdf',
+      dialogTitle: 'Save as PDF',
+      UTI: 'com.adobe.pdf',
+      fileName: `${base}.pdf`,
+    });
+    return;
+  } catch (htmlErr) {
+    // Android / some devices fail HTML→PDF; fall back to capturing the on-screen receipt.
+    if (viewRef?.current) {
+      try {
+        await saveReceiptAsPdf(viewRef, base);
+        return;
+      } catch {
+        // Prefer the original HTML error if capture also fails.
+      }
+    }
+    throw htmlErr;
+  }
 }
 
 /**

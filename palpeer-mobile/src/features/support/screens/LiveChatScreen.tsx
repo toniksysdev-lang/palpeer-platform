@@ -121,6 +121,7 @@ export function LiveChatScreen() {
   const [bootError, setBootError] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [speaking, setSpeaking] = useState(false);
+  const [sendPressed, setSendPressed] = useState(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const inputRef = useRef<TextInput>(null);
   const sessionRef = useRef<string | null>(null);
@@ -527,6 +528,14 @@ export function LiveChatScreen() {
       : connectingLabel(!!sessionId, !!bootError, booting, awaitingEscalation);
 
   const canSend = !sending && !booting && !!sessionId && !awaitingEscalation && !!draft.trim();
+  // Chips sit under the thread (not inside the welcome bubble) so user replies aren't pushed away.
+  const showQuickChips =
+    !booting &&
+    !bootError &&
+    mode === 'ai' &&
+    !awaitingEscalation &&
+    messages.some((m) => m.quickChips) &&
+    !messages.some((m) => m.sender === 'user');
   // Lift the composer above the system / :3333 keypad. Pad the column so the message field
   // sits just above the keyboard (keyboard stays below the field).
   const keyboardLift = keyboardHeight > 0 ? keyboardHeight : 0;
@@ -641,10 +650,8 @@ export function LiveChatScreen() {
                     email,
                     subject: 'Support request from chat',
                   }}
-                  onQuickChip={(prompt, faqId) => void sendText(prompt, { faqId })}
                   onTalkToAgent={() => void escalateToAgent()}
                   onContinueAi={() => setAwaitingEscalation(false)}
-                  chipsDisabled={sending || booting || !sessionId || awaitingEscalation}
                   onTicketSubmitted={(ticket) => {
                     push({
                       id: `ticket-ok-${Date.now()}`,
@@ -666,6 +673,33 @@ export function LiveChatScreen() {
             style={[styles.composer, { paddingBottom: composerBottomPad }]}
             testID="live-chat-composer"
           >
+            {showQuickChips ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipRow}
+                style={styles.chipBar}
+                keyboardShouldPersistTaps="handled"
+                testID="live-chat-quick-chips"
+              >
+                {QUICK_CHIPS.map((chip) => (
+                  <Pressable
+                    key={chip.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={chip.label}
+                    disabled={sending || booting || !sessionId}
+                    onPress={() => void sendText(chip.prompt, { faqId: chip.faqId })}
+                    testID={`live-chat-chip-${chip.id}`}
+                    style={[
+                      styles.chip,
+                      (sending || booting || !sessionId) && styles.chipDisabled,
+                    ]}
+                  >
+                    <Text style={styles.chipLabel}>{chip.label}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
             {awaitingEscalation ? (
               <Text style={styles.composerHint}>Choose an option above, or ask for a person.</Text>
             ) : !sessionId && !booting ? (
@@ -697,11 +731,16 @@ export function LiveChatScreen() {
                 accessibilityState={{ disabled: !canSend, busy: sending }}
                 disabled={!canSend}
                 onPress={send}
+                onPressIn={() => setSendPressed(true)}
+                onPressOut={() => setSendPressed(false)}
                 testID="live-chat-send"
-                style={({ pressed }) => [
+                style={[
                   styles.sendBtn,
-                  !canSend && styles.sendBtnDisabled,
-                  pressed && canSend && styles.pressed,
+                  {
+                    // Always brand green — Fabric drops function-style backgrounds (white-on-white).
+                    backgroundColor: D.green,
+                    opacity: !canSend ? 0.55 : sendPressed ? 0.88 : 1,
+                  },
                 ]}
               >
                 {sending ? (
@@ -733,16 +772,12 @@ function connectingLabel(
 function LiveChatBubble({
   message,
   ticketPrefill,
-  onQuickChip,
-  chipsDisabled,
   onTalkToAgent,
   onContinueAi,
   onTicketSubmitted,
 }: {
   message: ChatMessage;
   ticketPrefill?: { fullName?: string | null; email?: string | null; subject?: string | null };
-  onQuickChip?: (prompt: string, faqId?: string) => void;
-  chipsDisabled?: boolean;
   onTalkToAgent: () => void;
   onContinueAi: () => void;
   onTicketSubmitted?: (ticket: { ticketNumber?: string }) => void;
@@ -793,32 +828,6 @@ function LiveChatBubble({
           </>
         )}
       </View>
-      {message.quickChips ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-          testID="live-chat-quick-chips"
-        >
-          {QUICK_CHIPS.map((chip) => (
-            <Pressable
-              key={chip.id}
-              accessibilityRole="button"
-              accessibilityLabel={chip.label}
-              disabled={chipsDisabled}
-              onPress={() => onQuickChip?.(chip.prompt, chip.faqId)}
-              testID={`live-chat-chip-${chip.id}`}
-              style={({ pressed }) => [
-                styles.chip,
-                chipsDisabled && styles.chipDisabled,
-                pressed && !chipsDisabled && styles.pressed,
-              ]}
-            >
-              <Text style={styles.chipLabel}>{chip.label}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      ) : null}
       {message.escalationPrompt ? (
         <View style={styles.choiceRow}>
           <Pressable
@@ -954,9 +963,14 @@ const styles = StyleSheet.create({
   threadContent: {
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 16,
-    gap: 14,
-    flexGrow: 1,
+    // Extra bottom so the last bubble clears the composer (scrollToEnd + flexGrow was clipping).
+    paddingBottom: 28,
+    gap: 8,
+  },
+  chipBar: {
+    flexGrow: 0,
+    paddingHorizontal: 14,
+    paddingBottom: 4,
   },
   empty: {
     alignItems: 'center',
@@ -1003,9 +1017,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
-  sendBtnDisabled: {
-    backgroundColor: D.greenDisabled,
-  },
   sendBtnLabel: {
     fontFamily: Platform.select({ web: D.font, default: undefined }),
     fontSize: 17,
@@ -1039,7 +1050,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   bubbleWrap: {
-    gap: 8,
+    gap: 4,
   },
   who: {
     fontFamily: Platform.select({ web: D.font, default: undefined }),

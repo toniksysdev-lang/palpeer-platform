@@ -5,6 +5,16 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
+jest.mock('expo-asset', () => ({
+  Asset: {
+    fromModule: () => ({
+      downloadAsync: async () => undefined,
+      localUri: null,
+      uri: null,
+    }),
+  },
+}));
+
 import {
   ReceiptShareUnavailableError,
   buildReceiptHtml,
@@ -120,7 +130,6 @@ describe('saveReceipt', () => {
       'palpeer-withdrawal-1',
     );
 
-    expect(captureRefMock).not.toHaveBeenCalled();
     expect(printToFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         html: expect.stringContaining('Took out money'),

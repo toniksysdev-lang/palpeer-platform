@@ -1068,15 +1068,19 @@ export default function Start(props: StartProps) {
     return (
       <Screen style={{ paddingBottom: 0 }}>
         <TopBar onBack={() => go('forgot')} say={say} />
-        {/* When the pad is open, dock the code field just above the keypad (justifyContent — marginTop:auto is ignored on RN web). */}
-        <View
-          style={{
-            flex: 1,
+        {/* Scrollable copy + code field; Continue stays above the in-flow number pad (same as email OTP). */}
+        <ScrollView
+          style={{ flex: 1, width: '100%', minHeight: 0 }}
+          contentContainerStyle={{
+            flexGrow: 1,
             width: '100%',
-            minHeight: 0,
             gap: sz(14),
+            paddingBottom: sz(10),
             justifyContent: forgotCodePadOpen ? 'flex-end' : 'flex-start',
           }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator
+          showsHorizontalScrollIndicator={false}
         >
           {!forgotCodePadOpen ? (
             <>
@@ -1104,7 +1108,9 @@ export default function Start(props: StartProps) {
               {authMsg}
             </Txt>
           ) : null}
-          {!forgotCodePadOpen ? <View style={{ flex: 1, minHeight: 0 }} /> : null}
+          {!forgotCodePadOpen ? <View style={{ flexGrow: 1, minHeight: sz(8) }} /> : null}
+        </ScrollView>
+        <View style={{ width: '100%', gap: sz(8), paddingTop: sz(4) }}>
           <Btn label="Continue" busy={busy} disabled={s.fcode.length !== 6} onPress={() => go('forgotNew')} />
         </View>
         <NumberPadSlot forId="forgot-code" />

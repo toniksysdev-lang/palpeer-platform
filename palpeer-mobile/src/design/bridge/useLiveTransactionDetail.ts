@@ -153,13 +153,14 @@ export function useLiveTransactionDetail(typeRaw: string, idRaw: string) {
   );
 
   const onSavePdf = useCallback(
-    async (_ref: RefObject<View | null>) => {
+    async (ref: RefObject<View | null>) => {
       if (!detail || savingFormat) return;
       setSavingFormat('pdf');
       try {
         await saveReceiptContentAsPdf(
           toReceiptContent(detail),
           `palpeer-${detail.type}-${detail.id}`,
+          ref,
         );
       } catch {
         toast.show({ type: 'error', title: "Couldn't save PDF" });

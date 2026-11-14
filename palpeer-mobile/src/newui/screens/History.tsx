@@ -1,7 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type RefObject } from 'react';
-import { Pressable, ScrollView, View, type View as RNView } from 'react-native';
+import { Image, Pressable, ScrollView, View, type View as RNView } from 'react-native';
 import type { HistoryListItem } from '@/design/bridge/useLiveHistory';
 import { DateOfBirthField } from '@/features/profile/DateOfBirthField';
 import { toDisplayDate, toIsoDate } from '@/features/profile/schemas';
@@ -270,7 +270,13 @@ export default function History(props: HistoryProps) {
                   say={sayDetail}
                 />
                 <H1>{detail.title}</H1>
-                <View ref={receiptRef} collapsable={false} style={{ gap: 12 }}>
+                <View ref={receiptRef} collapsable={false} style={{ gap: 12, backgroundColor: c.bg }}>
+                  <Image
+                    source={require('@/newui/assets/logo.png')}
+                    style={{ width: 140, height: 48, alignSelf: 'flex-start' }}
+                    resizeMode="contain"
+                    accessibilityLabel="Palpeer"
+                  />
                   <Card gap={4}>
                     {detail.rows.map(([k, v]) => (
                       <Line key={k} k={k} v={v} />

@@ -1,7 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { useMemo, useRef, useState, type RefObject } from 'react';
-import { View, type View as RNView } from 'react-native';
+import { Image, View, type View as RNView } from 'react-native';
 import type { HistoryListItem } from '@/design/bridge/useLiveHistory';
 import { useC } from '@/newui/lib/theme';
 import { Btn, Card, Divider, H1, Line, Loading, Row, Screen, TopBar, Txt } from '@/newui/ui/kit';
@@ -79,7 +79,13 @@ export default function TransactionDetail(props: TransactionDetailProps) {
     <Screen scroll gap={12}>
       <TopBar say={say} />
       <H1>{detail.title}</H1>
-      <View ref={receiptRef} collapsable={false} style={{ gap: 12 }}>
+      <View ref={receiptRef} collapsable={false} style={{ gap: 12, backgroundColor: c.bg }}>
+        <Image
+          source={require('@/newui/assets/logo.png')}
+          style={{ width: 140, height: 48, alignSelf: 'flex-start' }}
+          resizeMode="contain"
+          accessibilityLabel="Palpeer"
+        />
         <Card gap={4}>
           {detail.rows.map(([k, v]) => (
             <Line key={k} k={k} v={v} />
