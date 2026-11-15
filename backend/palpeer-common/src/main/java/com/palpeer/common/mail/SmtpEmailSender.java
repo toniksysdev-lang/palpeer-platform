@@ -9,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.mail.MailProperties;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -62,13 +61,8 @@ public class SmtpEmailSender implements EmailSender {
             helper.setTo(to);
             helper.setSubject(subject);
             if (hasHtml) {
+                // Logo is loaded from EmailBrand.LOGO_HTTPS_URL in HTML (no CID inline).
                 helper.setText(textBody == null ? "" : textBody, htmlBody);
-                ClassPathResource logo = new ClassPathResource("mail/palpeer-logo.png");
-                if (logo.exists()) {
-                    helper.addInline(EmailBrand.LOGO_CONTENT_ID, logo, "image/png");
-                } else {
-                    log.warn("Email logo missing on classpath (mail/palpeer-logo.png); HTML will show broken image");
-                }
             } else {
                 helper.setText(textBody == null ? "" : textBody, false);
             }

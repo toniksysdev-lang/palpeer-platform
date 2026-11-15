@@ -84,7 +84,7 @@ public final class EmailLayout {
                         EmailBrand.PRIMARY,
                         EmailBrand.BORDER,
                         escapeAttr(EmailBrand.SITE_URL),
-                        escapeAttr(EmailBrand.LOGO_CID_SRC),
+                        escapeAttr(EmailBrand.LOGO_HTTPS_URL),
                         EmailBrand.LOGO_WIDTH_PX,
                         EmailBrand.LOGO_WIDTH_PX,
                         EmailBrand.TEXT_DIM,

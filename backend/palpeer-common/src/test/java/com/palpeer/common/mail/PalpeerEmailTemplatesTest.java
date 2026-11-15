@@ -17,7 +17,7 @@ class PalpeerEmailTemplatesTest {
         assertTrue(email.html().contains(EmailBrand.BG));
         assertTrue(email.html().contains(EmailBrand.PRIMARY));
         assertTrue(email.html().contains("517200"));
-        assertTrue(email.html().contains(EmailBrand.LOGO_CID_SRC));
+        assertTrue(email.html().contains(EmailBrand.LOGO_HTTPS_URL));
         assertTrue(email.html().contains("alt=\"Palpeer\""));
         assertTrue(email.subject().contains("Palpeer"));
         assertFalse(email.subject().equals(email.subject().toUpperCase()));
@@ -44,7 +44,7 @@ class PalpeerEmailTemplatesTest {
         assertTrue(email.html().contains(EmailBrand.BG));
         assertTrue(email.html().contains(EmailBrand.PRIMARY));
         assertTrue(email.html().contains("517200"));
-        assertTrue(email.html().contains(EmailBrand.LOGO_CID_SRC));
+        assertTrue(email.html().contains(EmailBrand.LOGO_HTTPS_URL));
         assertTrue(email.text().contains("517200"));
         assertFalse(email.html().contains("<script"));
     }
@@ -79,7 +79,7 @@ class PalpeerEmailTemplatesTest {
         assertTrue(email.html().contains("Funds arrived"));
         assertTrue(email.html().contains("&lt;b&gt;100&lt;/b&gt;"));
         assertTrue(email.html().contains(EmailBrand.PRIMARY));
-        assertTrue(email.html().contains(EmailBrand.LOGO_CID_SRC));
+        assertTrue(email.html().contains(EmailBrand.LOGO_HTTPS_URL));
         assertTrue(email.text().contains("You received <b>100</b> CAD."));
     }
 
@@ -129,7 +129,7 @@ class PalpeerEmailTemplatesTest {
         assertTrue(email.html().contains("new.user@example.com"));
         assertTrue(email.html().contains(EmailBrand.PRIMARY));
         assertTrue(email.html().contains(EmailBrand.BG));
-        assertTrue(email.html().contains(EmailBrand.LOGO_CID_SRC));
+        assertTrue(email.html().contains(EmailBrand.LOGO_HTTPS_URL));
         assertTrue(email.text().contains("new.user@example.com"));
     }
 
@@ -155,13 +155,13 @@ class PalpeerEmailTemplatesTest {
 
     @Test
     void allTemplatesIncludeHeaderLogo() {
-        assertTrue(PalpeerEmailTemplates.emailVerification("1").html().contains(EmailBrand.LOGO_CID_SRC));
-        assertTrue(PalpeerEmailTemplates.otp("password reset", "2").html().contains(EmailBrand.LOGO_CID_SRC));
-        assertTrue(PalpeerEmailTemplates.welcome("a@b.co").html().contains(EmailBrand.LOGO_CID_SRC));
-        assertTrue(PalpeerEmailTemplates.notification("Hi", "Body").html().contains(EmailBrand.LOGO_CID_SRC));
+        assertTrue(PalpeerEmailTemplates.emailVerification("1").html().contains(EmailBrand.LOGO_HTTPS_URL));
+        assertTrue(PalpeerEmailTemplates.otp("password reset", "2").html().contains(EmailBrand.LOGO_HTTPS_URL));
+        assertTrue(PalpeerEmailTemplates.welcome("a@b.co").html().contains(EmailBrand.LOGO_HTTPS_URL));
+        assertTrue(PalpeerEmailTemplates.notification("Hi", "Body").html().contains(EmailBrand.LOGO_HTTPS_URL));
         assertTrue(PalpeerEmailTemplates.newDeviceLogin(
                         "a@b.co", "phone", "now", "https://x/secure/account-lock/z", EmailBrand.SUPPORT_EMAIL)
                 .html()
-                .contains(EmailBrand.LOGO_CID_SRC));
+                .contains(EmailBrand.LOGO_HTTPS_URL));
     }
 }
