@@ -221,11 +221,18 @@ export default function Change(props: ChangeProps) {
         </Card>
         <TopBar
           onBack={() => setStage('form')}
-          say={'Is this right? You give ' + giveText + '. You get ' + nowGet + '. ' + (expired ? 'Time is over. Get a new price.' : 'If it is right, tap Yes, change your money.')}
+          say={
+            'Is this right? You give ' +
+            giveText +
+            '. You get ' +
+            nowGet +
+            '. ' +
+            (expired ? 'Time is over. Get a new price.' : 'If it is right, tap Confirm Exchange.')
+          }
         />
         <View style={{ flex: 1 }} />
         <Btn
-          label={expired ? 'Get a new price' : 'Yes, change your money'}
+          label={expired ? 'Get a new price' : 'Confirm Exchange'}
           onPress={() => void (expired ? fetchQuote() : setStage('pin'))}
         />
       </Screen>

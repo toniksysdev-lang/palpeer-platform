@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Modal, Pressable, ScrollView, View } from 'react-native';
+import { negotiationPrefillsFor, type NegotiationPrefill } from '@/features/chat/logic';
 import { PinStep } from '@/newui/features/PinStep';
 import { useListen } from '@/newui/lib/speech';
 import { useC } from '@/newui/lib/theme';
@@ -90,6 +91,12 @@ export default function Messages(props: MessagesProps) {
   const [talkBusy, setTalkBusy] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [prefillOpen, setPrefillOpen] = useState(false);
+  const [selectedPrefill, setSelectedPrefill] = useState<NegotiationPrefill | null>(null);
+  const chatPrefills = useMemo(
+    () => negotiationPrefillsFor({ isSeller: false, canAct: true }),
+    [],
+  );
 
   useEffect(() => {
     if (params.section === 'alerts') setTab('alerts');
@@ -350,11 +357,86 @@ export default function Messages(props: MessagesProps) {
                   {chatError}
                 </Txt>
               ) : null}
-              <Field label="Message" value={draft} onChangeText={(v) => { setDraft(v); setChatError(''); }} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Suggested message"
+                onPress={() => setPrefillOpen(true)}
+                style={{
+                  minHeight: 52,
+                  borderRadius: 14,
+                  backgroundColor: c.field,
+                  paddingHorizontal: 12,
+                  justifyContent: 'center',
+                }}
+              >
+                <Txt size={14} w="700" color="text3">
+                  Suggested message
+                </Txt>
+                <Txt size={17} w="800" color={selectedPrefill ? c.text : 'text3'}>
+                  {selectedPrefill?.label ?? 'Choose a message'}
+                </Txt>
+              </Pressable>
+              <Field
+                label="Message"
+                value={draft}
+                onChangeText={(v) => {
+                  setDraft(v);
+                  setChatError('');
+                  setSelectedPrefill(null);
+                }}
+              />
               <Row gap={8}>
                 <Btn kind="outline" size="mid" label="Back" onPress={closeChat} style={{ flex: 1 }} />
                 <Btn size="mid" label="Send" onPress={() => void sendChat()} style={{ flex: 1 }} />
               </Row>
+              <Modal visible={prefillOpen} transparent animationType="fade" onRequestClose={() => setPrefillOpen(false)}>
+                <Pressable
+                  style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }}
+                  onPress={() => setPrefillOpen(false)}
+                >
+                  <View
+                    style={{
+                      maxHeight: '70%',
+                      backgroundColor: c.card,
+                      borderTopLeftRadius: 22,
+                      borderTopRightRadius: 22,
+                      padding: 16,
+                      gap: 8,
+                    }}
+                  >
+                    <Txt size={20} w="800">
+                      Suggested message
+                    </Txt>
+                    <ScrollView style={{ maxHeight: 360 }} keyboardShouldPersistTaps="handled">
+                      {chatPrefills.map((item) => (
+                        <Pressable
+                          key={item.id}
+                          accessibilityRole="button"
+                          onPress={() => {
+                            setSelectedPrefill(item);
+                            setDraft(item.build({}));
+                            setChatError('');
+                            setPrefillOpen(false);
+                          }}
+                          style={{
+                            minHeight: 52,
+                            borderRadius: 14,
+                            paddingHorizontal: 12,
+                            justifyContent: 'center',
+                            backgroundColor: selectedPrefill?.id === item.id ? c.brand : c.field,
+                            marginBottom: 8,
+                          }}
+                        >
+                          <Txt size={17} w="700" color={selectedPrefill?.id === item.id ? '#FFFFFF' : c.text}>
+                            {item.label}
+                          </Txt>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                    <Btn kind="outline" size="mid" label="Close" onPress={() => setPrefillOpen(false)} />
+                  </View>
+                </Pressable>
+              </Modal>
             </Screen>
           </Overlay>
         </>

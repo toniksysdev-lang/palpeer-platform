@@ -22,15 +22,32 @@ const HOME_FLOW_LEAVES = new Set([
   'Wallets',
   'WalletAdd',
   'Timeout',
+  'People',
+  'PeopleOffer',
+  'PeoplePost',
+  'PeopleTalk',
+  'PeopleLive',
 ]);
 
 /** Screens that should show the persistent dock (tab roots + common money flows). */
 const DOCK_LEAVES = new Set([...Object.keys(TAB_BY_LEAF), ...HOME_FLOW_LEAVES]);
 
+/** Feature stacks outside (design) that should still show the newui dock. */
+const FEATURE_ROOT_TAB: Record<string, TabKey> = {
+  p2p: 'messages',
+  negotiation: 'messages',
+  chat: 'messages',
+};
+
 function pathLeaf(pathname: string | null | undefined): string {
   if (!pathname) return '';
   const parts = pathname.split('/').filter(Boolean);
   return parts[parts.length - 1] || '';
+}
+
+function pathRoot(pathname: string | null | undefined): string {
+  if (!pathname) return '';
+  return pathname.split('/').filter(Boolean)[0] || '';
 }
 
 /**
@@ -41,8 +58,10 @@ export function DesignTabDock() {
   const pathname = usePathname();
   const unread = useDesignDockUnread();
   const leaf = useMemo(() => pathLeaf(pathname), [pathname]);
-  const show = DOCK_LEAVES.has(leaf);
-  const active: TabKey = TAB_BY_LEAF[leaf] ?? 'home';
+  const root = useMemo(() => pathRoot(pathname), [pathname]);
+  const featureTab = FEATURE_ROOT_TAB[root];
+  const show = DOCK_LEAVES.has(leaf) || !!featureTab;
+  const active: TabKey = featureTab ?? TAB_BY_LEAF[leaf] ?? 'home';
 
   if (!show) return null;
 

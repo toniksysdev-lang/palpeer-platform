@@ -1,16 +1,17 @@
 import { Stack } from 'expo-router';
 
-import { useTheme } from '@/providers/ThemeProvider';
+import { NewUiStackShell } from '@/newui/ui/NewUiStackShell';
 
 export default function ChatLayout() {
-  const theme = useTheme();
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        animation: 'slide_from_right',
-        contentStyle: { backgroundColor: theme.colors.background },
-      }}
-    />
+    <NewUiStackShell>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'slide_from_right',
+          contentStyle: { flex: 1, backgroundColor: 'transparent' },
+        }}
+      />
+    </NewUiStackShell>
   );
 }

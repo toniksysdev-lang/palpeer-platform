@@ -32,7 +32,7 @@ import { negotiationErrorMessage, openNegotiationFor } from '../logic';
 export function MakeOfferScreen() {
   const { requestId } = useLocalSearchParams<{ requestId: string }>();
   const request = useGetRequestQuery(requestId ?? skipToken);
-  const header = <StackHeader title="Make an offer" />;
+  const header = <StackHeader title="Create your offer" />;
 
   if (request.error && !request.data) {
     return (

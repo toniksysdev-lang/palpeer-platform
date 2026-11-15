@@ -1,7 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Linking, Modal, Pressable, Share, View } from 'react-native';
+import { Linking, Modal, Pressable, ScrollView, Share, View } from 'react-native';
 import type { useLivePeople } from '@/design/bridge/useLivePeople';
 import { PinStep } from '@/newui/features/PinStep';
 import { amtIn, amtShow } from '@/newui/lib/money';
@@ -94,15 +94,14 @@ const rewardOff = (c: Code, fee: number, rate: number, r?: Reward) => {
 };
 const pointsUsed = (c: Code, off: number, rate: number) => Math.ceil((c === 'CAD' ? off : off / rate) * POINTS_PER_CAD);
 const feeShown = (c: Code, fee: number, off: number) => (off >= fee ? 'Free' : '−' + fmt(c, fee - off));
-const hoursLabel = (h: number) => {
-  if (h >= 24 && h % 24 === 0) {
-    const d = h / 24;
-    return d + (d === 1 ? ' Day' : ' Days');
-  }
-  return h + (h === 1 ? ' hour' : ' hours');
-};
-/** Offer end choices: 3 days / 7 days (stored as hours for the API). */
-const OFFER_END_HOURS = [72, 168] as const;
+/** Offer end choices (stored as hours for the API). */
+const OFFER_END_OPTIONS = [
+  { hours: 3, label: '3 Hours' },
+  { hours: 24, label: '24 Hours' },
+  { hours: 72, label: '3 Days' },
+  { hours: 168, label: '7 Days' },
+] as const;
+const hoursLabel = (h: number) => OFFER_END_OPTIONS.find((o) => o.hours === h)?.label ?? h + (h === 1 ? ' hour' : ' hours');
 const leftLabel = (s: number) => {
   if (s <= 0) return 'Ended';
   const h = Math.floor(s / 3600);
@@ -226,7 +225,7 @@ export default function People(props: PeopleProps) {
   const [amount, setAmount] = useState('100');
   const [least, setLeast] = useState<string | null>(null);
   const [rate, setRate] = useState(990);
-  const [hours, setHours] = useState<number>(OFFER_END_HOURS[0]);
+  const [hours, setHours] = useState<number>(OFFER_END_OPTIONS[0].hours);
   const [more, setMore] = useState(false);
   const [pinFor, setPinFor] = useState<'buy' | 'post' | 'nudge'>('buy');
   const [pinBack, setPinBack] = useState<Stage>('offer');
@@ -281,8 +280,15 @@ export default function People(props: PeopleProps) {
   }, [props.stage, none]);
 
   const bal = useCallback(
-    (k: Code) => (backend ? props.liveBalances?.[k] ?? 0 : DEMO_BAL[k] ?? 0),
-    [backend, props.liveBalances],
+    (k: Code) => {
+      if (!backend) return DEMO_BAL[k] ?? 0;
+      const key = k.toUpperCase() as Code;
+      const fromMap = props.liveBalances?.[key] ?? props.liveBalances?.[k];
+      if (typeof fromMap === 'number' && Number.isFinite(fromMap)) return fromMap;
+      const wallet = props.liveWallets?.find((w) => (w.code || '').toUpperCase() === key);
+      return typeof wallet?.bal === 'number' && Number.isFinite(wallet.bal) ? wallet.bal : 0;
+    },
+    [backend, props.liveBalances, props.liveWallets],
   );
 
   const negotiationFor = useCallback(
@@ -600,7 +606,7 @@ export default function People(props: PeopleProps) {
     offer: "A person's offer. You give " + deal.youGive + '. After the fee, you get ' + deal.youGet + '. Tap Accept and buy, or offer a different price.',
     counter: 'Offer a different price. Your price is ' + myPrice + ' naira for one Canada dollar. Tap minus or plus, then send.',
     talk: waiting ? 'Waiting for the person to answer.' : "The person's price is " + dealRate + ' naira for one Canada dollar. You can accept, offer again, or say no.',
-    post: 'Make your offer. You give ' + postView.give + '. The person gets ' + postView.net + ' after their fee. You get ' + postView.get + ' after your fee.',
+    post: 'Create your offer. You give ' + postView.give + '. The person gets ' + postView.net + ' after their fee. You get ' + postView.get + ' after your fee.',
     pin: 'Enter your 4 number PIN, or use your fingerprint.',
     bought: 'Done. ' + rec.youGet + ' is now in your ' + rec.getName + '.',
     ended: 'Your offer ended. No one bought the rest. ' + endedAmt + ' is back in your wallet.',
@@ -888,7 +894,7 @@ export default function People(props: PeopleProps) {
   if (stage === 'post')
     return (
       <Screen scroll>
-        <H1>Make your offer</H1>
+        <H1>Create your offer</H1>
         <Card>
           <Row gap={10}>
             <Flag cc={WD[dir].cc} w={46} />
@@ -961,15 +967,29 @@ export default function People(props: PeopleProps) {
             <Txt size={17} w="700">
               Your offer ends in
             </Txt>
-            <Row gap={8}>
-              {OFFER_END_HOURS.map((h) => (
-                <Pressable key={h} accessibilityRole="radio" accessibilityState={{ selected: h === hours }} onPress={() => setHours(h)} style={{ flex: 1, minHeight: 52, borderRadius: 14, backgroundColor: h === hours ? c.brand : c.field, alignItems: 'center', justifyContent: 'center' }}>
-                  <Txt size={17} w="800" color={h === hours ? '#FFFFFF' : c.text}>
-                    {hoursLabel(h)}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
+              {OFFER_END_OPTIONS.map((opt) => (
+                <Pressable
+                  key={opt.hours}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: opt.hours === hours }}
+                  onPress={() => setHours(opt.hours)}
+                  style={{
+                    minWidth: 104,
+                    paddingHorizontal: 14,
+                    minHeight: 52,
+                    borderRadius: 14,
+                    backgroundColor: opt.hours === hours ? c.brand : c.field,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Txt size={16} w="800" color={opt.hours === hours ? '#FFFFFF' : c.text} noTr>
+                    {opt.label}
                   </Txt>
                 </Pressable>
               ))}
-            </Row>
+            </ScrollView>
           </Card>
         ) : null}
         <Card gap={4} bg={c.tileGreen}>
@@ -1193,7 +1213,7 @@ export default function People(props: PeopleProps) {
           <P center>Make your own offer. A person can take it.</P>
         </View>
         <TopBar say={say.list} />
-        <Btn label="Make your offer" onPress={() => { setReward(null); setStage('post'); }} />
+        <Btn label="Create your offer" onPress={() => { setReward(null); setStage('post'); }} />
         <Btn kind="link" label="Instant Exchange instead" onPress={() => router.replace('/Change')} />
       </Screen>
     );
@@ -1262,7 +1282,7 @@ export default function People(props: PeopleProps) {
         );
       })}
       <TopBar say={say.list} />
-      <Btn icon="plus" label="Make your offer" onPress={() => { setReward(null); setStage('post'); }} />
+      <Btn icon="plus" label="Create your offer" onPress={() => { setReward(null); setStage('post'); }} />
       {overlays}
     </Screen>
   );

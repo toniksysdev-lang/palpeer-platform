@@ -104,7 +104,10 @@ export function useLivePeople() {
   const liveBalances = useMemo(() => {
     const map: Record<string, number> = {};
     for (const w of walletsQ.data ?? []) {
-      map[w.currencyCode] = balanceNumber(w.availableBalance);
+      // Normalize codes so People bal('NGN') matches API keys like "ngn" / "NGN".
+      const code = (w.currencyCode || '').trim().toUpperCase();
+      if (!code) continue;
+      map[code] = balanceNumber(w.availableBalance);
     }
     return map;
   }, [walletsQ.data]);

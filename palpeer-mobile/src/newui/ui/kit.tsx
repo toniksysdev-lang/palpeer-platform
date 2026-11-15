@@ -463,6 +463,7 @@ export function Btn({
   const c = useC();
   const t = useT();
   const { s } = useLayout();
+  // minHeight (not fixed height) so long labels like "Confirm Exchange" wrap on narrow phones.
   const h = s(size === 'big' ? 68 : size === 'mid' ? 60 : 52);
   const fs = size === 'big' ? 22 : size === 'mid' ? 19 : 17;
   const bgMap: Record<BtnKind, string> = {
@@ -505,7 +506,7 @@ export function Btn({
       onPressOut={() => setPressed(false)}
       style={[
         {
-          height: kind === 'link' ? undefined : h,
+          // Use minHeight (not fixed height) so long labels stay fully visible on narrow phones.
           minHeight: kind === 'link' ? s(48) : h,
           // Link / fit CTAs sit beside other content — width 100% shoved them off-screen.
           width: inline ? undefined : '100%',
@@ -519,7 +520,9 @@ export function Btn({
           alignItems: 'center',
           justifyContent: 'center',
           flexDirection: 'row',
+          flexWrap: 'wrap',
           paddingHorizontal: kind === 'link' ? s(4) : s(14),
+          paddingVertical: kind === 'link' ? 0 : s(10),
           opacity: pressed && !busy ? 0.85 : 1,
         },
         style,
@@ -532,7 +535,10 @@ export function Btn({
           w="800"
           color={fg}
           center
-          style={kind === 'link' && !busy ? { textDecorationLine: 'underline' } : undefined}
+          style={[
+            { flexShrink: 1, maxWidth: '100%' },
+            kind === 'link' && !busy ? { textDecorationLine: 'underline' } : null,
+          ]}
         >
           {shown}
         </Txt>

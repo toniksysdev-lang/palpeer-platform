@@ -72,7 +72,7 @@ export function NegotiationDetailScreen() {
 
   const header = (
     <StackHeader
-      title="Offer"
+      title="Your offer"
       onBack={() =>
         router.canGoBack()
           ? router.back()

@@ -132,7 +132,7 @@ export function RequestDetailScreen() {
     setAppliedPromoCode(null);
   }, [appliedPromoCode, feeEstimate.data, feeEstimate.isFetching]);
 
-  const header = <StackHeader title="P2P request" />;
+  const header = <StackHeader title="P2P request" onBack={() => (router.canGoBack() ? router.back() : router.replace('/Messages'))} />;
 
   if (request.error && !data) {
     return (
@@ -369,7 +369,7 @@ export function RequestDetailScreen() {
           />
         ) : (
           <Button
-            label="Make an offer"
+            label="Create your offer"
             variant="outline"
             onPress={() => void startOfferChat()}
             loading={offerChatBusy}
