@@ -28,7 +28,7 @@ const POINTS_END = 'Dec 31, 2026';
 const POINTS_PER_CAD = 100;
 const LOW = 950;
 const HIGH = 1000;
-const STEP = 5;
+const STEP = 1;
 const PAL_BUY = 900; // Palpeer rate when you give CA$
 const PAL_SELL = 1000; // Palpeer rate when you give naira
 
@@ -94,11 +94,26 @@ const rewardOff = (c: Code, fee: number, rate: number, r?: Reward) => {
 };
 const pointsUsed = (c: Code, off: number, rate: number) => Math.ceil((c === 'CAD' ? off : off / rate) * POINTS_PER_CAD);
 const feeShown = (c: Code, fee: number, off: number) => (off >= fee ? 'Free' : '−' + fmt(c, fee - off));
-const hoursLabel = (h: number) => h + (h === 1 ? ' hour' : ' hours');
+const hoursLabel = (h: number) => {
+  if (h >= 24 && h % 24 === 0) {
+    const d = h / 24;
+    return d + (d === 1 ? ' Day' : ' Days');
+  }
+  return h + (h === 1 ? ' hour' : ' hours');
+};
+/** Offer end choices: 3 days / 7 days (stored as hours for the API). */
+const OFFER_END_HOURS = [72, 168] as const;
 const leftLabel = (s: number) => {
-  const m = Math.ceil(s / 60);
-  if (m >= 60) return hoursLabel(Math.ceil(m / 60)) + ' left';
-  return m + (m === 1 ? ' minute left' : ' minutes left');
+  if (s <= 0) return 'Ended';
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = Math.floor(s % 60);
+  const ss = String(sec).padStart(2, '0');
+  if (h > 0) {
+    return h + 'h ' + String(m).padStart(2, '0') + 'm ' + ss + 's left';
+  }
+  if (m > 0) return m + 'm ' + ss + 's left';
+  return sec + 's left';
 };
 const worth = (g: Code, amt: number, rate: number) => (g === 'CAD' ? amt * rate : amt / rate);
 const palQuote = (o: Offer) => (o.giveCode === 'CAD' ? { rate: PAL_BUY, getCode: 'NGN' as Code, get: o.amt * PAL_BUY } : { rate: PAL_SELL, getCode: 'CAD' as Code, get: o.amt / PAL_SELL });
@@ -211,7 +226,7 @@ export default function People(props: PeopleProps) {
   const [amount, setAmount] = useState('100');
   const [least, setLeast] = useState<string | null>(null);
   const [rate, setRate] = useState(990);
-  const [hours, setHours] = useState(1);
+  const [hours, setHours] = useState<number>(OFFER_END_HOURS[0]);
   const [more, setMore] = useState(false);
   const [pinFor, setPinFor] = useState<'buy' | 'post' | 'nudge'>('buy');
   const [pinBack, setPinBack] = useState<Stage>('offer');
@@ -287,10 +302,10 @@ export default function People(props: PeopleProps) {
     );
   }, []);
 
-  // Count down every offer; when one of mine ends while I look at it, show "Your offer ended".
+  // Count down every offer each second (shows h/m/s); when one of mine ends, show "Your offer ended".
   useEffect(() => {
     const t = setInterval(() => {
-      const tick = (o: Offer) => ({ ...o, left: Math.max(0, o.left - 10) });
+      const tick = (o: Offer) => ({ ...o, left: Math.max(0, o.left - 1) });
       setOffers((os) => os.map(tick).filter((o) => o.left > 0));
       setMine((ms) => {
         const next = ms.map(tick);
@@ -307,7 +322,7 @@ export default function People(props: PeopleProps) {
         }
         return next.filter((o) => o.left > 0);
       });
-    }, 10000);
+    }, 1000);
     return () => {
       clearInterval(t);
       if (reply.current) clearTimeout(reply.current);
@@ -581,7 +596,7 @@ export default function People(props: PeopleProps) {
   }
 
   const say: Record<Stage, string> = {
-    list: any ? 'Choose a person. Tap an offer to see it. Or make your own offer.' : 'No one is here yet. Make your own offer and a person can take it. Or change now instead.',
+    list: any ? 'Trade Peer to Peer. Tap an offer to see it. Or make your own offer.' : 'No one is here yet. Make your own offer and a person can take it. Or use Instant Exchange instead.',
     offer: "A person's offer. You give " + deal.youGive + '. After the fee, you get ' + deal.youGet + '. Tap Accept and buy, or offer a different price.',
     counter: 'Offer a different price. Your price is ' + myPrice + ' naira for one Canada dollar. Tap minus or plus, then send.',
     talk: waiting ? 'Waiting for the person to answer.' : "The person's price is " + dealRate + ' naira for one Canada dollar. You can accept, offer again, or say no.',
@@ -591,7 +606,7 @@ export default function People(props: PeopleProps) {
     ended: 'Your offer ended. No one bought the rest. ' + endedAmt + ' is back in your wallet.',
     nowDone: 'Done. ' + now.get + ' is now in your ' + now.getName + '. Your offer is closed.',
     live:
-      (liveOffer && liveOffer.left <= 1800 ? leftLabel(liveOffer.left) + '. You can use Change now with no waiting. ' : '') +
+      (liveOffer && liveOffer.left <= 1800 ? leftLabel(liveOffer.left) + '. You can use Instant Exchange with no waiting. ' : '') +
       'Your offer is posted. You are waiting for a person. You give ' + live.give + '. The person gets ' + live.net + ' after their fee. You get ' + live.get + ' after your fee. ' + live.leftText + '.',
   };
 
@@ -606,7 +621,7 @@ export default function People(props: PeopleProps) {
           ₦
         </Txt>
         <PadNumberInput
-          accessibilityLabel="My price for CA$1"
+          accessibilityLabel="My rate for CA$1"
           padKey={padKey}
           maxLength={4}
           value={value ? String(value) : ''}
@@ -825,7 +840,7 @@ export default function People(props: PeopleProps) {
       <Screen scroll>
         <H1>Offer a different price</H1>
         <Card>
-          <H2>My price for CA$1</H2>
+          <H2>My rate for CA$1</H2>
           {priceStepper(myPrice, setMyPrice, '#1D5BC7', 'people-counter-rate')}
           <Txt size={16} w="600" color="text2" center>
             {'The person asks ₦' + dealRateLive + '. You can pick ₦950 to ₦1,000'}
@@ -914,7 +929,7 @@ export default function People(props: PeopleProps) {
         </Card>
         <TopBar onBack={goList} say={say.post} />
         <Card>
-          <H2>My price for CA$1</H2>
+          <H2>My rate for CA$1</H2>
           {priceStepper(rate, setRate, '#0B6E4F', 'people-rate')}
           <Txt size={16} w="600" color="text2" center>
             You can pick ₦950 to ₦1,000
@@ -922,16 +937,16 @@ export default function People(props: PeopleProps) {
         </Card>
         <Card>
           <Txt size={17} w="800">
-            Least a person can buy
+            Minimum a person can buy
           </Txt>
           <Row gap={4}>
             <Txt size={24} w="800" noTr>
               {WD[dir].sym}
             </Txt>
-            <PadNumberInput accessibilityLabel="Least a person can buy" decimal padKey="people-least" value={amtShow(leastText)} onChangeText={(v) => setLeast(amtIn(v))} style={{ minWidth: 100, flexShrink: 1, fontSize: 24, fontFamily: 'NotoSans_800ExtraBold', paddingVertical: 4 }} />
+            <PadNumberInput accessibilityLabel="Minimum a person can buy" decimal padKey="people-least" value={amtShow(leastText)} onChangeText={(v) => setLeast(amtIn(v))} style={{ minWidth: 100, flexShrink: 1, fontSize: 24, fontFamily: 'NotoSans_800ExtraBold', paddingVertical: 4 }} />
           </Row>
           <Txt size={15} w="600" color={leastBad ? 'red' : 'text3'}>
-            {leastSmall ? 'It must be ' + minText(dir, rate) + ' or more' : leastBad ? 'It must not be more than ' + postView.give : 'You choose this. Buyers cannot change it.'}
+            {leastSmall ? 'It must be ' + minText(dir, rate) + ' or more' : leastBad ? 'It must not be more than ' + postView.give : 'Most users set C$300 minimum to reduce fees'}
           </Txt>
         </Card>
         {rewardBtn}
@@ -947,7 +962,7 @@ export default function People(props: PeopleProps) {
               Your offer ends in
             </Txt>
             <Row gap={8}>
-              {[1, 6, 24].map((h) => (
+              {OFFER_END_HOURS.map((h) => (
                 <Pressable key={h} accessibilityRole="radio" accessibilityState={{ selected: h === hours }} onPress={() => setHours(h)} style={{ flex: 1, minHeight: 52, borderRadius: 14, backgroundColor: h === hours ? c.brand : c.field, alignItems: 'center', justifyContent: 'center' }}>
                   <Txt size={17} w="800" color={h === hours ? '#FFFFFF' : c.text}>
                     {hoursLabel(h)}
@@ -1040,7 +1055,7 @@ export default function People(props: PeopleProps) {
         </View>
         <TopBar onBack={false} say={say.ended} />
         <View style={{ flex: 1 }} />
-        <Btn label="Change now" onPress={() => router.replace('/Change')} />
+        <Btn label="Instant Exchange" onPress={() => router.replace('/Change')} />
         <Btn kind="outline" size="mid" label="Make a new offer" onPress={() => { setReward(null); setStage('post'); }} />
         <Btn kind="link" label="Go home" onPress={() => router.replace('/Main')} />
       </Screen>
@@ -1053,9 +1068,9 @@ export default function People(props: PeopleProps) {
         {liveOffer.left <= 1800 ? (
           <Row gap={10} style={{ borderRadius: 18, backgroundColor: c.warnBg, padding: 12 }}>
             <Txt size={16} w="700" style={{ flex: 1 }}>
-              {live.leftText + '. No wait with Change now.'}
+              {live.leftText + '. No wait with Instant Exchange.'}
             </Txt>
-            <Btn size="small" label="Change now" onPress={() => setStopping(true)} />
+            <Btn size="small" label="Instant Exchange" onPress={() => setStopping(true)} />
           </Row>
         ) : null}
         <H2>Waiting for a person</H2>
@@ -1089,7 +1104,7 @@ export default function People(props: PeopleProps) {
             {live.priceText}
           </Txt>
           <Txt size={15} color="text2">
-            {'Least a person can buy: ' + live.leastText}
+            {'Minimum a person can buy: ' + live.leastText}
           </Txt>
           <Txt size={16} w="700" color="orange">
             {live.leftText}
@@ -1144,7 +1159,7 @@ export default function People(props: PeopleProps) {
           <Screen>
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 }}>
               <H1 center>Stop your offer?</H1>
-              <P center>To use Change now, your offer must stop first.</P>
+              <P center>To use Instant Exchange, your offer must stop first.</P>
               <Txt size={30} w="800" noTr>
                 {live.give}
               </Txt>
@@ -1171,7 +1186,7 @@ export default function People(props: PeopleProps) {
   if (!any)
     return (
       <Screen>
-        <H1>Choose a person</H1>
+        <H1>Trade Peer to Peer</H1>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 }}>
           <Circle icon="people" bg="#1D5BC7" />
           <H2 center>No one is here yet</H2>
@@ -1179,14 +1194,14 @@ export default function People(props: PeopleProps) {
         </View>
         <TopBar say={say.list} />
         <Btn label="Make your offer" onPress={() => { setReward(null); setStage('post'); }} />
-        <Btn kind="link" label="Change now instead" onPress={() => router.replace('/Change')} />
+        <Btn kind="link" label="Instant Exchange instead" onPress={() => router.replace('/Change')} />
       </Screen>
     );
 
   return (
     <Screen scroll>
       <Row between>
-        <H1>Choose a person</H1>
+        <H1>Trade Peer to Peer</H1>
         <Row gap={4}>
           <Flag cc="CA" w={36} />
           <Flag cc="NG" w={36} />

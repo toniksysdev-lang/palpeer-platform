@@ -213,7 +213,18 @@ export default function Send(props: SendProps) {
         say="Send money to another Palpeer user. Same money only. No fee. Enter the amount, then the username, phone number or email. Check the full name before you send."
       />
       <Card>
-        <Field label="To which Palpeer user?" placeholder="@username" value={who} onChangeText={(v) => { setWho(v); setBackendError(null); }} autoCapitalize="none" autoCorrect={false} />
+        <Field
+          label="To which Palpeer user?"
+          placeholder="Username, phone or email"
+          value={who}
+          onChangeText={(v) => {
+            setWho(v);
+            setBackendError(null);
+          }}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="default"
+        />
         <Txt size={15} w="600" color="text3">
           Type a username, phone number or email.
         </Txt>

@@ -63,11 +63,10 @@ export function PinStep({
   const press = async (d: string) => {
     if (busy) return;
     const v = pin + d;
-    if (v.length < 4) {
-      setPin(v);
-      setWrong(false);
-      return;
-    }
+    // Always paint the new digit first (including the 4th) before verify clears it.
+    setPin(v);
+    setWrong(false);
+    if (v.length < 4) return;
     if (confirmPin) {
       setBusy(true);
       try {

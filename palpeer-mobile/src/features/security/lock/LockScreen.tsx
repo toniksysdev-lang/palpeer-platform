@@ -242,14 +242,12 @@ export function LockScreen() {
           }}
           testID="lock-use-pin"
           style={({ pressed }) => [
-            showBio ? styles.outlineBtn : styles.primaryBtn,
+            styles.primaryBtn,
             busy && styles.btnDisabled,
             pressed && !busy && styles.pressed,
           ]}
         >
-          <Text style={showBio ? styles.outlineBtnLabel : styles.primaryBtnLabel}>
-            Use my PIN
-          </Text>
+          <Text style={styles.primaryBtnLabel}>Use my PIN</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"

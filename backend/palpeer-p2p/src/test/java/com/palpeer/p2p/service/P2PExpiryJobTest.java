@@ -23,6 +23,7 @@ class P2PExpiryJobTest {
     void expiresEachDueRequestAndKeepsGoingAfterAFailure() {
         UUID failing = UUID.randomUUID();
         UUID due = UUID.randomUUID();
+        when(p2PService.findOpenIdsNeedingExpiryReminder(any())).thenReturn(List.of());
         when(p2PService.findExpiredOpenIds(any())).thenReturn(List.of(failing, due));
         when(p2PService.expireIfDue(failing)).thenThrow(new IllegalStateException("lock timeout"));
         when(p2PService.expireIfDue(due)).thenReturn(true);
@@ -31,5 +32,17 @@ class P2PExpiryJobTest {
 
         verify(p2PService).expireIfDue(failing);
         verify(p2PService).expireIfDue(due);
+    }
+
+    @Test
+    void sendsExpiryRemindersBeforeExpiring() {
+        UUID remind = UUID.randomUUID();
+        when(p2PService.findOpenIdsNeedingExpiryReminder(any())).thenReturn(List.of(remind));
+        when(p2PService.sendExpiryReminderIfDue(remind)).thenReturn(true);
+        when(p2PService.findExpiredOpenIds(any())).thenReturn(List.of());
+
+        job.sweep();
+
+        verify(p2PService).sendExpiryReminderIfDue(remind);
     }
 }

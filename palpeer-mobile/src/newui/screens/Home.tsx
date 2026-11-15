@@ -251,7 +251,7 @@ export default function Home(props: HomeProps) {
   }[] = [
     { label: 'Add', note: 'Fund my wallet', icon: 'plus', bg: c.tileGreen, dot: '#0B6E4F', href: HREFS.add as Href },
     { label: 'Send', note: 'To Palpeer user', icon: 'send', bg: c.tileBlue, dot: '#1D5BC7', href: HREFS.send as Href, guard: 'Sending' },
-    { label: 'Change', note: 'To other currency', icon: 'change', bg: c.tileOrange, dot: '#A84C08', href: HREFS.change as Href, guard: 'Changing money' },
+    { label: 'Exchange', note: 'To other currency', icon: 'change', bg: c.tileOrange, dot: '#A84C08', href: HREFS.change as Href, guard: 'Changing money' },
     { label: 'Withdraw', note: 'To my account', icon: 'bank', bg: c.tilePurple, dot: '#5E3AB8', href: HREFS.withdraw as Href, guard: 'Withdrawing' },
   ];
 
@@ -428,8 +428,8 @@ export default function Home(props: HomeProps) {
                   />
                 ) : null}
                 <Btn
-                  label="Use your PIN"
-                  kind={biometricEnabled ? 'outline' : 'primary'}
+                  label="Use my PIN"
+                  kind="primary"
                   size="mid"
                   disabled={lockBusy}
                   onPress={() => {

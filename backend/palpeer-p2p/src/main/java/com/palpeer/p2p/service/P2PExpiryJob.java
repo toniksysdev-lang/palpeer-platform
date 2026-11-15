@@ -8,8 +8,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Marks OPEN requests EXPIRED shortly after {@code expiresAt}, so their negotiations close on time
- * instead of on the next read of the request. Each request expires in its own transaction.
+ * Marks OPEN requests EXPIRED shortly after {@code expiresAt}, and notifies the offer owner
+ * ~30 minutes before expiry (push + email). Each request is handled in its own transaction.
  */
 @Slf4j
 @Component
@@ -22,8 +22,24 @@ public class P2PExpiryJob {
             initialDelayString = "${palpeer.p2p.expiry-sweep-ms:30000}",
             fixedDelayString = "${palpeer.p2p.expiry-sweep-ms:30000}")
     public void sweep() {
+        Instant now = Instant.now();
+
+        int reminded = 0;
+        for (UUID requestId : p2PService.findOpenIdsNeedingExpiryReminder(now)) {
+            try {
+                if (p2PService.sendExpiryReminderIfDue(requestId)) {
+                    reminded++;
+                }
+            } catch (RuntimeException ex) {
+                log.warn("P2P expiry reminder failed for request {}", requestId, ex);
+            }
+        }
+        if (reminded > 0) {
+            log.info("P2P expiry reminder sent for {} request(s)", reminded);
+        }
+
         int expired = 0;
-        for (UUID requestId : p2PService.findExpiredOpenIds(Instant.now())) {
+        for (UUID requestId : p2PService.findExpiredOpenIds(now)) {
             try {
                 if (p2PService.expireIfDue(requestId)) {
                     expired++;

@@ -105,13 +105,14 @@ export const OFFERS = [
   { rate: 985, amt: 90000, left: 1500, ca: false },
 ];
 export const leftLabel = (t: number) => {
-  const m = Math.ceil(t / 60);
   if (t <= 0) return 'Ended';
-  if (m >= 60) {
-    const h = Math.ceil(m / 60);
-    return h + (h === 1 ? ' hour left' : ' hours left');
-  }
-  return m + (m === 1 ? ' minute left' : ' minutes left');
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const sec = Math.floor(t % 60);
+  const ss = String(sec).padStart(2, '0');
+  if (h > 0) return h + 'h ' + String(m).padStart(2, '0') + 'm ' + ss + 's left';
+  if (m > 0) return m + 'm ' + ss + 's left';
+  return sec + 's left';
 };
 
 /** Seconds remaining until an ISO expiry (0 when past or missing). */

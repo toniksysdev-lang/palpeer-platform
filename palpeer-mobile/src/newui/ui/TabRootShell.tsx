@@ -46,7 +46,8 @@ export function TabRootShell({
             {
               padding: s(16),
               paddingTop: s(12),
-              paddingBottom: s(24),
+              // Tight bottom so content sits just above the persistent DesignTabDock.
+              paddingBottom: s(8),
               gap: s(gap),
               width: '100%',
             },

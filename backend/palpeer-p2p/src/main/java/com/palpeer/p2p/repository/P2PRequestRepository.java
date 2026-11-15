@@ -30,6 +30,21 @@ public interface P2PRequestRepository extends JpaRepository<P2PRequest, UUID>, J
             """)
     List<UUID> findOpenIdsExpiredBy(@Param("now") Instant now);
 
+    /**
+     * OPEN offers that expire within the next {@code until} window and have not yet
+     * received the 30-minute reminder (and are not already past due).
+     */
+    @Query("""
+            select r.id from P2PRequest r
+            where r.status = com.palpeer.p2p.domain.P2PStatus.OPEN
+              and r.expiresAt is not null
+              and r.expiresAt > :now
+              and r.expiresAt <= :until
+              and r.expiryReminderSentAt is null
+            """)
+    List<UUID> findOpenIdsNeedingExpiryReminder(
+            @Param("now") Instant now, @Param("until") Instant until);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from P2PRequest r where r.id = :id")
     Optional<P2PRequest> findByIdForUpdate(@Param("id") UUID id);

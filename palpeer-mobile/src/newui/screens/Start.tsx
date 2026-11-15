@@ -202,7 +202,7 @@ const speechFor = (st: string, s: StartState, people: boolean, left: number) =>
     moveStuck: 'Your answers were wrong 3 times. Customer service must help. Email support at palpeer dot com.',
     phone: 'Choose your country, and type your phone number. We will send you a code.',
     phoneCode: 'We sent a 6-digit code to your phone. Type it here. Or press Skip Code to continue without the code.',
-    account: 'Create your account. Type your email, a username and a password. A friend code is not needed.',
+    account: 'Create your account. Type your email, a username and a password. A referral code is not needed.',
     emailCode: 'We sent a 6-digit code to your email. Type it here.',
     method: 'How do you want to keep your account safe? Choose a 4 number PIN, or your face or fingerprint.',
     pinSet: 'Make a PIN with 4 numbers. Do not tell anyone.',
@@ -1352,7 +1352,7 @@ export default function Start(props: StartProps) {
         <Card gap={6}>
           <Field label="Email" value={s.mail} onChangeText={(v) => up({ mail: v })} autoCapitalize="none" keyboardType="email-address" />
           <Field label="Username" value={s.uname} onChangeText={(v) => up({ uname: v })} autoCapitalize="none" />
-          <Field label="Friend's code (if you have one)" value={s.refer} onChangeText={(v) => up({ refer: v })} autoCapitalize="characters" />
+          <Field label="Referral code (if you have one)" value={s.refer} onChangeText={(v) => up({ refer: v })} autoCapitalize="characters" />
           <Field label="Make a password (at least 8)" value={s.pw1} onChangeText={(v) => up({ pw1: v })} secureTextEntry={!s.showPw} autoCapitalize="none" maxLength={128} />
           <Field label="Type it again" value={s.pw2} onChangeText={(v) => up({ pw2: v })} secureTextEntry={!s.showPw} autoCapitalize="none" maxLength={128} />
           <Btn kind="link" label={s.showPw ? 'Hide' : 'Show'} onPress={() => up({ showPw: !s.showPw })} />

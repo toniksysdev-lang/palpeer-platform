@@ -33,7 +33,11 @@ import {
   useOptionalNumberPad,
 } from '@/components/ui/NumberPadContext';
 import { numberFieldTextInputProps, suppressSystemKeyboard } from '@/components/ui/numberFieldInput';
-import { readDigitsFromClipboard } from '@/components/ui/pasteDigits';
+import {
+  digitsFromPasteEvent,
+  extractDigits,
+  readDigitsFromClipboard,
+} from '@/components/ui/pasteDigits';
 import {
   keepPreviewKeyboardFocus,
   PREVIEW_KEYBOARD_EVENT,
@@ -206,9 +210,11 @@ function PadRevealOnOpen() {
 function ScreenScrollBody({
   children,
   contentContainerStyle,
+  onScrollBeginDrag,
 }: {
   children: ReactNode;
   contentContainerStyle: StyleProp<ViewStyle>;
+  onScrollBeginDrag?: () => void;
 }) {
   const focusScroll = useFocusScroll();
   const scrollRef = focusScroll?.scrollRef;
@@ -221,6 +227,7 @@ function ScreenScrollBody({
       keyboardDismissMode="on-drag"
       showsVerticalScrollIndicator={false}
       showsHorizontalScrollIndicator={false}
+      onScrollBeginDrag={onScrollBeginDrag}
       onScroll={(e) => focusScroll?.registerScrollOffset(e.nativeEvent.contentOffset.y)}
       scrollEventThrottle={16}
     >
@@ -276,22 +283,34 @@ export function Screen({
   const dismissPad = () => {
     if (numberPad?.active) numberPad.close();
   };
+  // Only reserve large bottom space while the in-app pad is open (avoids a gap above the tab footer).
+  const padOpen = !!numberPad?.active;
+  const contentInner: ViewStyle = {
+    ...inner,
+    paddingBottom:
+      (pad ? s(16) : 0) + (scroll && scrollPadReserve ? (padOpen ? 240 : s(28)) : 0),
+  };
 
-  // Pressable wrapper: empty areas dismiss the in-app number pad; child buttons still receive presses.
+  // Do not wrap ScrollView in Pressable — that steals center drags on Android (edge-only scroll).
+  // Dismiss the pad on scroll-begin / background touch without blocking scrolling.
   const body = scroll ? (
     <FocusScrollProvider scrollRef={scrollRef}>
       <KeyboardFocusReveal />
       <PadRevealOnOpen />
-      <Pressable style={{ flex: 1, width: '100%' }} onPress={dismissPad} accessible={false}>
-        <ScreenScrollBody contentContainerStyle={[inner, style]}>{children}</ScreenScrollBody>
-      </Pressable>
+      <ScreenScrollBody contentContainerStyle={[contentInner, style]} onScrollBeginDrag={dismissPad}>
+        {children}
+      </ScreenScrollBody>
     </FocusScrollProvider>
   ) : (
-    <Pressable style={{ flex: 1, width: '100%' }} onPress={dismissPad} accessible={false}>
-      <View style={[{ flex: 1, width: '100%' }, inner, style]} pointerEvents="box-none">
-        {children}
-      </View>
-    </Pressable>
+    <View
+      style={[{ flex: 1, width: '100%' }, contentInner, style]}
+      onStartShouldSetResponder={() => {
+        dismissPad();
+        return false;
+      }}
+    >
+      {children}
+    </View>
   );
 
   // Full-window shell + inset padding (not SafeAreaView) so LayoutProvider’s
@@ -669,6 +688,10 @@ export function Field({
   const padActive = usePad && pad.padAvailable;
   // System-keyboard fields (e.g. security-question answers) scroll above the soft keyboard.
   const focusAnchor = useFocusAnchor();
+  const otpAutofill =
+    rest.textContentType === 'oneTimeCode' ||
+    rest.autoComplete === 'sms-otp' ||
+    rest.autoComplete === 'one-time-code';
 
   return (
     <View
@@ -685,15 +708,44 @@ export function Field({
       ) : null}
       <TextInput
         value={display}
-        onChangeText={emit}
+        onChangeText={(raw) => {
+          // Accept clipboard / OS paste of codes with spaces or email fluff.
+          if (usePad || otpAutofill) {
+            const extracted = extractDigits(raw, Number.isFinite(padMax) && padMax > 0 ? padMax : 32);
+            if (extracted && extracted !== raw) {
+              emit(extracted);
+              return;
+            }
+          }
+          emit(raw);
+        }}
         placeholderTextColor={c.text4}
         accessibilityLabel={label ? t(label) : undefined}
         {...rest}
         {...(padActive ? numberFieldTextInputProps : null)}
         // Keep OS copy/paste menu even when the in-app pad owns digit entry.
         contextMenuHidden={false}
+        // iOS/Android SMS / mail autofill for verification codes.
+        {...(otpAutofill
+          ? {
+              textContentType: 'oneTimeCode' as const,
+              autoComplete: Platform.OS === 'android' ? ('sms-otp' as const) : ('one-time-code' as const),
+              importantForAutofill: 'yes' as const,
+            }
+          : null)}
         maxLength={isPhone ? undefined : maxLength}
         placeholder={rest.placeholder ? t(rest.placeholder) : undefined}
+        onPaste={(e: unknown) => {
+          const pasted = digitsFromPasteEvent(
+            e,
+            Number.isFinite(padMax) && padMax > 0 ? padMax : 32,
+          );
+          if (pasted) {
+            emit(pasted);
+            const ev = e as { preventDefault?: () => void };
+            ev.preventDefault?.();
+          }
+        }}
         onFocus={(e) => {
           rest.onFocus?.(e);
           if (padActive) {
@@ -788,11 +840,22 @@ export function PadNumberInput({
   return (
     <TextInput
       value={value}
-      onChangeText={onChangeText}
+      onChangeText={(raw) => {
+        const extracted = extractDigits(raw, maxLength);
+        onChangeText(extracted || raw);
+      }}
       placeholderTextColor={c.text4}
       {...rest}
       {...numberFieldTextInputProps}
       contextMenuHidden={false}
+      onPaste={(e: unknown) => {
+        const pasted = digitsFromPasteEvent(e, maxLength);
+        if (pasted) {
+          onChangeText(pasted);
+          const ev = e as { preventDefault?: () => void };
+          ev.preventDefault?.();
+        }
+      }}
       onFocus={(e) => {
         rest.onFocus?.(e);
         suppressSystemKeyboard();

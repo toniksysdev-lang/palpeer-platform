@@ -170,11 +170,10 @@ export default function Add(props: AddProps) {
 
   const say = {
     form: 'Add money. Choose how much to add. There is no fee.',
-    send: isCad
-      ? 'Open your bank app. ' + cfg.step + '. Copy the details. Send the exact amount. Then tap It is sent.'
-      : 'Open your bank app. ' +
-        cfg.step +
-        '. Copy the details. Send the exact amount. Palpeer checks for your payment automatically.',
+    send:
+      'Open your bank app. ' +
+      cfg.step +
+      '. Send the fund to the below bank detail. Send the exact amount. Palpeer checks for your payment automatically.',
     wait: 'Waiting for your money. You will get an alert when it is in your wallet. If you do not send it, this closes after 3 days.',
     done: 'Done. ' + amountText + ' is now in your wallet.',
   }[stage];
@@ -210,12 +209,12 @@ export default function Add(props: AddProps) {
   };
 
   /**
-   * Kuda (NGN): watch funding as soon as VA details are shown. GET /funding/{id} runs
-   * DYNAMIC_COLLECTION_ACCOUNT_TSQ on the server, so credits settle without "It is sent".
+   * Watch funding as soon as bank details are shown (CAD Interac + NGN/Kuda).
+   * Credits settle automatically — no "It is sent" tap.
    */
   useEffect(() => {
     if (stage !== 'send' && stage !== 'wait') return;
-    if (isCad || !props.backend || !props.waitForFunding || !fundingId) return;
+    if (!props.backend || !props.waitForFunding || !fundingId) return;
 
     const ac = new AbortController();
     setAutoChecking(true);
@@ -243,22 +242,12 @@ export default function Add(props: AddProps) {
       ac.abort();
       setAutoChecking(false);
     };
-  }, [stage, isCad, fundingId, props.backend, props.waitForFunding]);
+  }, [stage, fundingId, props.backend, props.waitForFunding]);
 
   const goWait = async () => {
     setStage('wait');
     setFundingError(null);
     if (timer.current) clearTimeout(timer.current);
-    // NGN auto-poll effect already covers wait; CAD (and preview) still poll from this tap.
-    if (isCad && props.backend && props.waitForFunding) {
-      const r = await props.waitForFunding(fundingId || '');
-      if (r.ok) setStage('done');
-      else if (!r.cancelled) {
-        setFundingError(r.error);
-        setStage('send');
-      }
-      return;
-    }
     if (!props.backend && !staticStage) {
       timer.current = setTimeout(() => setStage('done'), 6000);
     }
@@ -303,7 +292,7 @@ export default function Add(props: AddProps) {
         <TopBar onBack={() => setStage('form')} say={say} />
         <H1>Send from your bank</H1>
         <Card>
-          {['Open your bank app', cfg.step, 'Copy these into your bank app'].map((s, i) => (
+          {['Open your bank app', cfg.step, 'Send the fund to the below bank detail'].map((s, i) => (
             <Row key={s} gap={12}>
               <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: c.brand, alignItems: 'center', justifyContent: 'center' }}>
                 <Txt size={17} w="800" color="#FFFFFF" noTr>
@@ -345,7 +334,7 @@ export default function Add(props: AddProps) {
           <Txt size={16} w="700" color="orange">
             {isCad ? 'Send the exact amount from ' + email + '. No security question.' : 'Send the exact amount. Bank fees are shown by your bank.'}
           </Txt>
-          {!isCad && props.backend && autoChecking ? (
+          {props.backend && autoChecking ? (
             <Row gap={10} style={{ alignItems: 'center' }}>
               <ActivityIndicator color={c.brand} />
               <Txt size={16} w="700" color={c.brand} style={{ flex: 1 }}>
@@ -355,8 +344,8 @@ export default function Add(props: AddProps) {
           ) : null}
         </Card>
         <View style={{ flex: 1 }} />
-        {isCad || !props.backend ? (
-          <Btn label="It is sent" onPress={() => void goWait()} />
+        {!props.backend ? (
+          <Btn label="Continue" onPress={() => void goWait()} />
         ) : (
           <Btn kind="outline" label="Go home" onPress={goHome} />
         )}

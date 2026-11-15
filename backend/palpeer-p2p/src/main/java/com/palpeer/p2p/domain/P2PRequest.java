@@ -50,6 +50,13 @@ public class P2PRequest extends BaseEntity {
     @Column(name = "expires_at")
     private Instant expiresAt;
 
+    /**
+     * When the owner was notified that this OPEN offer expires in ~30 minutes.
+     * Null until {@link com.palpeer.p2p.service.P2PExpiryJob} sends that reminder.
+     */
+    @Column(name = "expiry_reminder_sent_at")
+    private Instant expiryReminderSentAt;
+
     @Column(name = "notes", length = 500)
     private String notes;
 

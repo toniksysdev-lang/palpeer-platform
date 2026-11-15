@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { metaFor } from '@/design/bridge/currencyMeta';
 import type { DesignWallet } from '@/design/bridge/mapWallet';
@@ -128,6 +128,34 @@ export default function Change(props: ChangeProps) {
     return true;
   };
 
+  // Live Instant Exchange total (same idea as the peer estimate updating as you type).
+  const previewSeq = useRef(0);
+  useEffect(() => {
+    if (!props.backend || !props.lockQuote) return;
+    if (n <= 0 || tooMuch || tooLittle) {
+      setQuoteNowGet('');
+      setQuoteRateText('');
+      return;
+    }
+    const seq = ++previewSeq.current;
+    const t = setTimeout(() => {
+      void (async () => {
+        const r = await props.lockQuote!({ giveCode: give, wantCode: want, amount });
+        if (seq !== previewSeq.current) return;
+        if (r.ok) {
+          setQuoteNowGet(r.nowGet);
+          setQuoteRateText(r.rateText);
+          setQuoteGiveText(r.giveText);
+          setQuoteAfterText(r.afterText);
+          setBackendError(null);
+        } else {
+          setBackendError(r.error);
+        }
+      })();
+    }, 350);
+    return () => clearTimeout(t);
+  }, [props.backend, props.lockQuote, give, want, amount, n, tooMuch, tooLittle]);
+
   const goCheck = async () => {
     if (!(await fetchQuote())) return;
     setStage('check');
@@ -231,7 +259,15 @@ export default function Change(props: ChangeProps) {
     );
 
   const sayForm =
-    'Change money. You give ' + W(give).name + '. You want ' + W(want).name + '. Change now: Palpeer changes it and there is no waiting. You get ' + nowGet + '. Choose a person: you change with another user and you may wait. You may get ' + personGet + ' after the fee.';
+    'Change money. You give ' +
+    W(give).name +
+    '. You want ' +
+    W(want).name +
+    '. Instant Exchange: Palpeer changes it and there is no waiting. You get ' +
+    nowGet +
+    '. Trade Peer to Peer: you change with another user and you may wait. You may get ' +
+    personGet +
+    ' after the fee.';
 
   return (
     <Screen scroll>
@@ -312,7 +348,7 @@ export default function Change(props: ChangeProps) {
         <Circle icon="bolt" size={52} iconSize={30} />
         <View style={{ flex: 1 }}>
           <Txt size={21} w="800">
-            Change now
+            Instant Exchange
           </Txt>
           <Txt size={16} color="text2">
             Palpeer changes it. No waiting.
@@ -320,13 +356,18 @@ export default function Change(props: ChangeProps) {
           <Txt size={18} w="800" color="brandText">
             {'You get ' + nowGet}
           </Txt>
+          {quoteRateText ? (
+            <Txt size={15} w="600" color="text3" noTr>
+              {quoteRateText}
+            </Txt>
+          ) : null}
         </View>
       </Pressable>
       <Pressable accessibilityRole="button" onPress={() => router.push('/People')} style={{ borderRadius: 20, backgroundColor: c.card, padding: 14, flexDirection: 'row', gap: 12 }}>
         <Circle icon="people" size={52} iconSize={30} bg="#1D5BC7" />
         <View style={{ flex: 1 }}>
           <Txt size={21} w="800">
-            Choose a person
+            Trade Peer to Peer
           </Txt>
           <Txt size={16} color="text2">
             Change with a user. You may wait.

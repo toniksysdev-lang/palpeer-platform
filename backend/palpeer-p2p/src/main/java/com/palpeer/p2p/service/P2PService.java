@@ -576,6 +576,14 @@ public class P2PService {
     }
 
     /**
+     * OPEN requests that expire within the next 30 minutes and still need the owner reminder.
+     */
+    @Transactional(readOnly = true)
+    public List<UUID> findOpenIdsNeedingExpiryReminder(Instant now) {
+        return p2PRequestRepository.findOpenIdsNeedingExpiryReminder(now, now.plusSeconds(30 * 60L));
+    }
+
+    /**
      * Records EXPIRED for one request if it is still OPEN and past {@code expiresAt} (re-checked
      * under the row lock, so racing accepts, cancels or other sweepers are safe).
      */
@@ -586,6 +594,29 @@ public class P2PService {
                     P2PStatus before = entity.getStatus();
                     refreshExpiry(entity);
                     return before != entity.getStatus();
+                })
+                .orElse(false);
+    }
+
+    /**
+     * Push + email the offer owner once when their OPEN listing is within 30 minutes of expiry.
+     */
+    @Transactional
+    public boolean sendExpiryReminderIfDue(UUID requestId) {
+        return p2PRequestRepository.findByIdForUpdate(requestId)
+                .map(entity -> {
+                    Instant now = Instant.now();
+                    if (entity.getStatus() != P2PStatus.OPEN
+                            || entity.getExpiresAt() == null
+                            || entity.getExpiryReminderSentAt() != null
+                            || !entity.getExpiresAt().isAfter(now)
+                            || entity.getExpiresAt().isAfter(now.plusSeconds(30 * 60L))) {
+                        return false;
+                    }
+                    entity.setExpiryReminderSentAt(now);
+                    p2PRequestRepository.save(entity);
+                    notifyExpiryReminder(entity);
+                    return true;
                 })
                 .orElse(false);
     }
@@ -603,7 +634,22 @@ public class P2PService {
         }
     }
 
-    /** In-app alert when the owner's listing ends without a full trade. */
+    /** Push + email the owner ~30 minutes before their listing expires. */
+    private void notifyExpiryReminder(P2PRequest entity) {
+        String money = formatAmount(entity.getAmount()) + " " + entity.getBaseCurrencyCode();
+        eventPublisher.publishEvent(new UserNotifyEvent(
+                entity.getUserId(),
+                "Your offer ends in 30 minutes",
+                "Your P2P offer for " + money + " expires in about 30 minutes. "
+                        + "A buyer can still take it, or you can close it and use Instant Exchange.",
+                "P2P",
+                "P2P_REQUEST",
+                entity.getId(),
+                true,
+                true));
+    }
+
+    /** In-app + email + push when the owner's listing ends without a full trade. */
     private void notifyOfferClosed(P2PRequest entity, boolean releasedSellHold, boolean expired) {
         String money = formatAmount(entity.getAmount()) + " " + entity.getBaseCurrencyCode();
         String body;

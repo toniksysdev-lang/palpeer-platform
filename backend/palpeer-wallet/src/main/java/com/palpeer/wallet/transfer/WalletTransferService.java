@@ -197,22 +197,38 @@ public class WalletTransferService {
         if (recipient.isEmpty()) {
             throw new BusinessException("RECIPIENT_REQUIRED", "Recipient is required", HttpStatus.BAD_REQUEST);
         }
-        if (recipient.contains("@")) {
-            String email = recipient.toLowerCase(Locale.ROOT);
-            User user = userRepository
-                    .findByEmailIgnoreCase(email)
-                    .orElseThrow(() -> new BusinessException(
-                            "RECIPIENT_NOT_FOUND",
-                            "No user found for that email",
-                            HttpStatus.NOT_FOUND));
-            return new ResolvedRecipient(user, email, "EMAIL");
+
+        // Email: local@domain with a dot in the domain (not a bare @username).
+        int at = recipient.indexOf('@');
+        if (at > 0) {
+            String domain = recipient.substring(at + 1);
+            if (!domain.isBlank() && domain.contains(".")) {
+                String email = recipient.toLowerCase(Locale.ROOT);
+                User user = userRepository
+                        .findByEmailIgnoreCase(email)
+                        .orElseThrow(() -> new BusinessException(
+                                "RECIPIENT_NOT_FOUND",
+                                "No user found for that email",
+                                HttpStatus.NOT_FOUND));
+                return new ResolvedRecipient(user, email, "EMAIL");
+            }
         }
+
+        // Username (optional leading @) before phone, so handles like "ada" are not forced to +ada.
+        String usernameKey = recipient.startsWith("@") ? recipient.substring(1).trim() : recipient;
+        if (!usernameKey.isEmpty() && !usernameKey.startsWith("+")) {
+            var byUsername = userRepository.findByUsernameIgnoreCase(usernameKey);
+            if (byUsername.isPresent()) {
+                return new ResolvedRecipient(byUsername.get(), usernameKey, "USERNAME");
+            }
+        }
+
         String phone = recipient.startsWith("+") ? recipient : "+" + recipient.replaceAll("\\D", "");
         User user = userRepository
                 .findByPhone(phone)
                 .orElseThrow(() -> new BusinessException(
                         "RECIPIENT_NOT_FOUND",
-                        "No user found for that phone number",
+                        "No user found for that username, phone number or email",
                         HttpStatus.NOT_FOUND));
         return new ResolvedRecipient(user, phone, "PHONE");
     }
