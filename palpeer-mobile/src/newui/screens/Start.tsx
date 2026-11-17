@@ -823,13 +823,16 @@ export default function Start(props: StartProps) {
                   'amountLabel' in o && typeof o.amountLabel === 'string' && o.amountLabel
                     ? o.amountLabel
                     : 'Selling ' + (o.ca ? 'CA$' : '₦') + o.amt.toLocaleString('en-CA');
-                const remain =
-                  props.backend && 'expiresAt' in o && o.expiresAt
-                    ? leftSeconds(o.expiresAt)
-                    : o.left - clock;
+                const expireAt =
+                  props.backend && 'expiresAt' in o && typeof (o as { expiresAt?: unknown }).expiresAt === 'string'
+                    ? (o as { expiresAt: string }).expiresAt
+                    : null;
+                const remain = expireAt ? leftSeconds(expireAt) : o.left - clock;
+                const offerId = (o as { id?: string }).id;
+                const rowKey = typeof offerId === 'string' && offerId ? offerId : String(i);
                 return (
                   <Row
-                    key={'id' in o && o.id ? o.id : i}
+                    key={rowKey}
                     gap={10}
                     style={{
                       minHeight: sz(88),
@@ -855,10 +858,11 @@ export default function Start(props: StartProps) {
                     </View>
                     <Btn
                       size="small"
-                      label="Click to buy"
-                      a11y={'Click to buy. ' + amt}
+                      fit
+                      label="Buy"
+                      a11y={'Buy. ' + amt}
                       onPress={() => go('login', { buying: true, created: false })}
-                      style={{ flexShrink: 0 }}
+                      style={{ flexShrink: 0, alignSelf: 'center', minWidth: sz(72), maxWidth: sz(96), paddingHorizontal: sz(10) }}
                     />
                   </Row>
                 );

@@ -86,8 +86,13 @@ export function FocusScrollProvider({ children, scrollRef }: ProviderProps) {
       const scroller = scrollRef.current;
       if (!scroller) return;
 
-      target.measureInWindow((_x, y, _w, h) => {
-        scroller.measureInWindow((_sx, sy, _sw, sh) => {
+      target.measureInWindow((_x: number, y: number, _w: number, h: number) => {
+        const measureScroller = scroller as unknown as {
+          measureInWindow: (
+            cb: (sx: number, sy: number, sw: number, sh: number) => void,
+          ) => void;
+        };
+        measureScroller.measureInWindow((_sx: number, sy: number, _sw: number, sh: number) => {
           if (sh <= 0 || h <= 0) return;
           const fieldTop = y;
           const fieldBottom = y + h;

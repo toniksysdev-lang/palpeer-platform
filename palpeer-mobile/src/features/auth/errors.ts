@@ -53,13 +53,15 @@ const FIELD_FOR_CODE: Record<string, string> = {
 const GENERIC_VALIDATION_MESSAGES = new Set(['Validation failed', 'Request validation failed']);
 
 export function authErrorMessage(error: AppError): string {
-  if (error.code && MESSAGES[error.code]) return MESSAGES[error.code];
+  const mapped = error.code ? MESSAGES[error.code] : undefined;
+  if (mapped) return mapped;
 
   // Bean Validation returns a generic envelope; prefer the field message (e.g. username rules).
   const fieldEntries = Object.entries(error.fieldErrors);
   if (fieldEntries.length > 0) {
     if (error.fieldErrors.username) return error.fieldErrors.username;
-    if (fieldEntries.length === 1) return fieldEntries[0][1];
+    const only = fieldEntries[0];
+    if (fieldEntries.length === 1 && only) return only[1];
     if (GENERIC_VALIDATION_MESSAGES.has(error.message) || error.code === 'VALIDATION_FAILED') {
       return fieldEntries.map(([, message]) => message).join(' ');
     }

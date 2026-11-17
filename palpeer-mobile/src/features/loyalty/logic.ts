@@ -1,5 +1,6 @@
 import type { LoyaltyPointsBalance, LoyaltyPointsLedgerEntry } from '@/types/api/promotion';
 import { LOYALTY_POINTS_PER_CAD } from '@/types/api/promotion';
+import { toMoney } from '@/utils/money';
 
 /** Convert a CAD money string to loyalty points (100 pts = CA$1). */
 export function cadToPoints(cad: string | number | null | undefined, perCad = LOYALTY_POINTS_PER_CAD): number {
@@ -20,7 +21,7 @@ export function formatPoints(points: number): string {
 export function emptyPointsBalance(): LoyaltyPointsBalance {
   return {
     balancePoints: 0,
-    balanceCad: '0',
+    balanceCad: toMoney('0'),
     earnedPoints: 0,
     usedPoints: 0,
     pointsPerCad: LOYALTY_POINTS_PER_CAD,

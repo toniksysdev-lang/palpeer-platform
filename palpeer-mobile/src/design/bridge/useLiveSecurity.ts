@@ -161,8 +161,10 @@ export function useLiveSecurity() {
           return { ok: false, error: msg };
         }
         // Optimistic cache so RequireSecurityQuestions does not bounce back during refetch.
+        // Endpoint name is injected via securityApi; baseApi typings don't always see it.
         dispatch(
-          baseApi.util.upsertQueryData('getSecurityQuestions', undefined, [
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (baseApi.util.upsertQueryData as any)('getSecurityQuestions', undefined, [
             {
               id: '00000000-0000-4000-8000-000000000001',
               questionKey: q1.questionKey,

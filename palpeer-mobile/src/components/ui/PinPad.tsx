@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
   slot: { width: 28, height: 28, borderRadius: 14, borderWidth: 1.5 },
   dotsWrap: { width: '100%', position: 'relative' },
   hiddenPaste: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     opacity: 0.02,
     color: 'transparent',
     zIndex: 2,

@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'center', position: 'relative' },
   cell: { width: 48, height: 56, alignItems: 'center', justifyContent: 'center' },
   hiddenInput: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     opacity: 0.02,
     color: 'transparent',
     zIndex: 2,

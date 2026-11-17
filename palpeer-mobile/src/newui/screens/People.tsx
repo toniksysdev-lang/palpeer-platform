@@ -1,5 +1,5 @@
 import * as Clipboard from 'expo-clipboard';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, Share, View } from 'react-native';
 import type { useLivePeople } from '@/design/bridge/useLivePeople';
@@ -26,8 +26,8 @@ const OLD_CODE = 'OLDCODE';
 const CODE_SHARE = 0.5;
 const POINTS_END = 'Dec 31, 2026';
 const POINTS_PER_CAD = 100;
-const LOW = 950;
-const HIGH = 1000;
+const FALLBACK_LOW = 950;
+const FALLBACK_HIGH = 1000;
 const STEP = 1;
 const PAL_BUY = 900; // Palpeer rate when you give CA$
 const PAL_SELL = 1000; // Palpeer rate when you give naira
@@ -190,12 +190,28 @@ export default function People(props: PeopleProps) {
   const c = useC();
   const backend = !!props.backend;
   const { listen, listenLabel } = useListen();
+  const params = useLocalSearchParams<{
+    requestId?: string | string[];
+    negotiationId?: string | string[];
+    nudge?: string | string[];
+  }>();
+  const paramOne = (v?: string | string[]) => (Array.isArray(v) ? v[0] : v)?.trim() || '';
+  const deepRequestId = paramOne(params.requestId);
+  const deepNegotiationId = paramOne(params.negotiationId);
+  const deepNudge = paramOne(params.nudge) === '1' || paramOne(params.nudge) === 'true';
+
   const startStage = props.stage || 'list';
   const none = startStage === 'empty';
   const talking = startStage === 'talk';
   const offersSeed: Offer[] = backend ? mapLiveOffers(props.liveOffers) : none ? [] : [SAMPLE_OFFER, SAMPLE_OFFER_2];
   const mineSeed: Offer[] = backend ? mapLiveMine(props.liveMine) : none ? [] : [SAMPLE_MINE];
   const firstMine = backend ? props.liveMine?.[0] : mineSeed[0] ?? SAMPLE_MINE;
+
+  const rateLow = props.liveRateBounds?.min ?? FALLBACK_LOW;
+  const rateHigh = props.liveRateBounds?.max ?? FALLBACK_HIGH;
+  const rateMid = props.liveRateBounds?.mid ?? Math.round((rateLow + rateHigh) / 2);
+  const LOW = rateLow;
+  const HIGH = rateHigh;
 
   const [stage, setStage] = useState<Stage>(none ? 'list' : startStage === 'share' || startStage === 'stop' ? 'live' : (startStage as Stage));
   const [sharing, setSharing] = useState(startStage === 'share');
@@ -224,13 +240,14 @@ export default function People(props: PeopleProps) {
   const [dir, setDir] = useState<Code>('CAD');
   const [amount, setAmount] = useState('100');
   const [least, setLeast] = useState<string | null>(null);
-  const [rate, setRate] = useState(990);
+  const [rate, setRate] = useState(rateMid);
   const [hours, setHours] = useState<number>(OFFER_END_OPTIONS[0].hours);
   const [more, setMore] = useState(false);
   const [pinFor, setPinFor] = useState<'buy' | 'post' | 'nudge'>('buy');
   const [pinBack, setPinBack] = useState<Stage>('offer');
   const [waved, setWaved] = useState<string[]>(!props.stage || props.stage === 'live' ? [] : ['m1']);
   const [nudgeId, setNudgeId] = useState<string | null>(null);
+  const deepLinkApplied = useRef(false);
   const [now, setNow] = useState({ get: '', give: '', getName: '', palText: '' });
   const [doneAt, setDoneAt] = useState(new Date());
   const [receipt, setReceipt] = useState<ReturnType<typeof buyerView> | null>(
@@ -278,6 +295,79 @@ export default function People(props: PeopleProps) {
       setStopping(s === 'stop');
     }
   }, [props.stage, none]);
+
+  // Admin rate band → default "My rate" to the midpoint once bounds load.
+  useEffect(() => {
+    if (!props.liveRateBounds) return;
+    setRate((cur) => {
+      if (cur >= rateLow && cur <= rateHigh) return cur;
+      return rateMid;
+    });
+  }, [props.liveRateBounds, rateLow, rateHigh, rateMid]);
+
+  // Push / alert deep links: open the matching People stage.
+  useEffect(() => {
+    if (deepLinkApplied.current) return;
+    if (deepNegotiationId && backend) {
+      const neg = props.liveNegotiations?.find((n) => n.id === deepNegotiationId);
+      if (!neg) return;
+      deepLinkApplied.current = true;
+      setOpenId(neg.p2pRequestId);
+      const offer = (props.liveOffers ?? []).find((o) => o.id === neg.p2pRequestId);
+      if (offer) {
+        setTake(String(offer.amt));
+        setDealRate(offer.rate);
+        setMyPrice(Math.max(rateLow, offer.rate - 10));
+      }
+      const bubbles =
+        (neg.offers ?? [])
+          .filter((o) => o.status === 'PENDING' || o.status === 'ACCEPTED')
+          .map((o) => ({
+            me: o.offeredBy === neg.counterpartyId,
+            rate: Number.parseFloat(String(o.rate)) || 0,
+          }))
+          .filter((b) => b.rate > 0) ?? [];
+      setTalk(bubbles.length ? bubbles : []);
+      setWaiting(false);
+      setStage('talk');
+      return;
+    }
+    if (deepRequestId) {
+      const inOffers = offers.find((o) => o.id === deepRequestId) || (props.liveOffers ?? []).find((o) => o.id === deepRequestId);
+      const inMine = mine.find((o) => o.id === deepRequestId) || (props.liveMine ?? []).find((o) => o.id === deepRequestId);
+      if (!inOffers && !inMine && (backend ? props.peopleLoading : false)) return;
+      deepLinkApplied.current = true;
+      if (inMine || (deepNudge && inMine)) {
+        setMineId(deepRequestId);
+        setStage('live');
+        if (deepNudge) setWaved((w) => w.filter((id) => id !== deepRequestId));
+        return;
+      }
+      if (inOffers || deepRequestId) {
+        setOpenId(deepRequestId);
+        const o = inOffers as Offer | undefined;
+        if (o) {
+          setTake(String(o.amt));
+          setDealRate(o.rate);
+          setMyPrice(Math.max(rateLow, o.rate - 10));
+        }
+        setStage(startStage === 'talk' ? 'talk' : 'offer');
+      }
+    }
+  }, [
+    backend,
+    deepNegotiationId,
+    deepNudge,
+    deepRequestId,
+    mine,
+    offers,
+    props.liveMine,
+    props.liveNegotiations,
+    props.liveOffers,
+    props.peopleLoading,
+    rateLow,
+    startStage,
+  ]);
 
   const bal = useCallback(
     (k: Code) => {
@@ -345,17 +435,16 @@ export default function People(props: PeopleProps) {
     : talk;
   const dealRateLive = negOther ? parseFloat(negOther.rate) || dealRate : dealRate;
   const waitingLive = waiting || !!(neg?.offers?.length && neg.offers[neg.offers.length - 1]?.offeredBy === neg.counterpartyId && neg.offers[neg.offers.length - 1]?.status === 'PENDING');
-  const takeNum = backend
-    ? (negOther ? parseFloat(String(negOther.amount)) || open.amt : parseFloat(take) || open.amt)
-    : parseFloat(take) || 0;
-  const takeShown = backend ? String(takeNum) : take;
+  const takeNum = parseFloat(take) || (backend ? open.amt : 0);
+  const takeShown = take;
   const feeEats = takeNum > 0 && feeOf(open.giveCode, takeNum, dealRateLive) >= takeNum;
   const takeBad = takeNum < open.least || takeNum > open.amt || feeEats;
   const deal = buyerView(open, dealRateLive, takeNum, reward);
   const mineDeal = buyerView(open, myPrice, takeNum, reward);
   const short = deal.pay > bal(deal.payCode);
   const n = parseFloat(amount) || 0;
-  const leastText = least === null ? (dir === 'CAD' ? String(MIN_CAD) : String(Math.ceil(MIN_CAD * rate))) : least;
+  // Minimum defaults to the "You give" amount (editable downward).
+  const leastText = least === null ? (n > 0 ? String(n) : dir === 'CAD' ? String(MIN_CAD) : String(Math.ceil(MIN_CAD * rate))) : least;
   const leastNum = parseFloat(leastText) || 0;
   const amountSmall = tooSmall(dir, n, rate);
   const leastSmall = !amountSmall && tooSmall(dir, leastNum, rate);
@@ -363,8 +452,11 @@ export default function People(props: PeopleProps) {
   const tooMuch = n > bal(dir);
   const rateBad = rate < LOW || rate > HIGH;
   const blocked = n <= 0 || tooMuch || leastBad || amountSmall || rateBad;
+  const tipFloorCad = FLAT_UP_TO_CAD;
+  const tipFloorText = dir === 'CAD' ? 'C$' + tipFloorCad : '₦' + Math.round(tipFloorCad * rate).toLocaleString('en-CA');
+  const ratePickText = 'You can pick ₦' + LOW.toLocaleString('en-CA') + ' to ₦' + HIGH.toLocaleString('en-CA');
   const nudgeOffer =
-    !backend && ['list', 'offer', 'live'].includes(stage) && !sharing && !rewardPanel
+    ['live', 'list'].includes(stage) && !sharing && !rewardPanel && !stopping
       ? mine.find((o) => o.left > 0 && o.left <= 1800 && !waved.includes(o.id))
       : undefined;
   const nq = nudgeOffer ? palQuote(nudgeOffer) : null;
@@ -499,10 +591,8 @@ export default function People(props: PeopleProps) {
         setWaiting(false);
         return;
       }
+      // Stay on Talk about the price (do not auto-open chat).
       setWaiting(false);
-      if (!neg && r.data && typeof r.data === 'object' && r.data !== null && 'id' in r.data) {
-        void props.onOpenNegotiationChat?.(String((r.data as { id: string }).id));
-      }
       return;
     }
     setStage('talk');
@@ -799,19 +889,18 @@ export default function People(props: PeopleProps) {
         <H1>{"A person's offer"}</H1>
         <Card>
           <Txt size={16} color="text2">
-            You want to buy
+            Set amount you want to buy
           </Txt>
           <Row gap={6}>
             <Txt size={28} w="800" noTr>
               {WD[open.giveCode].sym}
             </Txt>
             <PadNumberInput
-              accessibilityLabel="You want to buy"
+              accessibilityLabel="Set amount you want to buy"
               decimal
               padKey="people-take"
               value={amtShow(takeShown)}
-              onChangeText={(v) => !backend && setTake(amtIn(v))}
-              editable={!backend}
+              onChangeText={(v) => setTake(amtIn(v))}
               style={{ minWidth: 88, flexShrink: 1, fontSize: 28, fontFamily: 'NotoSans_800ExtraBold', paddingVertical: 4 }}
             />
           </Row>
@@ -849,7 +938,7 @@ export default function People(props: PeopleProps) {
           <H2>My rate for CA$1</H2>
           {priceStepper(myPrice, setMyPrice, '#1D5BC7', 'people-counter-rate')}
           <Txt size={16} w="600" color="text2" center>
-            {'The person asks ₦' + dealRateLive + '. You can pick ₦950 to ₦1,000'}
+            {'The person asks ₦' + dealRateLive + '. ' + ratePickText}
           </Txt>
           <Divider />
           <Line k="You buy" v={mineDeal.offerAmt} />
@@ -938,21 +1027,25 @@ export default function People(props: PeopleProps) {
           <H2>My rate for CA$1</H2>
           {priceStepper(rate, setRate, '#0B6E4F', 'people-rate')}
           <Txt size={16} w="600" color="text2" center>
-            You can pick ₦950 to ₦1,000
+            {ratePickText}
           </Txt>
         </Card>
         <Card>
           <Txt size={17} w="800">
-            Minimum a person can buy
+            Minimum a person can buy from this offer
           </Txt>
           <Row gap={4}>
             <Txt size={24} w="800" noTr>
               {WD[dir].sym}
             </Txt>
-            <PadNumberInput accessibilityLabel="Minimum a person can buy" decimal padKey="people-least" value={amtShow(leastText)} onChangeText={(v) => setLeast(amtIn(v))} style={{ minWidth: 100, flexShrink: 1, fontSize: 24, fontFamily: 'NotoSans_800ExtraBold', paddingVertical: 4 }} />
+            <PadNumberInput accessibilityLabel="Minimum a person can buy from this offer" decimal padKey="people-least" value={amtShow(leastText)} onChangeText={(v) => setLeast(amtIn(v))} style={{ minWidth: 100, flexShrink: 1, fontSize: 24, fontFamily: 'NotoSans_800ExtraBold', paddingVertical: 4 }} />
           </Row>
           <Txt size={15} w="600" color={leastBad ? 'red' : 'text3'}>
-            {leastSmall ? 'It must be ' + minText(dir, rate) + ' or more' : leastBad ? 'It must not be more than ' + postView.give : 'Most users set C$300 minimum to reduce fees'}
+            {leastSmall
+              ? 'It must be ' + minText(dir, rate) + ' or more'
+              : leastBad
+                ? 'It must not be more than ' + postView.give
+                : 'Selling a large amount? Consider setting your minimum order above ' + tipFloorText}
           </Txt>
         </Card>
         {rewardBtn}
@@ -998,7 +1091,7 @@ export default function People(props: PeopleProps) {
           <Line k={postView.myFeeLabel} v={postView.myFeeShow} />
           <Line k="You get" v={postView.get} strong />
           <Txt size={16} w="700" color={amountSmall ? 'red' : 'text2'}>
-            {apiError || (amountSmall ? 'Too small. The least is ' + minText(dir, rate) : rateBad ? 'Pick a price from ₦950 to ₦1,000' : 'Your offer ends in ' + hoursLabel(hours))}
+            {apiError || (amountSmall ? 'Too small. The least is ' + minText(dir, rate) : rateBad ? 'Pick a price from ₦' + LOW.toLocaleString('en-CA') + ' to ₦' + HIGH.toLocaleString('en-CA') : 'Your offer ends in ' + hoursLabel(hours))}
           </Txt>
         </Card>
         <Btn label="Post your offer" disabled={blocked} onPress={() => { setPinFor('post'); setPinBack('post'); setStage('pin'); }} />

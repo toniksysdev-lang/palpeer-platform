@@ -43,7 +43,7 @@ export function walletErrorMessage(error: AppError): string {
     error.code === 'KUDA_ERROR' &&
     /do not have permission|contact the api team/i.test(error.message ?? '')
   ) {
-    return MESSAGES.KUDA_PERMISSION_DENIED;
+    return MESSAGES.KUDA_PERMISSION_DENIED ?? "Naira funding isn't enabled for this payment account yet. Contact support.";
   }
   const mapped = error.code ? MESSAGES[error.code] : undefined;
   // Prefer a specific Kuda/Korapay message when the API returned one (e.g. invalid phone).

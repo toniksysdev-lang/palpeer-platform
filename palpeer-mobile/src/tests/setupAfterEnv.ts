@@ -8,17 +8,14 @@ jest.setTimeout(20000);
 // Drive that path from media.sizes so KYC tests match production behaviour.
 const { Image } = require('react-native');
 const { media } = require('./mocks/media');
-jest.spyOn(Image, 'getSize').mockImplementation(
-  (
-    uri: string,
-    success: (width: number, height: number) => void,
-    failure?: (error: Error) => void,
-  ) => {
-    const size = media.sizes[uri];
-    if (size) {
-      success(size.width, size.height);
-      return;
-    }
-    failure?.(new Error(`No size registered for ${uri}`));
-  },
-);
+jest.spyOn(Image, 'getSize').mockImplementation((...args: unknown[]) => {
+  const uri = String(args[0] ?? '');
+  const success = args[1] as (width: number, height: number) => void;
+  const failure = args[2] as ((error: Error) => void) | undefined;
+  const size = media.sizes[uri];
+  if (size) {
+    success(size.width, size.height);
+    return;
+  }
+  failure?.(new Error(`No size registered for ${uri}`));
+});

@@ -30,7 +30,9 @@ export default function DesignLayout() {
               screenOptions={{
                 headerShown: false,
                 animation: 'slide_from_right',
-                detachInactiveScreens: true,
+                // Keep inactive design screens mounted so keypad/form state survives back nav.
+                // Cast: native-stack typings omit this option in our current RN Screens version.
+                ...({ detachInactiveScreens: true } as object),
                 contentStyle: {
                   flex: 1,
                   backgroundColor: designDark ? DARK_PAGE : '#F3F6F4',

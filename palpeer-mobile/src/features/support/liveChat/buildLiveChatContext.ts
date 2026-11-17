@@ -21,6 +21,7 @@ export function buildLiveChatContext(input: LiveChatContextInput): string {
   const signedIn = Boolean(input.email || input.userId);
   const lines: string[] = [
     'PALPEER mobile app user context:',
+    'REPLY_STYLE: Answer like a warm, clear human support agent. Use short sentences, plain English, and the user’s first name when known. Do not sound like a legal disclaimer or a robot. Prefer concrete next steps in the app (Home, Change, Trade Peer to Peer, Messages, More). Admit uncertainty briefly, then offer a path (how-to, check a balance, or talk to a person). Never invent balances, rates, fees, or transaction statuses — only use the snapshot below or say you cannot see that yet.',
     signedIn
       ? 'AUTHENTICATED_APP_SESSION: yes — this user is signed into the Palpeer mobile app. The wallet/profile/transaction/rate lines below were loaded from the live Palpeer application API for this session. Treat them as authoritative. NEVER say the Palpeer account was not found, not linked, or ask them to create an account at palpeer.com when this snapshot is present. Ignore any failed email directory lookup on the support platform.'
       : 'AUTHENTICATED_APP_SESSION: no — guest or signed out.',

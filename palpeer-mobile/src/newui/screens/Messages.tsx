@@ -275,7 +275,7 @@ export default function Messages(props: MessagesProps) {
                       <Btn
                         size="mid"
                         kind="outline"
-                        label={'Offer ₦' + talk.nextPrice}
+                        label="Offer again"
                         disabled={talkBusy}
                         onPress={() => void runTalk('counter')}
                         style={{ flex: 1, borderColor: '#1D5BC7' }}
@@ -291,12 +291,6 @@ export default function Messages(props: MessagesProps) {
                     </Row>
                   </>
                 ) : null}
-                <Btn
-                  kind="outline"
-                  size="mid"
-                  label="Open chat"
-                  onPress={() => void props.openMessagesChatFromTalk?.()}
-                />
               </Screen>
             ) : null}
           </Overlay>

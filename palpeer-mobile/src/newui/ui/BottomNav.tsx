@@ -15,7 +15,16 @@ const TABS: { key: TabKey; label: string; icon: IconName; href: Href }[] = [
   { key: 'more', label: 'More', icon: 'dots', href: '/More' as Href },
 ];
 
-export function BottomNav({ active, unread = 0 }: { active: TabKey | string; unread?: number }) {
+export function BottomNav({
+  active,
+  unread = 0,
+  /** Path leaf (e.g. Main, People) — Home stays highlighted on money flows but must still navigate. */
+  leaf,
+}: {
+  active: TabKey | string;
+  unread?: number;
+  leaf?: string;
+}) {
   const c = useC();
   const { s } = useLayout();
   const insets = useSafeAreaInsets();
@@ -37,12 +46,26 @@ export function BottomNav({ active, unread = 0 }: { active: TabKey | string; unr
       {TABS.map((t) => {
         const on = t.key === active;
         const color = on ? c.brandText : c.text2;
+        const tabRootLeaf =
+          t.key === 'home'
+            ? 'Main'
+            : t.key === 'history'
+              ? 'History'
+              : t.key === 'messages'
+                ? 'Messages'
+                : 'More';
+        const alreadyOnRoot = leaf === tabRootLeaf;
         return (
           <Pressable
             key={t.key}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
-            onPress={() => !on && router.replace(t.href)}
+            onPress={() => {
+              // Home (and other tabs) must work from nested money-flow screens where the
+              // tab is already highlighted — previously `!on` skipped navigation entirely.
+              if (alreadyOnRoot && on) return;
+              router.replace(t.href);
+            }}
             style={{
               flex: 1,
               minHeight: s(62),

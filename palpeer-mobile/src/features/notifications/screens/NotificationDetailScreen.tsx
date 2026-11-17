@@ -56,7 +56,11 @@ export function NotificationDetailScreen() {
     );
   }
 
-  const target = notificationTarget(data);
+  const target = notificationTarget({
+    referenceType: data.referenceType,
+    referenceId: data.referenceId,
+    title: data.title,
+  });
 
   return (
     <Screen scroll gap={12}>

@@ -39,7 +39,7 @@ export function useLiveAuth() {
   const [loginBusy, setLoginBusy] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
 
-  const fail = (error: unknown): OkErr => {
+  const fail = (error: unknown): { ok: false; error: string } => {
     const appErr = toAppError(error);
     const msg = authErrorMessage(appErr);
     setAuthError(msg);

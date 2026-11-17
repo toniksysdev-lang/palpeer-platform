@@ -74,7 +74,7 @@ describe('notification and push targets', () => {
       `/transaction/TRANSFER/${ID}`,
     );
     expect(notificationTarget({ referenceType: 'NEGOTIATION', referenceId: ID })).toBe(
-      `/negotiation/${ID}`,
+      `/PeopleTalk?negotiationId=${ID}`,
     );
     expect(notificationTarget({ referenceType: 'ADMIN_BROADCAST', referenceId: null })).toBeNull();
     expect(notificationTarget({ referenceType: null, referenceId: null })).toBeNull();
@@ -88,7 +88,7 @@ describe('notification and push targets', () => {
     expect(pushTarget(undefined)).toBe('/notifications');
   });
 
-  it('opens P2P request pushes on the request screen via deepLink or reference', () => {
+  it('opens P2P request pushes on the People offer screen via deepLink or reference', () => {
     expect(
       pushTarget({
         notificationId: ID,
@@ -103,7 +103,38 @@ describe('notification and push targets', () => {
         referenceType: 'P2P_REQUEST',
         referenceId: ID,
       }),
-    ).toBe(`/p2p/request/${ID}`);
+    ).toBe(`/PeopleOffer?requestId=${ID}`);
+  });
+
+  it('routes marketplace alert titles to Trade / Talk / My offer', () => {
+    expect(
+      notificationTarget({
+        referenceType: 'P2P_REQUEST',
+        referenceId: ID,
+        title: 'P2P order posted',
+      }),
+    ).toBe('/People');
+    expect(
+      notificationTarget({
+        referenceType: 'P2P_REQUEST',
+        referenceId: ID,
+        title: 'My offer closed',
+      }),
+    ).toBe('/People');
+    expect(
+      notificationTarget({
+        referenceType: 'NEGOTIATION',
+        referenceId: ID,
+        title: 'New price offer',
+      }),
+    ).toBe(`/PeopleTalk?negotiationId=${ID}`);
+    expect(
+      notificationTarget({
+        referenceType: 'P2P_REQUEST',
+        referenceId: ID,
+        title: 'Your offer ends in 30 minutes',
+      }),
+    ).toBe(`/PeopleLive?requestId=${ID}&nudge=1`);
   });
 });
 

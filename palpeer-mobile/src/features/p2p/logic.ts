@@ -531,7 +531,10 @@ export function canAccept(
   return !!userId && request.userId !== userId && effectiveStatus(request, now) === 'OPEN';
 }
 
-export function orderRole(order: P2POrderResponse, userId: string | null) {
+export function orderRole(
+  order: Pick<P2POrderResponse, 'requesterId' | 'acceptorId'>,
+  userId: string | null,
+) {
   if (order.acceptorId === userId) return 'acceptor' as const;
   if (order.requesterId === userId) return 'requester' as const;
   return null;

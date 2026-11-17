@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Animated, Easing, Pressable, View } from 'react-native';
 import { metaFor } from '@/design/bridge/currencyMeta';
 import type { DesignWallet } from '@/design/bridge/mapWallet';
 import type { LockQuoteResult } from '@/design/bridge/useLiveChange';
@@ -58,10 +58,36 @@ export default function Change(props: ChangeProps) {
   const [quoteAfterText, setQuoteAfterText] = useState('');
   const [backendError, setBackendError] = useState<string | null>(null);
   const pinLocked = staticStage === 'locked';
+  const swapSpin = useRef(new Animated.Value(0)).current;
+  const swapPulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (staticStage !== undefined) setStage(normStage(staticStage));
   }, [staticStage]);
+
+  // Keep the currency swap control obvious: rotating + color pulse.
+  useEffect(() => {
+    const spin = Animated.loop(
+      Animated.timing(swapSpin, {
+        toValue: 1,
+        duration: 2800,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(swapPulse, { toValue: 1, duration: 900, useNativeDriver: false }),
+        Animated.timing(swapPulse, { toValue: 0, duration: 900, useNativeDriver: false }),
+      ]),
+    );
+    spin.start();
+    pulse.start();
+    return () => {
+      spin.stop();
+      pulse.stop();
+    };
+  }, [swapPulse, swapSpin]);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -268,7 +294,7 @@ export default function Change(props: ChangeProps) {
   const sayForm =
     'Change money. You give ' +
     W(give).name +
-    '. You want ' +
+    '. You get ' +
     W(want).name +
     '. Instant Exchange: Palpeer changes it and there is no waiting. You get ' +
     nowGet +
@@ -323,24 +349,51 @@ export default function Change(props: ChangeProps) {
           </Pressable>
           <View style={{ flex: 1 }}>
             <Txt size={16} color="text2">
-              You want
+              You get
             </Txt>
             <Txt size={20} w="800">
               {W(want).name}
             </Txt>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Swap the two moneys"
-            onPress={() => {
-              setGive(want);
-              setWant(give);
-              setAmount(startAmount(want, perWant));
+          <Animated.View
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              backgroundColor: swapPulse.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['#1D5BC7', '#0B6E4F'],
+              }),
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
-            style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: c.field, alignItems: 'center', justifyContent: 'center' }}
           >
-            <Icon name="swap" size={28} color={c.text} />
-          </Pressable>
+            <Animated.View
+              style={{
+                transform: [
+                  {
+                    rotate: swapSpin.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['0deg', '360deg'],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Swap the two moneys"
+                onPress={() => {
+                  setGive(want);
+                  setWant(give);
+                  setAmount(startAmount(want, perWant));
+                }}
+                style={{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Icon name="swap" size={28} color="#FFFFFF" />
+              </Pressable>
+            </Animated.View>
+          </Animated.View>
         </Row>
       </Card>
       <TopBar onBack={() => router.back()} say={sayForm} />

@@ -100,8 +100,7 @@ describe('saveReceipt', () => {
 
   it('fails clearly when sharing is unavailable on native', async () => {
     const original = Platform.OS;
-    // @ts-expect-error test override
-    Platform.OS = 'ios';
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
     isAvailableMock.mockResolvedValue(false);
     try {
       await expect(saveReceiptAsImage(refWithView())).rejects.toBeInstanceOf(
@@ -109,8 +108,7 @@ describe('saveReceipt', () => {
       );
       expect(captureRefMock).toHaveBeenCalled();
     } finally {
-      // @ts-expect-error test override
-      Platform.OS = original;
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: original });
     }
   });
 

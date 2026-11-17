@@ -383,6 +383,16 @@ export function useLiveMore() {
           action: 'privacy',
         },
         {
+          title: 'Terms and Conditions',
+          note: 'Rules for using Palpeer',
+          action: 'terms',
+        },
+        {
+          title: 'Privacy Policy',
+          note: 'How we handle your information',
+          action: 'privacyPolicy',
+        },
+        {
           title: 'App look',
           note: scheme === 'dark' ? 'Dark screen' : 'Light screen',
           action: 'look',
@@ -462,6 +472,14 @@ export function useLiveMore() {
       }
       if (action === 'privacy') {
         router.push('/Privacy' as Href);
+        return;
+      }
+      if (action === 'terms') {
+        router.push('/Terms' as Href);
+        return;
+      }
+      if (action === 'privacyPolicy') {
+        router.push('/PrivacyPolicy' as Href);
         return;
       }
       if (action === 'securityQuestions') {

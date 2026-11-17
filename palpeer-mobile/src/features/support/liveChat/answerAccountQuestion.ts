@@ -150,10 +150,12 @@ function formatWallets(snapshot: AccountSnapshot): string {
     );
   });
 
+  const first = snapshot.profile?.firstName?.trim();
+  const hi = first ? `Hi ${first} — ` : '';
   return [
-    `Here are the wallets on your Palpeer account${snapshot.email ? ` (${snapshot.email})` : ''}:`,
+    `${hi}here is what I see on your wallets right now${snapshot.email ? ` (${snapshot.email})` : ''}:`,
     ...lines,
-    'Balances come from your live account in the app. Open Wallets for ledger detail.',
+    'Those numbers are live from your account. Open Home or Wallets if you want the full ledger.',
   ].join('\n');
 }
 

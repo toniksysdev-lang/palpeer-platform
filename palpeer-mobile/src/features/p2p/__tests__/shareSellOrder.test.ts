@@ -1,3 +1,5 @@
+import { toMoney } from '@/utils/money';
+
 import {
   canShareSellOrder,
   sellOrderAcceptPath,
@@ -21,8 +23,8 @@ describe('shareSellOrder helpers', () => {
     const message = sellOrderShareMessage(
       {
         id: ID,
-        amount: '100.00',
-        rate: '980',
+        amount: toMoney('100.00'),
+        rate: toMoney('980'),
         baseCurrencyCode: 'CAD',
         quoteCurrencyCode: 'NGN',
       },

@@ -1,6 +1,6 @@
 import { router, type Href } from 'expo-router';
 import { Linking } from 'react-native';
-import { Btn, Card, Choice, H1, P, Screen, TopBar, Txt } from '@/newui/ui/kit';
+import { Btn, Choice, H1, P, Screen, TopBar, Txt } from '@/newui/ui/kit';
 
 type Props = {
   backend?: boolean;
@@ -33,9 +33,21 @@ export default function Privacy(props: Props) {
       <Txt size={18} w="800">
         Policies
       </Txt>
+      <Choice
+        title="Privacy Policy"
+        note="Read how we handle your information"
+        onPress={() => router.push('/PrivacyPolicy' as Href)}
+        right={null}
+      />
+      <Choice
+        title="Terms and Conditions"
+        note="Rules for using Palpeer"
+        onPress={() => router.push('/Terms' as Href)}
+        right={null}
+      />
       {props.privacyPolicyUrl ? (
         <Choice
-          title="Privacy policy"
+          title="Privacy Policy (web)"
           note="Opens in your browser"
           onPress={() => void props.onOpenUrl?.(props.privacyPolicyUrl!)}
           right={null}
@@ -43,18 +55,11 @@ export default function Privacy(props: Props) {
       ) : null}
       {props.termsUrl ? (
         <Choice
-          title="Terms of use"
+          title="Terms (web)"
           note="Opens in your browser"
           onPress={() => void props.onOpenUrl?.(props.termsUrl!)}
           right={null}
         />
-      ) : null}
-      {!props.privacyPolicyUrl && !props.termsUrl ? (
-        <Card>
-          <Txt size={16} color="text2">
-            The privacy policy and terms are not available in this version yet.
-          </Txt>
-        </Card>
       ) : null}
 
       <Txt size={18} w="800">

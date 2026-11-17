@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   hiddenPaste: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     opacity: 0.02,
     color: 'transparent',
     zIndex: 2,

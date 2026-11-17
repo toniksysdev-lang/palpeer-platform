@@ -16,8 +16,10 @@ import {
   useCreateRequestMutation,
   useGetMyRequestsQuery,
   useGetOpenRequestsQuery,
+  useGetP2PRateBoundsQuery,
   useLazyGetP2PFeeEstimateQuery,
 } from '@/services/api/p2pApi';
+import { ALERTS_POLL_MS } from '@/services/api/notificationApi';
 import { formatPoints } from '@/features/loyalty/logic';
 import {
   useGetActivePromotionsQuery,
@@ -69,11 +71,29 @@ function toMine(req: P2PRequestResponse) {
 
 export function useLivePeople() {
   const authenticated = useAppSelector((s) => s.session.status === 'authenticated');
-  const open = useGetOpenRequestsQuery(undefined, { skip: !authenticated });
-  const mine = useGetMyRequestsQuery(undefined, { skip: !authenticated });
+  const open = useGetOpenRequestsQuery(undefined, {
+    skip: !authenticated,
+    pollingInterval: authenticated ? ALERTS_POLL_MS : 0,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
+  });
+  const mine = useGetMyRequestsQuery(undefined, {
+    skip: !authenticated,
+    pollingInterval: authenticated ? ALERTS_POLL_MS : 0,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
+  });
   const walletsQ = useGetWalletsQuery(undefined, { skip: !authenticated });
   const userId = useAppSelector((s) => s.session.userId);
-  const negotiations = useGetMyNegotiationsQuery(undefined, { skip: !authenticated });
+  const negotiations = useGetMyNegotiationsQuery(undefined, {
+    skip: !authenticated,
+    pollingInterval: authenticated ? ALERTS_POLL_MS : 0,
+  });
+  // CAD→NGN bounds drive "My rate for CA$1" on Create offer (admin min/max).
+  const rateBoundsQ = useGetP2PRateBoundsQuery(
+    { baseCurrencyCode: 'CAD', quoteCurrencyCode: 'NGN' },
+    { skip: !authenticated },
+  );
   const pointsBalanceQ = useGetMyLoyaltyPointsBalanceQuery(undefined, { skip: !authenticated });
   const promotionsQ = useGetActivePromotionsQuery(undefined, { skip: !authenticated });
   const [acceptRequest] = useAcceptRequestMutation();
@@ -348,6 +368,19 @@ export function useLivePeople() {
 
   const shareUrlFor = useCallback((requestId: string) => sellOrderShareUrl(requestId), []);
 
+  const liveRateBounds = useMemo(() => {
+    const b = rateBoundsQ.data;
+    if (!b) return null;
+    const min = Number.parseFloat(String(b.minRate)) || 0;
+    const max = Number.parseFloat(String(b.maxRate)) || 0;
+    if (!(min > 0) || !(max > 0) || max < min) return null;
+    return {
+      min,
+      max,
+      mid: Math.round((min + max) / 2),
+    };
+  }, [rateBoundsQ.data]);
+
   return {
     backend: true as const,
     liveOffers,
@@ -355,6 +388,7 @@ export function useLivePeople() {
     liveBalances,
     liveWallets,
     liveNegotiations,
+    liveRateBounds,
     peopleLoading: open.isLoading || mine.isLoading,
     shareUrlFor,
     bonusCadUnused,

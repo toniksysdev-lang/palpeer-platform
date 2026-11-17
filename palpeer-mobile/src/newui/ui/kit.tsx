@@ -292,7 +292,7 @@ export function Screen({
   };
 
   // Do not wrap ScrollView in Pressable — that steals center drags on Android (edge-only scroll).
-  // Dismiss the pad on scroll-begin / background touch without blocking scrolling.
+  // Number pad closes only when the user scrolls (not on outside taps).
   const body = scroll ? (
     <FocusScrollProvider scrollRef={scrollRef}>
       <KeyboardFocusReveal />
@@ -302,15 +302,7 @@ export function Screen({
       </ScreenScrollBody>
     </FocusScrollProvider>
   ) : (
-    <View
-      style={[{ flex: 1, width: '100%' }, contentInner, style]}
-      onStartShouldSetResponder={() => {
-        dismissPad();
-        return false;
-      }}
-    >
-      {children}
-    </View>
+    <View style={[{ flex: 1, width: '100%' }, contentInner, style]}>{children}</View>
   );
 
   // Full-window shell + inset padding (not SafeAreaView) so LayoutProvider’s
@@ -741,17 +733,19 @@ export function Field({
           : null)}
         maxLength={isPhone ? undefined : maxLength}
         placeholder={rest.placeholder ? t(rest.placeholder) : undefined}
-        onPaste={(e: unknown) => {
-          const pasted = digitsFromPasteEvent(
-            e,
-            Number.isFinite(padMax) && padMax > 0 ? padMax : 32,
-          );
-          if (pasted) {
-            emit(pasted);
-            const ev = e as { preventDefault?: () => void };
-            ev.preventDefault?.();
-          }
-        }}
+        {...({
+          onPaste: (e: unknown) => {
+            const pasted = digitsFromPasteEvent(
+              e,
+              Number.isFinite(padMax) && padMax > 0 ? padMax : 32,
+            );
+            if (pasted) {
+              emit(pasted);
+              const ev = e as { preventDefault?: () => void };
+              ev.preventDefault?.();
+            }
+          },
+        } as object)}
         onFocus={(e) => {
           rest.onFocus?.(e);
           if (padActive) {
@@ -777,14 +771,14 @@ export function Field({
         }}
         // RN Web: DOM click/focus does not always fire onPressIn — open the in-app pad explicitly.
         {...(padActive && Platform.OS === 'web'
-          ? {
+          ? ({
               onClick: () => {
                 suppressSystemKeyboard();
                 pad.select();
                 focusAnchor.activate();
                 focusAnchor.reveal();
               },
-            }
+            } as object)
           : null)}
         style={[
           {
@@ -854,14 +848,16 @@ export function PadNumberInput({
       {...rest}
       {...numberFieldTextInputProps}
       contextMenuHidden={false}
-      onPaste={(e: unknown) => {
-        const pasted = digitsFromPasteEvent(e, maxLength);
-        if (pasted) {
-          onChangeText(pasted);
-          const ev = e as { preventDefault?: () => void };
-          ev.preventDefault?.();
-        }
-      }}
+      {...({
+        onPaste: (e: unknown) => {
+          const pasted = digitsFromPasteEvent(e, maxLength);
+          if (pasted) {
+            onChangeText(pasted);
+            const ev = e as { preventDefault?: () => void };
+            ev.preventDefault?.();
+          }
+        },
+      } as object)}
       onFocus={(e) => {
         rest.onFocus?.(e);
         suppressSystemKeyboard();
@@ -1078,7 +1074,7 @@ export function Overlay({
         <View
           pointerEvents="auto"
           collapsable={false}
-          style={[StyleSheet.absoluteFillObject, { backgroundColor: c.bg, zIndex: 1 }]}
+          style={[StyleSheet.absoluteFill, { backgroundColor: c.bg, zIndex: 1 }]}
         >
           {children}
         </View>

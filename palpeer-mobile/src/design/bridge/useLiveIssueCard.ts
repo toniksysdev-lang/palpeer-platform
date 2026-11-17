@@ -35,7 +35,8 @@ export function useLiveIssueCard() {
         code: item.code,
         symbol: item.symbol || meta.sym,
         name: meta.name,
-        cc: meta.cc,
+        // Flag ISO2 for design Flag — meta stores blob paths, not country codes.
+        cc: item.code === 'CAD' ? 'CA' : item.code === 'NGN' ? 'NG' : item.code.slice(0, 2),
         hasWallet: wallets.some((w) => w.currencyCode === item.code),
       };
     });

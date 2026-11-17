@@ -846,17 +846,6 @@ export function Screen({ bg = '#F3F6F4', go, children }) {
   const canScroll = padOpen || keyboardOpen;
   // Canvas stays at the frozen phone height so focusing inputs cannot shrink the page.
   const canvasH = fitLock?.canvasH ?? Math.max(availH, Math.round(DESIGN_H * scale));
-  // Wait out the opening tap so the new dismiss overlay does not eat the same press.
-  const [dismissArmed, setDismissArmed] = useState(false);
-  useEffect(() => {
-    if (!overlayPad) {
-      setDismissArmed(false);
-      return undefined;
-    }
-    const timer = setTimeout(() => setDismissArmed(true), 320);
-    return () => clearTimeout(timer);
-  }, [overlayPad]);
-
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
@@ -969,22 +958,6 @@ export function Screen({ bg = '#F3F6F4', go, children }) {
                   >
                     {children}
                   </ScrollView>
-                  {overlayPad && dismissArmed ? (
-                    <Pressable
-                      testID="number-pad-dismiss"
-                      accessibilityRole="button"
-                      accessibilityLabel="Dismiss number pad"
-                      onPress={() => pad?.close()}
-                      style={{
-                        position: 'absolute',
-                        left: 0,
-                        right: 0,
-                        top: 0,
-                        bottom: NUMBER_PAD_DOCK_HEIGHT * scale,
-                        zIndex: 19,
-                      }}
-                    />
-                  ) : null}
                   <View
                     pointerEvents="box-none"
                     style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 20 }}

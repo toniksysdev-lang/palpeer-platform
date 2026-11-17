@@ -23,6 +23,13 @@ const ROUTES: readonly RegExp[] = [
   /^\/promotions$/,
   /^\/referrals$/,
   /^\/activity$/,
+  /^\/People$/,
+  /^\/PeopleOffer$/,
+  /^\/PeopleTalk$/,
+  /^\/PeopleLive$/,
+  /^\/PeoplePost$/,
+  /^\/Terms$/,
+  /^\/PrivacyPolicy$/,
 ];
 
 /** Strips `palpeer://`, `exp+palpeer://` or a leading slash and splits off the query. */
@@ -78,6 +85,23 @@ export function resolveDeepLink(input: string | null | undefined): string | null
   if (cardMatch?.[1]) return `/Card?id=${cardMatch[1]}`;
   // Design History (legacy /activity tab).
   if (path === '/activity') return '/History';
+  // Preserve safe query keys for People deep links from pushes/alerts.
+  if (
+    path === '/PeopleOffer' ||
+    path === '/PeopleTalk' ||
+    path === '/PeopleLive' ||
+    path === '/People'
+  ) {
+    const requestId = query.get('requestId');
+    const negotiationId = query.get('negotiationId');
+    const nudge = query.get('nudge');
+    const qs = new URLSearchParams();
+    if (requestId && UUID_ONLY.test(requestId)) qs.set('requestId', requestId);
+    if (negotiationId && UUID_ONLY.test(negotiationId)) qs.set('negotiationId', negotiationId);
+    if (nudge === '1' || nudge === 'true') qs.set('nudge', '1');
+    const q = qs.toString();
+    return q ? `${path}?${q}` : path;
+  }
   return path;
 }
 
@@ -88,13 +112,40 @@ export function isGuestDeepLink(path: string | null | undefined): boolean {
 
 const UUID_ONLY = new RegExp(`^${UUID}$`);
 
-/** Screen for a notification's `referenceType` (NT-3). */
+function titleHint(title: string | null | undefined): string {
+  return (title || '').trim().toLowerCase();
+}
+
+/**
+ * Screen for a notification's `referenceType` (NT-3).
+ * Optional `title` routes marketplace alerts to the new Trade / Talk / My offer screens.
+ */
 export function notificationTarget(notification: {
   referenceType: string | null;
   referenceId: string | null;
+  title?: string | null;
 }): string | null {
   const type = notification.referenceType?.toUpperCase();
   const id = notification.referenceId;
+  const title = titleHint(notification.title);
+
+  // Alerts tab / push copy → newui People stages.
+  if (
+    title.includes('p2p order posted') ||
+    title.includes('my offer closed') ||
+    title.includes('my offer ended')
+  ) {
+    return '/People';
+  }
+  if (title.includes('ends in 30 minutes') || title.includes('offer ends soon')) {
+    return id && UUID_ONLY.test(id)
+      ? `/PeopleLive?requestId=${id}&nudge=1`
+      : '/PeopleLive';
+  }
+  if (title.includes('new price offer') || title.includes('talk about')) {
+    return id && UUID_ONLY.test(id) ? `/PeopleTalk?negotiationId=${id}` : '/PeopleTalk';
+  }
+
   switch (type) {
     case 'REFERRAL':
       return '/referrals';
@@ -104,16 +155,17 @@ export function notificationTarget(notification: {
     case 'TRANSFER':
       return id && UUID_ONLY.test(id) ? `/transaction/${type}/${id}` : null;
     case 'P2P_REQUEST':
-      return id && UUID_ONLY.test(id) ? `/p2p/request/${id}` : null;
+      // Open that person's offer in the new Trade UI.
+      return id && UUID_ONLY.test(id) ? `/PeopleOffer?requestId=${id}` : '/People';
     case 'P2P_ORDER':
       return id && UUID_ONLY.test(id) ? `/p2p/order/${id}` : null;
     case 'NEGOTIATION':
-      return id && UUID_ONLY.test(id) ? `/negotiation/${id}` : null;
+      return id && UUID_ONLY.test(id) ? `/PeopleTalk?negotiationId=${id}` : '/PeopleTalk';
     case 'ADMIN_BROADCAST':
       // Open the notification detail screen (title + body from admin).
       return null;
     case 'P2P':
-      return '/notifications';
+      return '/People';
     default:
       return null;
   }
@@ -138,8 +190,14 @@ export function pushTarget(data: unknown): string {
 
   const referenceType = typeof record.referenceType === 'string' ? record.referenceType : null;
   const referenceId = typeof record.referenceId === 'string' ? record.referenceId : null;
-  const byReference = notificationTarget({ referenceType, referenceId });
-  if (byReference && referenceType?.toUpperCase() === 'P2P_REQUEST') {
+  const title = typeof record.title === 'string' ? record.title : null;
+  const byReference = notificationTarget({ referenceType, referenceId, title });
+  if (
+    byReference &&
+    (referenceType?.toUpperCase() === 'P2P_REQUEST' ||
+      referenceType?.toUpperCase() === 'NEGOTIATION' ||
+      referenceType?.toUpperCase() === 'P2P')
+  ) {
     return byReference;
   }
 

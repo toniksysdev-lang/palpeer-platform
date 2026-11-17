@@ -67,7 +67,10 @@ export function CreateWalletScreen() {
     );
   }
 
-  if (!currencies.data || !wallets.data || !registrationCountries.data || profileLoading || !profile) {
+  const currencyList = currencies.data;
+  const walletList = wallets.data;
+  const registrationList = registrationCountries.data;
+  if (!currencyList || !walletList || !registrationList || profileLoading || !profile) {
     return (
       <Screen>
         {header}
@@ -78,13 +81,13 @@ export function CreateWalletScreen() {
   }
 
   const available = remainingRegistrationWalletOptions({
-    registrationIso2: registrationCountries.data,
-    platformCurrencyCodes: currencies.data.map((currency) => currency.code),
-    heldCurrencyCodes: wallets.data.map((wallet) => wallet.currencyCode),
+    registrationIso2: registrationList,
+    platformCurrencyCodes: currencyList.map((currency) => currency.code),
+    heldCurrencyCodes: walletList.map((wallet) => wallet.currencyCode),
   });
   const selectedOption = available.find((option) => option.countryIso2 === selectedCountry) ?? null;
   const symbolFor = (code: string) =>
-    currencies.data.find((currency) => currency.code.toUpperCase() === code.toUpperCase())
+    currencyList.find((currency) => currency.code.toUpperCase() === code.toUpperCase())
       ?.symbol ?? code;
   const profileComplete = Boolean(profile.complete);
   const pinReady = Boolean(pinStatus.data?.pinSet);
@@ -149,8 +152,8 @@ export function CreateWalletScreen() {
 
   if (available.length === 0) {
     const anyCorridor = remainingRegistrationWalletOptions({
-      registrationIso2: registrationCountries.data,
-      platformCurrencyCodes: currencies.data.map((currency) => currency.code),
+      registrationIso2: registrationList,
+      platformCurrencyCodes: currencyList.map((currency) => currency.code),
       heldCurrencyCodes: [],
     }).length;
     return (

@@ -9,6 +9,8 @@ import type {
   ReferralResponse,
 } from '@/types/api/promotion';
 
+import { toMoney } from '@/utils/money';
+
 import { baseApi } from './baseApi';
 
 export const BONUSES_PAGE_SIZE = 20;
@@ -83,7 +85,7 @@ export const promotionApi = baseApi.injectEndpoints({
         const r = (raw ?? {}) as Record<string, unknown>;
         return {
           balancePoints: Number(r.balancePoints ?? 0) || 0,
-          balanceCad: String(r.balanceCad ?? '0'),
+          balanceCad: toMoney(String(r.balanceCad ?? '0')),
           earnedPoints: Number(r.earnedPoints ?? 0) || 0,
           usedPoints: Number(r.usedPoints ?? 0) || 0,
           pointsPerCad: Number(r.pointsPerCad ?? 100) || 100,

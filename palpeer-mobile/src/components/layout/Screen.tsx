@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Keyboard,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   View,
@@ -117,18 +116,6 @@ export function Screen({
   const overlayPad = padOpen && (numberPad?.inlineHosts ?? 0) === 0;
   const padScrollInset = overlayPad ? NUMBER_PAD_DOCK_HEIGHT : 0;
   const footerOffset = footer ? theme.spacing.md + footerBottomInset + 56 : 0;
-  // Arm the outside-tap layer only after the opening tap finishes — otherwise the same
-  // press that focused the field lands on the new overlay and immediately closes the pad.
-  const [dismissArmed, setDismissArmed] = useState(false);
-  useEffect(() => {
-    if (!overlayPad) {
-      setDismissArmed(false);
-      return undefined;
-    }
-    const timer = setTimeout(() => setDismissArmed(true), 320);
-    return () => clearTimeout(timer);
-  }, [overlayPad]);
-
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
@@ -184,22 +171,9 @@ export function Screen({
               paddingBottom: theme.spacing.md + footerBottomInset,
             },
           ]}
-          onTouchStart={dismissPad}
         >
           {footer}
         </View>
-      ) : null}
-      {overlayPad && dismissArmed ? (
-        <Pressable
-          testID="number-pad-dismiss"
-          accessibilityRole="button"
-          accessibilityLabel="Dismiss number pad"
-          onPress={dismissPad}
-          style={[
-            styles.padDismiss,
-            footer ? { bottom: footerOffset + NUMBER_PAD_DOCK_HEIGHT } : { bottom: NUMBER_PAD_DOCK_HEIGHT },
-          ]}
-        />
       ) : null}
       {/* Overlay — must not sit in flex flow or the page shrinks when the pad opens. */}
       <View
@@ -277,13 +251,6 @@ function KeyboardRevealOnShow() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  padDismiss: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    zIndex: 19,
-  },
   padOverlay: {
     position: 'absolute',
     left: 0,

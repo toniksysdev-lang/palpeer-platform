@@ -153,7 +153,11 @@ export async function resolveImageDimensions(
 async function measureUriBytes(uri: string): Promise<number | null> {
   try {
     if (typeof FileSystem.getInfoAsync === 'function') {
-      const info = await FileSystem.getInfoAsync(uri, { size: true });
+      // Legacy FileSystem typings omit `{ size: true }` on some Expo versions.
+      const info = await (FileSystem.getInfoAsync as (u: string, o?: object) => Promise<{ exists: boolean; size?: number }>)(
+        uri,
+        { size: true },
+      );
       if (info.exists && typeof info.size === 'number') return info.size;
     }
   } catch {
@@ -174,7 +178,11 @@ async function measureUriBytes(uri: string): Promise<number | null> {
 type SavedJpeg = { uri: string; width: number; height: number };
 
 async function encodeWithinComplyCubeLimits(
-  rendered: { width: number; height: number; saveAsync: (o: { format: string; compress: number }) => Promise<SavedJpeg> },
+  rendered: {
+    width: number;
+    height: number;
+    saveAsync: (o?: { format?: SaveFormat; compress?: number }) => Promise<SavedJpeg>;
+  },
   startUri: string,
 ): Promise<SavedJpeg> {
   let quality = JPEG_QUALITY;

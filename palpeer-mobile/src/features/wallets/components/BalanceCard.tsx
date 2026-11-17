@@ -51,7 +51,7 @@ export function BalanceCard({ wallet, hidden, onToggleHidden, onOpen }: Props) {
         onPress={onOpen}
         accessibilityRole="button"
         accessibilityLabel={`${walletName}, available ${hidden ? 'hidden' : `${code} ${available}`}`}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       />
       <LinearGradient
         colors={[theme.colors.heroStart, theme.colors.heroEnd, '#0B6E4F']}

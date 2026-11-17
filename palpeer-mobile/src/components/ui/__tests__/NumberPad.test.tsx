@@ -1,4 +1,4 @@
-import { act, fireEvent, screen } from '@testing-library/react-native';
+import { fireEvent, screen } from '@testing-library/react-native';
 import { useState } from 'react';
 
 import { NumberPadDock } from '@/components/ui/NumberPadContext';
@@ -111,39 +111,27 @@ describe('NumberPad', () => {
     expect(screen.getByTestId('number-pad-dock-key-dot')).toBeTruthy();
   });
 
-  it('closes when the dismiss layer outside the pad is pressed', async () => {
-    jest.useFakeTimers();
-    try {
-      const { Screen } = require('@/components/layout/Screen');
-      function Harness() {
-        const [value, setValue] = useState('');
-        return (
-          <Screen scroll>
-            <Input
-              label="Code"
-              value={value}
-              onChangeText={setValue}
-              numberPad="digits"
-              numberPadMaxLength={4}
-              testID="code"
-            />
-          </Screen>
-        );
-      }
-
-      await renderWithProviders(<Harness />);
-      await fireEvent(screen.getByTestId('code'), 'focus');
-      expect(screen.getByTestId('number-pad-dock-grid')).toBeTruthy();
-      // Dismiss overlay is armed after the opening tap finishes.
-      expect(screen.queryByTestId('number-pad-dismiss')).toBeNull();
-      await act(async () => {
-        jest.advanceTimersByTime(320);
-      });
-      expect(screen.getByTestId('number-pad-dismiss')).toBeTruthy();
-      await fireEvent.press(screen.getByTestId('number-pad-dismiss'));
-      expect(screen.queryByTestId('number-pad-dock-grid')).toBeNull();
-    } finally {
-      jest.useRealTimers();
+  it('does not mount an outside-tap dismiss layer (pad closes on scroll only)', async () => {
+    const { Screen } = require('@/components/layout/Screen');
+    function Harness() {
+      const [value, setValue] = useState('');
+      return (
+        <Screen scroll>
+          <Input
+            label="Code"
+            value={value}
+            onChangeText={setValue}
+            numberPad="digits"
+            numberPadMaxLength={4}
+            testID="code"
+          />
+        </Screen>
+      );
     }
+
+    await renderWithProviders(<Harness />);
+    await fireEvent(screen.getByTestId('code'), 'focus');
+    expect(screen.getByTestId('number-pad-dock-grid')).toBeTruthy();
+    expect(screen.queryByTestId('number-pad-dismiss')).toBeNull();
   });
 });

@@ -226,7 +226,7 @@ export default function Add(props: AddProps) {
         // ~30 min at 3s — long enough for the user to open their bank app and transfer.
         maxAttempts: 600,
       });
-      if (ac.signal.aborted || r.cancelled) return;
+      if (ac.signal.aborted || (!r.ok && r.cancelled)) return;
       setAutoChecking(false);
       if (r.ok) {
         setStage('done');

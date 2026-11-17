@@ -86,11 +86,14 @@ export const p2pApi = baseApi.injectEndpoints({
     getOpenRequests: build.query<P2PRequestResponse[], void>({
       query: () => ({ path: '/p2p/requests' }),
       providesTags: [OPEN_LIST],
+      // Keep People's offers live without a manual pull-to-refresh.
+      keepUnusedDataFor: 15,
     }),
     /** The caller's requests in every status, newest first. */
     getMyRequests: build.query<P2PRequestResponse[], void>({
       query: () => ({ path: '/p2p/me/requests' }),
       providesTags: [MINE],
+      keepUnusedDataFor: 15,
     }),
     getRequest: build.query<P2PRequestResponse, string>({
       query: (id) => ({ path: requestPath(id) }),

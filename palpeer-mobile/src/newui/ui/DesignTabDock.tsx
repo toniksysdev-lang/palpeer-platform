@@ -29,8 +29,11 @@ const HOME_FLOW_LEAVES = new Set([
   'PeopleLive',
 ]);
 
+/** Legal / settings leaves keep the More tab highlighted. */
+const MORE_FLOW_LEAVES = new Set(['Terms', 'PrivacyPolicy', 'Privacy']);
+
 /** Screens that should show the persistent dock (tab roots + common money flows). */
-const DOCK_LEAVES = new Set([...Object.keys(TAB_BY_LEAF), ...HOME_FLOW_LEAVES]);
+const DOCK_LEAVES = new Set([...Object.keys(TAB_BY_LEAF), ...HOME_FLOW_LEAVES, ...MORE_FLOW_LEAVES]);
 
 /** Feature stacks outside (design) that should still show the newui dock. */
 const FEATURE_ROOT_TAB: Record<string, TabKey> = {
@@ -61,13 +64,16 @@ export function DesignTabDock() {
   const root = useMemo(() => pathRoot(pathname), [pathname]);
   const featureTab = FEATURE_ROOT_TAB[root];
   const show = DOCK_LEAVES.has(leaf) || !!featureTab;
-  const active: TabKey = featureTab ?? TAB_BY_LEAF[leaf] ?? 'home';
+  const active: TabKey =
+    featureTab ??
+    TAB_BY_LEAF[leaf] ??
+    (MORE_FLOW_LEAVES.has(leaf) ? 'more' : 'home');
 
   if (!show) return null;
 
   return (
     <View style={{ flexShrink: 0, width: '100%' }}>
-      <BottomNav active={active} unread={unread} />
+      <BottomNav active={active} unread={unread} leaf={leaf} />
     </View>
   );
 }

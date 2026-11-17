@@ -108,7 +108,7 @@ export function destinationAccountRows(
   if (!reference) return [['To', 'My bank']];
   if (currencyCode === 'CAD') {
     if (EFT_PATTERN.test(reference)) {
-      const [institution, transit, account = ''] = reference.split(/[:|;-]/);
+      const [institution = '', transit = '', account = ''] = reference.split(/[:|;-]/);
       return [
         ['Method', 'Bank transfer (EFT)'],
         ['Institution', institution],

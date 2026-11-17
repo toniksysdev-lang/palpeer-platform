@@ -17,7 +17,11 @@ export function useOpenNotification() {
   return useCallback(
     (notification: NotificationResponse) => {
       if (isUnread(notification)) void markRead(notification.id);
-      const target = notificationTarget(notification);
+      const target = notificationTarget({
+        referenceType: notification.referenceType,
+        referenceId: notification.referenceId,
+        title: notification.title,
+      });
       if (target) {
         router.push(target as Href);
       } else {
