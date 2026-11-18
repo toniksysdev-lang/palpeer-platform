@@ -77,7 +77,7 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'PALPEER',
   slug: 'palpeer',
-  owner: 'toniksyslab',
+  owner: 'toniksystemslab',
   version: '0.1.4',
   scheme: 'palpeer',
   orientation: 'portrait',
@@ -235,7 +235,7 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
   extra: {
     appEnv: APP_ENV,
     eas: {
-      projectId: '17c6c982-5228-447d-b4f2-11aafef55874',
+      projectId: '2f9541b9-3ec8-4206-a46e-90cfc535184a',
     },
   },
 });
