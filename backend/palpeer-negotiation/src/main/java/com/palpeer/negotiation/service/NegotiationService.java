@@ -108,7 +108,8 @@ public class NegotiationService {
         eventPublisher.publishEvent(new UserNotifyEvent(
                 negotiation.getRequesterId(),
                 "New price offer",
-                "Someone wants to talk about your P2P " + side + " offer: " + detail + ". Open Messages to answer.",
+                "Someone wants to talk about your P2P " + side + " offer: " + detail
+                        + ". Open Talk about the price to answer.",
                 "P2P",
                 "NEGOTIATION",
                 negotiation.getId(),
@@ -165,7 +166,7 @@ public class NegotiationService {
                 "New price offer",
                 "Someone offered a new price ("
                         + formatAmount(request.rate())
-                        + "). Open Messages to answer.");
+                        + "). Open Talk about the price to answer.");
         return changed(negotiation);
     }
 

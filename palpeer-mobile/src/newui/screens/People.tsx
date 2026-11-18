@@ -231,6 +231,7 @@ export default function People(props: PeopleProps) {
   const [copied, setCopied] = useState('');
   const [apiError, setApiError] = useState('');
   const [negAccept, setNegAccept] = useState<NegAccept | null>(null);
+  const [saidNo, setSaidNo] = useState(false);
   const [endedAmt, setEndedAmt] = useState(
     firstMine ? fmt(asCode(firstMine.giveCode), firstMine.amt) : fmt('NGN', SAMPLE_MINE.amt),
   );
@@ -241,7 +242,9 @@ export default function People(props: PeopleProps) {
   const [mineId, setMineId] = useState(mineSeed[0]?.id ?? (backend ? '' : 'm1'));
   const [dealRate, setDealRate] = useState(talking ? 975 : 980);
   const [myPrice, setMyPrice] = useState(970);
-  const [talk, setTalk] = useState<{ me: boolean; rate: number }[]>(talking ? [{ me: false, rate: 980 }, { me: true, rate: 970 }, { me: false, rate: 975 }] : []);
+  const [talk, setTalk] = useState<Array<{ me: boolean; rate: number; text?: string }>>(
+    talking ? [{ me: false, rate: 980 }, { me: true, rate: 970 }, { me: false, rate: 975 }] : [],
+  );
   const [waiting, setWaiting] = useState(false);
   const [dir, setDir] = useState<Code>('CAD');
   const [amount, setAmount] = useState('100');
@@ -254,6 +257,8 @@ export default function People(props: PeopleProps) {
   const [waved, setWaved] = useState<string[]>(!props.stage || props.stage === 'live' ? [] : ['m1']);
   const [nudgeId, setNudgeId] = useState<string | null>(null);
   const deepLinkApplied = useRef(false);
+  /** Set after create/counter so Offer again always has a negotiation id for push. */
+  const [localNegId, setLocalNegId] = useState<string | null>(null);
   const [now, setNow] = useState({ get: '', give: '', getName: '', palText: '' });
   const [doneAt, setDoneAt] = useState(new Date());
   const [receipt, setReceipt] = useState<ReturnType<typeof buyerView> | null>(
@@ -266,13 +271,16 @@ export default function People(props: PeopleProps) {
     if (!backend) return;
     const next = mapLiveOffers(props.liveOffers);
     setOffers(next);
-    setOpenId((id) => next.find((o) => o.id === id)?.id ?? next[0]?.id ?? '');
-    if (!next.length) {
-      setStage((s) => (['offer', 'counter', 'talk'].includes(s) ? 'list' : s));
-      setTalk([]);
-      setWaiting(false);
-    }
-  }, [backend, props.liveOffers]);
+    setOpenId((id) => {
+      if (next.find((o) => o.id === id)) return id;
+      // Keep openId when Talk is for my own listing (Alerts → PeopleTalk).
+      if ((props.liveMine ?? []).some((o) => o.id === id)) return id;
+      if (deepNegotiationId) return id;
+      return next[0]?.id ?? id;
+    });
+    // Do not kick Talk/Offer stages just because marketplace offers are empty —
+    // price talk often opens against the user's own listing.
+  }, [backend, deepNegotiationId, props.liveMine, props.liveOffers]);
 
   useEffect(() => {
     if (!backend) return;
@@ -319,21 +327,34 @@ export default function People(props: PeopleProps) {
       if (!neg) return;
       deepLinkApplied.current = true;
       setOpenId(neg.p2pRequestId);
-      const offer = (props.liveOffers ?? []).find((o) => o.id === neg.p2pRequestId);
+      const offer =
+        (props.liveOffers ?? []).find((o) => o.id === neg.p2pRequestId) ||
+        (props.liveMine ?? []).find((o) => o.id === neg.p2pRequestId);
+      setLocalNegId(neg.id);
+      const me = props.userId ?? null;
+      const pending =
+        [...(neg.offers ?? [])].reverse().find((o) => o.status === 'PENDING') ?? null;
+      const pendingRate = pending ? Number.parseFloat(String(pending.rate)) || 0 : 0;
+      const pendingAmt = pending ? Number.parseFloat(String(pending.amount)) || 0 : 0;
       if (offer) {
-        setTake(String(offer.amt));
-        setDealRate(offer.rate);
-        setMyPrice(Math.max(rateLow, offer.rate - 10));
+        setTake(String(pendingAmt > 0 ? pendingAmt : offer.amt));
+        setDealRate(pendingRate > 0 ? pendingRate : offer.rate);
+        setMyPrice(Math.max(rateLow, (pendingRate > 0 ? pendingRate : offer.rate) - 10));
+      } else if (pendingRate > 0) {
+        if (pendingAmt > 0) setTake(String(pendingAmt));
+        setDealRate(pendingRate);
+        setMyPrice(Math.max(rateLow, pendingRate - 10));
       }
       const bubbles =
         (neg.offers ?? [])
           .filter((o) => o.status === 'PENDING' || o.status === 'ACCEPTED')
           .map((o) => ({
-            me: o.offeredBy === neg.counterpartyId,
+            me: !!me && o.offeredBy === me,
             rate: Number.parseFloat(String(o.rate)) || 0,
           }))
           .filter((b) => b.rate > 0) ?? [];
       setTalk(bubbles.length ? bubbles : []);
+      setSaidNo(false);
       setWaiting(false);
       setStage('talk');
       return;
@@ -397,13 +418,6 @@ export default function People(props: PeopleProps) {
     [backend, props.liveNegotiations],
   );
 
-  const negOtherOffer = useCallback((neg: NonNullable<LivePeople['liveNegotiations']>[number] | null) => {
-    if (!neg?.offers) return null;
-    return (
-      [...neg.offers].reverse().find((o) => o.offeredBy !== neg.counterpartyId && o.status === 'PENDING') ?? null
-    );
-  }, []);
-
   // Count down every offer each second (shows h/m/s); when one of mine ends, show "Your offer ended".
   useEffect(() => {
     const t = setInterval(() => {
@@ -432,20 +446,71 @@ export default function People(props: PeopleProps) {
   }, []);
 
   const any = offers.length + mine.length > 0;
-  const openRaw = offers.find((o) => o.id === openId) || (backend ? offers[0] : undefined) || SAMPLE_OFFER;
+  const meId = props.userId ?? null;
+  // Alerts / deep links may open Talk for my listing (liveMine) or someone else's (liveOffers).
+  const openRaw =
+    offers.find((o) => o.id === openId) ||
+    mine.find((o) => o.id === openId) ||
+    (backend ? offers[0] : undefined) ||
+    SAMPLE_OFFER;
   const open = openRaw;
-  const neg = openRaw ? negotiationFor(openRaw.id) : null;
-  const negOther = negOtherOffer(neg);
+  const neg =
+    (localNegId && props.liveNegotiations?.find((n) => n.id === localNegId)) ||
+    (deepNegotiationId && props.liveNegotiations?.find((n) => n.id === deepNegotiationId)) ||
+    (openRaw ? negotiationFor(openRaw.id) : null);
+  const pendingOffer =
+    neg?.offers ? [...neg.offers].reverse().find((o) => o.status === 'PENDING') ?? null : null;
+  const pendingTheirs =
+    pendingOffer && meId && pendingOffer.offeredBy !== meId ? pendingOffer : null;
+  const pendingMine =
+    pendingOffer && meId && pendingOffer.offeredBy === meId ? pendingOffer : null;
   const talkLive = neg?.offers
-    ? neg.offers.map((o) => ({ me: o.offeredBy === neg.counterpartyId, rate: parseFloat(o.rate) || 0 }))
+    ? neg.offers.map((o) => ({
+        me: !!meId && o.offeredBy === meId,
+        rate: parseFloat(o.rate) || 0,
+        text: undefined as string | undefined,
+      }))
     : talk;
-  const dealRateLive = negOther ? parseFloat(negOther.rate) || dealRate : dealRate;
-  const waitingLive = waiting || !!(neg?.offers?.length && neg.offers[neg.offers.length - 1]?.offeredBy === neg.counterpartyId && neg.offers[neg.offers.length - 1]?.status === 'PENDING');
-  const takeNum = parseFloat(take) || (backend ? open.amt : 0);
+  const dealRateLive = pendingTheirs
+    ? parseFloat(String(pendingTheirs.rate)) || dealRate
+    : pendingMine
+      ? parseFloat(String(pendingMine.rate)) || dealRate
+      : dealRate;
+  const lastOfferAmt = pendingTheirs
+    ? parseFloat(String(pendingTheirs.amount)) || 0
+    : pendingMine
+      ? parseFloat(String(pendingMine.amount)) || 0
+      : 0;
+  const waitingLive =
+    waiting ||
+    !!(neg?.status === 'OPEN' && pendingMine) ||
+    !!(
+      !meId &&
+      neg?.offers?.length &&
+      neg.offers[neg.offers.length - 1]?.offeredBy === neg.counterpartyId &&
+      neg.offers[neg.offers.length - 1]?.status === 'PENDING'
+    );
+  const takeNum =
+    lastOfferAmt > 0 ? lastOfferAmt : parseFloat(take) || (backend ? open.amt : 0);
   const takeShown = take;
   const feeEats = takeNum > 0 && feeOf(open.giveCode, takeNum, dealRateLive) >= takeNum;
   const takeBad = takeNum < open.least || takeNum > open.amt || feeEats;
   const deal = buyerView(open, dealRateLive, takeNum, reward);
+  const iAmListingOwner =
+    !!mine.find((o) => o.id === open.id) || (!!neg && !!meId && neg.requesterId === meId);
+  const dealLine =
+    dealRateLive > 0
+      ? iAmListingOwner
+        ? `At ₦${Math.round(dealRateLive)}: the buyer gets ${deal.youGet}, you get ${deal.youGive}`
+        : `At ₦${Math.round(dealRateLive)}: you give ${deal.youGive}, you get ${deal.youGet}`
+      : 'Talk about the price until you agree.';
+  const acceptLabel = iAmListingOwner
+    ? `Accept ₦${Math.round(dealRateLive)}`
+    : `Accept ₦${Math.round(dealRateLive)} and buy`;
+  const displayTalk = [
+    ...talkLive,
+    ...(saidNo || talk.some((t) => t.text === 'No') ? [{ me: true, rate: 0, text: 'No' }] : []),
+  ];
   const mineDeal = buyerView(open, myPrice, takeNum, reward);
   const short = deal.pay > bal(deal.payCode);
   const n = parseFloat(amount) || 0;
@@ -581,15 +646,18 @@ export default function People(props: PeopleProps) {
     const opening = talkLive.length ? talkLive : [{ me: false, rate: dealRateLive }];
     if (backend) {
       if (!openRaw || !props.onSendCounter) return;
+      // Stay on Talk about the price after send (Offer again / first counter).
       setStage('talk');
       setWaiting(true);
       setApiError('');
+      setSaidNo(false);
       setTalk([...opening, { me: true, rate: myPrice }]);
+      const negId = neg?.id ?? localNegId ?? deepNegotiationId ?? null;
       const r = await props.onSendCounter({
         requestId: openRaw.id,
         amount: String(takeNum || open.amt),
         rate: String(myPrice),
-        negotiationId: neg?.id ?? null,
+        negotiationId: negId,
       });
       if (!r?.ok) {
         setApiError(r?.error || 'Could not send my price.');
@@ -597,8 +665,13 @@ export default function People(props: PeopleProps) {
         setWaiting(false);
         return;
       }
-      // Stay on Talk about the price (do not auto-open chat).
-      setWaiting(false);
+      const createdId =
+        r.data && typeof r.data === 'object' && r.data !== null && 'id' in r.data
+          ? String((r.data as { id: string }).id)
+          : null;
+      if (createdId) setLocalNegId(createdId);
+      // Keep waiting until the other person answers (live pendingMine drives waitingLive).
+      setWaiting(true);
       return;
     }
     setStage('talk');
@@ -614,6 +687,31 @@ export default function People(props: PeopleProps) {
   const goList = () => {
     setStage('list');
     setTalk([]);
+    setWaiting(false);
+    setSaidNo(false);
+    setLocalNegId(null);
+  };
+  const sayNo = async () => {
+    if (backend) {
+      const negId = neg?.id ?? localNegId ?? deepNegotiationId;
+      if (!negId || !props.onRejectNegotiation) {
+        goList();
+        return;
+      }
+      setApiError('');
+      setTalk((t) => [...t, { me: true, rate: 0, text: 'No' }]);
+      setSaidNo(true);
+      const r = await props.onRejectNegotiation(negId);
+      if (!r?.ok) {
+        setApiError(r?.error || 'Could not say no.');
+        setSaidNo(false);
+        return;
+      }
+      setWaiting(false);
+      return;
+    }
+    setTalk((t) => [...t, { me: true, rate: 0, text: 'No' }]);
+    setSaidNo(true);
     setWaiting(false);
   };
   const copyShare = (label: string) => {
@@ -655,7 +753,7 @@ export default function People(props: PeopleProps) {
     if (backend) {
       if (!openRaw) return;
       setApiError('');
-      if (stage === 'talk' && neg && negOther) {
+      if (stage === 'talk' && neg && pendingTheirs) {
         setNegAccept({ id: neg.id, requestId: openRaw.id });
         setPinFor('buy');
         setPinBack(stage);
@@ -701,7 +799,13 @@ export default function People(props: PeopleProps) {
     list: any ? 'Trade Peer to Peer. Tap an offer to see it. Or make your own offer.' : 'No one is here yet. Make your own offer and a person can take it. Or use Instant Exchange instead.',
     offer: "A person's offer. You give " + deal.youGive + '. After the fee, you get ' + deal.youGet + '. Tap Accept and buy, or offer a different price.',
     counter: 'Offer a different price. Your price is ' + myPrice + ' naira for one Canada dollar. Tap minus or plus, then send.',
-    talk: waiting ? 'Waiting for the person to answer.' : "The person's price is " + dealRate + ' naira for one Canada dollar. You can accept, offer again, or say no.',
+    talk: waitingLive
+      ? 'Waiting for the person to answer.'
+      : saidNo
+        ? 'You said no. The offer can stay open for others.'
+        : "The person's price is " +
+          Math.round(dealRateLive) +
+          ' naira for one Canada dollar. You can accept, offer again, or say no.',
     post: 'Create your offer. You give ' + postView.give + '. The person gets ' + postView.net + ' after their fee. You get ' + postView.get + ' after your fee.',
     pin: 'Enter your 4 number PIN, or use your fingerprint.',
     bought: 'Done. ' + rec.youGet + ' is now in your ' + rec.getName + '.',
@@ -762,14 +866,21 @@ export default function People(props: PeopleProps) {
   const rewardBtn = <Btn kind="outline" size="small" label={rewardLine} onPress={() => { setRewardPanel(true); setCodeBad(false); }} style={{ borderColor: '#5E3AB8' }} />;
   const bubbles = (
     <View style={{ gap: 8 }}>
-      {talkLive.map((b, i) => (
+      {displayTalk.map((b, i) => (
         <View key={i} style={{ alignSelf: b.me ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
           <Txt size={14} w="700" color="text3" style={{ textAlign: b.me ? 'right' : 'left' }}>
-            {b.me ? 'My price' : "The person's price"}
+            {b.text === 'No' ? (b.me ? 'My reply' : 'Their reply') : b.me ? 'My price' : "The person's price"}
           </Txt>
-          <View style={{ borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: b.me ? '#1D5BC7' : c.field }}>
-            <Txt size={19} w="800" color={b.me ? '#FFFFFF' : c.text} noTr>
-              {price(b.rate)}
+          <View
+            style={{
+              borderRadius: 16,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              backgroundColor: b.text === 'No' ? c.red : b.me ? '#1D5BC7' : c.field,
+            }}
+          >
+            <Txt size={19} w="800" color={b.me || b.text === 'No' ? '#FFFFFF' : c.text} noTr>
+              {b.text === 'No' ? 'No' : price(b.rate)}
             </Txt>
           </View>
         </View>
@@ -989,26 +1100,41 @@ export default function People(props: PeopleProps) {
       <Screen scroll>
         <H1>Talk about the price</H1>
         {bubbles}
-        {waitingLive ? (
+        {waitingLive && !saidNo ? (
           <Txt size={17} w="800" color="orange" role="alert">
             Waiting for the person to answer
           </Txt>
         ) : null}
+        {saidNo ? (
+          <Txt size={17} w="800" color="red" role="alert">
+            You said no. The offer can stay open for others.
+          </Txt>
+        ) : null}
+        {apiError ? (
+          <Txt size={16} w="700" color="red" role="alert">
+            {apiError}
+          </Txt>
+        ) : null}
         <TopBar onBack={goList} say={say.talk} />
-        {!waitingLive ? (
+        {!waitingLive && !saidNo ? (
           <>
             <Card>
               <Txt size={16} w="700">
-                {'At ₦' + dealRateLive + ': you give ' + deal.youGive + ', you get ' + deal.youGet}
+                {dealLine}
               </Txt>
             </Card>
-            <Btn label={'Accept ₦' + dealRateLive + ' and buy'} disabled={takeBad || short} onPress={() => void startAccept()} />
+            <Btn
+              label={acceptLabel}
+              disabled={takeBad || short || !pendingTheirs}
+              onPress={() => void startAccept()}
+            />
             <Row gap={8}>
               <Btn size="mid" kind="outline" label="Offer again" onPress={() => setStage('counter')} style={{ flex: 1 }} />
-              <Btn size="mid" kind="outline" label="Say no" onPress={goList} style={{ flex: 1, borderColor: c.red }} />
+              <Btn size="mid" kind="outline" label="Say no" onPress={() => void sayNo()} style={{ flex: 1, borderColor: c.red }} />
             </Row>
           </>
         ) : null}
+        {saidNo ? <Btn kind="outline" label="Back to offers" onPress={goList} /> : null}
       </Screen>
     );
 

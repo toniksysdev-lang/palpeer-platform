@@ -9,7 +9,10 @@ import {
   useCounterOfferMutation,
   useCreateOfferMutation,
   useGetMyNegotiationsQuery,
+  useRejectNegotiationMutation,
 } from '@/services/api/negotiationApi';
+import { newIdempotencyKey } from '@/services/api/client';
+import { useOpenChatRoomMutation, useSendChatMessageMutation } from '@/services/api/chatApi';
 import {
   useAcceptRequestMutation,
   useCancelRequestMutation,
@@ -25,7 +28,6 @@ import {
   useGetActivePromotionsQuery,
   useGetMyLoyaltyPointsBalanceQuery,
 } from '@/services/api/promotionApi';
-import { useOpenChatRoomMutation } from '@/services/api/chatApi';
 import { useGetWalletsQuery } from '@/services/api/walletApi';
 import { useAppSelector } from '@/store';
 import type { P2PRequestResponse, P2PSide } from '@/types/api/p2p';
@@ -103,7 +105,9 @@ export function useLivePeople() {
   const [counterOffer] = useCounterOfferMutation();
   const [acceptNegotiation] = useAcceptNegotiationMutation();
   const [cancelNegotiation] = useCancelNegotiationMutation();
+  const [rejectNegotiation] = useRejectNegotiationMutation();
   const [openChatRoom] = useOpenChatRoomMutation();
+  const [sendChatMessage] = useSendChatMessageMutation();
   const [estimateFee] = useLazyGetP2PFeeEstimateQuery();
   const { requestPin } = usePinPrompt();
   const pendingAccept = useRef<PendingAccept | null>(null);
@@ -354,6 +358,31 @@ export function useLivePeople() {
     [cancelNegotiation],
   );
 
+  /** Decline the pending price, post "No" in the negotiation chat, and notify the other party. */
+  const onRejectNegotiation = useCallback(
+    async (negotiationId: string): Promise<OkErr> => {
+      try {
+        // Best-effort chat "No" so Talk / Messages history shows the decline.
+        try {
+          const room = await openChatRoom({ negotiationId }).unwrap();
+          if (room?.id) {
+            await sendChatMessage({
+              roomId: room.id,
+              message: { content: 'No', clientMessageId: newIdempotencyKey() },
+            }).unwrap();
+          }
+        } catch {
+          // Chat may not exist yet — still reject the negotiation so push fires.
+        }
+        await rejectNegotiation(negotiationId).unwrap();
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error: toAppError(error).message ?? 'Could not say no.' };
+      }
+    },
+    [openChatRoom, rejectNegotiation, sendChatMessage],
+  );
+
   const onOpenNegotiationChat = useCallback(
     async (negotiationId: string): Promise<OkErr> => {
       try {
@@ -383,6 +412,7 @@ export function useLivePeople() {
 
   return {
     backend: true as const,
+    userId: userId ?? null,
     liveOffers,
     liveMine,
     liveBalances,
@@ -406,6 +436,7 @@ export function useLivePeople() {
     onSendCounter,
     onAcceptNegotiation,
     onCancelNegotiation,
+    onRejectNegotiation,
     onOpenNegotiationChat,
   };
 }

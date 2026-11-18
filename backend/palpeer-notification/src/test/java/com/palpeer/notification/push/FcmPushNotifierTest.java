@@ -31,7 +31,8 @@ class FcmPushNotifierTest {
                 .containsEntry("notificationId", id.toString())
                 .containsEntry("referenceType", "FUNDING")
                 .containsEntry("referenceId", refId.toString())
-                .containsEntry("category", "TRANSACTION");
+                .containsEntry("category", "TRANSACTION")
+                .containsEntry("title", "Funding successful");
     }
 
     @Test
@@ -67,6 +68,29 @@ class FcmPushNotifierTest {
         assertThat(data)
                 .containsEntry("deepLink", "palpeer://p2p/request/" + refId)
                 .containsEntry("referenceType", "P2P_REQUEST")
-                .containsEntry("referenceId", refId.toString());
+                .containsEntry("referenceId", refId.toString())
+                .containsEntry("title", "New P2P BUY");
+    }
+
+    @Test
+    void buildData_addsDeepLinkForNegotiation() {
+        UUID id = UUID.randomUUID();
+        UUID refId = UUID.randomUUID();
+        Notification notification = new Notification();
+        notification.setId(id);
+        notification.setTitle("New price offer");
+        notification.setBody("Open Talk about the price to answer.");
+        notification.setCategory("P2P");
+        notification.setChannel(NotificationChannel.PUSH);
+        notification.setStatus(NotificationStatus.PENDING);
+        notification.setReferenceType("NEGOTIATION");
+        notification.setReferenceId(refId);
+
+        Map<String, String> data = FcmPushNotifier.buildData(notification);
+
+        assertThat(data)
+                .containsEntry("deepLink", "palpeer://PeopleTalk?negotiationId=" + refId)
+                .containsEntry("referenceType", "NEGOTIATION")
+                .containsEntry("title", "New price offer");
     }
 }

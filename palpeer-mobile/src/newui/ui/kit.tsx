@@ -475,9 +475,12 @@ export function Btn({
   const t = useT();
   const { s } = useLayout();
   const notoLoaded = useNotoFontsLoaded();
-  // Fixed height so the label sits mid top/bottom; minHeight still allows rare wraps.
+  // minHeight (not fixed height) so ExtraBold glyphs + wraps stay fully visible.
   const h = s(size === 'big' ? 68 : size === 'mid' ? 60 : 52);
   const fs = s(size === 'big' ? 22 : size === 'mid' ? 19 : 17);
+  // Noto ExtraBold needs a taller line box than fontSize or Android clips descenders.
+  const labelFs = kind === 'link' ? s(17) : fs;
+  const labelLh = Math.round(labelFs * 1.3);
   const bgMap: Record<BtnKind, string> = {
     primary: c.brand,
     outline: 'transparent',
@@ -518,8 +521,7 @@ export function Btn({
       onPressOut={() => setPressed(false)}
       style={[
         {
-          // Fixed height keeps single-line labels optically centered; minHeight lets long labels wrap.
-          height: kind === 'link' ? undefined : h,
+          // minHeight only — fixed height + overflow:hidden clipped ExtraBold label bottoms.
           minHeight: kind === 'link' ? s(48) : h,
           // Link / fit CTAs sit beside other content — width 100% shoved them off-screen.
           width: inline ? undefined : '100%',
@@ -533,10 +535,10 @@ export function Btn({
           alignItems: 'center',
           justifyContent: 'center',
           flexDirection: 'row',
-          flexWrap: kind === 'link' ? 'wrap' : 'nowrap',
+          flexWrap: 'wrap',
           paddingHorizontal: kind === 'link' ? s(4) : s(14),
-          paddingVertical: 0,
-          overflow: 'hidden',
+          // Vertical pad keeps underlines / descenders clear of the edge.
+          paddingVertical: kind === 'link' ? s(8) : s(12),
           opacity: pressed && !busy ? 0.85 : 1,
         },
         style,
@@ -549,14 +551,12 @@ export function Btn({
           alignItems: 'center',
           justifyContent: 'center',
           maxWidth: '100%',
-          // Inner row fills the button height so text sits mid top/bottom.
-          ...(kind === 'link' ? null : { flex: 1, alignSelf: 'stretch' }),
         }}
       >
         {busy ? <ActivityIndicator color={fg} style={{ marginRight: s(10) }} /> : icon ? <Icon name={icon} size={s(26)} color={fg} /> : null}
         {shown ? (
           <Text
-            numberOfLines={kind === 'link' ? 2 : 2}
+            numberOfLines={2}
             style={{
               flexShrink: 1,
               maxWidth: '100%',
@@ -566,13 +566,13 @@ export function Btn({
                   : notoLoaded
                     ? FONT_NATIVE['800']
                     : undefined,
-              fontSize: kind === 'link' ? s(17) : fs,
-              // Match fontSize so the glyph box is vertically centered in the row.
-              lineHeight: kind === 'link' ? s(17) : fs,
+              fontSize: labelFs,
+              lineHeight: labelLh,
               fontWeight: Platform.OS === 'web' ? '800' : undefined,
               color: fg,
               textAlign: 'center',
-              includeFontPadding: false,
+              // Keep Android font padding so Noto ExtraBold does not clip.
+              ...(Platform.OS === 'android' ? { includeFontPadding: true } : null),
               textAlignVertical: 'center',
               ...(kind === 'link' && !busy ? { textDecorationLine: 'underline' as const } : null),
             }}
@@ -598,10 +598,11 @@ export function Pill({ label, icon, onPress, dark, a11y }: { label: string; icon
       accessibilityLabel={a11y ? t(a11y) : undefined}
       onPress={onPress}
       style={{
-        height: s(48),
+        minHeight: s(48),
         maxWidth: '48%',
         paddingLeft: s(10),
         paddingRight: s(12),
+        paddingVertical: s(8),
         borderRadius: s(24),
         backgroundColor: dark ? c.ink : c.card,
         flexDirection: 'row',
@@ -611,7 +612,7 @@ export function Pill({ label, icon, onPress, dark, a11y }: { label: string; icon
       }}
     >
       <Icon name={icon} size={s(22)} color={fg} />
-      <Txt size={16} w="700" color={fg} lines={1}>
+      <Txt size={16} w="700" color={fg} lines={1} lh={1.3}>
         {label}
       </Txt>
     </Pressable>

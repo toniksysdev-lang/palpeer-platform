@@ -9,6 +9,7 @@ import {
   useGetChatRoomsQuery,
   useGetChatUnreadCountQuery,
   useMarkChatReadMutation,
+  useOpenChatRoomMutation,
   useSendChatMessageMutation,
 } from '@/services/api/chatApi';
 import { newIdempotencyKey } from '@/services/api/client';
@@ -94,6 +95,7 @@ export function useLiveMessages() {
 
   const messagesQ = useGetChatMessagesInfiniteQuery(activeRoomId ?? skipToken);
   const [sendMessage] = useSendChatMessageMutation();
+  const [openChatRoom] = useOpenChatRoomMutation();
   const [markRead] = useMarkChatReadMutation();
   const [acceptNegotiation] = useAcceptNegotiationMutation();
   const [counterOffer] = useCounterOfferMutation();
@@ -192,13 +194,26 @@ export function useLiveMessages() {
     const waiting = neg.status === 'OPEN' && !!pending && pending.offeredBy === userId;
     const done = neg.status === 'ACCEPTED';
     const closed = neg.status === 'CANCELLED';
-    const bubbles = neg.offers.map((o) => ({
-      id: o.id,
-      me: o.offeredBy === userId,
-      rate: Number.parseFloat(o.rate) || 0,
-      text: `CA$1 = ₦${Math.round(Number.parseFloat(o.rate) || 0)}`,
-      who: o.offeredBy === userId ? 'My price' : "The other person's price",
-    }));
+    const bubbles = [
+      ...neg.offers.map((o) => ({
+        id: o.id,
+        me: o.offeredBy === userId,
+        rate: Number.parseFloat(o.rate) || 0,
+        text: `CA$1 = ₦${Math.round(Number.parseFloat(o.rate) || 0)}`,
+        who: o.offeredBy === userId ? 'My price' : "The other person's price",
+      })),
+      ...(neg.status === 'CANCELLED' && neg.closedReason === 'REJECTED'
+        ? [
+            {
+              id: `${neg.id}-no`,
+              me: true,
+              rate: 0,
+              text: 'No',
+              who: 'My reply',
+            },
+          ]
+        : []),
+    ];
     const buyerGets = Math.max(0, amount - 2);
     const iGet = amount * rate - 2 * rate;
     const dealText =
@@ -350,12 +365,26 @@ export function useLiveMessages() {
     const neg = activeNegotiation;
     if (!neg || neg.status !== 'OPEN') return { ok: false, error: 'Nothing to decline.' };
     try {
+      // Post "No" into the negotiation chat so Talk history shows the decline.
+      try {
+        const room =
+          roomsQ.data?.find((r) => r.negotiationId === neg.id) ??
+          (await openChatRoom({ negotiationId: neg.id }).unwrap());
+        if (room?.id) {
+          await sendMessage({
+            roomId: room.id,
+            message: { content: 'No', clientMessageId: newIdempotencyKey() },
+          }).unwrap();
+        }
+      } catch {
+        // Still reject even if chat send fails.
+      }
       await rejectNegotiation(neg.id).unwrap();
       return { ok: true };
     } catch (error) {
       return { ok: false, error: toAppError(error).message ?? 'Could not say no.' };
     }
-  }, [activeNegotiation, rejectNegotiation]);
+  }, [activeNegotiation, openChatRoom, rejectNegotiation, roomsQ.data, sendMessage]);
 
   const onLoadMoreAlerts = useCallback(() => {
     if (notifications.hasNextPage && !notifications.isFetchingNextPage) {

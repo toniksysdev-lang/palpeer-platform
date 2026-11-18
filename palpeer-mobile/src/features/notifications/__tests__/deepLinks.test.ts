@@ -106,6 +106,26 @@ describe('notification and push targets', () => {
     ).toBe(`/PeopleOffer?requestId=${ID}`);
   });
 
+  it('opens New price offer pushes on Talk about the price via deepLink or reference', () => {
+    expect(
+      pushTarget({
+        notificationId: ID,
+        referenceType: 'NEGOTIATION',
+        referenceId: ID,
+        title: 'New price offer',
+        deepLink: `palpeer://PeopleTalk?negotiationId=${ID}`,
+      }),
+    ).toBe(`/PeopleTalk?negotiationId=${ID}`);
+    expect(
+      pushTarget({
+        notificationId: ID,
+        referenceType: 'NEGOTIATION',
+        referenceId: ID,
+        title: 'Price talk ended',
+      }),
+    ).toBe(`/PeopleTalk?negotiationId=${ID}`);
+  });
+
   it('routes marketplace alert titles to Trade / Talk / My offer', () => {
     expect(
       notificationTarget({

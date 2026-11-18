@@ -731,7 +731,7 @@ export default function Start(props: StartProps) {
           <Btn
             kind="link"
             label="Have an account? Log in"
-            style={{ alignSelf: 'center', minHeight: sz(52), paddingVertical: sz(6) }}
+            style={{ alignSelf: 'center' }}
             onPress={() => go('login', { created: false, buying: false })}
           />
         </View>

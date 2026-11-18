@@ -80,11 +80,20 @@ public class FcmPushNotifier implements PushNotifier {
         if (notification.getCategory() != null && !notification.getCategory().isBlank()) {
             data.put("category", notification.getCategory());
         }
-        // App deep link so marketplace P2P pushes open the request screen directly.
-        if (notification.getReferenceId() != null
-                && notification.getReferenceType() != null
-                && "P2P_REQUEST".equalsIgnoreCase(notification.getReferenceType().trim())) {
-            data.put("deepLink", "palpeer://p2p/request/" + notification.getReferenceId());
+        // App deep links so marketplace P2P pushes open the right screen directly.
+        if (notification.getReferenceId() != null && notification.getReferenceType() != null) {
+            String type = notification.getReferenceType().trim();
+            if ("P2P_REQUEST".equalsIgnoreCase(type)) {
+                data.put("deepLink", "palpeer://p2p/request/" + notification.getReferenceId());
+            } else if ("NEGOTIATION".equalsIgnoreCase(type)) {
+                // Talk about the price for this negotiation (Alerts / Offer again / Say no).
+                data.put(
+                        "deepLink",
+                        "palpeer://PeopleTalk?negotiationId=" + notification.getReferenceId());
+            }
+        }
+        if (notification.getTitle() != null && !notification.getTitle().isBlank()) {
+            data.put("title", notification.getTitle());
         }
         return data;
     }

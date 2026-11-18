@@ -266,7 +266,7 @@ export default function Messages(props: MessagesProps) {
                       </Txt>
                     </Card>
                     <Btn
-                      label={'Accept ₦' + talk.rate}
+                      label={`Accept ₦${talk.rate}`}
                       busy={talkBusy}
                       disabled={talkBusy}
                       onPress={() => setPinOpen(true)}
