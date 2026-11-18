@@ -12,7 +12,8 @@ class ApayloPaymentRailStatusTest {
         assertThat(ApayloPaymentRail.isCompletedStatus("settled")).isTrue();
         assertThat(ApayloPaymentRail.isCompletedStatus("Sent")).isFalse();
         assertThat(ApayloPaymentRail.isCompletedStatus("Pending")).isFalse();
-        // Incoming search endpoint only returns completed rows — blank treated as completed.
-        assertThat(ApayloPaymentRail.isCompletedStatus(null)).isTrue();
+        // Blank/missing status must not count as settled (fail closed).
+        assertThat(ApayloPaymentRail.isCompletedStatus(null)).isFalse();
+        assertThat(ApayloPaymentRail.isCompletedStatus("")).isFalse();
     }
 }

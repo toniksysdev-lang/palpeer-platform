@@ -88,18 +88,19 @@ class PaymentWebhookControllerTest {
     }
 
     @Test
-    void processesCorrectlySignedWebhook() {
+    void ignoresDirectFundingIdSettleEvenWhenSigned() {
         UUID fundingId = UUID.randomUUID();
         String body = fundingBody(fundingId, "SUCCESS");
 
         var response = controller.kuda(body, signed("sha256=" + sign(SECRET, body)));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        verify(fundingService).completeById(eq(fundingId), eq(true), any());
+        verify(fundingService, never()).completeById(any(), anyBoolean(), any());
+        verifyNoInteractions(withdrawalService);
     }
 
     @Test
-    void acceptsKudaUsernamePasswordHeaders() {
+    void acceptsKudaUsernamePasswordHeadersButIgnoresDirectFundingIdSettle() {
         kudaProperties.setWebhookSecret("");
         kudaProperties.setWebhookUsername(WEBHOOK_USER);
         kudaProperties.setWebhookPassword(WEBHOOK_PASS);
@@ -115,7 +116,8 @@ class PaymentWebhookControllerTest {
         var response = controller.kuda(body, request);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        verify(fundingService).completeById(eq(fundingId), eq(true), any());
+        verify(fundingService, never()).completeById(any(), anyBoolean(), any());
+        verifyNoInteractions(withdrawalService);
     }
 
     @Test

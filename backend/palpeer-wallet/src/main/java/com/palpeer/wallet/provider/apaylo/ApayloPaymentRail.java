@@ -486,19 +486,20 @@ public class ApayloPaymentRail implements PaymentRailProvider {
     private static boolean amountMatches(JsonNode row, BigDecimal expected) {
         String raw = firstText(row, "Amount", "amount");
         if (!notBlank(raw)) {
-            return true;
+            // Fail closed — missing amount must never count as a confirmed payment.
+            return false;
         }
         try {
             return new BigDecimal(raw.trim().replace(",", "")).compareTo(expected) == 0;
         } catch (NumberFormatException ex) {
-            return true;
+            return false;
         }
     }
 
     static boolean isCompletedStatus(String status) {
         if (!notBlank(status)) {
-            // SearchInteracEtransfers only returns completed incoming transfers.
-            return true;
+            // Fail closed — blank/missing status is not proof of settlement.
+            return false;
         }
         String normalized = status.trim().toLowerCase(Locale.ROOT);
         return normalized.equals("completed")

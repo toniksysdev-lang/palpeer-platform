@@ -35,10 +35,12 @@ function buildCsp(env: Record<string, string>, mode: string): string {
   }
 
   if (isProd) {
-    // Production meta CSP must include https/wss or the Render header ∩ meta intersection
-    // collapses to 'self' only and sign-in fails with a network error.
-    connect.add('https:');
-    connect.add('wss:');
+    // Production CSP: allow only the configured API/WS origins (plus 'self').
+    // Do not open connect-src to all https:/wss: — that would let a compromised page
+    // beacon to arbitrary hosts. Render does not currently send a conflicting CSP header.
+    if (!apiOrigin) {
+      throw new Error('VITE_API_BASE_URL is required to build a production CSP connect-src allowlist.');
+    }
   } else {
     // Local API + Vite HMR websocket (ws://localhost:5173). Without these, the admin shell
     // fails to load in the browser even though the HTML response is 200.

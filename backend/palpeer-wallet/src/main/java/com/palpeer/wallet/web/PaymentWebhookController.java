@@ -16,6 +16,7 @@ import com.palpeer.wallet.withdrawal.WithdrawalService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.Locale;
 import java.util.UUID;
@@ -99,7 +100,9 @@ public class PaymentWebhookController {
                 return handleKudaTransactionNotification(root);
             }
 
-            // Test / operator-style payloads (fundingId + status)
+            // Operator-style payloads (fundingId/status) are not accepted on the public webhook.
+            // Settle only via Transaction.Notification (+ TSQ) or admin APIs — prevents free
+            // credits if webhook credentials leak.
             Boolean success = resolveOutcome(root);
             if (success == null) {
                 log.warn("KUDA webhook ignored — status missing or not terminal");
@@ -118,7 +121,10 @@ public class PaymentWebhookController {
             String withdrawalId = firstText(root, "withdrawalId", "WithdrawalId");
 
             if (fundingId != null) {
-                fundingService.completeById(UUID.fromString(fundingId), success, reason);
+                log.warn(
+                        "KUDA webhook ignored — direct fundingId settle disabled on public webhook fundingId={}",
+                        fundingId);
+                return ResponseEntity.ok(ApiResponse.ok("ignored", null));
             } else if (withdrawalId != null && reference != null) {
                 withdrawalService.completeFromProvider(
                         KudaPaymentRail.NAME, reference, success, success ? null : reason);
@@ -288,7 +294,7 @@ public class PaymentWebhookController {
                 log.warn("KUDA webhook rejected — password header is not valid Base64");
                 return false;
             }
-            boolean ok = username.equals(headerUser) && password.equals(decoded);
+            boolean ok = constantTimeEquals(username, headerUser) && constantTimeEquals(password, decoded);
             if (!ok) {
                 log.warn("KUDA webhook rejected — invalid username/password headers");
             }
@@ -345,7 +351,12 @@ public class PaymentWebhookController {
             String withdrawalId = firstText(root, "withdrawalId", "WithdrawalId");
 
             if (fundingId != null) {
-                fundingService.completeById(UUID.fromString(fundingId), success, reason);
+                // Public webhooks must not settle by internal UUID — that path is admin-only.
+                log.warn(
+                        "{} webhook ignored — direct fundingId settle disabled on public webhook fundingId={}",
+                        providerName,
+                        fundingId);
+                return ResponseEntity.ok(ApiResponse.ok("ignored", null));
             } else if (withdrawalId != null) {
                 if (reference != null) {
                     withdrawalService.completeFromProvider(
@@ -420,5 +431,15 @@ public class PaymentWebhookController {
 
     private static boolean notBlank(String value) {
         return value != null && !value.isBlank();
+    }
+
+    /** Constant-time string compare to reduce webhook credential timing leaks. */
+    private static boolean constantTimeEquals(String expected, String actual) {
+        if (expected == null || actual == null) {
+            return false;
+        }
+        byte[] left = expected.getBytes(StandardCharsets.UTF_8);
+        byte[] right = actual.getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(left, right);
     }
 }
