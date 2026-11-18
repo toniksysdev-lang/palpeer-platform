@@ -2,9 +2,11 @@ import * as Clipboard from 'expo-clipboard';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, Share, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { useLivePeople } from '@/design/bridge/useLivePeople';
 import { PinStep } from '@/newui/features/PinStep';
 import { amtIn, amtShow } from '@/newui/lib/money';
+import { useLayout } from '@/newui/lib/layout';
 import { useListen } from '@/newui/lib/speech';
 import { useC } from '@/newui/lib/theme';
 import { Icon } from '@/newui/ui/Icon';
@@ -188,6 +190,10 @@ type Stage = 'list' | 'offer' | 'counter' | 'talk' | 'post' | 'pin' | 'bought' |
 /** Choose a person (P2P): people's offers, my offers, make an offer, price talk, 30-minute Palpeer rate pop-up. */
 export default function People(props: PeopleProps) {
   const c = useC();
+  const { s } = useLayout();
+  const insets = useSafeAreaInsets();
+  // Lift the ends-soon sheet above the persistent DesignTabDock (icon band + safe inset).
+  const tabDockOffset = s(6) + s(62) + s(10) + insets.bottom;
   const backend = !!props.backend;
   const { listen, listenLabel } = useListen();
   const params = useLocalSearchParams<{
@@ -775,9 +781,35 @@ export default function People(props: PeopleProps) {
   const overlays = (
     <>
       {/* 30 minutes before my offer ends: offer the Palpeer rate */}
-      <Modal visible={!!nudge} transparent animationType="fade" onRequestClose={() => nudgeOffer && setWaved([...waved, nudgeOffer.id])}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: c.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 16, gap: 10 }}>
+      <Modal
+        visible={!!nudge}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => nudgeOffer && setWaved([...waved, nudgeOffer.id])}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'flex-end',
+            // Sit above the phone footer tab bar (DesignTabDock lives outside the Stack).
+            paddingBottom: tabDockOffset,
+            zIndex: 1000,
+            elevation: 24,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: c.bg,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              padding: 16,
+              gap: 10,
+              elevation: 28,
+              zIndex: 1001,
+            }}
+          >
             <Row between>
               <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: c.warnBg }}>
                 <Txt size={16} w="800" color="orange">
