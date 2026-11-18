@@ -22,7 +22,8 @@ export default function LegalDocument({ title, body, say }: Props) {
 
   const back = () => {
     if (router.canGoBack()) router.back();
-    else router.replace('/More' as Href);
+    // Public legal pages can open while signed out — fall back to Start, not More.
+    else router.replace('/' as Href);
   };
 
   return (

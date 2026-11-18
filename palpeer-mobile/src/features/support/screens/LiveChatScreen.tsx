@@ -75,18 +75,48 @@ type Mode = 'ai' | 'agent';
 function greeting(firstName: string | null): string {
   const name = firstName?.trim();
   const who = name || 'there';
-  return `Hi ${who}, I am ${HELPER_NAME}, your Palpeer helper. Ask me about fees, rates, adding, changing, sending or withdrawing money. Say 'talk to a person' any time.`;
+  return `Hi ${who}, I am ${HELPER_NAME}, your Palpeer helper. How may I help you?`;
+}
+
+/** Casual hi/hello — introduce and ask how to help (do not send to remote AI). */
+function isCasualGreeting(text: string): boolean {
+  const t = text.trim().toLowerCase().replace(/[!?.]+$/g, '').trim();
+  return /^(hi|hello|hey|hiya|howdy|good\s*(morning|afternoon|evening)|yo|sup|what's\s*up|whats\s*up|hola)(\s+there)?$/.test(
+    t,
+  );
+}
+
+function greetingReply(firstName: string | null): string {
+  const name = firstName?.trim();
+  const who = name ? `, ${name}` : '';
+  return `Hello${who}! I'm ${HELPER_NAME}, your Palpeer helper. How may I help you?`;
 }
 
 function wantsPerson(text: string): boolean {
   const t = text.trim().toLowerCase();
+  if (
+    /\b(live\s*)?(agent|human|person|representative|staff|advisor|operator)\b/.test(t) ||
+    /\b(customer\s*(care|service|support)|support\s*(staff|agent|team)|help\s*desk)\b/.test(t)
+  ) {
+    return (
+      /\b(talk|speak|chat|connect|call|transfer|get|need|want|please|reach|contact|ask|see|join)\b/.test(
+        t,
+      ) ||
+      t === 'agent' ||
+      t === 'human' ||
+      t === 'person' ||
+      t.includes('live agent') ||
+      t.includes('real person') ||
+      t.includes('real human')
+    );
+  }
   return (
     t.includes('talk to a person') ||
     t.includes('talk to person') ||
-    t.includes('live agent') ||
-    t.includes('human agent') ||
-    t === 'agent' ||
-    t === 'person'
+    t.includes('speak to someone') ||
+    t.includes('talk to someone') ||
+    t.includes('connect me') ||
+    t.includes('live chat')
   );
 }
 
@@ -345,6 +375,16 @@ export function LiveChatScreen() {
       return;
     }
 
+    if (mode === 'ai' && isCasualGreeting(text)) {
+      push({
+        id: `ai-greet-${Date.now()}`,
+        text: greetingReply(firstName),
+        sender: 'ai',
+        createdAt: new Date().toISOString(),
+      });
+      return;
+    }
+
     const loadingId = `loading-${Date.now()}`;
     if (mode === 'ai') {
       push({
@@ -422,10 +462,18 @@ export function LiveChatScreen() {
         answerHowToFromFaq(text) ??
         (remoteAiDegradedRef.current ? answerHowToFromFaq(text, { loose: true }) : null);
       if (howToAnswer) {
+        const canAsk = /^\s*(can|could|is it possible|am i able)\b/i.test(text.trim());
+        const howAsk = /^\s*how\b/i.test(text.trim());
+        let warmHow = howToAnswer;
+        if (canAsk && !/^(yes|no|sure|of course)/i.test(howToAnswer.trim())) {
+          warmHow = `Yes, you can. ${howToAnswer}`;
+        } else if (howAsk && !/^(sure|of course|happy|absolutely|great|yes)/i.test(howToAnswer.trim())) {
+          warmHow = `Of course — happy to help with that.\n\n${howToAnswer}`;
+        }
         setMessages((prev) => prev.filter((m) => m.id !== loadingId));
         push({
           id: `ai-faq-${Date.now()}`,
-          text: howToAnswer,
+          text: warmHow,
           sender: 'ai',
           createdAt: new Date().toISOString(),
         });

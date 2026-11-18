@@ -1227,8 +1227,8 @@ export default function People(props: PeopleProps) {
           </Txt>
         </Card>
         <TopBar onBack={goList} say={say.live} />
-        <Btn icon="share" label="Share your offer" onPress={() => { setSharing(true); setCopied(''); }} />
-        <Btn kind="outline" size="mid" label="Stop your offer" style={{ borderColor: c.red }} onPress={() => void stopLiveOffer()} />
+        <Btn icon="share" label="Share this offer" onPress={() => { setSharing(true); setCopied(''); }} />
+        <Btn kind="outline" size="mid" label="Stop this offer" style={{ borderColor: c.red }} onPress={() => void stopLiveOffer()} />
 
         <Overlay open={sharing}>
           <Screen scroll>

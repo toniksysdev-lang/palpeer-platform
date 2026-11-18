@@ -268,15 +268,22 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   cta: {
+    height: 68,
     minHeight: 68,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
+    paddingVertical: 0,
+    overflow: 'hidden',
   },
   ctaLabel: {
     fontFamily: Platform.select({ web: D.font, default: undefined }),
     fontSize: 22,
     fontWeight: '800',
+    lineHeight: 22,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    textAlign: 'center',
   },
 });

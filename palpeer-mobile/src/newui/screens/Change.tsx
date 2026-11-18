@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, View } from 'react-native';
+import { Animated, Pressable, View } from 'react-native';
 import { metaFor } from '@/design/bridge/currencyMeta';
 import type { DesignWallet } from '@/design/bridge/mapWallet';
 import type { LockQuoteResult } from '@/design/bridge/useLiveChange';
@@ -58,36 +58,25 @@ export default function Change(props: ChangeProps) {
   const [quoteAfterText, setQuoteAfterText] = useState('');
   const [backendError, setBackendError] = useState<string | null>(null);
   const pinLocked = staticStage === 'locked';
-  const swapSpin = useRef(new Animated.Value(0)).current;
   const swapPulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (staticStage !== undefined) setStage(normStage(staticStage));
   }, [staticStage]);
 
-  // Keep the currency swap control obvious: rotating + color pulse.
+  // Keep the currency swap control obvious with a color flash only (no rotate).
   useEffect(() => {
-    const spin = Animated.loop(
-      Animated.timing(swapSpin, {
-        toValue: 1,
-        duration: 2800,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-    );
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(swapPulse, { toValue: 1, duration: 900, useNativeDriver: false }),
         Animated.timing(swapPulse, { toValue: 0, duration: 900, useNativeDriver: false }),
       ]),
     );
-    spin.start();
     pulse.start();
     return () => {
-      spin.stop();
       pulse.stop();
     };
-  }, [swapPulse, swapSpin]);
+  }, [swapPulse]);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -368,31 +357,18 @@ export default function Change(props: ChangeProps) {
               justifyContent: 'center',
             }}
           >
-            <Animated.View
-              style={{
-                transform: [
-                  {
-                    rotate: swapSpin.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ['0deg', '360deg'],
-                    }),
-                  },
-                ],
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Swap the two moneys"
+              onPress={() => {
+                setGive(want);
+                setWant(give);
+                setAmount(startAmount(want, perWant));
               }}
+              style={{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}
             >
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Swap the two moneys"
-                onPress={() => {
-                  setGive(want);
-                  setWant(give);
-                  setAmount(startAmount(want, perWant));
-                }}
-                style={{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <Icon name="swap" size={28} color="#FFFFFF" />
-              </Pressable>
-            </Animated.View>
+              <Icon name="swap" size={28} color="#FFFFFF" />
+            </Pressable>
           </Animated.View>
         </Row>
       </Card>

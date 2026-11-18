@@ -13,6 +13,8 @@ const PRESERVE_WHEN_SIGNED_OUT = [
   '/view-rates',
   '/p2p-share',
   '/login',
+  '/Terms',
+  '/PrivacyPolicy',
 ] as const;
 
 /**

@@ -94,6 +94,11 @@ const PHRASE_ALIASES: readonly { re: RegExp; id: string }[] = [
   { re: /\b(how (do|can|to) i )?(add|fund|deposit)(\s+(money|wallet|cad|ngn))?\b/, id: 'fund-how' },
   { re: /\b(how (do|can|to) i )?withdraw( money| funds?)?\b/, id: 'withdraw-how' },
   { re: /\b(how (do|can|to) i )?(change|swap|convert)( money| funds?)?\b/, id: 'exchange-how' },
+  {
+    re: /\b(wallet\s*to\s*wallet|transfer\s+(money|funds?|to)|send\s+(money|funds?|to)|can i (send|transfer))\b/,
+    id: 'send-wallet',
+  },
+  { re: /\b(how (do|can|to) i )?send( money| funds?)?\b/, id: 'send-how' },
   { re: /\bforgot.*\bpin\b/, id: 'forgot-pin' },
   { re: /\bforgot.*password\b/, id: 'forgot-password' },
 ];

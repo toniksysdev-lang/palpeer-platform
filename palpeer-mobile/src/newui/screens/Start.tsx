@@ -1,5 +1,5 @@
 import * as LocalAuthentication from 'expo-local-authentication';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, BackHandler, Easing, Image, Linking, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
@@ -236,11 +236,11 @@ export default function Start(props: StartProps) {
   const tv = useTv();
   /** Only show fingerprint/face login when Face or Fingerprint unlock is enabled. */
   const biometricUnlockOn = useAppSelector((state) => state.appLock.biometricEnabled);
-  // Cap globe art so short phones (SE / Flip) still leave room for CTAs.
-  const heroW = Math.min(320, Math.max(220, winW - 48));
-  const heightBudget = Math.max(0.55, Math.min(1, (winH - 280) / 320));
+  // Cap globe art so short phones still leave room for CTAs + full "Have an account? Log in".
+  const heroW = Math.min(320, Math.max(200, winW - 48));
+  const heightBudget = Math.max(0.42, Math.min(1, (winH - 340) / 320));
   const heroScale = Math.min(heroW / 320, heightBudget);
-  const logoW = Math.min(200, Math.round(230 * heroScale));
+  const logoW = Math.min(180, Math.round(210 * heroScale));
   const logoH = Math.round(logoW * (105 / 250));
   const p = useLocalSearchParams<{ stage?: string; tab?: string; country?: string; gate?: string; fails?: string; buying?: string }>();
   const staticStage = props.stage ?? p.stage ?? 'land';
@@ -648,7 +648,7 @@ export default function Start(props: StartProps) {
               height: Math.round(LAND_HERO.height * heroScale),
               minHeight: Math.round(LAND_HERO.height * heroScale),
               alignSelf: 'center',
-              flexShrink: Platform.OS === 'web' ? 1 : 0,
+              flexShrink: 1,
               overflow: 'visible',
             }}
           >
@@ -717,24 +717,21 @@ export default function Start(props: StartProps) {
             width: '100%',
             padding: sz(16),
             paddingTop: sz(14),
-            // Keep CTAs above the Android system nav / gesture bar (was under the footer toolbar).
-            paddingBottom: sz(16) + (Platform.OS === 'web' ? 0 : insets.bottom),
+            // Keep CTAs + login link fully above the Android system nav / gesture bar.
+            paddingBottom: sz(20) + (Platform.OS === 'web' ? 0 : insets.bottom),
             justifyContent: 'flex-end',
+            gap: sz(8),
           }}
         >
-          <View style={{ height: sz(8) }} />
-          <Txt size={winH < 720 ? 24 : 28} w="800" center lh={1.15} role="header">
+          <Txt size={winH < 720 ? 22 : 28} w="800" center lh={1.15} role="header">
             Change your money. Easy and safe.
           </Txt>
-          <View style={{ height: sz(20) }} />
           <Btn label="Get started" onPress={() => go('type')} />
-          <View style={{ height: sz(8) }} />
           <Btn kind="outline" size="mid" label="See best rate now" onPress={() => go('rates')} />
-          <View style={{ height: sz(8) }} />
           <Btn
             kind="link"
             label="Have an account? Log in"
-            style={{ alignSelf: 'center' }}
+            style={{ alignSelf: 'center', minHeight: sz(52), paddingVertical: sz(6) }}
             onPress={() => go('login', { created: false, buying: false })}
           />
         </View>
@@ -989,6 +986,29 @@ export default function Start(props: StartProps) {
             <Btn kind="link" label="Get started" onPress={() => go('type')} style={{ flex: 1 }} />
             <Btn kind="link" label="Need help?" onPress={() => up({ wantHelp: true, buying: false, created: false, passChanged: false })} style={{ flex: 1 }} />
           </Row>
+          <Row gap={6} style={{ flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Terms and Conditions"
+              onPress={() => router.push('/Terms' as Href)}
+            >
+              <Txt size={15} w="700" color="brandText" style={{ textDecorationLine: 'underline' }}>
+                Terms and Conditions
+              </Txt>
+            </Pressable>
+            <Txt size={15} color="text2">
+              ·
+            </Txt>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Privacy Policy"
+              onPress={() => router.push('/PrivacyPolicy' as Href)}
+            >
+              <Txt size={15} w="700" color="brandText" style={{ textDecorationLine: 'underline' }}>
+                Privacy Policy
+              </Txt>
+            </Pressable>
+          </Row>
         </ScrollView>
       </SafeAreaView>
     );
@@ -1068,7 +1088,10 @@ export default function Start(props: StartProps) {
         />
       </Screen>
     );
-  if (stage === 'forgotCode')
+  if (stage === 'forgotCode') {
+    const dismissForgotPad = () => {
+      if (numberPad?.active) numberPad.close();
+    };
     return (
       <Screen style={{ paddingBottom: 0 }}>
         <TopBar onBack={() => go('forgot')} say={say} />
@@ -1083,36 +1106,40 @@ export default function Start(props: StartProps) {
             justifyContent: forgotCodePadOpen ? 'flex-end' : 'flex-start',
           }}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator
           showsHorizontalScrollIndicator={false}
+          onScrollBeginDrag={dismissForgotPad}
         >
-          {!forgotCodePadOpen ? (
-            <>
-              <H1>Check your email</H1>
-              <P noTr>{tv('If {0} has an account, a code is coming. It ends in 10 minutes.', s.fmail)}</P>
-            </>
-          ) : null}
-          <Card>
-            <Field
-              label="6-digit code"
-              value={s.fcode}
-              onChangeText={(v) => up({ fcode: digits(v).slice(0, 6) })}
-              keyboardType="number-pad"
-              textContentType="oneTimeCode"
-              big
-              center
-              maxLength={6}
-              padKey="forgot-code"
-              autoFocus={forgotCodePadOpen}
-            />
-            {resend}
-          </Card>
-          {authMsg ? (
-            <Txt size={16} w="700" color="red" role="alert">
-              {authMsg}
-            </Txt>
-          ) : null}
-          {!forgotCodePadOpen ? <View style={{ flexGrow: 1, minHeight: sz(8) }} /> : null}
+          <Pressable onPress={dismissForgotPad} style={{ flexGrow: 1, width: '100%', gap: sz(14) }}>
+            {!forgotCodePadOpen ? (
+              <>
+                <H1>Check your email</H1>
+                <P noTr>{tv('If {0} has an account, a code is coming. It ends in 10 minutes.', s.fmail)}</P>
+              </>
+            ) : null}
+            <Card>
+              <Field
+                label="6-digit code"
+                value={s.fcode}
+                onChangeText={(v) => up({ fcode: digits(v).slice(0, 6) })}
+                keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                big
+                center
+                maxLength={6}
+                padKey="forgot-code"
+                autoFocus={forgotCodePadOpen}
+              />
+              {resend}
+            </Card>
+            {authMsg ? (
+              <Txt size={16} w="700" color="red" role="alert">
+                {authMsg}
+              </Txt>
+            ) : null}
+            {!forgotCodePadOpen ? <View style={{ flexGrow: 1, minHeight: sz(8) }} /> : null}
+          </Pressable>
         </ScrollView>
         <View style={{ width: '100%', gap: sz(8), paddingTop: sz(4) }}>
           <Btn label="Continue" busy={busy} disabled={s.fcode.length !== 6} onPress={() => go('forgotNew')} />
@@ -1120,6 +1147,7 @@ export default function Start(props: StartProps) {
         <NumberPadSlot forId="forgot-code" />
       </Screen>
     );
+  }
   if (stage === 'forgotNew') {
     const ok = s.np1.length >= 8 && s.np1.length <= 128 && s.np1 === s.np2;
     return (
@@ -1165,6 +1193,9 @@ export default function Start(props: StartProps) {
     const ok = s.phone.length === PHONE_MAX_LEN;
     const signupIncomplete =
       props.authErrorCode === 'SIGNUP_INCOMPLETE' || authMsg === SIGNUP_INCOMPLETE_MESSAGE;
+    const dismissPhonePad = () => {
+      if (numberPad?.active) numberPad.close();
+    };
     return (
       <Screen style={{ paddingBottom: 0 }}>
         <TopBar onBack={() => go('type')} say={say} />
@@ -1178,43 +1209,74 @@ export default function Start(props: StartProps) {
             paddingBottom: sz(10),
           }}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator
           showsHorizontalScrollIndicator={false}
+          onScrollBeginDrag={dismissPhonePad}
         >
-          <H1>My phone number</H1>
-          <P>We will send a code to your phone.</P>
-          <Card>
-            <Txt size={16} w="700">
-              My country
-            </Txt>
-            <Pressable accessibilityRole="button" accessibilityLabel="Choose your country" onPress={() => up({ pickOpen: 'phone' })} style={{ minHeight: 60, borderRadius: 14, backgroundColor: c.field, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Flag cc={pc.cc} w={38} />
-              <Txt size={18} w="800" style={{ flex: 1 }}>
-                {pc.name + ' ' + pc.dial}
+          {/* Pressable as content (not ScrollView wrapper) so outside taps close the pad without stealing scroll. */}
+          <Pressable onPress={dismissPhonePad} style={{ flexGrow: 1, width: '100%', gap: sz(14) }}>
+            <H1>My phone number</H1>
+            <P>We will send a code to your phone.</P>
+            <Card>
+              <Txt size={16} w="700">
+                My country
               </Txt>
-              <Icon name="down" size={20} color={c.text} />
-            </Pressable>
-            <Field
-              label="Phone number"
-              value={s.phone}
-              onChangeText={(v) => up({ phone: normalizePhoneInput(v) })}
-              keyboardType="phone-pad"
-              textContentType="telephoneNumber"
-              format="phone"
-              maxLength={PHONE_MAX_LEN}
-              padKey="signup-phone"
-              placeholder={formatPhoneDisplay('5555555555')}
-            />
-          </Card>
-          <Txt size={16} color="text2">
-            If you continue, you agree to the Terms of Use and Privacy Policy.
-          </Txt>
-          {authMsg ? (
-            <Txt size={16} w="700" color="red" role="alert">
-              {authMsg}
-            </Txt>
-          ) : null}
-          <View style={{ flexGrow: 1, minHeight: sz(8) }} />
+              <Pressable accessibilityRole="button" accessibilityLabel="Choose your country" onPress={() => up({ pickOpen: 'phone' })} style={{ minHeight: 60, borderRadius: 14, backgroundColor: c.field, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Flag cc={pc.cc} w={38} />
+                <Txt size={18} w="800" style={{ flex: 1 }}>
+                  {pc.name + ' ' + pc.dial}
+                </Txt>
+                <Icon name="down" size={20} color={c.text} />
+              </Pressable>
+              <Field
+                label="Phone number"
+                value={s.phone}
+                onChangeText={(v) => up({ phone: normalizePhoneInput(v) })}
+                keyboardType="phone-pad"
+                textContentType="telephoneNumber"
+                format="phone"
+                maxLength={PHONE_MAX_LEN}
+                padKey="signup-phone"
+                placeholder={formatPhoneDisplay('5555555555')}
+              />
+            </Card>
+            <Row gap={6} style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+              <Txt size={16} color="text2">
+                If you continue, you agree to the
+              </Txt>
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel="Terms and Conditions"
+                onPress={() => router.push('/Terms' as Href)}
+              >
+                <Txt size={16} w="700" color="brandText" style={{ textDecorationLine: 'underline' }}>
+                  Terms and Conditions
+                </Txt>
+              </Pressable>
+              <Txt size={16} color="text2">
+                and
+              </Txt>
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel="Privacy Policy"
+                onPress={() => router.push('/PrivacyPolicy' as Href)}
+              >
+                <Txt size={16} w="700" color="brandText" style={{ textDecorationLine: 'underline' }}>
+                  Privacy Policy
+                </Txt>
+              </Pressable>
+              <Txt size={16} color="text2">
+                .
+              </Txt>
+            </Row>
+            {authMsg ? (
+              <Txt size={16} w="700" color="red" role="alert">
+                {authMsg}
+              </Txt>
+            ) : null}
+            <View style={{ flexGrow: 1, minHeight: sz(8) }} />
+          </Pressable>
         </ScrollView>
         <View style={{ width: '100%', gap: sz(8), paddingTop: sz(4) }}>
           {signupIncomplete && props.onResumeIncompleteSignup ? (
@@ -1269,6 +1331,9 @@ export default function Start(props: StartProps) {
   if (stage === 'phoneCode' || stage === 'emailCode') {
     const isMail = stage === 'emailCode';
     const code = isMail ? s.ecode : s.pcode;
+    const dismissOtpPad = () => {
+      if (numberPad?.active) numberPad.close();
+    };
     return (
       <Screen style={{ paddingBottom: 0 }}>
         <TopBar onBack={() => go(isMail ? 'account' : 'phone')} say={say} />
@@ -1282,33 +1347,37 @@ export default function Start(props: StartProps) {
             paddingBottom: sz(10),
           }}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator
           showsHorizontalScrollIndicator={false}
+          onScrollBeginDrag={dismissOtpPad}
         >
-          <H1>{isMail ? 'Check your email' : 'Check your phone'}</H1>
-          <P noTr>{tv('We sent a 6-digit code to {0}.', isMail ? s.mail : pc.dial + ' ***-***-' + s.phone.slice(-2))}</P>
-          <Card>
-            <Field
-              label="6-digit code"
-              value={code}
-              onChangeText={(v) => up(isMail ? { ecode: digits(v).slice(0, 6) } : { pcode: digits(v).slice(0, 6) })}
-              keyboardType="number-pad"
-              textContentType="oneTimeCode"
-              big
-              center
-              maxLength={6}
-              padKey="otp-code"
-              autoFocus={otpCodePadOpen}
-            />
-            {resend}
-            {isMail ? <Btn kind="link" label="Wrong email? Change it" onPress={() => go('account')} /> : null}
-          </Card>
-          {authMsg ? (
-            <Txt size={16} w="700" color="red" role="alert">
-              {authMsg}
-            </Txt>
-          ) : null}
-          <View style={{ flexGrow: 1, minHeight: sz(8) }} />
+          <Pressable onPress={dismissOtpPad} style={{ flexGrow: 1, width: '100%', gap: sz(14) }}>
+            <H1>{isMail ? 'Check your email' : 'Check your phone'}</H1>
+            <P noTr>{tv('We sent a 6-digit code to {0}.', isMail ? s.mail : pc.dial + ' ***-***-' + s.phone.slice(-2))}</P>
+            <Card>
+              <Field
+                label="6-digit code"
+                value={code}
+                onChangeText={(v) => up(isMail ? { ecode: digits(v).slice(0, 6) } : { pcode: digits(v).slice(0, 6) })}
+                keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                big
+                center
+                maxLength={6}
+                padKey="otp-code"
+                autoFocus={otpCodePadOpen}
+              />
+              {resend}
+              {isMail ? <Btn kind="link" label="Wrong email? Change it" onPress={() => go('account')} /> : null}
+            </Card>
+            {authMsg ? (
+              <Txt size={16} w="700" color="red" role="alert">
+                {authMsg}
+              </Txt>
+            ) : null}
+            <View style={{ flexGrow: 1, minHeight: sz(8) }} />
+          </Pressable>
         </ScrollView>
         <View style={{ width: '100%', gap: sz(8), paddingTop: sz(4) }}>
           <Btn

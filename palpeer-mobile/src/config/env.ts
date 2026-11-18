@@ -86,6 +86,24 @@ function parseEndpoint(
   return secureSchemes.some((scheme) => url.toLowerCase().startsWith(scheme)) ? url : '';
 }
 
+/**
+ * When EXPO_PUBLIC_* was never set (local Gradle release, mis-copied env), release and
+ * staging/production builds still need the live API. Do not override an explicit but invalid
+ * URL (e.g. http in production) — that stays empty so misconfig stays visible in tests.
+ */
+function withLiveEndpointFallback(
+  parsed: string,
+  rawValue: string | undefined,
+  fallback: string,
+  env: AppEnvironment,
+): string {
+  if (parsed) return parsed;
+  if (rawValue?.trim()) return '';
+  const releaseBundle = typeof __DEV__ !== 'undefined' ? !__DEV__ : env !== 'development';
+  if (releaseBundle || env === 'staging' || env === 'production') return fallback;
+  return '';
+}
+
 type RawEnv = {
   EXPO_PUBLIC_ENV?: string;
   EXPO_PUBLIC_API_BASE_URL?: string;
@@ -113,6 +131,10 @@ export const SUPPORT_CHAT_WEB_PROXY_PATH = '/support-chat-api';
  * domain is configured. Prefer deriving from {@code EXPO_PUBLIC_API_BASE_URL}.
  */
 export const DEFAULT_SHARE_BASE_URL = 'https://palpeer-api.onrender.com';
+
+/** Live API used by EAS preview/production and as a release-bundle fallback. */
+export const DEFAULT_PRODUCTION_API_BASE_URL = 'https://palpeer-api.onrender.com/api/v1';
+export const DEFAULT_PRODUCTION_WS_URL = 'https://palpeer-api.onrender.com/ws';
 
 const DEFAULT_ANDROID_STORE =
   'https://play.google.com/store/apps/details?id=com.palpeer.app';
@@ -146,7 +168,18 @@ function resolveShareBaseUrl(raw: RawEnv, apiBaseUrl: string): string {
 
 export function buildConfig(raw: RawEnv): AppConfig {
   const env = parseEnvironment(raw.EXPO_PUBLIC_ENV);
-  const apiBaseUrl = parseEndpoint(raw.EXPO_PUBLIC_API_BASE_URL, env, ['https://']);
+  const apiBaseUrl = withLiveEndpointFallback(
+    parseEndpoint(raw.EXPO_PUBLIC_API_BASE_URL, env, ['https://']),
+    raw.EXPO_PUBLIC_API_BASE_URL,
+    DEFAULT_PRODUCTION_API_BASE_URL,
+    env,
+  );
+  const wsUrl = withLiveEndpointFallback(
+    parseEndpoint(raw.EXPO_PUBLIC_WS_URL, env, ['https://', 'wss://']),
+    raw.EXPO_PUBLIC_WS_URL,
+    DEFAULT_PRODUCTION_WS_URL,
+    env,
+  );
   const supportChatConfigured = parseEndpoint(
     raw.EXPO_PUBLIC_SUPPORT_CHAT_API_BASE_URL,
     env,
@@ -159,7 +192,7 @@ export function buildConfig(raw: RawEnv): AppConfig {
   return {
     env,
     apiBaseUrl,
-    wsUrl: parseEndpoint(raw.EXPO_PUBLIC_WS_URL, env, ['https://', 'wss://']),
+    wsUrl,
     supportChatApiBaseUrl,
     // Staging/production often hit a cold Render free instance; keep headroom beyond 15s.
     requestTimeoutMs: env === 'development' ? 15_000 : 60_000,

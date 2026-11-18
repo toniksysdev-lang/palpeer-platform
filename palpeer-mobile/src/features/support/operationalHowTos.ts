@@ -176,7 +176,7 @@ export const OPERATIONAL_HOW_TOS: readonly HowToSection[] = [
         id: 'fund-how',
         title: 'How do I add money?',
         body:
-          'Home → Fund wallet (for the wallet on screen), or open a wallet → Fund. Enter amount → review → confirm. The payment method follows the wallet currency — there is no separate method picker.',
+          'To add money, go to the Home page, tap Add (or Fund), enter the amount, review the details, then confirm. The payment method follows the wallet currency — there is no separate method picker.',
       },
       {
         id: 'fund-cad',
@@ -206,7 +206,7 @@ export const OPERATIONAL_HOW_TOS: readonly HowToSection[] = [
         id: 'withdraw-how',
         title: 'How do I withdraw money?',
         body:
-          'Home → Withdraw or wallet → Withdraw. Enter amount and destination → review → confirm with your transaction PIN if set. Amount cannot exceed available balance. Status is tracked on the withdrawal screen (held / complete / failed with amount released / reversed).',
+          'To take money out, go to the Home page, tap Take out (or Withdraw), enter the amount and destination, review, then confirm with your PIN if set. You cannot withdraw more than your available balance.',
       },
       {
         id: 'withdraw-cad',
@@ -225,6 +225,24 @@ export const OPERATIONAL_HOW_TOS: readonly HowToSection[] = [
         title: 'Why did my available balance drop after withdraw?',
         body:
           'On submit, the amount moves to pending (hold) until the withdrawal completes or fails. If it fails or is reversed, funds return to available.',
+      },
+    ],
+  },
+  {
+    id: 'send',
+    title: 'Send money',
+    items: [
+      {
+        id: 'send-how',
+        title: 'How do I send money to another Palpeer user?',
+        body:
+          'Yes, you can. To do that, go to the Home page, tap Send, enter the amount, then type the email, username or phone number of the receiver. Check the full name on the screen, then confirm with your PIN or fingerprint. Send is same money only (same currency), wallet to wallet between Palpeer users.',
+      },
+      {
+        id: 'send-wallet',
+        title: 'Can I transfer wallet to wallet?',
+        body:
+          'Yes, you can. To do that, go to the Home page, tap Send, type the email or username or phone number of the receiver, enter the amount, check their name, then confirm. That moves money from your wallet to theirs in the same currency.',
       },
     ],
   },
@@ -248,7 +266,7 @@ export const OPERATIONAL_HOW_TOS: readonly HowToSection[] = [
         id: 'exchange-how',
         title: 'How do I change / swap money?',
         body:
-          'Open the InstantEX / Exchange tab (or Home → InstantEX). Choose source and target wallets (different currencies), enter an amount on either side — the other side and rate come from the server. Review shows a locked quote with a countdown; confirm with PIN if set. If the quote expires, get a new quote. You need at least two wallets in different currencies. For a rate with another person, use the P2P tab instead.',
+          'To change money between your own wallets, go to the Home page, tap Change, pick what you give and what you want, type the amount, then choose Change now. Check the quote, then confirm with your PIN or fingerprint. You need at least two wallets in different currencies. To trade with another person at your own rate, use Trade Peer to Peer instead.',
       },
       {
         id: 'exchange-fees',

@@ -1,4 +1,10 @@
-import { buildConfig, isApiConfigured, rewriteEmulatorHostForWeb } from '../env';
+import {
+  buildConfig,
+  DEFAULT_PRODUCTION_API_BASE_URL,
+  DEFAULT_PRODUCTION_WS_URL,
+  isApiConfigured,
+  rewriteEmulatorHostForWeb,
+} from '../env';
 
 describe('buildConfig', () => {
   it('trims trailing slashes and reads the environment', () => {
@@ -117,6 +123,16 @@ describe('buildConfig', () => {
     expect(
       isApiConfigured(buildConfig({ EXPO_PUBLIC_API_BASE_URL: 'http://10.0.2.2:8085/api/v1' })),
     ).toBe(true);
+  });
+
+  it('uses the live API when staging/production omit EXPO_PUBLIC_API_BASE_URL', () => {
+    const staging = buildConfig({ EXPO_PUBLIC_ENV: 'staging' });
+    expect(staging.apiBaseUrl).toBe(DEFAULT_PRODUCTION_API_BASE_URL);
+    expect(staging.wsUrl).toBe(DEFAULT_PRODUCTION_WS_URL);
+    expect(isApiConfigured(staging)).toBe(true);
+    const production = buildConfig({ EXPO_PUBLIC_ENV: 'production' });
+    expect(production.apiBaseUrl).toBe(DEFAULT_PRODUCTION_API_BASE_URL);
+    expect(production.wsUrl).toBe(DEFAULT_PRODUCTION_WS_URL);
   });
 
   it('defaults the support chat API to app.palpeer.com.ng on native', () => {

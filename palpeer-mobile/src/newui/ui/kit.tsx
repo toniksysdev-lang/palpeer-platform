@@ -291,19 +291,29 @@ export function Screen({
       (pad ? s(16) : 0) + (scroll && scrollPadReserve ? (padOpen ? 240 : s(28)) : 0),
   };
 
-  // Do not wrap ScrollView in Pressable — that steals center drags on Android (edge-only scroll).
-  // Number pad closes only when the user scrolls (not on outside taps).
+  // ScrollView: Pressable as *content* (not wrapper) so outside taps dismiss without stealing scroll.
+  // Overlay pad: full-bleed dismiss sheet above the dock.
   const body = scroll ? (
     <FocusScrollProvider scrollRef={scrollRef}>
       <KeyboardFocusReveal />
       <PadRevealOnOpen />
       <ScreenScrollBody contentContainerStyle={[contentInner, style]} onScrollBeginDrag={dismissPad}>
-        {children}
+        <Pressable onPress={dismissPad} style={{ width: '100%', gap: s(gap), flexGrow: 1 }}>
+          {children}
+        </Pressable>
       </ScreenScrollBody>
     </FocusScrollProvider>
   ) : (
-    <View style={[{ flex: 1, width: '100%' }, contentInner, style]}>{children}</View>
+    <Pressable
+      onPress={dismissPad}
+      style={[{ flex: 1, width: '100%' }, contentInner, style]}
+    >
+      {children}
+    </Pressable>
   );
+
+  const overlayPad = padOpen && (numberPad?.inlineHosts ?? 0) === 0;
+  const dockH = numberPadMetrics(scale > 0 ? scale : 1).dockHeight;
 
   // Full-window shell + inset padding (not SafeAreaView) so LayoutProvider’s
   // usable-height scale matches :3333 instead of double-compressing the canvas.
@@ -325,7 +335,16 @@ export function Screen({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         {body}
-        <NumberPadDock scale={scale} includeBottomInset={false} />
+        {overlayPad ? (
+          <Pressable
+            accessibilityLabel="Dismiss number pad"
+            onPress={dismissPad}
+            style={[StyleSheet.absoluteFillObject, { bottom: dockH, zIndex: 15 }]}
+          />
+        ) : null}
+        <View style={{ zIndex: 20 }} collapsable={false}>
+          <NumberPadDock scale={scale} includeBottomInset={false} />
+        </View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -455,9 +474,10 @@ export function Btn({
   const c = useC();
   const t = useT();
   const { s } = useLayout();
-  // minHeight (not fixed height) so long labels like "Confirm Exchange" wrap on narrow phones.
+  const notoLoaded = useNotoFontsLoaded();
+  // Fixed height so the label sits mid top/bottom; minHeight still allows rare wraps.
   const h = s(size === 'big' ? 68 : size === 'mid' ? 60 : 52);
-  const fs = size === 'big' ? 22 : size === 'mid' ? 19 : 17;
+  const fs = s(size === 'big' ? 22 : size === 'mid' ? 19 : 17);
   const bgMap: Record<BtnKind, string> = {
     primary: c.brand,
     outline: 'transparent',
@@ -498,7 +518,8 @@ export function Btn({
       onPressOut={() => setPressed(false)}
       style={[
         {
-          // Use minHeight (not fixed height) so long labels stay fully visible on narrow phones.
+          // Fixed height keeps single-line labels optically centered; minHeight lets long labels wrap.
+          height: kind === 'link' ? undefined : h,
           minHeight: kind === 'link' ? s(48) : h,
           // Link / fit CTAs sit beside other content — width 100% shoved them off-screen.
           width: inline ? undefined : '100%',
@@ -512,29 +533,54 @@ export function Btn({
           alignItems: 'center',
           justifyContent: 'center',
           flexDirection: 'row',
-          flexWrap: 'wrap',
+          flexWrap: kind === 'link' ? 'wrap' : 'nowrap',
           paddingHorizontal: kind === 'link' ? s(4) : s(14),
-          paddingVertical: kind === 'link' ? 0 : s(10),
+          paddingVertical: 0,
+          overflow: 'hidden',
           opacity: pressed && !busy ? 0.85 : 1,
         },
         style,
       ]}
     >
-      {busy ? <ActivityIndicator color={fg} style={{ marginRight: s(10) }} /> : icon ? <Icon name={icon} size={s(26)} color={fg} /> : null}
-      {shown ? (
-        <Txt
-          size={kind === 'link' ? 17 : fs}
-          w="800"
-          color={fg}
-          center
-          style={[
-            { flexShrink: 1, maxWidth: '100%' },
-            kind === 'link' && !busy ? { textDecorationLine: 'underline' } : null,
-          ]}
-        >
-          {shown}
-        </Txt>
-      ) : null}
+      <View
+        pointerEvents="none"
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          maxWidth: '100%',
+          // Inner row fills the button height so text sits mid top/bottom.
+          ...(kind === 'link' ? null : { flex: 1, alignSelf: 'stretch' }),
+        }}
+      >
+        {busy ? <ActivityIndicator color={fg} style={{ marginRight: s(10) }} /> : icon ? <Icon name={icon} size={s(26)} color={fg} /> : null}
+        {shown ? (
+          <Text
+            numberOfLines={kind === 'link' ? 2 : 2}
+            style={{
+              flexShrink: 1,
+              maxWidth: '100%',
+              fontFamily:
+                Platform.OS === 'web'
+                  ? FONT['800']
+                  : notoLoaded
+                    ? FONT_NATIVE['800']
+                    : undefined,
+              fontSize: kind === 'link' ? s(17) : fs,
+              // Match fontSize so the glyph box is vertically centered in the row.
+              lineHeight: kind === 'link' ? s(17) : fs,
+              fontWeight: Platform.OS === 'web' ? '800' : undefined,
+              color: fg,
+              textAlign: 'center',
+              includeFontPadding: false,
+              textAlignVertical: 'center',
+              ...(kind === 'link' && !busy ? { textDecorationLine: 'underline' as const } : null),
+            }}
+          >
+            {t(shown)}
+          </Text>
+        ) : null}
+      </View>
       {children}
     </Pressable>
   );

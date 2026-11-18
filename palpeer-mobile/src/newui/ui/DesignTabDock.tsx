@@ -29,8 +29,8 @@ const HOME_FLOW_LEAVES = new Set([
   'PeopleLive',
 ]);
 
-/** Legal / settings leaves keep the More tab highlighted. */
-const MORE_FLOW_LEAVES = new Set(['Terms', 'PrivacyPolicy', 'Privacy']);
+/** Settings hub keeps the More tab highlighted. Full legal docs stay dock-free (public + signed-in). */
+const MORE_FLOW_LEAVES = new Set(['Privacy']);
 
 /** Screens that should show the persistent dock (tab roots + common money flows). */
 const DOCK_LEAVES = new Set([...Object.keys(TAB_BY_LEAF), ...HOME_FLOW_LEAVES, ...MORE_FLOW_LEAVES]);

@@ -239,6 +239,9 @@ function resolveText(t) {
     out.fontFamily = /mono/i.test(t.fontFamily) ? Platform.select({ ios: 'Menlo', default: 'monospace' }) : undefined;
   }
   if (t.lineHeight == null && t._lhMul != null && t.fontSize) out.lineHeight = Math.round(t._lhMul * t.fontSize * 100) / 100;
+  // Android fonts otherwise add extra top padding that throws off vertically centered CTAs.
+  out.includeFontPadding = false;
+  if (Platform.OS === 'android') out.textAlignVertical = 'center';
   return out;
 }
 
@@ -293,7 +296,13 @@ export function Box({ s, kind, flow, onPress, href, disabled, children, _cell, l
   const st = prep(s, dark, scale);
   const { view, text } = splitStyle(st);
   const display = st._display || 'block';
-  if (display === 'block' && !flow && kind === 'button' && !text.textAlign) text.textAlign = 'center';
+  if (kind === 'button') {
+    if (!text.textAlign) text.textAlign = 'center';
+    // Inherited page _lhMul (~1.36) makes green CTA labels sit high; tighten the line box.
+    if (text._lhMul == null && text.lineHeight == null) text._lhMul = 1;
+    if (view.alignItems == null) view.alignItems = 'center';
+    if (view.justifyContent == null) view.justifyContent = 'center';
+  }
   const textCtx = useMemo(() => ({ ...inherited, ...text, inText: false }), [inherited, JSON.stringify(text)]);
   if (display === 'none') return null;
 
@@ -956,8 +965,29 @@ export function Screen({ bg = '#F3F6F4', go, children }) {
                       if (padOpen) pad?.close();
                     }}
                   >
-                    {children}
+                    <Pressable
+                      onPress={() => {
+                        if (padOpen) pad?.close();
+                      }}
+                      style={{ flexGrow: 1, width: '100%' }}
+                    >
+                      {children}
+                    </Pressable>
                   </ScrollView>
+                  {overlayPad ? (
+                    <Pressable
+                      accessibilityLabel="Dismiss number pad"
+                      onPress={() => pad?.close()}
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        bottom: NUMBER_PAD_DOCK_HEIGHT * scale,
+                        zIndex: 15,
+                      }}
+                    />
+                  ) : null}
                   <View
                     pointerEvents="box-none"
                     style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 20 }}
