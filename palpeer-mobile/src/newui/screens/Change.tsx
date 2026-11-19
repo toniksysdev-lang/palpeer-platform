@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, View } from 'react-native';
 import { metaFor } from '@/design/bridge/currencyMeta';
@@ -399,7 +399,16 @@ export default function Change(props: ChangeProps) {
           ) : null}
         </View>
       </Pressable>
-      <Pressable accessibilityRole="button" onPress={() => router.push('/People')} style={{ borderRadius: 20, backgroundColor: c.card, padding: 14, flexDirection: 'row', gap: 12 }}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() =>
+          router.push({
+            pathname: '/PeoplePost',
+            params: { amount: String(n > 0 ? n : amount), giveCode: give },
+          } as Href)
+        }
+        style={{ borderRadius: 20, backgroundColor: c.card, padding: 14, flexDirection: 'row', gap: 12 }}
+      >
         <Circle icon="people" size={52} iconSize={30} bg="#1D5BC7" />
         <View style={{ flex: 1 }}>
           <Txt size={21} w="800">

@@ -268,7 +268,7 @@ export default function Messages(props: MessagesProps) {
                     <Btn
                       label={`Accept ₦${talk.rate}`}
                       busy={talkBusy}
-                      disabled={talkBusy}
+                      disabled={false}
                       onPress={() => setPinOpen(true)}
                     />
                     <Row gap={8}>
@@ -276,7 +276,7 @@ export default function Messages(props: MessagesProps) {
                         size="mid"
                         kind="outline"
                         label="Offer again"
-                        disabled={talkBusy}
+                        disabled={false}
                         onPress={() => void runTalk('counter')}
                         style={{ flex: 1, borderColor: '#1D5BC7' }}
                       />
@@ -284,7 +284,7 @@ export default function Messages(props: MessagesProps) {
                         size="mid"
                         kind="outline"
                         label="Say no"
-                        disabled={talkBusy}
+                        disabled={false}
                         onPress={() => void runTalk('reject')}
                         style={{ flex: 1, borderColor: c.red }}
                       />

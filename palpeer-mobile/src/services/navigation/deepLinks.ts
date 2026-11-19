@@ -28,6 +28,7 @@ const ROUTES: readonly RegExp[] = [
   /^\/PeopleTalk$/,
   /^\/PeopleLive$/,
   /^\/PeoplePost$/,
+  /^\/Messages$/,
   /^\/Terms$/,
   /^\/PrivacyPolicy$/,
 ];
@@ -80,6 +81,9 @@ export function resolveDeepLink(input: string | null | undefined): string | null
   }
   const shareMatch = path.match(new RegExp(`^/p2p/share/(${UUID})$`));
   if (shareMatch?.[1]) return `/p2p-share/${shareMatch[1]}`;
+  // Legacy authenticated request detail → newui People offer.
+  const requestMatch = path.match(new RegExp(`^/p2p/request/(${UUID})$`));
+  if (requestMatch?.[1]) return `/PeopleOffer?requestId=${requestMatch[1]}`;
   // Design Card screen (legacy /cards/:id still accepted as input).
   const cardMatch = path.match(new RegExp(`^/cards/(${UUID})$`));
   if (cardMatch?.[1]) return `/Card?id=${cardMatch[1]}`;
@@ -90,17 +94,30 @@ export function resolveDeepLink(input: string | null | undefined): string | null
     path === '/PeopleOffer' ||
     path === '/PeopleTalk' ||
     path === '/PeopleLive' ||
-    path === '/People'
+    path === '/People' ||
+    path === '/PeoplePost'
   ) {
     const requestId = query.get('requestId');
     const negotiationId = query.get('negotiationId');
     const nudge = query.get('nudge');
+    const amount = query.get('amount');
+    const giveCode = query.get('giveCode');
     const qs = new URLSearchParams();
     if (requestId && UUID_ONLY.test(requestId)) qs.set('requestId', requestId);
     if (negotiationId && UUID_ONLY.test(negotiationId)) qs.set('negotiationId', negotiationId);
     if (nudge === '1' || nudge === 'true') qs.set('nudge', '1');
+    if (amount && /^\d+(\.\d+)?$/.test(amount)) qs.set('amount', amount);
+    if (giveCode === 'CAD' || giveCode === 'NGN') qs.set('giveCode', giveCode);
     const q = qs.toString();
     return q ? `${path}?${q}` : path;
+  }
+  // Push taps land on Messages → Alerts.
+  if (path === '/Messages') {
+    const section = query.get('section');
+    if (section === 'alerts' || section === 'talks' || section === 'chats') {
+      return `/Messages?section=${section}`;
+    }
+    return path;
   }
   return path;
 }
@@ -118,7 +135,7 @@ function titleHint(title: string | null | undefined): string {
 
 /**
  * Screen for a notification's `referenceType` (NT-3).
- * Optional `title` routes marketplace alerts to the new Trade / Talk / My offer screens.
+ * Used when the user taps a row inside Messages → Alerts (not the push tray).
  */
 export function notificationTarget(notification: {
   referenceType: string | null;
@@ -129,7 +146,7 @@ export function notificationTarget(notification: {
   const id = notification.referenceId;
   const title = titleHint(notification.title);
 
-  // Alerts tab / push copy → newui People stages.
+  // In-Alerts actions still open the matching Trade / Talk screen.
   if (
     title.includes('p2p order posted') ||
     title.includes('my offer closed') ||
@@ -142,7 +159,7 @@ export function notificationTarget(notification: {
       ? `/PeopleLive?requestId=${id}&nudge=1`
       : '/PeopleLive';
   }
-  if (title.includes('new price offer') || title.includes('talk about')) {
+  if (title.includes('new price offer') || title.includes('talk about') || title.includes('price talk')) {
     return id && UUID_ONLY.test(id) ? `/PeopleTalk?negotiationId=${id}` : '/PeopleTalk';
   }
 
@@ -155,14 +172,12 @@ export function notificationTarget(notification: {
     case 'TRANSFER':
       return id && UUID_ONLY.test(id) ? `/transaction/${type}/${id}` : null;
     case 'P2P_REQUEST':
-      // Open that person's offer in the new Trade UI.
       return id && UUID_ONLY.test(id) ? `/PeopleOffer?requestId=${id}` : '/People';
     case 'P2P_ORDER':
       return id && UUID_ONLY.test(id) ? `/p2p/order/${id}` : null;
     case 'NEGOTIATION':
       return id && UUID_ONLY.test(id) ? `/PeopleTalk?negotiationId=${id}` : '/PeopleTalk';
     case 'ADMIN_BROADCAST':
-      // Open the notification detail screen (title + body from admin).
       return null;
     case 'P2P':
       return '/People';
@@ -171,39 +186,12 @@ export function notificationTarget(notification: {
   }
 }
 
+/** Every push tray tap opens Messages → Alerts (NT-4). In-app alert rows still use notificationTarget. */
+export const MESSAGES_ALERTS_PATH = '/Messages?section=alerts';
+
 /**
- * Where a tapped push goes. FCM data includes `notificationId` / `referenceType` /
- * `referenceId` / optional `deepLink` (NT-4). The screen always refetches from the API (R-NT-1).
- *
- * Marketplace P2P alerts open the request directly (not the inbox detail).
+ * Where a tapped push goes. FCM may include `deepLink`; we still land on Messages → Alerts.
  */
-export function pushTarget(data: unknown): string {
-  const record = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
-  const deepLinkRaw =
-    typeof record.deepLink === 'string'
-      ? record.deepLink
-      : typeof record.url === 'string'
-        ? record.url
-        : null;
-  const fromDeepLink = deepLinkRaw ? resolveDeepLink(deepLinkRaw) : null;
-  if (fromDeepLink) return fromDeepLink;
-
-  const referenceType = typeof record.referenceType === 'string' ? record.referenceType : null;
-  const referenceId = typeof record.referenceId === 'string' ? record.referenceId : null;
-  const title = typeof record.title === 'string' ? record.title : null;
-  const byReference = notificationTarget({ referenceType, referenceId, title });
-  if (
-    byReference &&
-    (referenceType?.toUpperCase() === 'P2P_REQUEST' ||
-      referenceType?.toUpperCase() === 'NEGOTIATION' ||
-      referenceType?.toUpperCase() === 'P2P')
-  ) {
-    return byReference;
-  }
-
-  const notificationId = record.notificationId;
-  if (typeof notificationId === 'string' && UUID_ONLY.test(notificationId)) {
-    return `/notifications/${notificationId}`;
-  }
-  return byReference ?? '/notifications';
+export function pushTarget(_data: unknown): string {
+  return MESSAGES_ALERTS_PATH;
 }

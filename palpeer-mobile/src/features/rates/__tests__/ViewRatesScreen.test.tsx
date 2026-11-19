@@ -43,8 +43,8 @@ describe('ViewRatesScreen — Live P2P Buy This Exchange', () => {
 
     await fireEvent.press(await screen.findByTestId('view-rates-p2p-buy-r-sell-1'));
 
-    expect(pendingNavigation.peek()).toBe('/p2p/request/r-sell-1');
-    expect(router.push).toHaveBeenCalledWith('/login');
+    expect(pendingNavigation.peek()).toBe('/PeopleOffer?requestId=r-sell-1');
+    expect(router.push).toHaveBeenCalledWith('/StartLogin');
   });
 
   it('opens the sell request when already signed in', async () => {
@@ -60,10 +60,7 @@ describe('ViewRatesScreen — Live P2P Buy This Exchange', () => {
     await fireEvent.press(await screen.findByTestId('view-rates-p2p-buy-r-sell-1'));
 
     expect(pendingNavigation.peek()).toBeNull();
-    expect(router.push).toHaveBeenCalledWith({
-      pathname: '/p2p/request/[id]',
-      params: { id: 'r-sell-1' },
-    });
+    expect(router.push).toHaveBeenCalledWith('/PeopleOffer?requestId=r-sell-1');
   });
 
   it('hides Buy This Exchange on buy-side listings', async () => {

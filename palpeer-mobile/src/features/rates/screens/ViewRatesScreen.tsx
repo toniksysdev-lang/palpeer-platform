@@ -166,7 +166,7 @@ function PublicP2PRateCard({ row }: { row: PublicP2PRateResponse }) {
     if (!canBuy || expired) return;
     const path = sellOrderAcceptPath(row.id);
     if (isAuthenticated) {
-      router.push({ pathname: '/p2p/request/[id]', params: { id: row.id } });
+      router.push(path as never);
       return;
     }
     pendingNavigation.set(path);

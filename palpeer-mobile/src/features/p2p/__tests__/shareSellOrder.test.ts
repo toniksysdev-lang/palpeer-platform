@@ -15,7 +15,7 @@ const SHARE_URL = `https://palpeer-api.onrender.com/p2p/share/${ID}`;
 describe('shareSellOrder helpers', () => {
   it('builds share and accept paths', () => {
     expect(sellOrderSharePath(ID)).toBe(`/p2p/share/${ID}`);
-    expect(sellOrderAcceptPath(ID)).toBe(`/p2p/request/${ID}`);
+    expect(sellOrderAcceptPath(ID)).toBe(`/PeopleOffer?requestId=${ID}`);
     expect(sellOrderShareUrl(ID)).toBe(SHARE_URL);
   });
 

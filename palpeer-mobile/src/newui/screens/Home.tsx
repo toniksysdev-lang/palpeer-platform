@@ -429,13 +429,14 @@ export default function Home(props: HomeProps) {
                 ) : null}
                 <Btn
                   label="Use my PIN"
-                  kind="primary"
+                  kind="outline"
                   size="mid"
                   disabled={lockBusy}
                   onPress={() => {
                     setLockMsg(null);
                     setLockPinOpen(true);
                   }}
+                  style={{ borderColor: '#0B6E4F' }}
                 />
                 <Btn
                   kind="link"

@@ -66,7 +66,7 @@ class FcmPushNotifierTest {
         Map<String, String> data = FcmPushNotifier.buildData(notification);
 
         assertThat(data)
-                .containsEntry("deepLink", "palpeer://p2p/request/" + refId)
+                .containsEntry("deepLink", "palpeer://Messages?section=alerts")
                 .containsEntry("referenceType", "P2P_REQUEST")
                 .containsEntry("referenceId", refId.toString())
                 .containsEntry("title", "New P2P BUY");
@@ -89,7 +89,7 @@ class FcmPushNotifierTest {
         Map<String, String> data = FcmPushNotifier.buildData(notification);
 
         assertThat(data)
-                .containsEntry("deepLink", "palpeer://PeopleTalk?negotiationId=" + refId)
+                .containsEntry("deepLink", "palpeer://Messages?section=alerts")
                 .containsEntry("referenceType", "NEGOTIATION")
                 .containsEntry("title", "New price offer");
     }

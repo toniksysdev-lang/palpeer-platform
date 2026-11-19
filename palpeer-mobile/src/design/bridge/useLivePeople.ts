@@ -349,13 +349,25 @@ export function useLivePeople() {
   const onCancelNegotiation = useCallback(
     async (negotiationId: string): Promise<OkErr> => {
       try {
+        // Best-effort chat "No" so Talk history shows the decline when leaving mid-wait.
+        try {
+          const room = await openChatRoom({ negotiationId }).unwrap();
+          if (room?.id) {
+            await sendChatMessage({
+              roomId: room.id,
+              message: { content: 'No', clientMessageId: newIdempotencyKey() },
+            }).unwrap();
+          }
+        } catch {
+          // Still cancel so the other party gets a push.
+        }
         await cancelNegotiation(negotiationId).unwrap();
         return { ok: true };
       } catch (error) {
         return { ok: false, error: toAppError(error).message ?? 'Could not end talk.' };
       }
     },
-    [cancelNegotiation],
+    [cancelNegotiation, openChatRoom, sendChatMessage],
   );
 
   /** Decline the pending price, post "No" in the negotiation chat, and notify the other party. */

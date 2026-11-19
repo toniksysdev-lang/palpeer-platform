@@ -4,6 +4,7 @@ import type { useLiveOfferLink } from '@/design/bridge/useLiveOfferLink';
 import { useC } from '@/newui/lib/theme';
 import { Icon } from '@/newui/ui/Icon';
 import { Btn, Card, Flag, H1, H2, P, Row, Screen, Txt } from '@/newui/ui/kit';
+import { pendingNavigation } from '@/services/navigation/pendingNavigation';
 
 type OfferLinkProps = ReturnType<typeof useLiveOfferLink> & {
   go?: (href: string) => void;
@@ -15,7 +16,9 @@ export default function OfferLink(props: OfferLinkProps) {
   const headline = props.headline ?? (props.ready ? 'A person shared an offer' : 'Someone shared an offer with you');
   const totalLabel = props.totalLabel ?? '—';
   const rateLabel = props.rateLabel ?? '—';
-  const loginHref = props.requestId ? `/StartLogin?buying=1&requestId=${props.requestId}` : '/StartLogin?buying=1';
+  const loginHref = props.requestId
+    ? `/StartLogin?buying=1&requestId=${props.requestId}`
+    : '/StartLogin?buying=1';
 
   return (
     <Screen>
@@ -41,7 +44,15 @@ export default function OfferLink(props: OfferLinkProps) {
       </Card>
       <View style={{ flex: 1 }} />
       <H2>Do you have Palpeer?</H2>
-      <Btn label="Yes, log in" onPress={() => router.replace(loginHref as Href)} />
+      <Btn
+        label="Yes, log in"
+        onPress={() => {
+          if (props.requestId) {
+            pendingNavigation.set(`/PeopleOffer?requestId=${props.requestId}`);
+          }
+          router.replace(loginHref as Href);
+        }}
+      />
       <Btn kind="outline" size="mid" label="No, get the app" onPress={() => router.replace('/')} />
       <P center>After you log in or join, this offer opens for you.</P>
     </Screen>

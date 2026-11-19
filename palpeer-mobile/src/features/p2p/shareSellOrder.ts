@@ -10,9 +10,9 @@ export function sellOrderSharePath(requestId: string): string {
   return `/p2p/share/${requestId}`;
 }
 
-/** Destination after login from guest Accept. */
+/** Destination after login from guest Accept — newui People offer. */
 export function sellOrderAcceptPath(requestId: string): string {
-  return `/p2p/request/${requestId}`;
+  return `/PeopleOffer?requestId=${requestId}`;
 }
 
 /**
