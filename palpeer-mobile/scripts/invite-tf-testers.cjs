@@ -8,7 +8,7 @@ const crypto = require('crypto');
 
 const BETA_GROUP = '96e35b07-e000-459f-8b86-c87722a5bf81';
 const ASC_APP_ID = '6826088742';
-const ACCOUNT = 'toniksyslab';
+const ACCOUNT = 'toniksystemslab';
 const EXCLUDE_SUBSTRING = 'covenant';
 const ENSURE_EMAILS = ['obianujucecilia2001@gmail.com'];
 

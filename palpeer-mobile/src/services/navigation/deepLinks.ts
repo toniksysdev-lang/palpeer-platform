@@ -51,12 +51,12 @@ function split(input: string): { path: string; query: URLSearchParams } | null {
 
 /**
  * HTTPS share URLs arrive as `/host/p2p/share/<id>` after scheme strip.
- * Accept the marketing host and the API bridge host.
+ * Accept branded API host, legacy onrender bridge, and app.palpeer.com.
  */
 function stripShareHost(path: string): string {
   const match = path.match(
     new RegExp(
-      `^/(?:app\\.palpeer\\.com|palpeer-api\\.onrender\\.com)(/p2p/share/${UUID})$`,
+      `^/(?:api\\.palpeer\\.com|app\\.palpeer\\.com|palpeer-api\\.onrender\\.com)(/p2p/share/${UUID})$`,
       'i',
     ),
   );

@@ -98,10 +98,10 @@ SSL/TLS mode: **Full**.
 
 ## Checklist
 
-- [ ] Render custom domains added
+- [x] Render custom domains added (`node scripts/apply-ops-security.mjs`)
 - [ ] Truehost CNAMEs for `api` / `admin`
 - [ ] Certs issued; health OK on custom API host
-- [ ] CORS + `PUBLIC_API_BASE_URL` updated; API redeployed
-- [ ] `ADMIN_IP_ALLOWLIST` set (optional)
-- [ ] EAS URLs + SSL pins updated; APK/iOS rebuilt
+- [x] CORS + `PUBLIC_API_BASE_URL` updated; API redeployed via script `--deploy`
+- [x] `ADMIN_IP_ALLOWLIST` set (script auto-IP; update if your public IP changes)
+- [ ] EAS URLs flipped to `api.palpeer.com` + SSL pins re-extracted after DNS/certs live; APK/iOS rebuilt
 - [ ] (Later) Cloudflare NS + WAF + Access on `admin.palpeer.com`

@@ -255,8 +255,8 @@ services:
         value: same-origin
       - path: /*
         name: Content-Security-Policy
-        # connect-src allows any https/wss API host (onrender + custom). Tighten in Dashboard if needed.
-        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+        # connect-src: only known API hosts (onrender + api.palpeer.com). Meta CSP from Vite build also scopes to VITE_API_BASE_URL.
+        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://palpeer-api.onrender.com wss://palpeer-api.onrender.com https://api.palpeer.com wss://api.palpeer.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
     routes:
       - type: rewrite
         source: /*

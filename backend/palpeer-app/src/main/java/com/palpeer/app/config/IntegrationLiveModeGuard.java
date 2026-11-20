@@ -1,6 +1,8 @@
 package com.palpeer.app.config;
 
 import com.palpeer.kyc.config.ComplyCubeProperties;
+import com.palpeer.wallet.provider.apaylo.ApayloProperties;
+import com.palpeer.wallet.provider.korapay.KorapayProperties;
 import com.palpeer.wallet.provider.kuda.KudaProperties;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +25,8 @@ public class IntegrationLiveModeGuard implements ApplicationRunner {
     private final Environment environment;
     private final ComplyCubeProperties complyCubeProperties;
     private final KudaProperties kudaProperties;
+    private final ApayloProperties apayloProperties;
+    private final KorapayProperties korapayProperties;
 
     @Override
     public void run(ApplicationArguments args) {
@@ -66,6 +70,18 @@ public class IntegrationLiveModeGuard implements ApplicationRunner {
                 problems.add(
                         "Kuda webhooks unauthenticated — set KUDA_WEBHOOK_USERNAME/PASSWORD (preferred) or KUDA_WEBHOOK_SECRET");
             }
+        }
+
+        if (apayloProperties.isEnabled()
+                && blankToEmpty(apayloProperties.getWebhookSecret()).isBlank()) {
+            problems.add(
+                    "APAYLO_ENABLED=true but APAYLO_WEBHOOK_SECRET is blank — inbound Apaylo webhooks will be rejected");
+        }
+
+        if (korapayProperties.isEnabled()
+                && blankToEmpty(korapayProperties.getWebhookSecret()).isBlank()) {
+            problems.add(
+                    "KORAPAY_ENABLED=true but KORAPAY_WEBHOOK_SECRET is blank — Korapay webhooks will be rejected");
         }
 
         if (problems.isEmpty()) {

@@ -87,8 +87,12 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
     bundleIdentifier: IOS_BUNDLE_ID,
     supportsTablet: false,
     ...(iosGoogleServices ? { googleServicesFile: iosGoogleServices } : {}),
-    // API host serves the working share bridge today; keep app.palpeer.com for when DNS is live.
-    associatedDomains: ['applinks:palpeer-api.onrender.com', 'applinks:app.palpeer.com'],
+    // Share bridge hosts: live onrender + api.palpeer.com (after DNS) + app.palpeer.com.
+    associatedDomains: [
+      'applinks:palpeer-api.onrender.com',
+      'applinks:api.palpeer.com',
+      'applinks:app.palpeer.com',
+    ],
     infoPlist: {
       NSCameraUsageDescription:
         'PALPEER uses the camera to capture your identity document and selfie for verification.',
@@ -140,6 +144,11 @@ const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
           {
             scheme: 'https',
             host: 'palpeer-api.onrender.com',
+            pathPrefix: '/p2p/share',
+          },
+          {
+            scheme: 'https',
+            host: 'api.palpeer.com',
             pathPrefix: '/p2p/share',
           },
           {

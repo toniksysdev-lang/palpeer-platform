@@ -403,7 +403,7 @@ export default function Change(props: ChangeProps) {
         accessibilityRole="button"
         onPress={() =>
           router.push({
-            pathname: '/PeoplePost',
+            pathname: '/People',
             params: { amount: String(n > 0 ? n : amount), giveCode: give },
           } as Href)
         }
