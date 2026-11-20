@@ -113,7 +113,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [resetAnonymous]);
 
-  // Idle timeout + clear tokens when the browser tab/window is closing.
+  // Idle timeout only. Do not clear/revoke on `pagehide` — that event also fires on refresh
+  // and would sign the operator out every reload. sessionStorage already drops tokens when
+  // the browser tab/session ends; explicit logout + idle timeout still revoke server-side.
   useEffect(() => {
     if (status !== 'authenticated') return;
 
@@ -143,36 +145,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     document.addEventListener('visibilitychange', bumpIdle);
 
-    const onPageHide = () => {
-      // sessionStorage already drops on browser close; also wipe any leftover tokens now.
-      const refreshToken = getRefreshToken();
-      clearSession();
-      if (refreshToken && !appConfig.useMockApi) {
-        try {
-          const base = appConfig.apiBaseUrl.replace(/\/$/, '');
-          const url = base.startsWith('http')
-            ? `${base}/auth/logout`
-            : `${window.location.origin}${base}/auth/logout`;
-          const body = JSON.stringify({ refreshToken });
-          if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
-            const blob = new Blob([body], { type: 'application/json' });
-            navigator.sendBeacon(url, blob);
-          } else {
-            void fetch(url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body,
-              keepalive: true,
-              credentials: 'omit',
-            });
-          }
-        } catch {
-          // Best-effort revoke on close.
-        }
-      }
-    };
-    window.addEventListener('pagehide', onPageHide);
-
     bumpIdle();
 
     return () => {
@@ -181,7 +153,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         window.removeEventListener(event, bumpIdle);
       }
       document.removeEventListener('visibilitychange', bumpIdle);
-      window.removeEventListener('pagehide', onPageHide);
     };
   }, [status, logout]);
 
