@@ -12,7 +12,7 @@ node scripts/apply-ops-security.mjs --admin-ip=x.x.x.x --deploy
 
 - [x] `OTP_LOG_CODE=false` (script + Blueprint)
 - [x] `ADMIN_MFA_REQUIRED=true` (script + Blueprint)
-- [x] `ADMIN_IP_ALLOWLIST` set by script (auto public IP or `--admin-ip=`)
+- [ ] `ADMIN_IP_ALLOWLIST` only when intentional (`--admin-ip=` or env); empty = open admin API (pair with Cloudflare Access)
 - [x] `PUBLIC_API_BASE_URL` + `CORS_ALLOWED_ORIGINS` include onrender + `admin.palpeer.com`
 - [x] Webhook secrets: script syncs from `.env` or generates `APAYLO_WEBHOOK_SECRET` / `KORAPAY_WEBHOOK_SECRET`; audits SET/MISSING
 - [x] Redis env present (`REDIS_HOST` / `PORT` / `PASSWORD` / `REDIS_SSL`) — Blueprint

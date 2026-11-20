@@ -3,7 +3,7 @@
  * Apply remaining ops/host security fixes against live Render + extract API SSL pins.
  *
  * - Sets OTP_LOG_CODE=false and ADMIN_MFA_REQUIRED=true
- * - Sets ADMIN_IP_ALLOWLIST (auto-detect public IP unless --admin-ip= or ADMIN_IP_ALLOWLIST env)
+ * - Sets ADMIN_IP_ALLOWLIST only when --admin-ip= or ADMIN_IP_ALLOWLIST env is provided
  * - Ensures PUBLIC_API_BASE_URL + CORS include onrender + api/admin.palpeer.com
  * - Fills missing webhook secrets (generate or sync from repo .env); never prints secret values
  * - Registers Render custom domains api.palpeer.com / admin.palpeer.com when missing
@@ -280,21 +280,28 @@ for (const [name, value] of Object.entries(WANT)) {
   console.log(`${name}: ${before === undefined ? 'created' : 'updated'} -> ${JSON.stringify(value)}`);
 }
 
-// Admin IP allowlist
+// Admin IP allowlist — only when explicitly requested. Auto-detecting the
+// runner's public IP locks every other operator out of /api/v1/admin/**.
 {
   const ip =
     (adminIpArg && adminIpArg.trim()) ||
     (process.env.ADMIN_IP_ALLOWLIST && process.env.ADMIN_IP_ALLOWLIST.trim()) ||
-    (await detectPublicIp());
-  const before = byKey.get('ADMIN_IP_ALLOWLIST') || '';
-  if (before === ip) {
-    console.log(`ADMIN_IP_ALLOWLIST: already ${ip}`);
-  } else {
-    await putEnv(key, 'ADMIN_IP_ALLOWLIST', ip);
-    byKey.set('ADMIN_IP_ALLOWLIST', ip);
+    '';
+  if (!ip) {
     console.log(
-      `ADMIN_IP_ALLOWLIST: ${before ? 'updated' : 'created'} -> ${ip} (admin API only; change if your public IP moves)`,
+      'ADMIN_IP_ALLOWLIST: skipped (pass --admin-ip=x.x.x.x or set ADMIN_IP_ALLOWLIST to enable)',
     );
+  } else {
+    const before = byKey.get('ADMIN_IP_ALLOWLIST') || '';
+    if (before === ip) {
+      console.log(`ADMIN_IP_ALLOWLIST: already ${ip}`);
+    } else {
+      await putEnv(key, 'ADMIN_IP_ALLOWLIST', ip);
+      byKey.set('ADMIN_IP_ALLOWLIST', ip);
+      console.log(
+        `ADMIN_IP_ALLOWLIST: ${before ? 'updated' : 'created'} -> ${ip} (admin API only; change if your public IP moves)`,
+      );
+    }
   }
 }
 

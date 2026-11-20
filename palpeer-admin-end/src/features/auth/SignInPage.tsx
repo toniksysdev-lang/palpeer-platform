@@ -106,7 +106,7 @@ export function SignInPage() {
       if (error instanceof ApiClientError) {
         if (error.code === 'USER_DISABLED') {
           setFormError('This account is locked or disabled.');
-        } else if (error.code === 'NOT_ADMIN') {
+        } else if (error.code === 'NOT_ADMIN' || error.code === 'ADMIN_IP_DENIED') {
           setFormError(error.message);
         } else if (error.code === 'NETWORK_ERROR') {
           setFormError(error.message);

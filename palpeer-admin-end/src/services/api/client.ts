@@ -58,6 +58,8 @@ function mapHumanMessage(status: number, code: string, fallback: string): string
       return 'Your session has expired. Please sign in again.';
     case 'ACCESS_DENIED':
       return 'You do not have permission to perform this action.';
+    case 'ADMIN_IP_DENIED':
+      return 'Admin console API is blocked from this network. Ask an operator to update ADMIN_IP_ALLOWLIST.';
     // Legacy reject-concurrent login (replaced by session takeover). Keep copy for old APIs.
     case 'SESSION_ALREADY_ACTIVE':
       return 'This account already has an active session. Sign in again to take over that session.';

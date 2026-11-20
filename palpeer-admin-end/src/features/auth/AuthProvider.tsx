@@ -257,6 +257,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         me = await verifyAdminAccess();
       } catch (error) {
         clearSession();
+        if (error instanceof ApiClientError && error.code === 'ADMIN_IP_DENIED') {
+          throw new ApiClientError(
+            403,
+            'ADMIN_IP_DENIED',
+            'Admin console API is blocked from this network. Ask an operator to update ADMIN_IP_ALLOWLIST.',
+          );
+        }
         if (error instanceof ApiClientError && (error.status === 403 || error.code === 'ACCESS_DENIED')) {
           throw new ApiClientError(
             403,
