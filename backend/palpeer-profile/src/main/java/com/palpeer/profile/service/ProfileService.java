@@ -97,9 +97,18 @@ public class ProfileService {
                 && StringUtils.hasText(profile.getStateTerritory())
                 && StringUtils.hasText(profile.getAddressLine1())
                 && StringUtils.hasText(profile.getCity())
-                && StringUtils.hasText(profile.getPostalCode())
+                && postalSatisfied(profile.getCountryOfResidence(), profile.getPostalCode())
                 && StringUtils.hasText(profile.getSourceOfIncome())
                 && StringUtils.hasText(profile.getMonthlyTransactionEstimate());
+    }
+
+    /** Matches mobile onboarding: NG/GH/KE do not require a real postal code. */
+    static boolean postalSatisfied(String countryOfResidence, String postalCode) {
+        if (StringUtils.hasText(postalCode)) {
+            return true;
+        }
+        String cc = countryOfResidence == null ? "" : countryOfResidence.trim().toUpperCase();
+        return cc.equals("NG") || cc.equals("GH") || cc.equals("KE");
     }
 
     private static void requireMinimumAge(LocalDate dateOfBirth) {

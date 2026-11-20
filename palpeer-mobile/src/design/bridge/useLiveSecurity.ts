@@ -20,7 +20,7 @@ import { securityCommands } from '@/services/security/securityCommands';
 import { useAppDispatch, useAppSelector } from '@/store';
 import type { PublicInstantRateResponse, PublicP2PRateResponse } from '@/types/api/exchange';
 import type { UpdateProfileRequest } from '@/types/api/profile';
-import { leftSeconds } from '@/newui/features/start/data';
+import { COUNTRIES, leftSeconds } from '@/newui/features/start/data';
 import { formatMoney, formatRate } from '@/utils/money';
 
 type OkErr = { ok: true } | { ok: false; error: string };
@@ -34,6 +34,24 @@ const COUNTRY_ID_TO_ISO: Record<string, string> = {
   ke: 'KE',
   za: 'ZA',
 };
+
+/** Countries where onboarding treats postal code as optional (matches `COUNTRIES[].postal`). */
+function countryRequiresPostal(iso2: string): boolean {
+  const id = Object.entries(COUNTRY_ID_TO_ISO).find(([, iso]) => iso === iso2)?.[0];
+  const row = COUNTRIES.find((c) => c.id === id) ?? COUNTRIES.find((c) => c.cc === iso2);
+  return row?.postal !== false;
+}
+
+/**
+ * API still requires a non-blank postalCode. For countries without postal systems,
+ * persist a stable placeholder so profile save (and completeness) can succeed.
+ */
+export function postalCodeForProfile(iso2: string, postal: string): string {
+  const trimmed = postal.trim();
+  if (trimmed) return trimmed;
+  if (!countryRequiresPostal(iso2)) return 'N/A';
+  return '';
+}
 
 /**
  * PIN, security questions, profile save, and public rates for the Start onboarding flow.
@@ -214,6 +232,12 @@ export function useLiveSecurity() {
       }
       const country =
         COUNTRY_ID_TO_ISO[input.live] ?? input.live.trim().toUpperCase().slice(0, 2);
+      const postalCode = postalCodeForProfile(country, input.postal);
+      if (!postalCode) {
+        const msg = 'Enter your postal / zip code on the previous step.';
+        setSecurityError(msg);
+        return { ok: false, error: msg };
+      }
       const incomeKey =
         SOURCE_OF_INCOME_OPTIONS.find((o) => o.title === input.income)?.key ??
         JOB_OPTIONS.find((o) => o.title === input.job)?.key ??
@@ -230,7 +254,7 @@ export function useLiveSecurity() {
         addressLine1: input.addr1.trim(),
         addressLine2: input.addr2.trim() || null,
         city: input.city.trim(),
-        postalCode: input.postal.trim(),
+        postalCode,
         sourceOfIncome: incomeKey,
         monthlyTransactionEstimate: monthKey,
       };

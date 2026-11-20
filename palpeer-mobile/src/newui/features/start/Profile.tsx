@@ -358,7 +358,7 @@ export function Where({ s, up, go, say, busy, backend }: StartCtx) {
 }
 
 /** Step 3: source of funds and monthly amount (in the phone country's currency). */
-export function Money({ s, up, go, say, busy, onProfileContinue }: StartCtx) {
+export function Money({ s, up, go, say, busy, onProfileContinue, authMsg }: StartCtx) {
   const c = useC();
   const chip = (text: string, on: boolean, onPress: () => void) => (
     <Pressable key={text} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={onPress} style={{ minHeight: 52, paddingHorizontal: 14, borderRadius: 16, backgroundColor: c.card, borderWidth: 3, borderColor: on ? c.brandText : 'transparent', justifyContent: 'center' }}>
@@ -367,6 +367,7 @@ export function Money({ s, up, go, say, busy, onProfileContinue }: StartCtx) {
       </Txt>
     </Pressable>
   );
+  const canContinue = !!s.income && s.month >= 0;
   return (
     <Screen scroll>
       <StepHead n={3} onBack={() => go('where')} say={say} />
@@ -376,10 +377,15 @@ export function Money({ s, up, go, say, busy, onProfileContinue }: StartCtx) {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{INCOMES.map((t) => chip(t, s.income === t, () => up({ income: t })))}</View>
       <H2>How much will you move each month?</H2>
       <View style={{ gap: 8 }}>{monthRanges(countryOf(s.country)).map((t, i) => chip(t, s.month === i, () => up({ month: i })))}</View>
+      {authMsg ? (
+        <Txt size={15} w="700" color="red" role="alert">
+          {authMsg}
+        </Txt>
+      ) : null}
       <Btn
         label="Continue"
         busy={busy}
-        disabled={!s.income}
+        disabled={!canContinue}
         onPress={async () => {
           if (onProfileContinue) await onProfileContinue();
           else go('idChoose');

@@ -16,7 +16,8 @@ public record UpdateProfileRequest(
         @NotBlank @Size(max = 200) String addressLine1,
         @Size(max = 200) String addressLine2,
         @NotBlank @Size(max = 100) String city,
-        @NotBlank @Size(max = 32) String postalCode,
+        /** Optional for countries without postal systems (e.g. NG); send blank or N/A. */
+        @Size(max = 32) String postalCode,
         @NotBlank @Size(max = 40) String sourceOfIncome,
         @NotBlank @Size(max = 40) String monthlyTransactionEstimate
 ) {
