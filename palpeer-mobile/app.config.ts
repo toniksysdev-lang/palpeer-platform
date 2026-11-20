@@ -75,7 +75,8 @@ export default (context: ConfigContext): ExpoConfig => {
 
 const buildExpoConfig = ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: 'PALPEER',
+  // Home-screen label must match TestFlight ("PALPEER Mobile") so testers don't open legacy "Palpeer".
+  name: 'PALPEER Mobile',
   slug: 'palpeer',
   owner: 'toniksystemslab',
   version: '0.1.4',

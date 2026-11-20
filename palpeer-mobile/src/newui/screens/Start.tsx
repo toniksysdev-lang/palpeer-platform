@@ -1,4 +1,5 @@
 import * as LocalAuthentication from 'expo-local-authentication';
+import Constants from 'expo-constants';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, BackHandler, Easing, Image, Linking, Platform, Pressable, ScrollView, View } from 'react-native';
@@ -45,6 +46,20 @@ import { Badge, Btn, Card, Choice, Circle, Divider, Dots, Field, Flag, flagSourc
 import { useAppSelector } from '@/store';
 
 const LOGO = require('@/newui/assets/logo.png');
+
+/** Home-screen / TestFlight identity check — shown on landing so testers know this is not legacy V1. */
+function appBuildLabel(): string {
+  const version = Constants.expoConfig?.version ?? Constants.nativeApplicationVersion ?? '';
+  const build =
+    Constants.nativeBuildVersion ??
+    Constants.expoConfig?.ios?.buildNumber ??
+    (Constants.expoConfig?.android?.versionCode != null
+      ? String(Constants.expoConfig.android.versionCode)
+      : '');
+  if (version && build) return `PALPEER Mobile · ${version} (${build})`;
+  if (version) return `PALPEER Mobile · ${version}`;
+  return 'PALPEER Mobile';
+}
 
 const DOC_TYPES = ['PASSPORT', 'NATIONAL_ID', 'DRIVING_LICENSE', 'RESIDENCE_PERMIT'] as const;
 const BLANK_AUTH: Partial<StartState> = {
@@ -642,6 +657,9 @@ export default function Start(props: StartProps) {
             </Pressable>
           </Row>
           <Image source={LOGO} style={{ width: logoW, height: logoH, maxWidth: '100%' }} resizeMode="contain" accessibilityLabel="Palpeer. Your rate, your way." />
+          <Txt size={13} w="600" color="rgba(255,255,255,0.72)" center noTr>
+            {appBuildLabel()}
+          </Txt>
           <View
             style={{
               width: Math.round(LAND_HERO.width * heroScale),
