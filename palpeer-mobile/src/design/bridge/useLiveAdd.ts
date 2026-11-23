@@ -4,6 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useEnsureProfile } from '@/features/profile/useEnsureProfile';
 import { FUNDING_POLL_MS, isInProgress } from '@/features/wallets/movementStatus';
 import { useIdempotencyKey } from '@/features/wallets/useIdempotencyKey';
+import { walletErrorMessage } from '@/features/wallets/errors';
 import { toAppError } from '@/services/api/errors';
 import { baseApi } from '@/services/api/baseApi';
 import { ALERTS } from '@/services/api/notificationApi';
@@ -23,6 +24,9 @@ import { toMoney } from '@/utils/money';
 
 import { metaFor } from './currencyMeta';
 import { ownedDesignWallets } from './mapWallet';
+
+/** How many consecutive poll failures before we soft-stop watching. */
+const MAX_CONSECUTIVE_POLL_ERRORS = 8;
 
 export type FundingDetails = {
   bank?: string;
@@ -115,7 +119,7 @@ export function useLiveAdd() {
       if ('error' in result) {
         return {
           ok: false as const,
-          error: toAppError(result.error).message ?? 'Could not start funding.',
+          error: walletErrorMessage(toAppError(result.error)) || 'Could not start funding.',
         };
       }
       fundingRef.current = result.data;
@@ -171,12 +175,14 @@ export function useLiveAdd() {
       const id = fundingId || fundingRef.current?.id;
       if (!id) return { ok: false, error: 'No funding to watch.' };
       const maxAttempts = opts?.maxAttempts ?? 40;
+      let consecutiveErrors = 0;
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         if (opts?.signal?.aborted) {
           return { ok: false, error: 'Cancelled', cancelled: true };
         }
         try {
           const data = await fetchFunding(id, true).unwrap();
+          consecutiveErrors = 0;
           if (data.status === 'SUCCESS') {
             // getFunding does not invalidate wallets — force Home balance refresh now.
             refreshAfterFunding(data.walletId);
@@ -197,7 +203,17 @@ export function useLiveAdd() {
           if (opts?.signal?.aborted) {
             return { ok: false, error: 'Cancelled', cancelled: true };
           }
-          return { ok: false, error: toAppError(raw).message ?? 'Could not check funding.' };
+          consecutiveErrors += 1;
+          // Transient provider/network blips while the user still needs to send Interac —
+          // keep watching instead of painting a hard failure next to the CAD instructions.
+          if (consecutiveErrors >= MAX_CONSECUTIVE_POLL_ERRORS) {
+            return {
+              ok: false,
+              error:
+                walletErrorMessage(toAppError(raw)) ||
+                'Still waiting for your payment. Check History later.',
+            };
+          }
         }
         await sleep(FUNDING_POLL_MS);
       }

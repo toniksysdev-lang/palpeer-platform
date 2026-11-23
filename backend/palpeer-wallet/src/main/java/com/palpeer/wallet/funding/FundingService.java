@@ -736,12 +736,20 @@ public class FundingService {
                 .filter(ref -> ref != null && !ref.isBlank())
                 .map(String::trim)
                 .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
-        var confirmed = rail.confirmFundingPayment(
-                blankToNull(tx.getProviderReference()),
-                blankToNull(tx.getIdempotencyKey()),
-                tx.getAmount(),
-                extractInteracEmail(tx.getFundingInstructions()),
-                claimedRefs);
+        java.util.Optional<ApayloPaymentRail.ConfirmedPayment> confirmed;
+        try {
+            confirmed = rail.confirmFundingPayment(
+                    blankToNull(tx.getProviderReference()),
+                    blankToNull(tx.getIdempotencyKey()),
+                    tx.getAmount(),
+                    extractInteracEmail(tx.getFundingInstructions()),
+                    claimedRefs);
+        } catch (RuntimeException ex) {
+            // Same posture as ApayloReconcileJob: search outages must not fail GET /funding/{id}
+            // while the user is still on "Send from your bank".
+            log.warn("Apaylo funding poll reconcile skipped for {}: {}", tx.getId(), ex.getMessage());
+            return toResponse(tx);
+        }
         if (confirmed.isEmpty()) {
             return toResponse(tx);
         }

@@ -86,6 +86,18 @@ public class ApayloClient {
             if (allowEmpty && isNoDataBody(ex.getResponseBodyAsString())) {
                 return objectMapper.createObjectNode().put("IsError", false).set("Result", objectMapper.createArrayNode());
             }
+            // Search/poll endpoints: treat transient gateway failures as "not found yet" so CAD
+            // Autodeposit funding polls do not surface "Apaylo request failed: 503" to the user.
+            if (allowEmpty && isTransientApayloStatus(ex.getStatusCode().value())) {
+                log.warn(
+                        "Apaylo POST {} transient {}: treating as empty search result",
+                        uri,
+                        ex.getStatusCode().value());
+                return objectMapper
+                        .createObjectNode()
+                        .put("IsError", false)
+                        .set("Result", objectMapper.createArrayNode());
+            }
             log.error("Apaylo POST {} failed: {} {}", uri, ex.getStatusCode(), ex.getResponseBodyAsString());
             throw apayloHttpError(ex);
         } catch (BusinessException ex) {
@@ -94,6 +106,15 @@ public class ApayloClient {
             log.error("Apaylo POST {} failed: {}", uri, ex.toString());
             throw new BusinessException("APAYLO_ERROR", "Apaylo request failed", HttpStatus.BAD_GATEWAY);
         }
+    }
+
+    private static boolean isTransientApayloStatus(int statusCode) {
+        return statusCode == 408
+                || statusCode == 425
+                || statusCode == 429
+                || statusCode == 502
+                || statusCode == 503
+                || statusCode == 504;
     }
 
     private static boolean isNoData(JsonNode response) {

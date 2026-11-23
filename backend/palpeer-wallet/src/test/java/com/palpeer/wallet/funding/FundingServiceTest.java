@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -156,6 +157,33 @@ class FundingServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("code")
                 .isEqualTo("FUNDING_INVALID_STATE");
+    }
+
+    @Test
+    void get_swallowsApayloPollErrorsAndKeepsPending() {
+        FundingTransaction tx = baseFunding(MoneyMovementStatus.PENDING);
+        tx.setCurrencyCode("CAD");
+        tx.setProviderName(ApayloPaymentRail.NAME);
+        tx.setFundingInstructions("{\"interacEmail\":\"toniksystems@gmail.com\"}");
+        when(fundingTransactionRepository.findByIdAndUserId(tx.getId(), userId)).thenReturn(Optional.of(tx));
+
+        ApayloPaymentRail rail = org.mockito.Mockito.mock(ApayloPaymentRail.class);
+        doReturn(rail).when(apayloPaymentRail).getIfAvailable();
+        when(rail.isEnabled()).thenReturn(true);
+        when(fundingTransactionRepository.findByProviderNameAndStatusOrderByCreatedAtDesc(
+                        ApayloPaymentRail.NAME, MoneyMovementStatus.SUCCESS))
+                .thenReturn(java.util.List.of());
+        when(rail.confirmFundingPayment(any(), any(), any(), any(), any()))
+                .thenThrow(new BusinessException(
+                        "APAYLO_ERROR",
+                        "Apaylo request failed: 503",
+                        org.springframework.http.HttpStatus.BAD_GATEWAY));
+
+        FundingTransactionResponse response = fundingService.get(userId, tx.getId());
+
+        assertThat(response.status()).isEqualTo(MoneyMovementStatus.PENDING);
+        assertThat(response.id()).isEqualTo(tx.getId());
+        verify(rail).confirmFundingPayment(any(), any(), any(), any(), any());
     }
 
     private FundingTransaction baseFunding(MoneyMovementStatus status) {
