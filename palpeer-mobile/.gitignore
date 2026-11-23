@@ -57,3 +57,6 @@ firebase-service-account.json
 package.json.ir_*
 target-state*.png
 
+
+store-screenshots/
+
