@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.palpeer.common.exception.BusinessException;
 import com.palpeer.common.exception.ResourceNotFoundException;
 import com.palpeer.common.mail.EmailSender;
 import com.palpeer.notification.domain.DeviceToken;
@@ -102,6 +103,38 @@ class NotificationPhase12Test {
         verify(deviceTokenRepository).save(captor.capture());
         assertThat(captor.getValue().getUserId()).isEqualTo(userId);
         assertThat(captor.getValue().getToken()).isEqualTo("tok-1");
+    }
+
+    @Test
+    void registerDeviceToken_rejectsRawApnsHexOnIos() {
+        UUID userId = UUID.randomUUID();
+        String apns =
+                "a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00";
+
+        assertThatThrownBy(() -> deviceTokenService.register(
+                        userId, new RegisterDeviceTokenRequest(apns, DeviceTokenPlatform.IOS, "iphone-1")))
+                .isInstanceOf(BusinessException.class)
+                .extracting("code")
+                .isEqualTo("DEVICE_TOKEN_UNSUPPORTED");
+        verify(deviceTokenRepository, never()).save(any());
+    }
+
+    @Test
+    void registerDeviceToken_acceptsExpoTokenOnIos() {
+        UUID userId = UUID.randomUUID();
+        String expo = "ExponentPushToken[abcdefghijklmnopqrst]";
+        when(deviceTokenRepository.findByToken(expo)).thenReturn(Optional.empty());
+        when(deviceTokenRepository.save(any(DeviceToken.class))).thenAnswer(inv -> {
+            DeviceToken t = inv.getArgument(0);
+            t.setId(UUID.randomUUID());
+            return t;
+        });
+
+        DeviceTokenResponse response = deviceTokenService.register(
+                userId, new RegisterDeviceTokenRequest(expo, DeviceTokenPlatform.IOS, "iphone-1"));
+
+        assertThat(response.enabled()).isTrue();
+        assertThat(response.platform()).isEqualTo(DeviceTokenPlatform.IOS);
     }
 
     @Test

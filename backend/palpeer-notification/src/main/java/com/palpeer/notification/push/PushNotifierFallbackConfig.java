@@ -1,5 +1,6 @@
 package com.palpeer.notification.push;
 
+import com.palpeer.notification.repository.DeviceTokenRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,7 +18,8 @@ public class PushNotifierFallbackConfig {
 
     @Bean
     @ConditionalOnMissingBean(PushNotifier.class)
-    PushNotifier expoAwarePushNotifier(ExpoPushNotifier expoPushNotifier) {
-        return new RoutingPushNotifier(expoPushNotifier, new LoggingPushNotifier());
+    PushNotifier expoAwarePushNotifier(
+            ExpoPushNotifier expoPushNotifier, DeviceTokenRepository deviceTokenRepository) {
+        return new RoutingPushNotifier(expoPushNotifier, new LoggingPushNotifier(), deviceTokenRepository);
     }
 }

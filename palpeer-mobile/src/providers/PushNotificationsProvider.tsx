@@ -172,8 +172,10 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
     };
     void sync();
     try {
-      const subscription = Notifications.addPushTokenListener((token) => {
-        if (typeof token.data === 'string') void sync(token.data);
+      // Re-resolve on rotation — do not upload the listener payload blindly (iOS often emits
+      // raw APNs hex that FCM Admin cannot deliver).
+      const subscription = Notifications.addPushTokenListener(() => {
+        void sync();
       });
       return () => subscription.remove();
     } catch (error) {

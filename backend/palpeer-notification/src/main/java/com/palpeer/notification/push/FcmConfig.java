@@ -57,8 +57,11 @@ public class FcmConfig {
 
     @Bean
     @Primary
-    PushNotifier routingPushNotifier(FcmPushNotifier fcmPushNotifier, ExpoPushNotifier expoPushNotifier) {
-        return new RoutingPushNotifier(expoPushNotifier, fcmPushNotifier);
+    PushNotifier routingPushNotifier(
+            FcmPushNotifier fcmPushNotifier,
+            ExpoPushNotifier expoPushNotifier,
+            DeviceTokenRepository deviceTokenRepository) {
+        return new RoutingPushNotifier(expoPushNotifier, fcmPushNotifier, deviceTokenRepository);
     }
 
     private GoogleCredentials loadCredentials() throws IOException {

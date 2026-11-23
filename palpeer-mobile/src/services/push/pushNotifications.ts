@@ -104,11 +104,38 @@ export function resolveEasProjectId(): string | undefined {
   return undefined;
 }
 
+/** Expo Push API tokens — delivered by the backend via exp.host (not Firebase Admin). */
+export function isExpoPushToken(token: string): boolean {
+  const t = token.trim();
+  return t.startsWith('ExponentPushToken[') || t.startsWith('ExpoPushToken[');
+}
+
 /**
- * Resolves a push token for backend registration.
+ * Raw APNs device tokens are hex (often 64 chars). Our API delivers native tokens only via FCM
+ * Admin, which rejects APNs hex — registering them just disables the row after every push.
+ */
+export function isRawApnsDeviceToken(token: string): boolean {
+  const t = token.trim().replace(/\s+/g, '');
+  return /^[0-9a-fA-F]{64}$/.test(t) || /^[0-9a-fA-F]{8}([0-9a-fA-F]{8}){7}$/.test(t);
+}
+
+/** True when the backend can deliver this token (Expo Push API or Android FCM). */
+export function isDeliverablePushToken(token: string): boolean {
+  const t = token.trim();
+  if (!t) return false;
+  if (isExpoPushToken(t)) return true;
+  // Never treat raw APNs as deliverable — FCM Admin returns INVALID_ARGUMENT.
+  if (isRawApnsDeviceToken(t)) return false;
+  // Native FCM registration tokens are long opaque strings (not 64-char hex).
+  return t.length >= 100;
+}
+
+/**
+ * Resolves a push token the backend can actually deliver.
  *
- * On Android prefer the native FCM token — the API delivers it with Firebase Admin (no Expo FCM
- * project credentials required). Fall back to an Expo push token (and on iOS prefer Expo/APNs).
+ * Prefer Expo tokens on every platform (Expo Push API). On Android, fall back to the native FCM
+ * token for Firebase Admin. Never register raw APNs hex — without GoogleService-Info / FCM iOS
+ * mapping those tokens always fail delivery.
  */
 async function resolvePushToken(): Promise<string> {
   if (Platform.OS === 'web') {
@@ -120,21 +147,6 @@ async function resolvePushToken(): Promise<string> {
 
   const projectId = resolveEasProjectId();
   const errors: string[] = [];
-
-  // Android: native FCM first (backend FcmPushNotifier). Needs google-services in the binary.
-  if (Platform.OS === 'android') {
-    try {
-      const token = await Notifications.getDevicePushTokenAsync();
-      if (typeof token.data === 'string' && token.data.trim()) {
-        return token.data.trim();
-      }
-      errors.push('Native device push token response was empty');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      errors.push(`Native: ${message}`);
-      logger.warn('Native FCM token unavailable; trying Expo push token', { error });
-    }
-  }
 
   if (projectId) {
     try {
@@ -153,17 +165,18 @@ async function resolvePushToken(): Promise<string> {
     logger.warn('EAS projectId missing from app config; Expo push tokens unavailable');
   }
 
-  // iOS / last resort: native device token (APNs).
-  if (Platform.OS !== 'android') {
+  // Android only: native FCM for Firebase Admin (same Firebase project as the API).
+  if (Platform.OS === 'android') {
     try {
       const token = await Notifications.getDevicePushTokenAsync();
-      if (typeof token.data === 'string' && token.data.trim()) {
+      if (typeof token.data === 'string' && isDeliverablePushToken(token.data)) {
         return token.data.trim();
       }
-      errors.push('Native device push token response was empty');
+      errors.push('Native device push token response was empty or not an FCM token');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       errors.push(`Native: ${message}`);
+      logger.warn('Native FCM token unavailable', { error });
     }
   }
 
@@ -182,8 +195,13 @@ async function resolvePushToken(): Promise<string> {
 }
 
 export async function buildPushRegistration(token?: string): Promise<RegisterDeviceTokenRequest> {
+  // OS token listeners often emit raw APNs/FCM blobs — only keep ones we can deliver; otherwise
+  // resolve a proper Expo/FCM token instead of uploading a token the API will disable.
+  const candidate = typeof token === 'string' ? token.trim() : '';
+  const resolved =
+    candidate && isDeliverablePushToken(candidate) ? candidate : await resolvePushToken();
   return {
-    token: token ?? (await resolvePushToken()),
+    token: resolved,
     platform: platform(),
     deviceIdentifier: await getDeviceIdentifier(),
   };
