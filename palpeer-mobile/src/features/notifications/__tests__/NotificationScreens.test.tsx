@@ -208,10 +208,18 @@ describe('NotificationSettingsScreen', () => {
       string
     >;
     expect(body).toMatchObject({
-      token: 'ExponentPushToken[test-token]',
+      // Android prefers native FCM; iOS uses Expo (no raw APNs).
+      token:
+        Platform.OS === 'android'
+          ? 'fcm-token-1-with-enough-length-here'
+          : 'ExponentPushToken[test-token]',
       platform: Platform.OS === 'android' ? 'ANDROID' : 'IOS',
     });
-    expect(getExpoPushTokenAsync).toHaveBeenCalled();
+    if (Platform.OS === 'android') {
+      expect(getDevicePushTokenAsync).toHaveBeenCalled();
+    } else {
+      expect(getExpoPushTokenAsync).toHaveBeenCalled();
+    }
     expect(body.deviceIdentifier).toEqual(expect.any(String));
     expect(await secureStorage.getPushTokenId()).toBe('dt-1');
     await waitFor(() => expect(screen.getByTestId('push-switch').props.value).toBe(true));
@@ -233,15 +241,42 @@ describe('NotificationSettingsScreen', () => {
 
   it('explains when this build has no push credentials', async () => {
     notifications.setPermission(GRANTED);
-    getExpoPushTokenAsync.mockRejectedValueOnce(new Error('Expo push unavailable'));
     getDevicePushTokenAsync.mockRejectedValueOnce(new Error('FirebaseApp is not initialized'));
+    getExpoPushTokenAsync.mockRejectedValueOnce(new Error('Expo push unavailable'));
     const { calls: all } = installFetchMock({ 'GET /notifications/device-tokens': ok([]) });
     await renderWithProviders(<NotificationSettingsScreen />);
 
     expect(await screen.findByTestId('push-error')).toHaveTextContent(
-      /Couldn't enable push on this install|aren't available|aren't configured/,
+      /Couldn't enable push on this install|aren't available|aren't configured|updated PALPEER build/,
     );
     expect(calls(all, 'POST', '/notifications/device-tokens')).toHaveLength(0);
+  });
+
+  it('uses native FCM on Android even when Expo would fail', async () => {
+    if (Platform.OS !== 'android') return;
+    notifications.setPermission(GRANTED);
+    getExpoPushTokenAsync.mockRejectedValue(new Error('FCM credentials missing in Expo'));
+    const { calls: all } = installFetchMock({
+      'GET /notifications/device-tokens': [ok([]), ok([tokenRecord({ id: 'dt-fcm' })])],
+      'POST /notifications/device-tokens': {
+        status: 201,
+        body: {
+          success: true,
+          data: tokenRecord({ id: 'dt-fcm' }),
+          timestamp: '',
+        },
+      },
+    });
+    await renderWithProviders(<NotificationSettingsScreen />);
+
+    await waitFor(() => expect(calls(all, 'POST', '/notifications/device-tokens')).toHaveLength(1));
+    const body = calls(all, 'POST', '/notifications/device-tokens')[0]?.body as Record<
+      string,
+      string
+    >;
+    expect(body.token).toBe('fcm-token-1-with-enough-length-here');
+    expect(getDevicePushTokenAsync).toHaveBeenCalled();
+    expect(getExpoPushTokenAsync).not.toHaveBeenCalled();
   });
 
   it('turns push off for this phone and can remove another device', async () => {

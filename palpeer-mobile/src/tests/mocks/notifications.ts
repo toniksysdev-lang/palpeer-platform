@@ -61,7 +61,7 @@ export const requestPermissionsAsync = jest.fn(async () => {
 });
 export const getDevicePushTokenAsync = jest.fn(async () => ({
   type: 'android',
-  data: 'fcm-token-1',
+  data: 'fcm-token-1-with-enough-length-here',
 }));
 export const getExpoPushTokenAsync = jest.fn(async () => ({
   type: 'expo',
@@ -102,7 +102,7 @@ export const notifications = {
     lastResponse = null;
     getDevicePushTokenAsync.mockImplementation(async () => ({
       type: 'android',
-      data: 'fcm-token-1',
+      data: 'fcm-token-1-with-enough-length-here',
     }));
     getExpoPushTokenAsync.mockImplementation(async () => ({
       type: 'expo',

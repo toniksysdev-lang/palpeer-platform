@@ -126,16 +126,22 @@ export function isDeliverablePushToken(token: string): boolean {
   if (isExpoPushToken(t)) return true;
   // Never treat raw APNs as deliverable — FCM Admin returns INVALID_ARGUMENT.
   if (isRawApnsDeviceToken(t)) return false;
-  // Native FCM registration tokens are long opaque strings (not 64-char hex).
-  return t.length >= 100;
+  // Native FCM registration tokens are opaque strings (typically 100+ chars; allow shorter).
+  return t.length >= 32;
+}
+
+function missingFirebaseCredentials(detail: string): boolean {
+  // Match real missing-plugin errors only — not every Expo message that mentions "FCM"/"APNs".
+  return /FirebaseApp is not initialized|Default FirebaseApp|google.?services|GOOGLE_SERVICES|FirebaseApp\.initializeApp/i.test(
+    detail,
+  );
 }
 
 /**
  * Resolves a push token the backend can actually deliver.
  *
- * Prefer Expo tokens on every platform (Expo Push API). On Android, fall back to the native FCM
- * token for Firebase Admin. Never register raw APNs hex — without GoogleService-Info / FCM iOS
- * mapping those tokens always fail delivery.
+ * Android: native FCM first (Firebase Admin on the API), then Expo Push token.
+ * iOS: Expo only — never register raw APNs hex (FCM Admin rejects it).
  */
 async function resolvePushToken(): Promise<string> {
   if (Platform.OS === 'web') {
@@ -147,6 +153,22 @@ async function resolvePushToken(): Promise<string> {
 
   const projectId = resolveEasProjectId();
   const errors: string[] = [];
+
+  // Android: prefer native FCM — works whenever google-services.json is in the binary, even if
+  // Expo's FCM credentials for getExpoPushTokenAsync are missing/misconfigured.
+  if (Platform.OS === 'android') {
+    try {
+      const token = await Notifications.getDevicePushTokenAsync();
+      if (typeof token.data === 'string' && isDeliverablePushToken(token.data)) {
+        return token.data.trim();
+      }
+      errors.push('Native device push token response was empty or not an FCM token');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`Native: ${message}`);
+      logger.warn('Native FCM token unavailable; trying Expo push token', { error });
+    }
+  }
 
   if (projectId) {
     try {
@@ -165,28 +187,18 @@ async function resolvePushToken(): Promise<string> {
     logger.warn('EAS projectId missing from app config; Expo push tokens unavailable');
   }
 
-  // Android only: native FCM for Firebase Admin (same Firebase project as the API).
-  if (Platform.OS === 'android') {
-    try {
-      const token = await Notifications.getDevicePushTokenAsync();
-      if (typeof token.data === 'string' && isDeliverablePushToken(token.data)) {
-        return token.data.trim();
-      }
-      errors.push('Native device push token response was empty or not an FCM token');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      errors.push(`Native: ${message}`);
-      logger.warn('Native FCM token unavailable', { error });
-    }
-  }
-
   const detail = errors.join(' | ');
   logger.warn('Push token resolution failed', { detail, projectId: projectId ?? null });
-  if (/FirebaseApp is not initialized|google.?services|Default FirebaseApp|FCM|APNs|aps-environment/i.test(detail)) {
+  if (missingFirebaseCredentials(detail)) {
     throw new PushUnavailableError(
-      projectId
-        ? "Couldn't enable push on this install. Update to a build that includes Firebase notification credentials, then try again."
-        : "Push notifications aren't configured for this build.",
+      Platform.OS === 'android'
+        ? "Couldn't enable push on this install. Update to a PALPEER build that includes Firebase (google-services), then try again."
+        : "Couldn't enable push on this install. Use a build with push credentials configured, then try again.",
+    );
+  }
+  if (Platform.OS === 'ios') {
+    throw new PushUnavailableError(
+      "Couldn't enable push on this iPhone yet. Install an updated PALPEER build, then turn push on again.",
     );
   }
   throw new PushUnavailableError(

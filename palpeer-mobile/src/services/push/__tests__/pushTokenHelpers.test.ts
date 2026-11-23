@@ -17,8 +17,9 @@ describe('push token helpers', () => {
     expect(isDeliverablePushToken(apns)).toBe(false);
   });
 
-  it('accepts long native FCM tokens', () => {
+  it('accepts native FCM tokens', () => {
     const fcm = 'd'.repeat(140) + ':APA91bExampleFcmRegistrationTokenValue';
     expect(isDeliverablePushToken(fcm)).toBe(true);
+    expect(isDeliverablePushToken('fcm-token-1-with-enough-length-here')).toBe(true);
   });
 });
