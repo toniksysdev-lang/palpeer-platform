@@ -57,6 +57,11 @@
         "sku": "palpeer-app-ios",
         "language": "en-US",
         "companyName": "Palpeer Global Holdings Inc."
+      },
+      "android": {
+        "serviceAccountKeyPath": "../secrets/google-play-service-account.json",
+        "track": "internal",
+        "releaseStatus": "draft"
       }
     }
   }
